@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cir"
+version = "0.1.0"
+description = "C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "elijahr", email = "elijahr+cir@gmail.com" },
+]
+urls = { "Homepage" = "https://github.com/elijahr/cir" }
+keywords = ["c", "c++", "parser", "cffi", "libclang", "ir", "code-generation"]
+classifiers = [
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Compilers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: C",
+    "Programming Language :: C++",
+    "License :: OSI Approved :: MIT License",
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-timeout"]
+lint = ["ruff", "mypy"]
+dev = ["cir[test,lint]"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cir"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM"]
+ignore = ["E501", "ARG002", "SIM108", "UP007"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cir"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "libclang: tests requiring system libclang installation",
+]
