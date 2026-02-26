@@ -37,9 +37,21 @@ class TestBackendRegistry:
         """Reset registry state before each test."""
         import cir.backends as b
 
+        self._saved_registry = dict(b._BACKEND_REGISTRY)
+        self._saved_default = b._DEFAULT_BACKEND
+        self._saved_loaded = b._BACKENDS_LOADED
         b._BACKEND_REGISTRY.clear()
         b._DEFAULT_BACKEND = None
         b._BACKENDS_LOADED = False
+
+    def teardown_method(self):
+        """Restore registry state after each test."""
+        import cir.backends as b
+
+        b._BACKEND_REGISTRY.clear()
+        b._BACKEND_REGISTRY.update(self._saved_registry)
+        b._DEFAULT_BACKEND = self._saved_default
+        b._BACKENDS_LOADED = self._saved_loaded
 
     def test_register_and_get_backend(self):
         register_backend("mock", MockBackend, is_default=True)
