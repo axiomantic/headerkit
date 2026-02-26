@@ -1,0 +1,5 @@
+source: https://github.com/llvm/llvm-project/blob/llvmorg-20.1.2/clang/bindings/python/clang/cindex.py
+sha256: de79079e9c324b7ec05ed43e66e39d12a5a3c8b022ae6acf916a0724c2d6c519
+llvm_version: 20.1.2
+vendored_date: 2026-02-26
+license: Apache-2.0 WITH LLVM-exception
