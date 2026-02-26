@@ -1,0 +1,409 @@
+"""Tests for the libclang backend."""
+
+from __future__ import annotations
+
+import pytest
+
+from cir.backends.libclang import (
+    LibclangBackend,
+    is_system_libclang_available,
+    _is_system_header,
+    _is_umbrella_header,
+    _deduplicate_declarations,
+    _mangle_specialization_name,
+    _get_libclang_search_paths,
+)
+from cir.ir import (
+    CType,
+    Enum,
+    EnumValue,
+    Field,
+    Function,
+    Header,
+    Parameter,
+    Pointer,
+    Struct,
+    Typedef,
+    Variable,
+)
+
+# Mark all tests that require libclang
+libclang = pytest.mark.libclang
+
+
+class TestImportability:
+    """Tests that the module can be imported and basic functions work."""
+
+    def test_module_imports(self):
+        """The libclang backend module can be imported."""
+        import cir.backends.libclang  # noqa: F401
+
+    def test_is_system_libclang_available_returns_bool(self):
+        """is_system_libclang_available() returns a boolean."""
+        result = is_system_libclang_available()
+        assert isinstance(result, bool)
+
+    def test_libclang_backend_class_exists(self):
+        """LibclangBackend class is importable."""
+        assert LibclangBackend is not None
+
+
+class TestHelperFunctions:
+    """Tests for helper functions that don't require libclang."""
+
+    def test_get_libclang_search_paths_returns_list(self):
+        """_get_libclang_search_paths returns a list of strings."""
+        paths = _get_libclang_search_paths()
+        assert isinstance(paths, list)
+        for path in paths:
+            assert isinstance(path, str)
+
+    def test_is_system_header_usr_include(self):
+        """System header detection for /usr/include."""
+        assert _is_system_header("/usr/include/stdio.h") is True
+
+    def test_is_system_header_usr_local(self):
+        """System header detection for /usr/local/include."""
+        assert _is_system_header("/usr/local/include/mylib.h") is True
+
+    def test_is_system_header_homebrew(self):
+        """System header detection for Homebrew paths."""
+        assert _is_system_header("/opt/homebrew/include/nng/nng.h") is True
+
+    def test_is_system_header_sdk(self):
+        """System header detection for SDK paths."""
+        assert _is_system_header("/path/to/MacOSX.sdk/usr/include/stdio.h") is True
+
+    def test_is_system_header_project_file(self):
+        """Non-system header detection for project files."""
+        assert _is_system_header("/home/user/project/include/mylib.h") is False
+
+    def test_is_system_header_project_prefix_overrides(self):
+        """project_prefixes can whitelist paths that would otherwise be system."""
+        path = "/opt/homebrew/include/sodium/crypto_auth.h"
+        assert _is_system_header(path) is True
+        assert _is_system_header(path, project_prefixes=("/opt/homebrew/include/sodium",)) is False
+
+    def test_is_umbrella_header_true(self):
+        """Umbrella header detection when many includes, few declarations."""
+        header = Header(
+            path="umbrella.h",
+            declarations=[],
+            included_headers={
+                "/home/user/lib/a.h",
+                "/home/user/lib/b.h",
+                "/home/user/lib/c.h",
+                "/home/user/lib/d.h",
+            },
+        )
+        assert _is_umbrella_header(header) is True
+
+    def test_is_umbrella_header_false_many_decls(self):
+        """Non-umbrella header with declarations."""
+        header = Header(
+            path="normal.h",
+            declarations=[
+                Struct("A", [Field("x", CType("int"))]),
+                Struct("B", [Field("y", CType("int"))]),
+                Struct("C", [Field("z", CType("int"))]),
+                Function("foo", CType("void"), []),
+            ],
+            included_headers={"/home/user/lib/a.h"},
+        )
+        assert _is_umbrella_header(header) is False
+
+    def test_deduplicate_declarations_removes_duplicates(self):
+        """_deduplicate_declarations removes duplicate declarations."""
+        decls = [
+            Struct("Point", [Field("x", CType("int"))]),
+            Struct("Point", [Field("x", CType("int"))]),  # duplicate
+            Function("foo", CType("void"), []),
+        ]
+        result = _deduplicate_declarations(decls)
+        assert len(result) == 2
+
+    def test_deduplicate_declarations_typedef_struct_pattern(self):
+        """_deduplicate_declarations handles typedef struct pattern."""
+        decls = [
+            Struct("Foo", [Field("x", CType("int"))]),
+            Typedef("Foo", CType("Foo")),  # should be removed, struct gets is_typedef=True
+        ]
+        result = _deduplicate_declarations(decls)
+        assert len(result) == 1
+        assert isinstance(result[0], Struct)
+        assert result[0].is_typedef is True
+
+    def test_mangle_specialization_name(self):
+        """_mangle_specialization_name converts template names."""
+        assert _mangle_specialization_name("Container<int>") == "Container_int"
+        assert _mangle_specialization_name("Map<int, double>") == "Map_int_double"
+        assert _mangle_specialization_name("Foo<int*>") == "Foo_int_ptr"
+        assert _mangle_specialization_name("std::vector<int>") == "std_vector_int"
+
+
+@libclang
+class TestLibclangBackendProperties:
+    """Tests for LibclangBackend properties (require libclang)."""
+
+    @pytest.fixture(autouse=True)
+    def skip_if_no_libclang(self):
+        if not is_system_libclang_available():
+            pytest.skip("System libclang not available")
+
+    def test_backend_name(self):
+        backend = LibclangBackend()
+        assert backend.name == "libclang"
+
+    def test_backend_supports_macros(self):
+        backend = LibclangBackend()
+        assert backend.supports_macros is True
+
+    def test_backend_supports_cpp(self):
+        backend = LibclangBackend()
+        assert backend.supports_cpp is True
+
+
+@libclang
+class TestLibclangParsing:
+    """Tests for parsing C code with the libclang backend."""
+
+    @pytest.fixture(autouse=True)
+    def skip_if_no_libclang(self):
+        if not is_system_libclang_available():
+            pytest.skip("System libclang not available")
+
+    @pytest.fixture
+    def backend(self):
+        return LibclangBackend()
+
+    def test_parse_simple_variable(self, backend):
+        """Parse a simple variable declaration."""
+        header = backend.parse("int x;", "test.h")
+        assert isinstance(header, Header)
+        assert len(header.declarations) >= 1
+        var_decls = [d for d in header.declarations if isinstance(d, Variable)]
+        assert len(var_decls) == 1
+        assert var_decls[0].name == "x"
+        assert isinstance(var_decls[0].type, CType)
+        assert var_decls[0].type.name == "int"
+
+    def test_parse_function(self, backend):
+        """Parse a function declaration."""
+        header = backend.parse("int add(int a, int b);", "test.h")
+        func_decls = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(func_decls) == 1
+        func = func_decls[0]
+        assert func.name == "add"
+        assert isinstance(func.return_type, CType)
+        assert func.return_type.name == "int"
+        assert len(func.parameters) == 2
+        assert func.parameters[0].name == "a"
+        assert func.parameters[1].name == "b"
+
+    def test_parse_struct(self, backend):
+        """Parse a struct declaration."""
+        code = """
+        struct Point {
+            int x;
+            int y;
+        };
+        """
+        header = backend.parse(code, "test.h")
+        struct_decls = [d for d in header.declarations if isinstance(d, Struct)]
+        assert len(struct_decls) == 1
+        s = struct_decls[0]
+        assert s.name == "Point"
+        assert len(s.fields) == 2
+        assert s.fields[0].name == "x"
+        assert s.fields[1].name == "y"
+
+    def test_parse_enum(self, backend):
+        """Parse an enum declaration."""
+        code = """
+        enum Color {
+            RED = 0,
+            GREEN = 1,
+            BLUE = 2
+        };
+        """
+        header = backend.parse(code, "test.h")
+        enum_decls = [d for d in header.declarations if isinstance(d, Enum)]
+        assert len(enum_decls) == 1
+        e = enum_decls[0]
+        assert e.name == "Color"
+        assert len(e.values) == 3
+        assert e.values[0].name == "RED"
+        assert e.values[0].value == 0
+        assert e.values[1].name == "GREEN"
+        assert e.values[1].value == 1
+        assert e.values[2].name == "BLUE"
+        assert e.values[2].value == 2
+
+    def test_parse_typedef(self, backend):
+        """Parse a typedef declaration."""
+        code = """
+        typedef unsigned long size_type;
+        """
+        header = backend.parse(code, "test.h")
+        typedef_decls = [d for d in header.declarations if isinstance(d, Typedef)]
+        assert len(typedef_decls) == 1
+        td = typedef_decls[0]
+        assert td.name == "size_type"
+
+    def test_parse_pointer_type(self, backend):
+        """Parse a function with pointer parameter and return type."""
+        code = "char* strdup(const char* s);"
+        header = backend.parse(code, "test.h")
+        func_decls = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(func_decls) == 1
+        func = func_decls[0]
+        assert func.name == "strdup"
+        assert isinstance(func.return_type, Pointer)
+        assert len(func.parameters) == 1
+        assert isinstance(func.parameters[0].type, Pointer)
+
+    def test_parse_union(self, backend):
+        """Parse a union declaration."""
+        code = """
+        union Data {
+            int i;
+            float f;
+            char c;
+        };
+        """
+        header = backend.parse(code, "test.h")
+        struct_decls = [d for d in header.declarations if isinstance(d, Struct)]
+        union_decls = [s for s in struct_decls if s.is_union]
+        assert len(union_decls) == 1
+        u = union_decls[0]
+        assert u.name == "Data"
+        assert u.is_union is True
+        assert len(u.fields) == 3
+
+    def test_parse_variadic_function(self, backend):
+        """Parse a variadic function declaration."""
+        code = "int printf(const char* fmt, ...);"
+        header = backend.parse(code, "test.h")
+        func_decls = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(func_decls) == 1
+        func = func_decls[0]
+        assert func.name == "printf"
+        assert func.is_variadic is True
+
+    def test_parse_forward_declaration(self, backend):
+        """Parse a forward struct declaration."""
+        code = "struct Opaque;"
+        header = backend.parse(code, "test.h")
+        struct_decls = [d for d in header.declarations if isinstance(d, Struct)]
+        assert len(struct_decls) == 1
+        s = struct_decls[0]
+        assert s.name == "Opaque"
+        assert len(s.fields) == 0  # forward decl has no fields
+
+    def test_parse_typedef_struct(self, backend):
+        """Parse typedef struct pattern."""
+        code = """
+        typedef struct Point {
+            int x;
+            int y;
+        } Point;
+        """
+        header = backend.parse(code, "test.h")
+        struct_decls = [d for d in header.declarations if isinstance(d, Struct)]
+        assert len(struct_decls) == 1
+        s = struct_decls[0]
+        assert s.name == "Point"
+        assert s.is_typedef is True
+        assert len(s.fields) == 2
+
+    def test_parse_error_raises_runtime_error(self, backend):
+        """Parse error raises RuntimeError."""
+        code = "this is not valid C code @#$%;"
+        with pytest.raises(RuntimeError, match="Parse error"):
+            backend.parse(code, "test.h")
+
+    def test_header_path(self, backend):
+        """Parsed header has correct path."""
+        header = backend.parse("int x;", "myfile.h")
+        assert header.path == "myfile.h"
+
+    def test_parse_produces_correct_ir_types(self, backend):
+        """Parse produces correct IR types for a mixed declaration file."""
+        code = """
+        struct Config {
+            int width;
+            int height;
+            const char* name;
+        };
+
+        enum Mode {
+            MODE_NORMAL = 0,
+            MODE_DEBUG = 1
+        };
+
+        int init(struct Config* cfg);
+        void shutdown(void);
+        """
+        header = backend.parse(code, "test.h")
+
+        # Check we got all declaration types
+        structs = [d for d in header.declarations if isinstance(d, Struct)]
+        enums = [d for d in header.declarations if isinstance(d, Enum)]
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+
+        assert len(structs) >= 1
+        assert len(enums) >= 1
+        assert len(funcs) >= 2
+
+        # Verify struct fields
+        config = next(s for s in structs if s.name == "Config")
+        assert len(config.fields) == 3
+        assert config.fields[0].name == "width"
+        assert config.fields[2].name == "name"
+        assert isinstance(config.fields[2].type, Pointer)
+
+        # Verify enum values
+        mode = next(e for e in enums if e.name == "Mode")
+        assert len(mode.values) == 2
+
+        # Verify function signatures
+        init_fn = next(f for f in funcs if f.name == "init")
+        assert isinstance(init_fn.return_type, CType)
+        assert init_fn.return_type.name == "int"
+        assert len(init_fn.parameters) == 1
+        assert isinstance(init_fn.parameters[0].type, Pointer)
+
+        shutdown_fn = next(f for f in funcs if f.name == "shutdown")
+        assert isinstance(shutdown_fn.return_type, CType)
+        assert shutdown_fn.return_type.name == "void"
+        assert len(shutdown_fn.parameters) == 0
+
+
+@libclang
+class TestBackendRegistration:
+    """Test that the backend registers itself when libclang is available."""
+
+    @pytest.fixture(autouse=True)
+    def skip_if_no_libclang(self):
+        if not is_system_libclang_available():
+            pytest.skip("System libclang not available")
+
+    def test_backend_registered(self):
+        """If libclang is available, the backend should be registered."""
+        from cir.backends import is_backend_available
+
+        assert is_backend_available("libclang")
+
+    def test_get_backend_returns_libclang(self):
+        """get_backend('libclang') returns a LibclangBackend instance."""
+        from cir.backends import get_backend
+
+        backend = get_backend("libclang")
+        assert isinstance(backend, LibclangBackend)
+
+    def test_protocol_compliance(self):
+        """LibclangBackend satisfies the ParserBackend protocol."""
+        from cir.ir import ParserBackend
+
+        backend = LibclangBackend()
+        assert isinstance(backend, ParserBackend)
