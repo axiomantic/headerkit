@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import subprocess
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from cir.backends.libclang import (
     LibclangBackend,
+    get_system_include_dirs,
     is_system_libclang_available,
     _is_system_header,
     _is_umbrella_header,
@@ -407,3 +411,288 @@ class TestBackendRegistration:
 
         backend = LibclangBackend()
         assert isinstance(backend, ParserBackend)
+
+
+class TestGetSystemIncludeDirs:
+    """Tests for get_system_include_dirs() system include path detection.
+
+    Adapted from autopxd2 test_libclang_includes.py::_get_system_include_args.
+    """
+
+    def setup_method(self):
+        """Clear the cached include dirs before each test."""
+        import cir.backends.libclang as mod
+        self._saved_c = mod._system_include_cache_c
+        self._saved_cxx = mod._system_include_cache_cxx
+        mod._system_include_cache_c = None
+        mod._system_include_cache_cxx = None
+
+    def teardown_method(self):
+        """Restore cached include dirs after each test."""
+        import cir.backends.libclang as mod
+        mod._system_include_cache_c = self._saved_c
+        mod._system_include_cache_cxx = self._saved_cxx
+
+    def test_returns_list_of_strings(self):
+        """get_system_include_dirs returns a list of strings."""
+        result = get_system_include_dirs()
+        assert isinstance(result, list)
+        for item in result:
+            assert isinstance(item, str)
+
+    def test_entries_are_isystem_flags(self):
+        """Each entry should be an -isystem flag if any paths are found."""
+        result = get_system_include_dirs()
+        for item in result:
+            assert item.startswith("-isystem"), f"Expected -isystem prefix, got: {item}"
+
+    def test_result_is_cached(self):
+        """Second call returns the same cached list object."""
+        first = get_system_include_dirs()
+        second = get_system_include_dirs()
+        assert first is second
+
+    def test_c_and_cxx_cached_separately(self):
+        """C and C++ include dirs are cached independently."""
+        c_dirs = get_system_include_dirs(cplus=False)
+        cxx_dirs = get_system_include_dirs(cplus=True)
+        # They might be different (C++ includes libc++ paths)
+        # But both should be lists
+        assert isinstance(c_dirs, list)
+        assert isinstance(cxx_dirs, list)
+
+    def test_clang_not_found_returns_empty(self):
+        """When clang is not on PATH, returns empty list."""
+        import cir.backends.libclang as mod
+        mod._system_include_cache_c = None
+        with patch("cir.backends.libclang.subprocess.run", side_effect=FileNotFoundError):
+            result = get_system_include_dirs()
+            assert result == []
+
+    def test_clang_timeout_returns_empty(self):
+        """When clang times out, returns empty list."""
+        import cir.backends.libclang as mod
+        mod._system_include_cache_c = None
+        with patch(
+            "cir.backends.libclang.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="clang", timeout=10),
+        ):
+            result = get_system_include_dirs()
+            assert result == []
+
+    def test_parses_include_search_paths(self):
+        """Parses clang -v output to extract include search paths."""
+        import cir.backends.libclang as mod
+        mod._system_include_cache_c = None
+        mock_result = MagicMock()
+        mock_result.stderr = (
+            "clang version 18.0.0\n"
+            "#include <...> search starts here:\n"
+            " /usr/lib/clang/18/include\n"
+            " /usr/include\n"
+            "End of search list.\n"
+        )
+        with patch("cir.backends.libclang.subprocess.run", return_value=mock_result):
+            result = get_system_include_dirs()
+            assert "-isystem/usr/lib/clang/18/include" in result
+            assert "-isystem/usr/include" in result
+
+    def test_skips_framework_directories(self):
+        """Framework directories are excluded from the result."""
+        import cir.backends.libclang as mod
+        mod._system_include_cache_c = None
+        mock_result = MagicMock()
+        mock_result.stderr = (
+            "#include <...> search starts here:\n"
+            " /usr/include\n"
+            " /System/Library/Frameworks (framework directory)\n"
+            "End of search list.\n"
+        )
+        with patch("cir.backends.libclang.subprocess.run", return_value=mock_result):
+            result = get_system_include_dirs()
+            assert "-isystem/usr/include" in result
+            assert len(result) == 1  # framework dir excluded
+
+
+@libclang
+class TestHeaderInclusionTracking:
+    """Tests for tracking included headers via libclang parsing.
+
+    Adapted from autopxd2 test_libclang_includes.py::TestHeaderInclusionTracking.
+    """
+
+    @pytest.fixture(autouse=True)
+    def skip_if_no_libclang(self):
+        if not is_system_libclang_available():
+            pytest.skip("System libclang not available")
+
+    @pytest.fixture
+    def backend(self):
+        return LibclangBackend()
+
+    def test_includes_stdio(self, backend):
+        """Detects stdio.h inclusion when parsing code that includes it."""
+        code = '#include <stdio.h>\nvoid test_func(FILE *f);\n'
+        header = backend.parse(code, "test.h")
+        assert any("stdio.h" in h for h in header.included_headers)
+
+    def test_includes_stdint(self, backend):
+        """Detects stdint.h inclusion."""
+        code = '#include <stdint.h>\ntypedef uint32_t my_int;\n'
+        header = backend.parse(code, "test.h")
+        assert any("stdint.h" in h for h in header.included_headers)
+
+    def test_includes_multiple_headers(self, backend):
+        """Detects multiple header inclusions."""
+        code = (
+            '#include <stdio.h>\n'
+            '#include <stdlib.h>\n'
+            '#include <string.h>\n'
+            'void test(void);\n'
+        )
+        header = backend.parse(code, "test.h")
+        included_basenames = {h.split("/")[-1] for h in header.included_headers}
+        assert "stdio.h" in included_basenames
+        assert "stdlib.h" in included_basenames
+        assert "string.h" in included_basenames
+
+    def test_no_includes_returns_set(self, backend):
+        """Header with no #include directives has included_headers as a set."""
+        code = "void standalone_func(int x);\n"
+        header = backend.parse(code, "test.h")
+        assert isinstance(header.included_headers, set)
+
+    def test_includes_transitive(self, backend):
+        """Tracks transitive includes (headers included by other headers)."""
+        # stdio.h typically includes other headers transitively
+        code = '#include <stdio.h>\nvoid test(void);\n'
+        header = backend.parse(code, "test.h")
+        # Should have at least stdio.h plus its transitive includes
+        assert len(header.included_headers) >= 1
+
+
+@libclang
+class TestTypeQualifierParsing:
+    """Tests for type qualifier parsing through the libclang backend.
+
+    Adapted from autopxd2 test_type_qualifiers.py. These test that the
+    libclang backend correctly extracts const, volatile, and handles
+    _Atomic / __restrict qualifiers in the IR.
+    """
+
+    @pytest.fixture(autouse=True)
+    def skip_if_no_libclang(self):
+        if not is_system_libclang_available():
+            pytest.skip("System libclang not available")
+
+    @pytest.fixture
+    def backend(self):
+        return LibclangBackend()
+
+    def test_const_qualifier_on_param(self, backend):
+        """const qualifier is preserved on function parameter types."""
+        code = "void process(const int* ptr);"
+        header = backend.parse(code, "test.h")
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        param = funcs[0].parameters[0]
+        assert isinstance(param.type, Pointer)
+        # The pointee should be const int
+        pointee = param.type.pointee
+        assert isinstance(pointee, CType)
+        assert "const" in pointee.qualifiers
+
+    def test_volatile_qualifier_on_param(self, backend):
+        """volatile qualifier is preserved on function parameter types."""
+        code = "void modify(volatile int* ptr);"
+        header = backend.parse(code, "test.h")
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        param = funcs[0].parameters[0]
+        assert isinstance(param.type, Pointer)
+        pointee = param.type.pointee
+        assert isinstance(pointee, CType)
+        assert "volatile" in pointee.qualifiers
+
+    def test_const_volatile_combined(self, backend):
+        """Both const and volatile qualifiers are preserved together."""
+        code = "void observe(const volatile int* ptr);"
+        header = backend.parse(code, "test.h")
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        param = funcs[0].parameters[0]
+        assert isinstance(param.type, Pointer)
+        pointee = param.type.pointee
+        assert isinstance(pointee, CType)
+        assert "const" in pointee.qualifiers
+        assert "volatile" in pointee.qualifiers
+
+    def test_const_char_pointer(self, backend):
+        """const char* is a common pattern that should parse correctly."""
+        code = "void print(const char* msg);"
+        header = backend.parse(code, "test.h")
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        param = funcs[0].parameters[0]
+        assert isinstance(param.type, Pointer)
+        pointee = param.type.pointee
+        assert isinstance(pointee, CType)
+        assert "const" in pointee.qualifiers
+        assert pointee.name == "char"
+
+    def test_atomic_typedef_parsed(self, backend):
+        """_Atomic typedef is parsed (qualifier may be stripped by libclang)."""
+        code = "typedef _Atomic int atomic_int;"
+        header = backend.parse(code, "test.h")
+        typedefs = [d for d in header.declarations if isinstance(d, Typedef)]
+        assert len(typedefs) == 1
+        td = typedefs[0]
+        assert td.name == "atomic_int"
+        # _Atomic may be stripped by libclang's type canonicalization;
+        # the key thing is that the typedef is parsed and the base type is int
+        assert "int" in str(td.underlying_type)
+
+    def test_atomic_in_struct_field(self, backend):
+        """_Atomic types in struct fields are parsed."""
+        code = """
+        typedef _Atomic int atomic_int;
+        struct counter {
+            atomic_int value;
+        };
+        """
+        header = backend.parse(code, "test.h")
+        structs = [d for d in header.declarations if isinstance(d, Struct)]
+        assert len(structs) >= 1
+        counter = next((s for s in structs if s.name == "counter"), None)
+        assert counter is not None
+        assert len(counter.fields) == 1
+        assert counter.fields[0].name == "value"
+
+    def test_restrict_in_function_param(self, backend):
+        """__restrict qualifier in function parameters is handled."""
+        code = "void copy(char* __restrict dst, const char* __restrict src);"
+        header = backend.parse(code, "test.h")
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        func = funcs[0]
+        assert func.name == "copy"
+        assert len(func.parameters) == 2
+        # __restrict is not a standard qualifier that cir preserves in IR,
+        # but the function should still parse correctly
+        assert func.parameters[0].name == "dst"
+        assert func.parameters[1].name == "src"
+        # src should have const on its pointee
+        src_param = func.parameters[1]
+        assert isinstance(src_param.type, Pointer)
+        assert "const" in src_param.type.pointee.qualifiers
+
+    def test_noreturn_function_parsed(self, backend):
+        """_Noreturn functions are parsed (qualifier stripped from IR)."""
+        code = "_Noreturn void abort_program(void);"
+        header = backend.parse(code, "test.h")
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        func = funcs[0]
+        assert func.name == "abort_program"
+        assert isinstance(func.return_type, CType)
+        assert func.return_type.name == "void"

@@ -200,6 +200,43 @@ class TestHeader:
         assert "stdio.h" in h.included_headers
         assert len(h.included_headers) == 2
 
+    def test_header_has_included_headers_attribute(self):
+        """Header should always have included_headers attribute.
+
+        Adapted from autopxd2 test_ir.py::TestHeaderIncludedHeaders.
+        """
+        header = Header(path="test.h", declarations=[])
+        assert hasattr(header, "included_headers")
+
+    def test_included_headers_defaults_to_empty_set(self):
+        """included_headers defaults to empty set when not provided.
+
+        Adapted from autopxd2 test_ir.py::TestHeaderIncludedHeaders.
+        """
+        header = Header(path="test.h", declarations=[])
+        assert header.included_headers == set()
+        assert isinstance(header.included_headers, set)
+
+    def test_included_headers_can_be_mutated(self):
+        """included_headers can be populated after construction.
+
+        Adapted from autopxd2 test_ir.py::TestHeaderIncludedHeaders.
+        """
+        header = Header(path="test.h", declarations=[])
+        header.included_headers = {"stdio.h", "stdlib.h", "stdint.h"}
+        assert "stdio.h" in header.included_headers
+        assert "stdlib.h" in header.included_headers
+        assert len(header.included_headers) == 3
+
+    def test_header_constructor_accepts_included_headers(self):
+        """Header constructor should accept included_headers parameter.
+
+        Adapted from autopxd2 test_ir.py::TestHeaderIncludedHeaders.
+        """
+        included = {"stdio.h", "string.h"}
+        header = Header(path="test.h", declarations=[], included_headers=included)
+        assert header.included_headers == included
+
 
 class TestSourceLocation:
     def test_location(self):

@@ -92,3 +92,47 @@ class TestGetCindex:
         ):
             cindex = get_cindex()
             assert cindex is not None
+
+    def test_each_vendored_version_loads(self):
+        """Every vendored version can be imported and has required attributes."""
+        import importlib
+
+        for version in VENDORED_VERSIONS:
+            module = importlib.import_module(f"cir._clang.v{version}.cindex")
+            assert hasattr(module, "Config"), f"v{version} missing Config"
+            assert hasattr(module, "Index"), f"v{version} missing Index"
+            assert hasattr(module, "CursorKind"), f"v{version} missing CursorKind"
+            assert hasattr(module, "TypeKind"), f"v{version} missing TypeKind"
+            assert hasattr(module, "TranslationUnit"), f"v{version} missing TranslationUnit"
+
+    def test_exact_match_no_warning(self):
+        """When detected version exactly matches a vendored version, no warning is emitted."""
+        import cir._clang
+
+        cir._clang._cached_cindex = None
+        import warnings
+        with (
+            patch("cir._clang._version.detect_llvm_version", return_value="20"),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("error")  # Turn warnings into errors
+            cindex = get_cindex()
+            assert cindex is not None
+
+    def test_cache_is_cleared_correctly(self):
+        """After clearing cache, next call re-detects version."""
+        import cir._clang
+
+        # Load once
+        first = get_cindex()
+        assert first is not None
+
+        # Clear cache
+        cir._clang._cached_cindex = None
+
+        # Load again with different version override
+        with patch.dict(os.environ, {"CIR_CLANG_VERSION": "18"}):
+            second = get_cindex()
+            assert second is not None
+            # Module names should reflect the version
+            assert "v18" in second.__name__
