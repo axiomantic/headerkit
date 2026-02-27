@@ -42,7 +42,7 @@ Changelog = "https://github.com/axiomantic/clangir/releases"
 [project.optional-dependencies]
 test = ["pytest", "pytest-timeout"]
 lint = ["ruff", "mypy"]
-docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.27"]
+docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.27", "mike>=2.1"]
 dev = ["clangir[test,lint,docs]"]
 
 [tool.hatch.build.targets.wheel]

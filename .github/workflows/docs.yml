@@ -5,43 +5,63 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., 0.3)'
+        required: true
+      set_latest:
+        description: 'Set as latest?'
+        type: boolean
+        default: true
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
+
       - name: Install dependencies
         run: pip install -e '.[docs]'
-      - name: Build documentation
-        run: mkdocs build --strict
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site/
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Extract version from tag
+        if: github.event_name == 'push'
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          MINOR="${TAG%.*}"
+          echo "version=$MINOR" >> "$GITHUB_OUTPUT"
+          echo "Deploying docs for version: $MINOR"
+
+      - name: Deploy versioned docs (tag push)
+        if: github.event_name == 'push'
+        run: |
+          mike deploy --push --update-aliases "${{ steps.version.outputs.version }}" latest
+
+      - name: Deploy versioned docs (manual)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ inputs.set_latest }}" = "true" ]; then
+            mike deploy --push --update-aliases "${{ inputs.version }}" latest
+          else
+            mike deploy --push "${{ inputs.version }}"
+          fi
+
+      - name: Set default version
+        if: github.event_name == 'push'
+        run: mike set-default --push latest

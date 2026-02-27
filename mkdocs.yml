@@ -1,6 +1,6 @@
 site_name: clangir
 site_description: C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer
-site_url: https://axiomantic.github.io/clangir
+site_url: https://axiomantic.github.io/clangir/
 repo_url: https://github.com/axiomantic/clangir
 repo_name: axiomantic/clangir
 
@@ -86,3 +86,8 @@ nav:
     - Writers: reference/writers.md
     - CFFI Writer: reference/cffi.md
     - JSON Writer: reference/json.md
+
+extra:
+  version:
+    provider: mike
+    default: latest
