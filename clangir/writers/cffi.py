@@ -476,3 +476,57 @@ def _enum_to_cffi_as_typedef(decl: Enum) -> str | None:
 
     lines.append(f"}} {decl.name};")
     return "\n".join(lines)
+
+
+class CffiWriter:
+    """Writer that generates CFFI cdef strings from clangir IR.
+
+    Options
+    -------
+    exclude_patterns : list[str] | None
+        Regex patterns. Declarations with names matching any pattern
+        are excluded from output.
+
+    Example
+    -------
+    ::
+
+        from clangir.writers import get_writer
+
+        writer = get_writer("cffi", exclude_patterns=["__.*"])
+        cdef_string = writer.write(header)
+
+        # Or directly:
+        from clangir.writers.cffi import CffiWriter
+        writer = CffiWriter(exclude_patterns=["__.*"])
+        cdef_string = writer.write(header)
+    """
+
+    def __init__(self, exclude_patterns: list[str] | None = None) -> None:
+        self._exclude_patterns = exclude_patterns
+
+    def write(self, header: Header) -> str:
+        """Convert header IR to CFFI cdef string."""
+        return header_to_cffi(header, exclude_patterns=self._exclude_patterns)
+
+    @property
+    def name(self) -> str:
+        return "cffi"
+
+    @property
+    def format_description(self) -> str:
+        return "CFFI cdef declarations for ffibuilder.cdef()"
+
+
+# Uses bottom-of-module self-registration. Unlike backends (which import
+# register_backend at the top and conditionally register at the bottom),
+# writers have no external dependencies so import and registration are
+# co-located.
+from clangir.writers import register_writer  # noqa: E402
+
+register_writer(
+    "cffi",
+    CffiWriter,
+    is_default=True,
+    description="CFFI cdef declarations for ffibuilder.cdef()",
+)

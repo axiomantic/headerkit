@@ -25,6 +25,15 @@ from clangir.ir import (
     TypeExpr,
     Variable,
 )
+from clangir.writers import (
+    WriterBackend,
+    get_default_writer,
+    get_writer,
+    get_writer_info,
+    is_writer_available,
+    list_writers,
+    register_writer,
+)
 
 __all__ = [
     # Types
@@ -47,10 +56,19 @@ __all__ = [
     # Container
     "Header",
     "SourceLocation",
-    # Protocol
+    # Parser Protocol
     "ParserBackend",
     # Backend API
     "get_backend",
     "list_backends",
     "is_backend_available",
+    # Writer Protocol
+    "WriterBackend",
+    # Writer API
+    "get_default_writer",
+    "get_writer",
+    "get_writer_info",
+    "is_writer_available",
+    "list_writers",
+    "register_writer",
 ]

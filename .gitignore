@@ -68,3 +68,6 @@ Thumbs.db
 
 # Project
 logs/
+
+# MkDocs
+site/

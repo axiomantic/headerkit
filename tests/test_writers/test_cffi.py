@@ -64,35 +64,27 @@ class TestDeclToCffi:
     def test_struct_with_fields(self):
         s = Struct("Point", [Field("x", CType("int")), Field("y", CType("int"))])
         result = decl_to_cffi(s)
-        assert result is not None
-        assert "struct Point" in result
-        assert "int x;" in result
-        assert "int y;" in result
+        assert result == "struct Point {\n    int x;\n    int y;\n};"
 
     def test_opaque_struct(self):
         s = Struct("Opaque", [])
         result = decl_to_cffi(s)
-        assert result is not None
-        assert "..." in result
+        assert result == "struct Opaque { ...; };"
 
     def test_typedef_struct(self):
         s = Struct("Point", [Field("x", CType("int"))], is_typedef=True)
         result = decl_to_cffi(s)
-        assert result is not None
-        assert "typedef struct" in result
+        assert result == "typedef struct Point {\n    int x;\n} Point;"
 
     def test_union(self):
         u = Struct("Data", [Field("i", CType("int"))], is_union=True)
         result = decl_to_cffi(u)
-        assert result is not None
-        assert "union Data" in result
+        assert result == "union Data {\n    int i;\n};"
 
     def test_enum(self):
         e = Enum("Color", [EnumValue("RED", 0), EnumValue("GREEN", 1)])
         result = decl_to_cffi(e)
-        assert result is not None
-        assert "enum Color" in result
-        assert "RED = 0" in result
+        assert result == "enum Color {\n    RED = 0,\n    GREEN = 1,\n};"
 
     def test_function(self):
         f = Function("add", CType("int"), [Parameter("a", CType("int")), Parameter("b", CType("int"))])
@@ -266,3 +258,57 @@ class TestHeaderToCffi:
         result = header_to_cffi(header)
         # The typedef should qualify "inner_s" as "struct inner_s"
         assert "typedef struct inner_s outer_t;" in result
+
+
+class TestCffiWriter:
+    """Tests for the CffiWriter class (protocol-compliant wrapper)."""
+
+    def test_writer_produces_same_output_as_function(self):
+        """CffiWriter.write() should produce identical output to header_to_cffi()."""
+        from clangir.writers.cffi import CffiWriter
+
+        header = Header(
+            "test.h",
+            [
+                Struct("Point", [Field("x", CType("int")), Field("y", CType("int"))]),
+                Function("get_point", Pointer(CType("Point")), []),
+            ],
+        )
+        writer = CffiWriter()
+        assert writer.write(header) == header_to_cffi(header)
+
+    def test_writer_with_exclude_patterns(self):
+        """CffiWriter should forward exclude_patterns to header_to_cffi."""
+        from clangir.writers.cffi import CffiWriter
+
+        header = Header(
+            "test.h",
+            [
+                Function("public_func", CType("void"), []),
+                Function("_private_func", CType("void"), []),
+            ],
+        )
+        writer = CffiWriter(exclude_patterns=[r"_private_"])
+        result = writer.write(header)
+        assert "public_func" in result
+        assert "_private_func" not in result
+
+    def test_writer_protocol_compliance(self):
+        """CffiWriter should satisfy the WriterBackend protocol."""
+        from clangir.writers import WriterBackend
+        from clangir.writers.cffi import CffiWriter
+
+        writer = CffiWriter()
+        assert isinstance(writer, WriterBackend)
+
+    def test_writer_name(self):
+        from clangir.writers.cffi import CffiWriter
+
+        writer = CffiWriter()
+        assert writer.name == "cffi"
+
+    def test_writer_format_description(self):
+        from clangir.writers.cffi import CffiWriter
+
+        writer = CffiWriter()
+        assert writer.format_description == "CFFI cdef declarations for ffibuilder.cdef()"
