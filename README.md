@@ -1,4 +1,4 @@
-# cir
+# clangir
 
 C Intermediate Representation - a Python library for parsing C/C++ headers.
 
@@ -7,7 +7,7 @@ Provides an IR data model for parsed C/C++ declarations, a libclang parser backe
 ## Installation
 
 ```
-pip install cir
+pip install clangir
 ```
 
 ## System Requirements
@@ -21,8 +21,8 @@ libclang shared library must be installed:
 ## Usage
 
 ```python
-from cir.backends import get_backend
-from cir.writers.cffi import header_to_cffi
+from clangir.backends import get_backend
+from clangir.writers.cffi import header_to_cffi
 
 backend = get_backend("libclang")
 header = backend.parse('#include "mylib.h"', "wrapper.h", include_dirs=["/path/to/include"])

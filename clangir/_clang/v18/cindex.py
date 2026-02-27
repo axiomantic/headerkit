@@ -64,7 +64,7 @@ from __future__ import absolute_import, division, print_function
 
 from ctypes import *
 
-from cir._clang.v18 import enumerations as _enumerations
+from clangir._clang.v18 import enumerations as _enumerations
 
 import collections.abc
 import os

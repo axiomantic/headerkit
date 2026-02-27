@@ -4,7 +4,7 @@ import os
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from cir._clang._version import detect_llvm_version
+from clangir._clang._version import detect_llvm_version
 
 
 class TestEnvVarOverride:
@@ -30,8 +30,8 @@ class TestLlvmConfig:
         mock_result.stdout = "18.1.0\n"
         with (
             patch.dict(os.environ, {}, clear=False),
-            patch("cir._clang._version.shutil.which", return_value="/usr/bin/llvm-config"),
-            patch("cir._clang._version.subprocess.run", return_value=mock_result),
+            patch("clangir._clang._version.shutil.which", return_value="/usr/bin/llvm-config"),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
         ):
             # Clear env var if set
             os.environ.pop("CIR_CLANG_VERSION", None)
@@ -45,10 +45,10 @@ class TestLlvmConfig:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: None if cmd == "llvm-config" else "/usr/bin/clang",
             ),
-            patch("cir._clang._version.subprocess.run", return_value=mock_result),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() == "19"
@@ -70,10 +70,10 @@ class TestLlvmConfig:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: f"/usr/bin/{cmd}",
             ),
-            patch("cir._clang._version.subprocess.run", side_effect=run_side_effect),
+            patch("clangir._clang._version.subprocess.run", side_effect=run_side_effect),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() == "21"
@@ -95,10 +95,10 @@ class TestLlvmConfig:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: f"/usr/bin/{cmd}",
             ),
-            patch("cir._clang._version.subprocess.run", side_effect=run_side_effect),
+            patch("clangir._clang._version.subprocess.run", side_effect=run_side_effect),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() == "20"
@@ -117,10 +117,10 @@ class TestLlvmConfig:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: f"/usr/bin/{cmd}",
             ),
-            patch("cir._clang._version.subprocess.run", side_effect=run_side_effect),
+            patch("clangir._clang._version.subprocess.run", side_effect=run_side_effect),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() == "19"
@@ -134,10 +134,10 @@ class TestClangPreprocessor:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: None if cmd == "llvm-config" else "/usr/bin/clang",
             ),
-            patch("cir._clang._version.subprocess.run", return_value=mock_result),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() == "20"
@@ -161,10 +161,10 @@ class TestClangPreprocessor:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: None if cmd == "llvm-config" else "/usr/bin/clang",
             ),
-            patch("cir._clang._version.subprocess.run", return_value=mock_result),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() == "16"
@@ -177,10 +177,10 @@ class TestClangPreprocessor:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: None if cmd == "llvm-config" else "/usr/bin/clang",
             ),
-            patch("cir._clang._version.subprocess.run", return_value=mock_result),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() is None
@@ -190,10 +190,10 @@ class TestClangPreprocessor:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "cir._clang._version.shutil.which",
+                "clangir._clang._version.shutil.which",
                 side_effect=lambda cmd: None if cmd == "llvm-config" else "/usr/bin/clang",
             ),
-            patch("cir._clang._version.subprocess.run", side_effect=OSError("Permission denied")),
+            patch("clangir._clang._version.subprocess.run", side_effect=OSError("Permission denied")),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() is None
@@ -203,7 +203,7 @@ class TestFallback:
     def test_all_methods_fail_returns_none(self):
         with (
             patch.dict(os.environ, {}, clear=False),
-            patch("cir._clang._version.shutil.which", return_value=None),
+            patch("clangir._clang._version.shutil.which", return_value=None),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() is None

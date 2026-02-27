@@ -1,10 +1,10 @@
-"""Generate CFFI cdef strings from cir IR declarations.
+"""Generate CFFI cdef strings from clangir IR declarations.
 
-This module converts cir IR (Intermediate Representation) objects into
+This module converts clangir IR (Intermediate Representation) objects into
 CFFI-compatible C declaration strings suitable for passing to
 ``ffibuilder.cdef()``.
 
-The IR types come from ``cir.ir`` and represent parsed C headers.
+The IR types come from ``clangir.ir`` and represent parsed C headers.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Optional, Sequence
 
-from cir.ir import (
+from clangir.ir import (
     Array,
     Constant,
     CType,
@@ -424,7 +424,7 @@ def header_to_cffi(
     """Convert all declarations in a Header to a CFFI cdef string.
 
     Args:
-        header: Parsed header IR from cir.
+        header: Parsed header IR from clangir.
         exclude_patterns: List of regex patterns. Declarations with names
             matching any pattern will be excluded.
 

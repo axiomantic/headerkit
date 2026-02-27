@@ -1,9 +1,9 @@
-"""Tests for the public API re-exports from cir package."""
+"""Tests for the public API re-exports from clangir package."""
 
 
-def test_all_ir_types_importable_from_cir():
-    """All public IR types should be importable directly from cir."""
-    from cir import (
+def test_all_ir_types_importable_from_clangir():
+    """All public IR types should be importable directly from clangir."""
+    from clangir import (
         CType,
         Pointer,
         Array,
@@ -37,18 +37,18 @@ def test_all_ir_types_importable_from_cir():
 
 
 def test_all_matches_module_exports():
-    """__all__ should list every public name exported from cir."""
-    import cir
+    """__all__ should list every public name exported from clangir."""
+    import clangir
 
-    for name in cir.__all__:
-        assert hasattr(cir, name), f"cir.__all__ lists {name!r} but it is not an attribute"
+    for name in clangir.__all__:
+        assert hasattr(clangir, name), f"clangir.__all__ lists {name!r} but it is not an attribute"
 
 
 def test_type_aliases_are_unions():
     """TypeExpr and Declaration should be Union type aliases."""
     import typing
 
-    from cir import Declaration, TypeExpr
+    from clangir import Declaration, TypeExpr
 
     # These are Union types, so get_args should return their members
     type_expr_args = typing.get_args(TypeExpr)
@@ -59,33 +59,33 @@ def test_type_aliases_are_unions():
 
 
 def test_ir_types_match_direct_import():
-    """Types imported from cir should be the same objects as from cir.ir."""
-    import cir
-    from cir import ir
+    """Types imported from clangir should be the same objects as from clangir.ir."""
+    import clangir
+    from clangir import ir
 
-    assert cir.CType is ir.CType
-    assert cir.Pointer is ir.Pointer
-    assert cir.Array is ir.Array
-    assert cir.Parameter is ir.Parameter
-    assert cir.FunctionPointer is ir.FunctionPointer
-    assert cir.Field is ir.Field
-    assert cir.EnumValue is ir.EnumValue
-    assert cir.Enum is ir.Enum
-    assert cir.Struct is ir.Struct
-    assert cir.Function is ir.Function
-    assert cir.Typedef is ir.Typedef
-    assert cir.Variable is ir.Variable
-    assert cir.Constant is ir.Constant
-    assert cir.Header is ir.Header
-    assert cir.SourceLocation is ir.SourceLocation
-    assert cir.ParserBackend is ir.ParserBackend
+    assert clangir.CType is ir.CType
+    assert clangir.Pointer is ir.Pointer
+    assert clangir.Array is ir.Array
+    assert clangir.Parameter is ir.Parameter
+    assert clangir.FunctionPointer is ir.FunctionPointer
+    assert clangir.Field is ir.Field
+    assert clangir.EnumValue is ir.EnumValue
+    assert clangir.Enum is ir.Enum
+    assert clangir.Struct is ir.Struct
+    assert clangir.Function is ir.Function
+    assert clangir.Typedef is ir.Typedef
+    assert clangir.Variable is ir.Variable
+    assert clangir.Constant is ir.Constant
+    assert clangir.Header is ir.Header
+    assert clangir.SourceLocation is ir.SourceLocation
+    assert clangir.ParserBackend is ir.ParserBackend
 
 
 def test_backend_functions_match_direct_import():
-    """Backend functions imported from cir should match cir.backends."""
-    import cir
-    from cir import backends
+    """Backend functions imported from clangir should match clangir.backends."""
+    import clangir
+    from clangir import backends
 
-    assert cir.get_backend is backends.get_backend
-    assert cir.list_backends is backends.list_backends
-    assert cir.is_backend_available is backends.is_backend_available
+    assert clangir.get_backend is backends.get_backend
+    assert clangir.list_backends is backends.list_backends
+    assert clangir.is_backend_available is backends.is_backend_available

@@ -1,6 +1,6 @@
-"""cir - C/C++ header parsing toolkit."""
+"""clangir - C/C++ header parsing toolkit."""
 
-from cir.ir import (
+from clangir.ir import (
     # Type expressions
     CType,
     Pointer,
@@ -24,7 +24,7 @@ from cir.ir import (
     # Protocol
     ParserBackend,
 )
-from cir.backends import get_backend, list_backends, is_backend_available
+from clangir.backends import get_backend, list_backends, is_backend_available
 
 __all__ = [
     # Types

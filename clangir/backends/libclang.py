@@ -6,7 +6,7 @@ It provides full C/C++ support including templates, namespaces, and classes.
 Requirements
 ------------
 * System libclang library must be installed
-* cir includes vendored clang Python bindings that are version-matched
+* clangir includes vendored clang Python bindings that are version-matched
   automatically to the system LLVM version
 
 If system libclang is not available, the backend will not register itself
@@ -28,7 +28,7 @@ Example
 -------
 ::
 
-    from cir.backends.libclang import LibclangBackend
+    from clangir.backends.libclang import LibclangBackend
 
     backend = LibclangBackend()
     header = backend.parse(code, "myheader.hpp", extra_args=["-std=c++17"])
@@ -42,11 +42,11 @@ import subprocess
 import sys
 from typing import Any
 
-from cir._clang import get_cindex as _get_cindex
-from cir.backends import (
+from clangir._clang import get_cindex as _get_cindex
+from clangir.backends import (
     register_backend,
 )
-from cir.ir import (
+from clangir.ir import (
     Array,
     Constant,
     CType,
@@ -399,10 +399,10 @@ def _mangle_specialization_name(cpp_name: str) -> str:
 
 
 class ClangASTConverter:
-    """Converts libclang cursors to cir IR.
+    """Converts libclang cursors to clangir IR.
 
     This class walks a libclang translation unit and produces the
-    equivalent cir IR declarations. It handles C and C++ constructs
+    equivalent clangir IR declarations. It handles C and C++ constructs
     including structs, unions, enums, typedefs, functions, classes, and variables.
 
     :param filename: Source filename for filtering declarations.
@@ -1645,7 +1645,7 @@ class LibclangBackend:
     -------
     ::
 
-        from cir.backends.libclang import LibclangBackend
+        from clangir.backends.libclang import LibclangBackend
 
         backend = LibclangBackend()
 
@@ -1880,7 +1880,7 @@ class LibclangBackend:
         :param project_prefixes: Optional tuple of path prefixes to treat as project
             headers (not system). Use this for umbrella headers of libraries installed
             in system locations (e.g., ``("/opt/homebrew/include/sodium",)``).
-        :returns: :class:`~cir.ir.Header` containing parsed declarations.
+        :returns: :class:`~clangir.ir.Header` containing parsed declarations.
         :raises RuntimeError: If parsing fails with errors.
 
         Example

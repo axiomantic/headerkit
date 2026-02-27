@@ -1,6 +1,6 @@
 """Tests for the IR module."""
 
-from cir.ir import (
+from clangir.ir import (
     Array,
     Constant,
     CType,

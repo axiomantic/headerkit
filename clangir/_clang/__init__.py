@@ -5,7 +5,7 @@ and selects the correct version based on the system's installed LLVM.
 
 Usage::
 
-    from cir._clang import get_cindex
+    from clangir._clang import get_cindex
 
     cindex = get_cindex()
     # cindex is the appropriate cindex module for your system LLVM
@@ -37,7 +37,7 @@ def get_cindex() -> ModuleType:
     if _cached_cindex is not None:
         return _cached_cindex
 
-    from cir._clang._version import detect_llvm_version
+    from clangir._clang._version import detect_llvm_version
 
     version = detect_llvm_version()
 
@@ -69,6 +69,6 @@ def get_cindex() -> ModuleType:
             )
             version = LATEST_VENDORED
 
-    module = importlib.import_module(f"cir._clang.v{version}.cindex")
+    module = importlib.import_module(f"clangir._clang.v{version}.cindex")
     _cached_cindex = module
     return module

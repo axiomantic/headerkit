@@ -1,6 +1,6 @@
 """Tests for the CFFI cdef writer."""
 
-from cir.ir import (
+from clangir.ir import (
     Array,
     Constant,
     CType,
@@ -16,7 +16,7 @@ from cir.ir import (
     Typedef,
     Variable,
 )
-from cir.writers.cffi import decl_to_cffi, header_to_cffi, type_to_cffi
+from clangir.writers.cffi import decl_to_cffi, header_to_cffi, type_to_cffi
 
 
 class TestTypeToCffi:

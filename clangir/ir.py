@@ -32,8 +32,8 @@ Example
 -------
 Parse a header and inspect declarations::
 
-    from cir.backends import get_backend
-    from cir.ir import Struct, Function
+    from clangir.backends import get_backend
+    from clangir.ir import Struct, Function
 
     backend = get_backend()
     header = backend.parse("struct Point { int x; int y; };", "test.h")
@@ -116,7 +116,7 @@ class CType:
 
     Composite types with pointers::
 
-        from cir.ir import Pointer
+        from clangir.ir import Pointer
 
         # const char*
         const_char_ptr = Pointer(CType("char", ["const"]))
@@ -666,8 +666,8 @@ class Header:
     -------
     ::
 
-        from cir.backends import get_backend
-        from cir.ir import Struct, Function
+        from clangir.backends import get_backend
+        from clangir.ir import Struct, Function
 
         backend = get_backend()
         header = backend.parse(code, "myheader.h")
@@ -696,7 +696,7 @@ class Header:
 class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
     """Protocol defining the interface for parser backends.
 
-    All parser backends must implement this protocol to be usable with cir.
+    All parser backends must implement this protocol to be usable with clangir.
     Backends are responsible for translating from their native AST format
     (pycparser, libclang, etc.) to the common :class:`Header` IR format.
 
@@ -708,7 +708,7 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
     -------
     ::
 
-        from cir.backends import get_backend
+        from clangir.backends import get_backend
 
         # Get default backend
         backend = get_backend()

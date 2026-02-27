@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from cir.backends import get_backend, is_backend_available
-from cir.writers.cffi import header_to_cffi
+from clangir.backends import get_backend, is_backend_available
+from clangir.writers.cffi import header_to_cffi
 
 # Skip entire module if libclang is not available
 pytestmark = pytest.mark.skipif(

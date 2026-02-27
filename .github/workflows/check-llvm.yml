@@ -1,0 +1,104 @@
+name: Check LLVM Releases
+
+# Detect new stable LLVM major versions that aren't yet vendored in clangir/_clang/
+# and open an issue with vendoring instructions.
+
+on:
+  schedule:
+    - cron: "0 10 * * 1" # Mondays at 10 AM UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect new LLVM versions
+        id: detect
+        run: |
+          # Get all stable LLVM major versions with releases (>= 18)
+          released_majors=$(
+            git -c 'versionsort.suffix=-' \
+              ls-remote --exit-code --refs --sort='version:refname' --tags \
+              https://github.com/llvm/llvm-project 'llvmorg-*.*.*' \
+            | sed 's/.*llvmorg-//' \
+            | grep -v '-' \
+            | awk -F. '$1 >= 18 { print $1 }' \
+            | sort -un
+          )
+
+          # Get vendored major versions
+          vendored_majors=$(
+            ls -d clangir/_clang/v*/ 2>/dev/null \
+            | sed 's|clangir/_clang/v||; s|/||' \
+            | sort -n
+          )
+
+          echo "Released LLVM majors: $released_majors"
+          echo "Vendored majors: $vendored_majors"
+
+          # Find missing versions
+          missing=""
+          for major in $released_majors; do
+            if ! echo "$vendored_majors" | grep -qx "$major"; then
+              missing="$missing $major"
+            fi
+          done
+          missing=$(echo "$missing" | xargs)
+
+          echo "Missing: ${missing:-none}"
+          echo "missing=$missing" >> "$GITHUB_OUTPUT"
+
+      - name: Open issues for missing versions
+        if: steps.detect.outputs.missing != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for major in ${{ steps.detect.outputs.missing }}; do
+            title="Vendor clang Python bindings for LLVM $major"
+
+            # Skip if issue already exists (open or closed)
+            existing=$(gh issue list --search "\"$title\" in:title" --state all --json number --jq 'length')
+            if [ "$existing" -gt 0 ]; then
+              echo "Issue already exists for LLVM $major, skipping"
+              continue
+            fi
+
+            # Get latest patch version for this major
+            latest=$(
+              git -c 'versionsort.suffix=-' \
+                ls-remote --exit-code --refs --sort='version:refname' --tags \
+                https://github.com/llvm/llvm-project "llvmorg-${major}.*.*" \
+              | sed 's/.*llvmorg-//' \
+              | grep -v '-' \
+              | sort -t. -k1,1n -k2,2n -k3,3n \
+              | tail -1
+            )
+
+            body=$(cat <<EOF
+          A new LLVM major version ($major) has stable releases (latest: $latest) but no vendored bindings in \`clangir/_clang/\`.
+
+          ## Steps to vendor
+
+          1. Download the clang Python bindings from the LLVM $latest source:
+             \`\`\`
+             https://github.com/llvm/llvm-project/tree/llvmorg-$latest/clang/bindings/python/clang
+             \`\`\`
+          2. Create \`clangir/_clang/v$major/\` with:
+             - \`__init__.py\`
+             - \`cindex.py\` (from the LLVM source)
+             - \`PROVENANCE\` (source URL, SHA256, license)
+          3. Update \`clangir/_clang/__init__.py\` if the loader needs changes for the new version.
+          4. Add tests and verify with \`pytest\`.
+
+          *This issue was automatically created by the check-llvm workflow.*
+          EOF
+          )
+
+            gh issue create --title "$title" --body "$body"
+            echo "Created issue for LLVM $major"
+          done

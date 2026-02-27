@@ -1,7 +1,7 @@
-"""Parser backends for cir.
+"""Parser backends for clangir.
 
 This package contains parser backend implementations that convert C/C++
-source code into the cir IR (Intermediate Representation).
+source code into the clangir IR (Intermediate Representation).
 
 Available Backends
 ------------------
@@ -13,7 +13,7 @@ Example
 -------
 ::
 
-    from cir.backends import get_backend, list_backends
+    from clangir.backends import get_backend, list_backends
 
     # Get the default backend
     backend = get_backend()
@@ -26,7 +26,7 @@ Example
         print(name)
 """
 
-from cir.ir import (
+from clangir.ir import (
     ParserBackend,
 )
 
@@ -45,7 +45,7 @@ def register_backend(name: str, backend_class: type[ParserBackend], is_default: 
     explicitly set on a later registration.
 
     :param name: Unique name for the backend (e.g., ``"libclang"``).
-    :param backend_class: Class implementing the :class:`~cir.ir.ParserBackend` protocol.
+    :param backend_class: Class implementing the :class:`~clangir.ir.ParserBackend` protocol.
     :param is_default: If True, this becomes the default backend for :func:`get_backend`.
     """
     global _DEFAULT_BACKEND  # pylint: disable=global-statement
@@ -63,7 +63,7 @@ def list_backends() -> list[str]:
     -------
     ::
 
-        from cir.backends import list_backends
+        from clangir.backends import list_backends
 
         for name in list_backends():
             print(f"Available: {name}")
@@ -94,7 +94,7 @@ def get_backend_info() -> list[dict[str, str | bool]]:
     }
 
     result: list[dict[str, str | bool]] = []
-    for name in ["libclang"]:  # cir only ships libclang
+    for name in ["libclang"]:  # clangir only ships libclang
         result.append(
             {
                 "name": name,
@@ -121,7 +121,7 @@ def get_backend(name: str | None = None) -> ParserBackend:
     -------
     ::
 
-        from cir.backends import get_backend
+        from clangir.backends import get_backend
 
         # Get default backend
         backend = get_backend()
@@ -158,7 +158,7 @@ def get_default_backend() -> str:
     -------
     ::
 
-        from cir.backends import get_default_backend
+        from clangir.backends import get_default_backend
 
         default = get_default_backend()
         print(f"Default backend: {default}")
@@ -175,7 +175,7 @@ def _detect_system_clang_version() -> str | None:
 
     :returns: Version string like "18" or None if not detected.
     """
-    from cir._clang._version import detect_llvm_version
+    from clangir._clang._version import detect_llvm_version
 
     return detect_llvm_version()
 
@@ -184,7 +184,7 @@ def _ensure_backends_loaded() -> None:
     """Lazily load backend modules to populate the registry.
 
     NOTE: Managed circular import pattern.
-    This module and cir.backends.libclang have a circular dependency:
+    This module and clangir.backends.libclang have a circular dependency:
     - This module defines the registry functions
     - libclang.py imports register_backend from here at load time
     - _ensure_backends_loaded() in this module imports libclang lazily
@@ -203,12 +203,12 @@ def _ensure_backends_loaded() -> None:
 
     # Import triggers module-level registration if libclang is available
     try:
-        import cir.backends.libclang  # noqa: F401 (side effect import)
+        import clangir.backends.libclang  # noqa: F401 (side effect import)
     except ImportError:
         pass
 
     if not _BACKEND_REGISTRY:
-        from cir._clang._version import detect_llvm_version
+        from clangir._clang._version import detect_llvm_version
 
         version = detect_llvm_version()
         if version:
