@@ -7,7 +7,8 @@ name = "clangir"
 version = "0.1.0"
 description = "C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT AND Apache-2.0 WITH LLVM-exception"
+license-files = ["LICENSE", "clangir/_clang/LICENSE"]
 authors = [
     { name = "elijahr", email = "elijahr+cir@gmail.com" },
 ]
@@ -25,6 +26,7 @@ classifiers = [
     "Programming Language :: C",
     "Programming Language :: C++",
     "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Typing :: Typed",
 ]
 requires-python = ">=3.10"

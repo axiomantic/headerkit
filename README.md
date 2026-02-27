@@ -56,3 +56,11 @@ cd clangir
 pip install -e '.[dev]'
 pytest
 ```
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+The vendored clang Python bindings in `clangir/_clang/v*/` are from the
+[LLVM Project](https://llvm.org/) and are licensed under the
+[Apache License v2.0 with LLVM Exceptions](clangir/_clang/LICENSE).
