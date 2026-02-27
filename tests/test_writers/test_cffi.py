@@ -16,7 +16,7 @@ from clangir.ir import (
     Typedef,
     Variable,
 )
-from clangir.writers.cffi import decl_to_cffi, header_to_cffi, type_to_cffi
+from clangir.writers.cffi import _format_field, _format_params, decl_to_cffi, header_to_cffi, type_to_cffi
 
 
 class TestTypeToCffi:
@@ -50,10 +50,14 @@ class TestTypeToCffi:
         assert type_to_cffi(fp) == "int(*)(int x, float)"
 
     def test_pointer_to_function_pointer(self):
+        fp = FunctionPointer(CType("void"), [Parameter("x", CType("int"))])
+        result = type_to_cffi(Pointer(fp))
+        assert result == "void(*)(int x)"
+
+    def test_pointer_to_function_pointer_no_params(self):
         fp = FunctionPointer(CType("void"), [])
         result = type_to_cffi(Pointer(fp))
-        assert "void" in result
-        assert "*" in result
+        assert result == "void(*)(void)"
 
 
 class TestDeclToCffi:
@@ -104,8 +108,7 @@ class TestDeclToCffi:
             is_variadic=True,
         )
         result = decl_to_cffi(f)
-        assert result is not None
-        assert "..." in result
+        assert result == "int printf(const char * fmt, ...);"
 
     def test_typedef(self):
         t = Typedef("myint", CType("unsigned int"))
@@ -116,12 +119,26 @@ class TestDeclToCffi:
     def test_constant_integer(self):
         c = Constant("SIZE", 100, is_macro=True)
         result = decl_to_cffi(c)
-        assert result is not None
-        assert "#define SIZE 100" in result
+        assert result == "#define SIZE 100"
 
     def test_constant_non_integer_skipped(self):
         c = Constant("STR", '"hello"', is_macro=True)
         result = decl_to_cffi(c)
+        assert result is None
+
+    def test_constant_float_returns_none(self):
+        """CFFI only supports integer constants; float values should return None."""
+        c = Constant("PI", 3.14, is_macro=True)
+        result = decl_to_cffi(c)
+        assert result is None
+
+    def test_unknown_declaration_type_returns_none(self):
+        """decl_to_cffi should return None for unknown declaration types."""
+
+        class FakeDecl:
+            name = "fake"
+
+        result = decl_to_cffi(FakeDecl())
         assert result is None
 
     def test_variable(self):
@@ -141,6 +158,45 @@ class TestDeclToCffi:
         f = Function("_internal_func", CType("void"), [])
         result = decl_to_cffi(f, exclude_patterns=[re.compile(r"_internal_")])
         assert result is None
+
+
+class TestFormatField:
+    def test_array_field(self):
+        f = Field("buf", Array(CType("char"), 256))
+        result = _format_field(f)
+        assert result == "    char buf[256];"
+
+    def test_function_pointer_field(self):
+        fp = FunctionPointer(CType("void"), [Parameter("x", CType("int"))])
+        f = Field("callback", fp)
+        result = _format_field(f)
+        assert result == "    void (*callback)(int x);"
+
+    def test_regular_field(self):
+        f = Field("count", CType("int"))
+        result = _format_field(f)
+        assert result == "    int count;"
+
+
+class TestFormatParams:
+    def test_array_parameter(self):
+        params = [Parameter("buf", Array(CType("char"), 256))]
+        result = _format_params(params, False)
+        assert result == "char buf[256]"
+
+    def test_function_pointer_parameter(self):
+        fp = FunctionPointer(CType("int"), [Parameter("x", CType("float"))])
+        params = [Parameter("cb", fp)]
+        result = _format_params(params, False)
+        assert result == "int (*cb)(float x)"
+
+    def test_empty_params_void(self):
+        result = _format_params([], False)
+        assert result == "void"
+
+    def test_variadic_only(self):
+        result = _format_params([], True)
+        assert result == "..."
 
 
 class TestHeaderToCffi:
@@ -181,7 +237,7 @@ class TestHeaderToCffi:
         assert "typedef" in result
         # Should NOT have "struct nng_socket { ...; };" separately
         lines = result.split("\n")
-        struct_lines = [l for l in lines if l.startswith("struct nng_socket")]
+        struct_lines = [line for line in lines if line.startswith("struct nng_socket")]
         assert len(struct_lines) == 0
 
     def test_enum_typedef_pair_combined(self):

@@ -10,7 +10,7 @@ from clangir.backends import (
     list_backends,
     register_backend,
 )
-from clangir.ir import Header, ParserBackend
+from clangir.ir import Header
 
 
 class MockBackend:
@@ -112,9 +112,11 @@ class TestBackendRegistry:
         b._BACKENDS_LOADED = True
         info = get_backend_info()
         assert isinstance(info, list)
-        # Should have at least the libclang entry
-        names = [entry["name"] for entry in info]
-        assert "libclang" in names
+        assert len(info) == 1
+        # get_backend_info iterates the registry
+        entry = info[0]
+        assert entry["name"] == "mock"
+        assert entry["available"] is True
 
     def test_first_registered_becomes_default(self):
         register_backend("first", MockBackend)
@@ -131,3 +133,40 @@ class TestBackendRegistry:
 
         b._BACKENDS_LOADED = True
         assert get_default_backend() == "second"
+
+    def test_duplicate_registration_second_class_wins(self):
+        """Registering the same name twice replaces the first class."""
+
+        class MockBackend2:
+            @property
+            def name(self) -> str:
+                return "mock2"
+
+            @property
+            def supports_macros(self) -> bool:
+                return True
+
+            @property
+            def supports_cpp(self) -> bool:
+                return True
+
+            def parse(self, code: str, filename: str, **kwargs) -> Header:
+                return Header(path=filename, declarations=[])
+
+        register_backend("mock", MockBackend)
+        register_backend("mock", MockBackend2)
+        import clangir.backends as b
+
+        b._BACKENDS_LOADED = True
+        backend = get_backend("mock")
+        assert isinstance(backend, MockBackend2)
+
+    def test_get_backend_creates_new_instances(self):
+        """Each call to get_backend should return a new instance."""
+        register_backend("mock", MockBackend, is_default=True)
+        import clangir.backends as b
+
+        b._BACKENDS_LOADED = True
+        first = get_backend("mock")
+        second = get_backend("mock")
+        assert first is not second

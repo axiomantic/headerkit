@@ -50,7 +50,12 @@ def get_cindex() -> ModuleType:
         version = LATEST_VENDORED
 
     if version not in VENDORED_VERSIONS:
-        v_int = int(version)
+        try:
+            v_int = int(version)
+        except ValueError:
+            warnings.warn(f"Invalid LLVM version {version!r}, falling back to {LATEST_VENDORED}", stacklevel=2)
+            version = LATEST_VENDORED
+            v_int = int(version)
         oldest_int = int(OLDEST_VENDORED)
         latest_int = int(LATEST_VENDORED)
 

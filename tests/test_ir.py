@@ -49,6 +49,12 @@ class TestPointer:
         p = Pointer(Pointer(CType("int")))
         assert str(p) == "int**"
 
+    def test_pointer_with_qualifiers(self):
+        """Pointer with qualifiers represents 'int * const'."""
+        p = Pointer(CType("int"), ["const"])
+        assert str(p) == "const int*"
+        assert p.qualifiers == ["const"]
+
 
 class TestArray:
     def test_fixed_size_array(self):
@@ -83,6 +89,11 @@ class TestFunctionPointer:
             is_variadic=True,
         )
         assert str(fp) == "int (*)(const char* fmt, ...)"
+
+    def test_variadic_function_pointer_no_named_params(self):
+        """Variadic function pointer with no named parameters."""
+        fp = FunctionPointer(CType("int"), [], is_variadic=True)
+        assert str(fp) == "int (*)(...)"
 
 
 class TestEnum:
@@ -120,6 +131,28 @@ class TestStruct:
     def test_cppclass(self):
         c = Struct("Widget", [], is_cppclass=True)
         assert str(c) == "cppclass Widget"
+
+    def test_struct_with_methods(self):
+        """Struct with methods list (C++ class methods)."""
+        s = Struct(
+            "Widget",
+            fields=[Field("width", CType("int"))],
+            methods=[
+                Function(
+                    "resize",
+                    CType("void"),
+                    [
+                        Parameter("w", CType("int")),
+                        Parameter("h", CType("int")),
+                    ],
+                ),
+            ],
+            is_cppclass=True,
+        )
+        assert len(s.methods) == 1
+        assert s.methods[0].name == "resize"
+        assert len(s.methods[0].parameters) == 2
+        assert str(s) == "cppclass Widget"
 
     def test_struct_with_cpp_fields(self):
         s = Struct(
@@ -165,6 +198,20 @@ class TestTypedef:
         t = Typedef("myint", CType("int"))
         assert str(t) == "typedef int myint"
 
+    def test_typedef_pointer(self):
+        """Typedef of a pointer type."""
+        t = Typedef("int_ptr", Pointer(CType("int")))
+        assert str(t) == "typedef int* int_ptr"
+
+    def test_typedef_function_pointer(self):
+        """Typedef of a function pointer type."""
+        fp = FunctionPointer(
+            CType("void"),
+            [Parameter("data", Pointer(CType("void")))],
+        )
+        t = Typedef("callback_t", fp)
+        assert str(t) == "typedef void (*)(void* data) callback_t"
+
 
 class TestVariable:
     def test_simple_variable(self):
@@ -180,6 +227,11 @@ class TestConstant:
     def test_const_variable(self):
         c = Constant("MAX", 255, type=CType("int"))
         assert str(c) == "const int MAX = 255"
+
+    def test_const_without_type(self):
+        """Non-macro constant with type=None omits type from str."""
+        c = Constant("VAL", 42)
+        assert str(c) == "const VAL = 42"
 
 
 class TestHeader:
@@ -253,9 +305,43 @@ class TestSourceLocation:
 class TestParserBackendProtocol:
     def test_protocol_is_runtime_checkable(self):
         """ParserBackend should work as a runtime-checkable Protocol."""
-        import typing
 
-        assert hasattr(ParserBackend, "__protocol_attrs__") or issubclass(type(ParserBackend), type(typing.Protocol))
+        class MockBackend:
+            def parse(
+                self,
+                code: str,
+                filename: str,
+                include_dirs=None,
+                extra_args=None,
+                *,
+                use_default_includes=True,
+                recursive_includes=True,
+                max_depth=10,
+                project_prefixes=None,
+            ):
+                return Header(path=filename)
+
+            @property
+            def name(self) -> str:
+                return "mock"
+
+            @property
+            def supports_macros(self) -> bool:
+                return False
+
+            @property
+            def supports_cpp(self) -> bool:
+                return False
+
+        assert isinstance(MockBackend(), ParserBackend)
+
+    def test_protocol_rejects_non_conforming(self):
+        """Objects not conforming to ParserBackend should fail isinstance."""
+
+        class NotABackend:
+            pass
+
+        assert not isinstance(NotABackend(), ParserBackend)
 
     def test_protocol_has_extended_parse_signature(self):
         """ParserBackend.parse should accept keyword-only optional parameters."""

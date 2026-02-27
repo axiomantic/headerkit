@@ -38,8 +38,11 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import subprocess
 import sys
+from collections import deque
+from dataclasses import replace
 from typing import Any
 
 from clangir._clang import get_cindex as _get_cindex
@@ -92,7 +95,7 @@ def _get_libclang_search_paths() -> list[str]:
         paths.append("/Library/Developer/CommandLineTools/usr/lib/libclang.dylib")
         # Xcode.app
         paths.append(
-            "/Applications/Xcode.app/Contents/Developer/Toolchains/" "XcodeDefault.xctoolchain/usr/lib/libclang.dylib"
+            "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libclang.dylib"
         )
 
     elif sys.platform == "linux":
@@ -272,25 +275,39 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
     # Check project prefixes first - if path matches, it's NOT a system header
     if project_prefixes:
         for prefix in project_prefixes:
-            if prefix.lower() in path_str:
+            normalized = prefix.lower().rstrip("/") + "/"
+            if path_str.startswith(normalized) or path_str == prefix.lower():
                 return False
 
-    # Common system header locations
-    system_prefixes = (
+    # System header locations that are absolute path prefixes
+    system_path_prefixes = (
         "/usr/include",
         "/usr/local/include",
         "/opt/homebrew/",
         "/opt/local/",
-        ".sdk/",
         "/system/library/frameworks",
         "/library/developer/commandlinetools",
+    )
+
+    # System header path fragments that can appear anywhere in the path
+    system_path_fragments = (
+        ".sdk/",
         "clang/include",
         "gcc/include",
         "g++/include",
         "c++/include",
     )
 
-    return any(prefix.lower() in path_str for prefix in system_prefixes)
+    for prefix in system_path_prefixes:
+        normalized = prefix.lower().rstrip("/") + "/"
+        if path_str.startswith(normalized) or path_str == prefix.lower():
+            return True
+
+    for fragment in system_path_fragments:
+        if fragment.lower() in path_str:
+            return True
+
+    return False
 
 
 def _is_umbrella_header(
@@ -370,8 +387,6 @@ def _deduplicate_declarations(declarations: list[Declaration]) -> list[Declarati
         if isinstance(decl, Struct) and decl_name in typedef_struct_names:
             # Create a new Struct with is_typedef=True
             # (dataclasses are immutable by default, need to replace)
-            from dataclasses import replace
-
             decl = replace(decl, is_typedef=True)
 
         if key not in seen:
@@ -421,7 +436,7 @@ class ClangASTConverter:
         self.project_prefixes = project_prefixes
         self.declarations: list[Declaration] = []
         # Track seen declarations to avoid duplicates
-        self._seen: dict[str, bool] = {}
+        self._seen: set[str] = set()
         # Current namespace context (for nested namespace support)
         self._namespace_stack: list[str] = []
         # Store translation unit for dependency resolution
@@ -747,13 +762,13 @@ class ClangASTConverter:
         # Process in dependency order using simple topological sort
         processed: set[str] = set(system_types_not_to_emit)  # Treat system types as already processed
         # Sort alphabetically for deterministic output
-        to_process = sorted(all_needed)
+        to_process = deque(sorted(all_needed))
         max_iterations = len(to_process) * len(to_process) + 1  # Safety limit
 
         iterations = 0
         while to_process and iterations < max_iterations:
             iterations += 1
-            type_name = to_process.pop(0)
+            type_name = to_process.popleft()
             if type_name in processed:
                 continue
 
@@ -769,6 +784,15 @@ class ClangASTConverter:
             processed.add(type_name)
             if type_name in typedef_map:
                 self._process_typedef(typedef_map[type_name])
+
+        if iterations >= max_iterations:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Topological sort hit iteration limit (%d); %d declarations may be missing",
+                max_iterations,
+                len(to_process),
+            )
 
     def _process_children(self, cursor: Any) -> None:
         """Process all children of a cursor."""
@@ -864,7 +888,7 @@ class ClangASTConverter:
         key = f"macro:{name}"
         if key in self._seen:
             return
-        self._seen[key] = True
+        self._seen.add(key)
 
         # Get tokens - first token is the macro name, rest is the value
         tokens = list(cursor.get_tokens())
@@ -917,9 +941,7 @@ class ClangASTConverter:
             )
         )
 
-    def _analyze_macro_tokens(
-        self, tokens: list[Any]
-    ) -> tuple[CType | None, int | float | str | None]:
+    def _analyze_macro_tokens(self, tokens: list[Any]) -> tuple[CType | None, int | float | str | None]:
         """Analyze macro value tokens to determine type.
 
         Returns:
@@ -985,9 +1007,7 @@ class ClangASTConverter:
         except ValueError:
             return None, False
 
-    def _analyze_expression_tokens(
-        self, tokens: list[Any]
-    ) -> tuple[CType | None, int | float | str | None]:
+    def _analyze_expression_tokens(self, tokens: list[Any]) -> tuple[CType | None, int | float | str | None]:
         """Analyze a multi-token expression macro.
 
         For expressions like (A + B), we detect if it looks like an integer
@@ -1089,15 +1109,15 @@ class ClangASTConverter:
             # Only emit forward declaration if we haven't seen this type at all
             if key in self._seen:
                 return
-            self._seen[key] = True
+            self._seen.add(key)
         else:
             # This is a definition - mark it and remove any prior forward declaration
-            self._seen[definition_key] = True
+            self._seen.add(definition_key)
             if key in self._seen:
                 # We previously emitted a forward declaration - need to remove it
                 # and replace with the definition
                 self._remove_forward_declaration(name, key_prefix)
-            self._seen[key] = True
+            self._seen.add(key)
 
         fields: list[Field] = []
         methods: list[Function] = []
@@ -1140,7 +1160,7 @@ class ClangASTConverter:
         key = f"template:{name}"
         if key in self._seen:
             return
-        self._seen[key] = True
+        self._seen.add(key)
 
         # Extract template type parameters and track non-type parameters
         template_params: list[str] = []
@@ -1221,7 +1241,7 @@ class ClangASTConverter:
         key = f"partial_spec:{display_name}"
         if key in self._seen:
             return
-        self._seen[key] = True
+        self._seen.add(key)
 
         # Try to find the base template to add a note to it
         # Look for existing template with the base name
@@ -1268,7 +1288,7 @@ class ClangASTConverter:
         if name and key in self._seen:
             return
         if name:
-            self._seen[key] = True
+            self._seen.add(key)
 
         values: list[EnumValue] = []
         for child in cursor.get_children():
@@ -1288,7 +1308,7 @@ class ClangASTConverter:
         key = f"function:{name}"
         if key in self._seen:
             return
-        self._seen[key] = True
+        self._seen.add(key)
 
         return_type = self._convert_type(cursor.result_type)
         if not return_type:
@@ -1354,7 +1374,7 @@ class ClangASTConverter:
         key = f"typedef:{name}"
         if key in self._seen:
             return
-        self._seen[key] = True
+        self._seen.add(key)
 
         underlying = cursor.underlying_typedef_type
 
@@ -1391,8 +1411,6 @@ class ClangASTConverter:
                         # Struct was already processed - update its is_typedef flag if needed
                         if is_typedef_pattern:
                             # Find and update the existing struct
-                            from dataclasses import replace
-
                             for i, existing_decl in enumerate(self.declarations):
                                 if isinstance(existing_decl, Struct) and existing_decl.name == struct_name:
                                     # Replace with typedef'd version
@@ -1401,8 +1419,8 @@ class ClangASTConverter:
                         # Don't create another struct, but might still need typedef
                     else:
                         # First time seeing this struct - create it
-                        self._seen[struct_key] = True
-                        self._seen[definition_key] = True  # Mark definition as seen
+                        self._seen.add(struct_key)
+                        self._seen.add(definition_key)  # Mark definition as seen
                         is_union = decl.kind == CursorKind.UNION_DECL
 
                         fields: list[Field] = []
@@ -1427,9 +1445,7 @@ class ClangASTConverter:
                     # If struct name == typedef name, we've already handled it above
                     # Only create separate typedef if names differ
                     if struct_name and struct_name != name:
-                        underlying_type: CType | Pointer | Array | FunctionPointer = CType(
-                            name=struct_name
-                        )  # Use just the name, not "struct name"
+                        underlying_type: TypeExpr = CType(name=struct_name)  # Use just the name, not "struct name"
 
                         typedef = Typedef(
                             name=name,
@@ -1479,7 +1495,7 @@ class ClangASTConverter:
         key = f"var:{name}"
         if key in self._seen:
             return
-        self._seen[key] = True
+        self._seen.add(key)
 
         var_type = self._convert_type(cursor.type)
         if not var_type:
@@ -1574,6 +1590,15 @@ class ClangASTConverter:
             decl = clang_type.get_declaration()
             return CType(name=decl.spelling)
 
+        # Handle C++ reference types
+        if kind == TypeKind.LVALUEREFERENCE:
+            pointee = self._convert_type(clang_type.get_pointee())
+            # Represent C++ references as the underlying type for C compatibility
+            return pointee
+        if kind == TypeKind.RVALUEREFERENCE:
+            pointee = self._convert_type(clang_type.get_pointee())
+            return pointee
+
         # Handle nullptr_t type (C++11)
         # std::nullptr_t resolves to TypeKind.NULLPTR
         # Map to void* since Cython doesn't have a nullptr_t type
@@ -1593,7 +1618,9 @@ class ClangASTConverter:
         # Clean up the spelling to get base type
         base_type = spelling
         for qual in qualifiers:
-            base_type = base_type.replace(qual, "").strip()
+            base_type = re.sub(r"\b" + re.escape(qual) + r"\b", "", base_type).strip()
+        # Clean up any double spaces
+        base_type = re.sub(r"\s+", " ", base_type).strip()
 
         return CType(name=base_type, qualifiers=qualifiers)
 
@@ -1831,9 +1858,10 @@ class LibclangBackend:
                 # Add declarations from sub-header
                 all_declarations.extend(sub_header.declarations)
 
-            except Exception:
-                # Skip headers that fail to parse
-                # This is common with complex system headers
+            except (OSError, RuntimeError, ValueError):
+                import logging
+
+                logging.getLogger(__name__).debug("Failed to parse included header: %s", abs_path, exc_info=True)
                 continue
 
         # Deduplicate declarations
@@ -1852,6 +1880,7 @@ class LibclangBackend:
         filename: str,
         include_dirs: list[str] | None = None,
         extra_args: list[str] | None = None,
+        *,
         use_default_includes: bool = True,
         recursive_includes: bool = True,
         max_depth: int = 10,
@@ -1914,7 +1943,15 @@ class LibclangBackend:
         args: list[str] = []
 
         # Detect C++ mode from extra_args
-        is_cplus = bool(extra_args and any(arg in ("-x", "c++") or arg.startswith("-std=c++") for arg in extra_args))
+        is_cplus = False
+        if extra_args:
+            for i, arg in enumerate(extra_args):
+                if arg.startswith("-std=c++"):
+                    is_cplus = True
+                    break
+                if arg == "-x" and i + 1 < len(extra_args) and extra_args[i + 1] == "c++":
+                    is_cplus = True
+                    break
 
         # Add user-specified include directories FIRST
         # This is important for C++ where user headers may need to come before system libc++

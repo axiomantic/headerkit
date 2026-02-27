@@ -94,7 +94,7 @@ def get_backend_info() -> list[dict[str, str | bool]]:
     }
 
     result: list[dict[str, str | bool]] = []
-    for name in ["libclang"]:  # clangir only ships libclang
+    for name in _BACKEND_REGISTRY:
         result.append(
             {
                 "name": name,
@@ -170,16 +170,6 @@ def get_default_backend() -> str:
     return _DEFAULT_BACKEND
 
 
-def _detect_system_clang_version() -> str | None:
-    """Detect the system libclang/LLVM version.
-
-    :returns: Version string like "18" or None if not detected.
-    """
-    from clangir._clang._version import detect_llvm_version
-
-    return detect_llvm_version()
-
-
 def _ensure_backends_loaded() -> None:
     """Lazily load backend modules to populate the registry.
 
@@ -205,7 +195,9 @@ def _ensure_backends_loaded() -> None:
     try:
         import clangir.backends.libclang  # noqa: F401 (side effect import)
     except ImportError:
-        pass
+        import logging
+
+        logging.getLogger(__name__).debug("Could not import libclang backend", exc_info=True)
 
     if not _BACKEND_REGISTRY:
         from clangir._clang._version import detect_llvm_version

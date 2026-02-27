@@ -14,19 +14,25 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - name: Detect new LLVM versions
         id: detect
         run: |
-          # Get all stable LLVM major versions with releases (>= 18)
-          released_majors=$(
+          # Fetch all LLVM tags once and cache for reuse
+          all_tags=$(
             git -c 'versionsort.suffix=-' \
               ls-remote --exit-code --refs --sort='version:refname' --tags \
               https://github.com/llvm/llvm-project 'llvmorg-*.*.*' \
             | sed 's/.*llvmorg-//' \
-            | grep -v '-' \
+            | grep -v '-'
+          )
+
+          # Get all stable LLVM major versions with releases (>= 18)
+          released_majors=$(
+            echo "$all_tags" \
             | awk -F. '$1 >= 18 { print $1 }' \
             | sort -un
           )
@@ -53,12 +59,21 @@ jobs:
           echo "Missing: ${missing:-none}"
           echo "missing=$missing" >> "$GITHUB_OUTPUT"
 
+          # Save tag list for reuse in the next step
+          {
+            echo "all_tags<<TAGS_EOF"
+            echo "$all_tags"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Open issues for missing versions
         if: steps.detect.outputs.missing != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          MISSING: ${{ steps.detect.outputs.missing }}
+          ALL_TAGS: ${{ steps.detect.outputs.all_tags }}
         run: |
-          for major in ${{ steps.detect.outputs.missing }}; do
+          for major in $MISSING; do
             title="Vendor clang Python bindings for LLVM $major"
 
             # Skip if issue already exists (open or closed)
@@ -68,19 +83,15 @@ jobs:
               continue
             fi
 
-            # Get latest patch version for this major
+            # Get latest patch version for this major from cached tags
             latest=$(
-              git -c 'versionsort.suffix=-' \
-                ls-remote --exit-code --refs --sort='version:refname' --tags \
-                https://github.com/llvm/llvm-project "llvmorg-${major}.*.*" \
-              | sed 's/.*llvmorg-//' \
-              | grep -v '-' \
+              echo "$ALL_TAGS" \
+              | grep "^${major}\." \
               | sort -t. -k1,1n -k2,2n -k3,3n \
               | tail -1
             )
 
-            body=$(cat <<EOF
-          A new LLVM major version ($major) has stable releases (latest: $latest) but no vendored bindings in \`clangir/_clang/\`.
+            body="A new LLVM major version ($major) has stable releases (latest: $latest) but no vendored bindings in \`clangir/_clang/\`.
 
           ## Steps to vendor
 
@@ -95,9 +106,7 @@ jobs:
           3. Update \`clangir/_clang/__init__.py\` if the loader needs changes for the new version.
           4. Add tests and verify with \`pytest\`.
 
-          *This issue was automatically created by the check-llvm workflow.*
-          EOF
-          )
+          *This issue was automatically created by the check-llvm workflow.*"
 
             gh issue create --title "$title" --body "$body"
             echo "Created issue for LLVM $major"

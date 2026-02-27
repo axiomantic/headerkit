@@ -14,7 +14,15 @@ class TestEnvVarOverride:
 
     def test_cir_clang_version_env_var_takes_precedence(self):
         """Env var should take precedence over llvm-config."""
-        with patch.dict(os.environ, {"CIR_CLANG_VERSION": "20"}):
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "19.0.0\n"
+        with (
+            patch.dict(os.environ, {"CIR_CLANG_VERSION": "20"}),
+            patch("clangir._clang._version.shutil.which", return_value="/usr/bin/llvm-config"),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
+        ):
+            # Even though llvm-config would return 19, the env var should win
             assert detect_llvm_version() == "20"
 
     def test_env_var_with_whitespace_is_stripped(self):
@@ -62,7 +70,7 @@ class TestLlvmConfig:
         clang_result.returncode = 0
         clang_result.stdout = "#define __clang_major__ 21\n"
 
-        def run_side_effect(cmd, **kwargs):
+        def run_side_effect(cmd, **kwargs):  # noqa: ARG001
             if "llvm-config" in cmd[0]:
                 return llvm_result
             return clang_result
@@ -87,7 +95,7 @@ class TestLlvmConfig:
         clang_result.returncode = 0
         clang_result.stdout = "#define __clang_major__ 20\n"
 
-        def run_side_effect(cmd, **kwargs):
+        def run_side_effect(cmd, **kwargs):  # noqa: ARG001
             if "llvm-config" in cmd[0]:
                 return llvm_result
             return clang_result
@@ -109,7 +117,7 @@ class TestLlvmConfig:
         clang_result.returncode = 0
         clang_result.stdout = "#define __clang_major__ 19\n"
 
-        def run_side_effect(cmd, **kwargs):
+        def run_side_effect(cmd, **kwargs):  # noqa: ARG001
             if "llvm-config" in cmd[0]:
                 raise subprocess.TimeoutExpired(cmd="llvm-config", timeout=5)
             return clang_result

@@ -39,9 +39,7 @@ class TestVariableRoundtrip:
 
     def test_pointer_variable(self, backend):
         cdef = parse_and_convert(backend, "char *name;")
-        assert "char" in cdef
-        assert "name" in cdef
-        assert "*" in cdef
+        assert "char * name;" in cdef
 
 
 class TestStructRoundtrip:
@@ -67,9 +65,9 @@ class TestStructRoundtrip:
         };
         """
         cdef = parse_and_convert(backend, code)
-        assert "struct Node" in cdef
+        assert "struct Node {" in cdef
         assert "int value;" in cdef
-        assert "next" in cdef
+        assert "struct Node * next;" in cdef
 
     def test_typedef_struct(self, backend):
         code = """
@@ -92,27 +90,22 @@ class TestFunctionRoundtrip:
     def test_simple_function(self, backend):
         code = "int add(int a, int b);"
         cdef = parse_and_convert(backend, code)
-        assert "int add(" in cdef
-        assert "int a" in cdef
-        assert "int b" in cdef
+        assert "int add(int a, int b);" in cdef
 
     def test_void_function(self, backend):
         code = "void do_nothing(void);"
         cdef = parse_and_convert(backend, code)
-        assert "void do_nothing(" in cdef
+        assert "void do_nothing(void);" in cdef
 
     def test_pointer_return(self, backend):
         code = "char *get_name(void);"
         cdef = parse_and_convert(backend, code)
-        assert "char" in cdef
-        assert "*" in cdef
-        assert "get_name" in cdef
+        assert "char * get_name(void);" in cdef
 
     def test_variadic_function(self, backend):
         code = "int printf(const char *fmt, ...);"
         cdef = parse_and_convert(backend, code)
-        assert "printf" in cdef
-        assert "..." in cdef
+        assert "int printf(const char * fmt, ...);" in cdef
 
 
 class TestEnumRoundtrip:
@@ -127,10 +120,10 @@ class TestEnumRoundtrip:
         };
         """
         cdef = parse_and_convert(backend, code)
-        assert "enum" in cdef
-        assert "RED" in cdef
-        assert "GREEN" in cdef
-        assert "BLUE" in cdef
+        assert "enum Color {" in cdef
+        assert "RED = 0," in cdef
+        assert "GREEN = 1," in cdef
+        assert "BLUE = 2," in cdef
 
     def test_typedef_enum(self, backend):
         code = """
@@ -140,9 +133,9 @@ class TestEnumRoundtrip:
         } Switch;
         """
         cdef = parse_and_convert(backend, code)
-        assert "Switch" in cdef
-        assert "OFF" in cdef
-        assert "ON" in cdef
+        assert "OFF = 0," in cdef
+        assert "ON = 1," in cdef
+        assert "} Switch;" in cdef
 
 
 class TestTypedefRoundtrip:
@@ -151,20 +144,64 @@ class TestTypedefRoundtrip:
     def test_simple_typedef(self, backend):
         code = "typedef unsigned int uint32;"
         cdef = parse_and_convert(backend, code)
-        assert "typedef" in cdef
-        assert "uint32" in cdef
+        assert "typedef unsigned int uint32;" in cdef
 
     def test_pointer_typedef(self, backend):
         code = "typedef void *handle_t;"
         cdef = parse_and_convert(backend, code)
-        assert "typedef" in cdef
-        assert "handle_t" in cdef
+        assert "typedef void * handle_t;" in cdef
 
     def test_function_pointer_typedef(self, backend):
         code = "typedef void (*callback_fn)(int status);"
         cdef = parse_and_convert(backend, code)
+        # libclang may not preserve parameter names in function pointer typedefs
+        assert "typedef void (*callback_fn)(int" in cdef
+        assert cdef.strip().endswith(";")
         assert "callback_fn" in cdef
-        assert "int" in cdef
+
+
+class TestUnionRoundtrip:
+    """Test parsing and converting union declarations."""
+
+    def test_simple_union(self, backend):
+        code = """
+        union Data {
+            int i;
+            float f;
+            char c;
+        };
+        """
+        cdef = parse_and_convert(backend, code)
+        assert "union Data {" in cdef
+        assert "int i;" in cdef
+        assert "float f;" in cdef
+        assert "char c;" in cdef
+
+
+class TestMacroConstantRoundtrip:
+    """Test parsing and converting macro constants."""
+
+    def test_integer_macro(self, backend):
+        code = "#define MAX_SIZE 1024\nvoid func(void);"
+        cdef = parse_and_convert(backend, code)
+        assert "#define MAX_SIZE 1024" in cdef
+
+    def test_non_integer_macro_skipped(self, backend):
+        code = '#define VERSION "1.0"\nvoid func(void);'
+        cdef = parse_and_convert(backend, code)
+        # String macros are not supported by CFFI and should be omitted
+        assert "VERSION" not in cdef
+
+
+class TestFunctionPointerTypedefRoundtrip:
+    """Test parsing and converting function pointer typedefs."""
+
+    def test_function_pointer_typedef(self, backend):
+        code = "typedef int (*comparator_fn)(const void *a, const void *b);"
+        cdef = parse_and_convert(backend, code)
+        assert "typedef" in cdef
+        assert "comparator_fn" in cdef
+        assert "..." not in cdef  # should not be variadic
 
 
 class TestMultipleDeclarations:
@@ -191,18 +228,18 @@ class TestMultipleDeclarations:
         cdef = parse_and_convert(backend, code)
 
         # Verify struct
-        assert "struct Buffer" in cdef
-        assert "data" in cdef
-        assert "length" in cdef
+        assert "struct Buffer {" in cdef
+        assert "char * data;" in cdef
+        assert "size_t length;" in cdef or "unsigned int length;" in cdef
 
         # Verify enum
-        assert "OK" in cdef
-        assert "ERROR" in cdef
+        assert "OK = 0," in cdef
+        assert "ERROR = 1," in cdef
 
         # Verify functions
-        assert "buffer_create" in cdef
-        assert "buffer_destroy" in cdef
-        assert "buffer_write" in cdef
+        assert "buffer_create(" in cdef
+        assert "buffer_destroy(" in cdef
+        assert "buffer_write(" in cdef
 
     def test_interdependent_types(self, backend):
         code = """
@@ -216,7 +253,8 @@ class TestMultipleDeclarations:
         """
         cdef = parse_and_convert(backend, code)
         assert "Config" in cdef
-        assert "init" in cdef
+        assert "int flags;" in cdef
+        assert "init(" in cdef
 
 
 class TestExcludePatterns:

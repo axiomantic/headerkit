@@ -10,7 +10,7 @@ The IR types come from ``clangir.ir`` and represent parsed C headers.
 from __future__ import annotations
 
 import re
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from clangir.ir import (
     Array,
@@ -29,7 +29,6 @@ from clangir.ir import (
     TypeExpr,
     Variable,
 )
-
 
 # Maps bare tag names to their kind ("struct", "union", "enum").
 # Populated by header_to_cffi before emitting declarations.
@@ -51,7 +50,7 @@ def _qualify_ctype_name(name: str, tag_kinds: TagKinds) -> str:
     return name
 
 
-def type_to_cffi(t: TypeExpr, tag_kinds: Optional[TagKinds] = None) -> str:
+def type_to_cffi(t: TypeExpr, tag_kinds: TagKinds | None = None) -> str:
     """Convert a type expression to its CFFI string representation."""
     tags = tag_kinds or {}
     if isinstance(t, CType):
@@ -70,7 +69,7 @@ def type_to_cffi(t: TypeExpr, tag_kinds: Optional[TagKinds] = None) -> str:
             return f"{type_to_cffi(fp.return_type, tags)}(*)({params})"
         # Collect consecutive pointer levels to emit "type **" not "type * *"
         ptr_count = 0
-        inner = t
+        inner: TypeExpr = t
         while isinstance(inner, Pointer):
             # Stop unwinding if we hit a function pointer pointee
             if isinstance(inner.pointee, FunctionPointer):
@@ -98,7 +97,7 @@ def type_to_cffi(t: TypeExpr, tag_kinds: Optional[TagKinds] = None) -> str:
 def _format_params(
     parameters: list[Parameter],
     is_variadic: bool,
-    tag_kinds: Optional[TagKinds] = None,
+    tag_kinds: TagKinds | None = None,
 ) -> str:
     """Format function parameter list as a string."""
     tags = tag_kinds or {}
@@ -111,15 +110,11 @@ def _format_params(
             # Arrays: dimension goes after the name
             if isinstance(p.type, Array):
                 size_str = str(p.type.size) if p.type.size is not None else ""
-                parts.append(
-                    f"{type_to_cffi(p.type.element_type, tags)} {p.name}[{size_str}]"
-                )
+                parts.append(f"{type_to_cffi(p.type.element_type, tags)} {p.name}[{size_str}]")
             elif isinstance(p.type, FunctionPointer):
                 fp = p.type
                 fp_params = _format_params(fp.parameters, fp.is_variadic, tags)
-                parts.append(
-                    f"{type_to_cffi(fp.return_type, tags)} (*{p.name})({fp_params})"
-                )
+                parts.append(f"{type_to_cffi(fp.return_type, tags)} (*{p.name})({fp_params})")
             else:
                 parts.append(f"{type_str} {p.name}")
         else:
@@ -129,7 +124,7 @@ def _format_params(
     return ", ".join(parts)
 
 
-def _format_field(f: Field, tag_kinds: Optional[TagKinds] = None) -> str:
+def _format_field(f: Field, tag_kinds: TagKinds | None = None) -> str:
     """Format a struct/union field declaration."""
     tags = tag_kinds or {}
     if isinstance(f.type, Array):
@@ -150,9 +145,9 @@ def _format_field(f: Field, tag_kinds: Optional[TagKinds] = None) -> str:
 
 def decl_to_cffi(
     decl: Declaration,
-    exclude_patterns: Optional[Sequence[re.Pattern]] = None,
-    tag_kinds: Optional[TagKinds] = None,
-) -> Optional[str]:
+    exclude_patterns: Sequence[re.Pattern[str]] | None = None,
+    tag_kinds: TagKinds | None = None,
+) -> str | None:
     """Convert a single IR declaration to a CFFI cdef string.
 
     Returns None if the declaration should be excluded.
@@ -181,9 +176,7 @@ def decl_to_cffi(
         return None
 
 
-def _struct_to_cffi(
-    decl: Struct, tag_kinds: Optional[TagKinds] = None
-) -> Optional[str]:
+def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | None:
     """Convert a Struct/Union IR node to CFFI cdef."""
     if decl.name is None or _is_anonymous_name(decl.name):
         return None
@@ -214,7 +207,7 @@ def _struct_to_cffi(
     return "\n".join(lines)
 
 
-def _is_anonymous_name(name: Optional[str]) -> bool:
+def _is_anonymous_name(name: str | None) -> bool:
     """Check if a name is a synthesized anonymous name from libclang."""
     if name is None:
         return True
@@ -222,7 +215,7 @@ def _is_anonymous_name(name: Optional[str]) -> bool:
     return "(unnamed" in name or "(anonymous" in name
 
 
-def _enum_to_cffi(decl: Enum) -> Optional[str]:
+def _enum_to_cffi(decl: Enum) -> str | None:
     """Convert an Enum IR node to CFFI cdef."""
     if not decl.values:
         return None
@@ -256,9 +249,9 @@ def _enum_to_cffi(decl: Enum) -> Optional[str]:
 
 def _function_to_cffi(
     decl: Function,
-    exclude_patterns: Optional[Sequence[re.Pattern]] = None,
-    tag_kinds: Optional[TagKinds] = None,
-) -> Optional[str]:
+    exclude_patterns: Sequence[re.Pattern[str]] | None = None,
+    tag_kinds: TagKinds | None = None,
+) -> str | None:
     """Convert a Function IR node to CFFI cdef."""
     if exclude_patterns:
         for pat in exclude_patterns:
@@ -269,26 +262,20 @@ def _function_to_cffi(
     return f"{type_to_cffi(decl.return_type, tag_kinds)} {decl.name}({params});"
 
 
-def _typedef_to_cffi(
-    decl: Typedef, tag_kinds: Optional[TagKinds] = None
-) -> Optional[str]:
+def _typedef_to_cffi(decl: Typedef, tag_kinds: TagKinds | None = None) -> str | None:
     """Convert a Typedef IR node to CFFI cdef."""
     underlying = decl.underlying_type
 
     # Function pointer typedef: typedef void (*name)(int, char *)
     # In the IR this is Pointer(FunctionPointer(...))
-    if isinstance(underlying, Pointer) and isinstance(
-        underlying.pointee, FunctionPointer
-    ):
+    if isinstance(underlying, Pointer) and isinstance(underlying.pointee, FunctionPointer):
         fp = underlying.pointee
         fp_params = _format_params(fp.parameters, fp.is_variadic, tag_kinds)
         return f"typedef {type_to_cffi(fp.return_type, tag_kinds)} (*{decl.name})({fp_params});"
 
     # Direct function pointer typedef (shouldn't normally happen but handle it)
     if isinstance(underlying, FunctionPointer):
-        fp_params = _format_params(
-            underlying.parameters, underlying.is_variadic, tag_kinds
-        )
+        fp_params = _format_params(underlying.parameters, underlying.is_variadic, tag_kinds)
         return f"typedef {type_to_cffi(underlying.return_type, tag_kinds)} (*{decl.name})({fp_params});"
 
     # Array typedef: typedef int name[10]
@@ -300,7 +287,7 @@ def _typedef_to_cffi(
     return f"typedef {type_to_cffi(underlying, tag_kinds)} {decl.name};"
 
 
-def _constant_to_cffi(decl: Constant) -> Optional[str]:
+def _constant_to_cffi(decl: Constant) -> str | None:
     """Convert a Constant IR node to CFFI cdef.
 
     CFFI's #define only supports integer constants or '...' (resolved at
@@ -316,9 +303,7 @@ def _constant_to_cffi(decl: Constant) -> Optional[str]:
     return None
 
 
-def _variable_to_cffi(
-    decl: Variable, tag_kinds: Optional[TagKinds] = None
-) -> Optional[str]:
+def _variable_to_cffi(decl: Variable, tag_kinds: TagKinds | None = None) -> str | None:
     """Convert a Variable IR node to CFFI cdef."""
     if isinstance(decl.type, Array):
         size_str = str(decl.type.size) if decl.type.size is not None else ""
@@ -419,7 +404,7 @@ def _find_typedef_enum_pairs(declarations: list[Declaration]) -> set[str]:
 
 def header_to_cffi(
     header: Header,
-    exclude_patterns: Optional[list[str]] = None,
+    exclude_patterns: list[str] | None = None,
 ) -> str:
     """Convert all declarations in a Header to a CFFI cdef string.
 
@@ -472,7 +457,7 @@ def header_to_cffi(
     return "\n".join(lines)
 
 
-def _enum_to_cffi_as_typedef(decl: Enum) -> Optional[str]:
+def _enum_to_cffi_as_typedef(decl: Enum) -> str | None:
     """Emit an enum as ``typedef enum { ... } name;`` (no tag name).
 
     Used when the original header had an anonymous enum with a typedef,
@@ -481,7 +466,7 @@ def _enum_to_cffi_as_typedef(decl: Enum) -> Optional[str]:
     if not decl.values:
         return None
 
-    lines = [f"typedef enum {{"]
+    lines = ["typedef enum {"]
 
     for v in decl.values:
         if v.value is not None:

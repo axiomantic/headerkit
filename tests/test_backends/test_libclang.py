@@ -9,22 +9,20 @@ import pytest
 
 from clangir.backends.libclang import (
     LibclangBackend,
-    get_system_include_dirs,
-    is_system_libclang_available,
+    _deduplicate_declarations,
+    _get_libclang_search_paths,
     _is_system_header,
     _is_umbrella_header,
-    _deduplicate_declarations,
     _mangle_specialization_name,
-    _get_libclang_search_paths,
+    get_system_include_dirs,
+    is_system_libclang_available,
 )
 from clangir.ir import (
     CType,
     Enum,
-    EnumValue,
     Field,
     Function,
     Header,
-    Parameter,
     Pointer,
     Struct,
     Typedef,
@@ -125,6 +123,11 @@ class TestHelperFunctions:
         ]
         result = _deduplicate_declarations(decls)
         assert len(result) == 2
+        names = [getattr(d, "name", None) for d in result]
+        assert "Point" in names
+        assert "foo" in names
+        assert isinstance(result[0], Struct)
+        assert isinstance(result[1], Function)
 
     def test_deduplicate_declarations_typedef_struct_pattern(self):
         """_deduplicate_declarations handles typedef struct pattern."""
@@ -184,7 +187,7 @@ class TestLibclangParsing:
         """Parse a simple variable declaration."""
         header = backend.parse("int x;", "test.h")
         assert isinstance(header, Header)
-        assert len(header.declarations) >= 1
+        assert len(header.declarations) == 1
         var_decls = [d for d in header.declarations if isinstance(d, Variable)]
         assert len(var_decls) == 1
         assert var_decls[0].name == "x"
@@ -304,6 +307,20 @@ class TestLibclangParsing:
         assert s.name == "Opaque"
         assert len(s.fields) == 0  # forward decl has no fields
 
+    def test_forward_decl_vs_empty_struct(self, backend):
+        """Forward declaration and empty struct body both produce zero fields."""
+        fwd_header = backend.parse("struct Opaque;", "fwd.h")
+        fwd_structs = [d for d in fwd_header.declarations if isinstance(d, Struct)]
+        assert len(fwd_structs) == 1
+        assert fwd_structs[0].name == "Opaque"
+        assert len(fwd_structs[0].fields) == 0
+
+        empty_header = backend.parse("struct Empty {};", "empty.h")
+        empty_structs = [d for d in empty_header.declarations if isinstance(d, Struct)]
+        assert len(empty_structs) == 1
+        assert empty_structs[0].name == "Empty"
+        assert len(empty_structs[0].fields) == 0
+
     def test_parse_typedef_struct(self, backend):
         """Parse typedef struct pattern."""
         code = """
@@ -355,9 +372,9 @@ class TestLibclangParsing:
         enums = [d for d in header.declarations if isinstance(d, Enum)]
         funcs = [d for d in header.declarations if isinstance(d, Function)]
 
-        assert len(structs) >= 1
-        assert len(enums) >= 1
-        assert len(funcs) >= 2
+        assert len(structs) == 1
+        assert len(enums) == 1
+        assert len(funcs) == 2
 
         # Verify struct fields
         config = next(s for s in structs if s.name == "Config")
@@ -422,6 +439,7 @@ class TestGetSystemIncludeDirs:
     def setup_method(self):
         """Clear the cached include dirs before each test."""
         import clangir.backends.libclang as mod
+
         self._saved_c = mod._system_include_cache_c
         self._saved_cxx = mod._system_include_cache_cxx
         mod._system_include_cache_c = None
@@ -430,6 +448,7 @@ class TestGetSystemIncludeDirs:
     def teardown_method(self):
         """Restore cached include dirs after each test."""
         import clangir.backends.libclang as mod
+
         mod._system_include_cache_c = self._saved_c
         mod._system_include_cache_cxx = self._saved_cxx
 
@@ -464,6 +483,7 @@ class TestGetSystemIncludeDirs:
     def test_clang_not_found_returns_empty(self):
         """When clang is not on PATH, returns empty list."""
         import clangir.backends.libclang as mod
+
         mod._system_include_cache_c = None
         with patch("clangir.backends.libclang.subprocess.run", side_effect=FileNotFoundError):
             result = get_system_include_dirs()
@@ -472,6 +492,7 @@ class TestGetSystemIncludeDirs:
     def test_clang_timeout_returns_empty(self):
         """When clang times out, returns empty list."""
         import clangir.backends.libclang as mod
+
         mod._system_include_cache_c = None
         with patch(
             "clangir.backends.libclang.subprocess.run",
@@ -483,6 +504,7 @@ class TestGetSystemIncludeDirs:
     def test_parses_include_search_paths(self):
         """Parses clang -v output to extract include search paths."""
         import clangir.backends.libclang as mod
+
         mod._system_include_cache_c = None
         mock_result = MagicMock()
         mock_result.stderr = (
@@ -500,6 +522,7 @@ class TestGetSystemIncludeDirs:
     def test_skips_framework_directories(self):
         """Framework directories are excluded from the result."""
         import clangir.backends.libclang as mod
+
         mod._system_include_cache_c = None
         mock_result = MagicMock()
         mock_result.stderr = (
@@ -532,24 +555,19 @@ class TestHeaderInclusionTracking:
 
     def test_includes_stdio(self, backend):
         """Detects stdio.h inclusion when parsing code that includes it."""
-        code = '#include <stdio.h>\nvoid test_func(FILE *f);\n'
+        code = "#include <stdio.h>\nvoid test_func(FILE *f);\n"
         header = backend.parse(code, "test.h")
         assert any("stdio.h" in h for h in header.included_headers)
 
     def test_includes_stdint(self, backend):
         """Detects stdint.h inclusion."""
-        code = '#include <stdint.h>\ntypedef uint32_t my_int;\n'
+        code = "#include <stdint.h>\ntypedef uint32_t my_int;\n"
         header = backend.parse(code, "test.h")
         assert any("stdint.h" in h for h in header.included_headers)
 
     def test_includes_multiple_headers(self, backend):
         """Detects multiple header inclusions."""
-        code = (
-            '#include <stdio.h>\n'
-            '#include <stdlib.h>\n'
-            '#include <string.h>\n'
-            'void test(void);\n'
-        )
+        code = "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\nvoid test(void);\n"
         header = backend.parse(code, "test.h")
         included_basenames = {h.split("/")[-1] for h in header.included_headers}
         assert "stdio.h" in included_basenames
@@ -565,7 +583,7 @@ class TestHeaderInclusionTracking:
     def test_includes_transitive(self, backend):
         """Tracks transitive includes (headers included by other headers)."""
         # stdio.h typically includes other headers transitively
-        code = '#include <stdio.h>\nvoid test(void);\n'
+        code = "#include <stdio.h>\nvoid test(void);\n"
         header = backend.parse(code, "test.h")
         # Should have at least stdio.h plus its transitive includes
         assert len(header.included_headers) >= 1
@@ -662,9 +680,9 @@ class TestTypeQualifierParsing:
         """
         header = backend.parse(code, "test.h")
         structs = [d for d in header.declarations if isinstance(d, Struct)]
-        assert len(structs) >= 1
-        counter = next((s for s in structs if s.name == "counter"), None)
-        assert counter is not None
+        assert len(structs) == 1
+        counter = structs[0]
+        assert counter.name == "counter"
         assert len(counter.fields) == 1
         assert counter.fields[0].name == "value"
 

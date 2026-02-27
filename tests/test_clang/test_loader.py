@@ -45,6 +45,7 @@ class TestGetCindex:
             cindex = get_cindex()
             assert cindex is not None
             assert hasattr(cindex, "Config")
+            assert "v18" in cindex.__name__
 
     def test_vendored_versions_tuple(self):
         assert isinstance(VENDORED_VERSIONS, tuple)
@@ -111,6 +112,7 @@ class TestGetCindex:
 
         clangir._clang._cached_cindex = None
         import warnings
+
         with (
             patch("clangir._clang._version.detect_llvm_version", return_value="20"),
             warnings.catch_warnings(),

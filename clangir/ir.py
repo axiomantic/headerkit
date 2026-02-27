@@ -52,7 +52,6 @@ from dataclasses import (
     field,
 )
 from typing import (
-    Optional,
     Protocol,
     Union,
     runtime_checkable,
@@ -87,7 +86,7 @@ class SourceLocation:
 
     file: str
     line: int
-    column: Optional[int] = None
+    column: int | None = None
 
 
 # =============================================================================
@@ -161,7 +160,7 @@ class Pointer:
         const_ptr = Pointer(CType("int"), ["const"])  # int* const
     """
 
-    pointee: Union[CType, Pointer, Array, FunctionPointer]
+    pointee: TypeExpr
     qualifiers: list[str] = field(default_factory=list)
 
     def __str__(self) -> str:
@@ -200,8 +199,8 @@ class Array:
         matrix = Array(Array(CType("int"), 3), 3)
     """
 
-    element_type: Union[CType, Pointer, Array, FunctionPointer]
-    size: Optional[Union[int, str]] = None  # None = flexible, str = expression
+    element_type: TypeExpr
+    size: Union[int, str] | None = None  # None = flexible, str = expression
 
     def __str__(self) -> str:
         size_str = str(self.size) if self.size is not None else ""
@@ -233,8 +232,8 @@ class Parameter:
         callback = Parameter("fn", FunctionPointer(CType("void"), []))
     """
 
-    name: Optional[str]
-    type: Union[CType, Pointer, Array, FunctionPointer]
+    name: str | None
+    type: TypeExpr
 
     def __str__(self) -> str:
         if self.name:
@@ -276,7 +275,7 @@ class FunctionPointer:
         )  # int (*)(const char* fmt, ...)
     """
 
-    return_type: Union[CType, Pointer, Array, FunctionPointer]
+    return_type: TypeExpr
     parameters: list[Parameter] = field(default_factory=list)
     is_variadic: bool = False
 
@@ -354,7 +353,7 @@ class EnumValue:
     """
 
     name: str
-    value: Optional[Union[int, str]] = None  # None = auto, str = expression
+    value: Union[int, str] | None = None  # None = auto, str = expression
 
     def __str__(self) -> str:
         if self.value is not None:
@@ -389,10 +388,10 @@ class Enum:
         anon = Enum(None, [EnumValue("FLAG_A", 1), EnumValue("FLAG_B", 2)])
     """
 
-    name: Optional[str]
+    name: str | None
     values: list[EnumValue] = field(default_factory=list)
     is_typedef: bool = False
-    location: Optional[SourceLocation] = None
+    location: SourceLocation | None = None
 
     def __str__(self) -> str:
         name_str = self.name or "(anonymous)"
@@ -446,18 +445,18 @@ class Struct:
         anon = Struct(None, [Field("value", CType("int"))])
     """
 
-    name: Optional[str]
+    name: str | None
     fields: list[Field] = field(default_factory=list)
     methods: list[Function] = field(default_factory=list)
     is_union: bool = False
     is_cppclass: bool = False
     is_typedef: bool = False
-    namespace: Optional[str] = None
+    namespace: str | None = None
     template_params: list[str] = field(default_factory=list)
-    cpp_name: Optional[str] = None
+    cpp_name: str | None = None
     notes: list[str] = field(default_factory=list)
     inner_typedefs: dict[str, str] = field(default_factory=dict)  # name -> underlying_type
-    location: Optional[SourceLocation] = None
+    location: SourceLocation | None = None
 
     def __str__(self) -> str:
         if self.is_cppclass:
@@ -511,8 +510,8 @@ class Function:
     return_type: TypeExpr
     parameters: list[Parameter] = field(default_factory=list)
     is_variadic: bool = False
-    namespace: Optional[str] = None
-    location: Optional[SourceLocation] = None
+    namespace: str | None = None
+    location: SourceLocation | None = None
 
     def __str__(self) -> str:
         params = ", ".join(str(p) for p in self.parameters)
@@ -553,7 +552,7 @@ class Typedef:
 
     name: str
     underlying_type: TypeExpr
-    location: Optional[SourceLocation] = None
+    location: SourceLocation | None = None
 
     def __str__(self) -> str:
         return f"typedef {self.underlying_type} {self.name}"
@@ -587,7 +586,7 @@ class Variable:
 
     name: str
     type: TypeExpr
-    location: Optional[SourceLocation] = None
+    location: SourceLocation | None = None
 
     def __str__(self) -> str:
         return f"{self.type} {self.name}"
@@ -630,15 +629,17 @@ class Constant:
     """
 
     name: str
-    value: Optional[Union[int, float, str]] = None  # None if complex/unknown
-    type: Optional[CType] = None
+    value: Union[int, float, str] | None = None  # None if complex/unknown
+    type: CType | None = None
     is_macro: bool = False
-    location: Optional[SourceLocation] = None
+    location: SourceLocation | None = None
 
     def __str__(self) -> str:
         if self.is_macro:
             return f"#define {self.name} {self.value}"
-        return f"const {self.type} {self.name} = {self.value}"
+        if self.type is not None:
+            return f"const {self.type} {self.name} = {self.value}"
+        return f"const {self.name} = {self.value}"
 
 
 # Type alias for any declaration
@@ -726,13 +727,13 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
         self,
         code: str,
         filename: str,
-        include_dirs: Optional[list[str]] = None,
-        extra_args: Optional[list[str]] = None,
+        include_dirs: list[str] | None = None,
+        extra_args: list[str] | None = None,
         *,
         use_default_includes: bool = True,
         recursive_includes: bool = True,
         max_depth: int = 10,
-        project_prefixes: Optional[tuple[str, ...]] = None,
+        project_prefixes: tuple[str, ...] | None = None,
     ) -> Header:
         """Parse C/C++ code and return the IR representation.
 

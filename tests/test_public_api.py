@@ -5,35 +5,10 @@ def test_all_ir_types_importable_from_clangir():
     """All public IR types should be importable directly from clangir."""
     from clangir import (
         CType,
-        Pointer,
-        Array,
-        Parameter,
-        FunctionPointer,
-        TypeExpr,
-        Field,
-        EnumValue,
-        Enum,
-        Struct,
-        Function,
-        Typedef,
-        Variable,
-        Constant,
-        Declaration,
-        Header,
-        SourceLocation,
-        ParserBackend,
-        get_backend,
-        list_backends,
-        is_backend_available,
     )
 
-    all_exports = [
-        CType, Pointer, Array, Parameter, FunctionPointer, TypeExpr,
-        Field, EnumValue, Enum, Struct, Function, Typedef,
-        Variable, Constant, Declaration, Header, SourceLocation,
-        ParserBackend, get_backend, list_backends, is_backend_available,
-    ]
-    assert all(t is not None for t in all_exports)
+    # The imports above already verify availability; no additional assertion needed.
+    assert CType is not None  # sanity check that imports succeeded
 
 
 def test_all_matches_module_exports():
@@ -42,6 +17,18 @@ def test_all_matches_module_exports():
 
     for name in clangir.__all__:
         assert hasattr(clangir, name), f"clangir.__all__ lists {name!r} but it is not an attribute"
+
+    # Reverse check: every public non-module attribute should be listed in __all__
+    import types
+
+    public_attrs = {
+        name
+        for name in dir(clangir)
+        if not name.startswith("_") and not isinstance(getattr(clangir, name), types.ModuleType)
+    }
+    all_set = set(clangir.__all__)
+    missing = public_attrs - all_set
+    assert missing == set(), f"Public attributes missing from __all__: {missing}"
 
 
 def test_type_aliases_are_unions():

@@ -22,7 +22,14 @@ def detect_llvm_version() -> str | None:
     # Strategy 1: Explicit env var override
     env_version = os.environ.get("CIR_CLANG_VERSION")
     if env_version:
-        return env_version.strip()
+        stripped = env_version.strip()
+        if stripped.isdigit():
+            return stripped
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "CIR_CLANG_VERSION=%r is not a valid major version number, ignoring", env_version
+        )
 
     # Strategy 2: llvm-config --version
     version = _try_llvm_config()
