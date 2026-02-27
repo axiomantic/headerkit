@@ -5,9 +5,11 @@ Detection strategy (in order):
 2. llvm-config --version (tries versioned names like llvm-config-18)
 3. pkg-config --modversion clang (reliable on Linux with libclang-dev)
 4. clang -dM -E -x c /dev/null to get __clang_major__ (tries clang-18 etc.)
-5. /usr/lib/llvm-{N}/ directory presence (Debian/Ubuntu, Linux only)
-6. Homebrew llvm prefix (macOS only, for non-PATH brew installs)
-7. Return None if all methods fail
+5. Windows registry HKLM\\SOFTWARE\\LLVM\\LLVM (win32 only)
+6. Windows Program Files scan (win32 only)
+7. /usr/lib/llvm-{N}/ directory presence (Debian/Ubuntu, Linux only)
+8. Homebrew llvm prefix (macOS only, for non-PATH brew installs)
+9. Return None if all methods fail
 """
 
 import glob
@@ -50,17 +52,27 @@ def detect_llvm_version() -> str | None:
     if version is not None:
         return version
 
-    # Strategy 5: /usr/lib/llvm-{N}/ directories (Linux)
+    # Strategy 5: Windows registry (win32 only)
+    version = _try_windows_registry()
+    if version is not None:
+        return version
+
+    # Strategy 6: Windows Program Files (win32 only)
+    version = _try_windows_program_files()
+    if version is not None:
+        return version
+
+    # Strategy 7: /usr/lib/llvm-{N}/ directories (Linux)
     version = _try_llvm_dir()
     if version is not None:
         return version
 
-    # Strategy 6: Homebrew llvm prefix (macOS)
+    # Strategy 8: Homebrew llvm prefix (macOS)
     version = _try_homebrew_llvm()
     if version is not None:
         return version
 
-    # Strategy 7: All methods failed
+    # Strategy 9: All methods failed
     return None
 
 
@@ -159,6 +171,105 @@ def _try_clang_preprocessor() -> str | None:
                 return match.group(1)
     except (subprocess.SubprocessError, OSError):
         pass
+
+    return None
+
+
+def _try_windows_registry() -> str | None:
+    """Try to detect LLVM version from the Windows registry.
+
+    The official LLVM installer writes its install directory to:
+    HKLM\\SOFTWARE\\LLVM\\LLVM (default value)
+
+    Since LLVM 16, llvm-config.exe is NOT included in the official
+    Windows installer. Instead, we run clang.exe from the install dir
+    to extract __clang_major__.
+    """
+    if sys.platform != "win32":
+        return None
+
+    try:
+        import winreg
+    except ImportError:
+        return None
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\LLVM\LLVM",
+            access=winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
+        ) as key:
+            install_dir, _ = winreg.QueryValueEx(key, "")
+    except OSError:
+        return None
+
+    if not install_dir or not os.path.isdir(install_dir):
+        return None
+
+    # Run clang.exe -dM -E -x c NUL to extract __clang_major__
+    clang_exe = os.path.join(install_dir, "bin", "clang.exe")
+    if not os.path.isfile(clang_exe):
+        return None
+
+    try:
+        result = subprocess.run(
+            [clang_exe, "-dM", "-E", "-x", "c", "NUL"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            match = re.search(
+                r"#define\s+__clang_major__\s+(\d+)",
+                result.stdout,
+            )
+            if match:
+                return match.group(1)
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    return None
+
+
+def _try_windows_program_files() -> str | None:
+    """Try to detect LLVM version from Program Files directories.
+
+    Checks standard LLVM installation paths using environment variables
+    rather than hardcoded drive letters.
+    """
+    if sys.platform != "win32":
+        return None
+
+    candidates = []
+
+    program_files = os.environ.get("PROGRAMFILES")
+    if program_files:
+        candidates.append(os.path.join(program_files, "LLVM", "bin", "clang.exe"))
+
+    program_files_x86 = os.environ.get("PROGRAMFILES(X86)")
+    if program_files_x86:
+        candidates.append(os.path.join(program_files_x86, "LLVM", "bin", "clang.exe"))
+
+    for clang_exe in candidates:
+        if not os.path.isfile(clang_exe):
+            continue
+
+        try:
+            result = subprocess.run(
+                [clang_exe, "-dM", "-E", "-x", "c", "NUL"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                match = re.search(
+                    r"#define\s+__clang_major__\s+(\d+)",
+                    result.stdout,
+                )
+                if match:
+                    return match.group(1)
+        except (subprocess.SubprocessError, OSError):
+            continue
 
     return None
 

@@ -209,11 +209,11 @@ class TestMultipleDeclarations:
 
     def test_complete_header(self, backend):
         code = """
-        typedef unsigned int size_t;
+        typedef unsigned int mysize_t;
 
         struct Buffer {
             char *data;
-            size_t length;
+            mysize_t length;
         };
 
         enum Status {
@@ -221,16 +221,16 @@ class TestMultipleDeclarations:
             ERROR = 1
         };
 
-        struct Buffer *buffer_create(size_t size);
+        struct Buffer *buffer_create(mysize_t size);
         void buffer_destroy(struct Buffer *buf);
-        int buffer_write(struct Buffer *buf, const char *data, size_t len);
+        int buffer_write(struct Buffer *buf, const char *data, mysize_t len);
         """
         cdef = parse_and_convert(backend, code)
 
         # Verify struct
         assert "struct Buffer {" in cdef
         assert "char * data;" in cdef
-        assert "size_t length;" in cdef or "unsigned int length;" in cdef
+        assert "mysize_t length;" in cdef or "unsigned int length;" in cdef
 
         # Verify enum
         assert "OK = 0," in cdef

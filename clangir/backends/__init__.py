@@ -200,21 +200,29 @@ def _ensure_backends_loaded() -> None:
         logging.getLogger(__name__).debug("Could not import libclang backend", exc_info=True)
 
     if not _BACKEND_REGISTRY:
+        import sys as _sys
+
         from clangir._clang._version import detect_llvm_version
 
         version = detect_llvm_version()
-        if version:
-            hint = (
-                f"libclang {version} detected but shared library not found.\n"
-                f"Install: brew install llvm (macOS) or "
-                f"apt install libclang-{version}-dev (Ubuntu)"
+
+        if _sys.platform == "win32":
+            install_advice = (
+                "Download from https://github.com/llvm/llvm-project/releases or run: winget install LLVM.LLVM"
             )
+        elif _sys.platform == "darwin":
+            install_advice = "brew install llvm"
         else:
-            hint = (
-                "No LLVM/clang installation found.\n"
-                "Install: brew install llvm (macOS) or "
-                "apt install libclang-dev (Ubuntu)"
+            install_advice = (
+                f"apt install libclang-{version}-dev (Ubuntu) or dnf install clang-devel (Fedora)"
+                if version
+                else "apt install libclang-dev (Ubuntu) or dnf install clang-devel (Fedora)"
             )
+
+        if version:
+            hint = f"libclang {version} detected but shared library not found.\nInstall: {install_advice}"
+        else:
+            hint = f"No LLVM/clang installation found.\nInstall: {install_advice}"
         import warnings
 
         warnings.warn(f"No parser backends available. {hint}", stacklevel=2)
