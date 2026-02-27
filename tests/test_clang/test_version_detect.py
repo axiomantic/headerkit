@@ -431,6 +431,8 @@ class TestFallback:
             patch.dict(os.environ, {}, clear=False),
             patch("clangir._clang._version.shutil.which", return_value=None),
             _no_llvm_dir,
+            patch("clangir._clang._version._try_windows_registry", return_value=None),
+            patch("clangir._clang._version._try_windows_program_files", return_value=None),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)
             assert detect_llvm_version() is None

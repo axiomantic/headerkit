@@ -735,7 +735,7 @@ class TestHeaderInclusionTracking:
         """Detects multiple header inclusions."""
         code = "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\nvoid test(void);\n"
         header = backend.parse(code, "test.h")
-        included_basenames = {h.split("/")[-1] for h in header.included_headers}
+        included_basenames = {os.path.basename(h) for h in header.included_headers}
         assert "stdio.h" in included_basenames
         assert "stdlib.h" in included_basenames
         assert "string.h" in included_basenames
