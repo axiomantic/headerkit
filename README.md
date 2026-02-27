@@ -23,6 +23,7 @@ libclang shared library must be installed:
 - macOS: `brew install llvm` or Xcode Command Line Tools
 - Ubuntu: `sudo apt install libclang-dev`
 - Fedora: `sudo dnf install clang-devel`
+- Windows: Download the [LLVM installer](https://github.com/llvm/llvm-project/releases) or `winget install LLVM.LLVM`
 
 Supports LLVM 18, 19, 20, and 21. The appropriate version is detected automatically.
 

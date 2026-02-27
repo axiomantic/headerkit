@@ -361,6 +361,70 @@ class TestHomebrewLlvm:
             assert detect_llvm_version() is None
 
 
+class TestWindowsDetectionOrder:
+    """Verify Windows-specific strategies are called in correct order."""
+
+    def test_registry_called_after_clang_preprocessor(self):
+        """On win32, registry detection is used when earlier strategies fail."""
+        mock_winreg = MagicMock()
+        mock_key = MagicMock()
+        mock_winreg.OpenKey.return_value = mock_key
+        mock_winreg.QueryValueEx.return_value = (r"C:\Program Files\LLVM", 1)
+        mock_winreg.HKEY_LOCAL_MACHINE = 0x80000002
+        mock_winreg.KEY_READ = 0x20019
+        mock_winreg.KEY_WOW64_64KEY = 0x0100
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "#define __clang_major__ 18\n"
+
+        with (
+            patch.dict(os.environ, {}, clear=False),
+            patch("clangir._clang._version.shutil.which", return_value=None),
+            patch("clangir._clang._version.sys.platform", "win32"),
+            patch.dict("sys.modules", {"winreg": mock_winreg}),
+            patch("clangir._clang._version.os.path.isdir", return_value=True),
+            patch("clangir._clang._version.os.path.isfile", return_value=True),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
+        ):
+            os.environ.pop("CIR_CLANG_VERSION", None)
+            assert detect_llvm_version() == "18"
+
+    def test_program_files_called_after_registry(self):
+        """On win32, Program Files detection is used when registry fails."""
+        mock_winreg = MagicMock()
+        mock_winreg.OpenKey.side_effect = OSError("No registry key")
+        mock_winreg.HKEY_LOCAL_MACHINE = 0x80000002
+        mock_winreg.KEY_READ = 0x20019
+        mock_winreg.KEY_WOW64_64KEY = 0x0100
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "#define __clang_major__ 20\n"
+
+        def isfile_side_effect(path):
+            return "program files" in path.lower() and "clang.exe" in path.lower()
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "PROGRAMFILES": r"C:\Program Files",
+                    "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
+                },
+                clear=False,
+            ),
+            patch("clangir._clang._version.shutil.which", return_value=None),
+            patch("clangir._clang._version.sys.platform", "win32"),
+            patch.dict("sys.modules", {"winreg": mock_winreg}),
+            patch("clangir._clang._version.os.path.isdir", return_value=False),
+            patch("clangir._clang._version.os.path.isfile", side_effect=isfile_side_effect),
+            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
+        ):
+            os.environ.pop("CIR_CLANG_VERSION", None)
+            assert detect_llvm_version() == "20"
+
+
 class TestFallback:
     def test_all_methods_fail_returns_none(self):
         with (

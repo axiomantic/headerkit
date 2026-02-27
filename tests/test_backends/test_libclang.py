@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +17,7 @@ from clangir.backends.libclang import (
     _mangle_specialization_name,
     get_system_include_dirs,
     is_system_libclang_available,
+    normalize_path,
 )
 from clangir.ir import (
     CType,
@@ -86,6 +88,10 @@ class TestHelperFunctions:
         assert _is_system_header(path) is True
         assert _is_system_header(path, project_prefixes=("/opt/homebrew/include/sodium",)) is False
 
+    def test_is_system_header_case_insensitive_with_backslashes(self):
+        """System header detection works with Windows-style backslash paths."""
+        assert _is_system_header(r"C:\some\path\clang\include\stddef.h") is True
+
     def test_is_umbrella_header_true(self):
         """Umbrella header detection when many includes, few declarations."""
         header = Header(
@@ -146,6 +152,166 @@ class TestHelperFunctions:
         assert _mangle_specialization_name("Map<int, double>") == "Map_int_double"
         assert _mangle_specialization_name("Foo<int*>") == "Foo_int_ptr"
         assert _mangle_specialization_name("std::vector<int>") == "std_vector_int"
+
+
+class TestNormalizePath:
+    """Tests for normalize_path() cross-platform path normalization."""
+
+    def test_backslash_to_forward_slash(self):
+        assert normalize_path(r"C:\Program Files\LLVM") == "c:/program files/llvm"
+
+    def test_lowercase(self):
+        assert normalize_path("/USR/INCLUDE") == "/usr/include"
+
+    def test_already_normalized(self):
+        assert normalize_path("/usr/include/stdio.h") == "/usr/include/stdio.h"
+
+    def test_mixed_separators(self):
+        assert normalize_path(r"C:\Program Files/LLVM\bin") == "c:/program files/llvm/bin"
+
+    def test_empty_string(self):
+        assert normalize_path("") == ""
+
+
+class TestIsSystemHeaderWindows:
+    """Tests for Windows-specific system header classification."""
+
+    def test_windows_llvm_install(self):
+        assert _is_system_header(r"C:\Program Files\LLVM\lib\clang\18\include\stddef.h") is True
+
+    def test_windows_llvm_x86_install(self):
+        assert _is_system_header(r"C:\Program Files (x86)\LLVM\lib\clang\18\include\stddef.h") is True
+
+    def test_windows_sdk_ucrt(self):
+        """Matched via 'windows kits/' fragment."""
+        assert _is_system_header(r"C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\ucrt\stdio.h") is True
+
+    def test_windows_sdk_um(self):
+        """Matched via 'windows kits/' fragment."""
+        assert _is_system_header(r"C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\um\windows.h") is True
+
+    def test_windows_sdk_shared(self):
+        """Matched via 'windows kits/' fragment."""
+        assert _is_system_header(r"C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\shared\windef.h") is True
+
+    def test_msvc_toolchain(self):
+        assert (
+            _is_system_header(
+                r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.38.33130\include\vcruntime.h"
+            )
+            is True
+        )
+
+    def test_visual_studio_headers(self):
+        assert (
+            _is_system_header(r"C:\Program Files\Microsoft Visual Studio\2022\Community\include\some_header.h") is True
+        )
+
+    def test_msys2_mingw64_headers(self):
+        assert _is_system_header(r"C:\msys64\mingw64\include\stdio.h") is True
+
+    def test_msys2_ucrt64_headers(self):
+        assert _is_system_header(r"C:\msys64\ucrt64\include\stdio.h") is True
+
+    def test_msys2_clang64_headers(self):
+        assert _is_system_header(r"C:\msys64\clang64\include\stdio.h") is True
+
+    def test_project_file_on_windows(self):
+        assert _is_system_header(r"C:\Users\dev\project\include\mylib.h") is False
+
+    def test_project_prefix_overrides_windows_system(self):
+        path = r"C:\Program Files\LLVM\include\myproject\myheader.h"
+        assert _is_system_header(path) is True
+        assert (
+            _is_system_header(
+                path,
+                project_prefixes=(r"C:\Program Files\LLVM\include\myproject",),
+            )
+            is False
+        )
+
+
+class TestLibclangSearchPathsWindows:
+    """Tests for Windows-specific libclang search paths."""
+
+    def test_includes_programfiles_path(self):
+        with (
+            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch.dict(
+                os.environ,
+                {
+                    "PROGRAMFILES": r"C:\Program Files",
+                    "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
+                },
+            ),
+        ):
+            paths = _get_libclang_search_paths()
+            normalized = [p.replace("\\", "/").lower() for p in paths]
+            assert any("program files/llvm/bin/libclang.dll" in p for p in normalized)
+
+    def test_includes_programfiles_x86_path(self):
+        with (
+            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch.dict(
+                os.environ,
+                {
+                    "PROGRAMFILES": r"C:\Program Files",
+                    "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
+                },
+            ),
+        ):
+            paths = _get_libclang_search_paths()
+            normalized = [p.replace("\\", "/").lower() for p in paths]
+            assert any("program files (x86)/llvm/bin/libclang.dll" in p for p in normalized)
+
+    def test_includes_scoop_path(self):
+        with (
+            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch.dict(
+                os.environ,
+                {
+                    "PROGRAMFILES": r"C:\Program Files",
+                    "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
+                    "USERPROFILE": r"C:\Users\testuser",
+                },
+            ),
+        ):
+            paths = _get_libclang_search_paths()
+            normalized = [p.replace("\\", "/").lower() for p in paths]
+            assert any("scoop/apps/llvm" in p for p in normalized)
+
+    def test_includes_msys2_paths(self):
+        with (
+            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch.dict(
+                os.environ,
+                {
+                    "PROGRAMFILES": r"C:\Program Files",
+                    "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
+                },
+            ),
+        ):
+            paths = _get_libclang_search_paths()
+            normalized = [p.replace("\\", "/").lower() for p in paths]
+            assert any("msys64/mingw64/bin/libclang.dll" in p for p in normalized)
+            assert any("msys64/ucrt64/bin/libclang.dll" in p for p in normalized)
+            assert any("msys64/clang64/bin/libclang.dll" in p for p in normalized)
+
+    def test_uses_env_var_not_hardcoded_paths(self):
+        """PROGRAMFILES env var is respected over hardcoded C:\\Program Files."""
+        with (
+            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch.dict(
+                os.environ,
+                {
+                    "PROGRAMFILES": r"D:\Custom\Programs",
+                    "PROGRAMFILES(X86)": r"D:\Custom\Programs (x86)",
+                },
+            ),
+        ):
+            paths = _get_libclang_search_paths()
+            normalized = [p.replace("\\", "/").lower() for p in paths]
+            assert any("d:/custom/programs/llvm/bin/libclang.dll" in p for p in normalized)
 
 
 @libclang

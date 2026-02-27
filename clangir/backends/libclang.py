@@ -75,6 +75,19 @@ CursorKind: Any = None
 TypeKind: Any = None
 
 
+def normalize_path(path: str) -> str:
+    """Normalize a file path for consistent comparison.
+
+    Converts backslashes to forward slashes and lowercases the entire
+    path. This enables platform-agnostic path comparison, particularly
+    for Windows paths where separators and case are inconsistent.
+
+    :param path: File path to normalize.
+    :returns: Normalized path string.
+    """
+    return path.replace("\\", "/").lower()
+
+
 def _get_libclang_search_paths() -> list[str]:
     """Get platform-specific paths to search for libclang.
 
@@ -108,9 +121,21 @@ def _get_libclang_search_paths() -> list[str]:
         paths.append("/usr/local/lib/libclang.so")
 
     elif sys.platform == "win32":
-        # Official LLVM installer locations
-        paths.append(r"C:\Program Files\LLVM\bin\libclang.dll")
-        paths.append(r"C:\Program Files (x86)\LLVM\bin\libclang.dll")
+        # Official LLVM installer (use env vars, not hardcoded paths)
+        program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+        program_files_x86 = os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
+        paths.append(os.path.join(program_files, "LLVM", "bin", "libclang.dll"))
+        paths.append(os.path.join(program_files_x86, "LLVM", "bin", "libclang.dll"))
+
+        # Scoop package manager (per-user install)
+        userprofile = os.environ.get("USERPROFILE", "")
+        if userprofile:
+            paths.append(os.path.join(userprofile, "scoop", "apps", "llvm", "current", "bin", "libclang.dll"))
+
+        # MSYS2 environments (default install location; MSYS2 does not expose
+        # a reliable environment variable for its install dir outside MSYS2 shells)
+        for msys2_env in ("mingw64", "ucrt64", "clang64"):
+            paths.append(os.path.join("C:\\msys64", msys2_env, "bin", "libclang.dll"))
 
     return paths
 
@@ -270,13 +295,13 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
     :param project_prefixes: Optional tuple of path prefixes to treat as project (not system)
     :returns: True if this is a system header
     """
-    path_str = str(header_path).lower()
+    path_str = normalize_path(str(header_path))
 
     # Check project prefixes first - if path matches, it's NOT a system header
     if project_prefixes:
         for prefix in project_prefixes:
-            normalized = prefix.lower().rstrip("/") + "/"
-            if path_str.startswith(normalized) or path_str == prefix.lower():
+            normalized = normalize_path(prefix).rstrip("/") + "/"
+            if path_str.startswith(normalized) or path_str == normalize_path(prefix):
                 return False
 
     # System header locations that are absolute path prefixes
@@ -296,15 +321,25 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
         "gcc/include",
         "g++/include",
         "c++/include",
+        # Windows: LLVM and Windows SDK paths
+        "program files/llvm/",
+        "program files (x86)/llvm/",
+        "windows kits/",
+        "/vc/tools/msvc/",
+        "microsoft visual studio/",
+        # MSYS2 environments
+        "msys64/mingw64/",
+        "msys64/ucrt64/",
+        "msys64/clang64/",
     )
 
     for prefix in system_path_prefixes:
-        normalized = prefix.lower().rstrip("/") + "/"
-        if path_str.startswith(normalized) or path_str == prefix.lower():
+        normalized = prefix.rstrip("/") + "/"
+        if path_str.startswith(normalized) or path_str == prefix:
             return True
 
     for fragment in system_path_fragments:
-        if fragment.lower() in path_str:
+        if fragment in path_str:
             return True
 
     return False
@@ -816,13 +851,13 @@ class ClangASTConverter:
         file_path = loc.file.name
 
         # Check main file
-        if file_path == self.filename:
+        if normalize_path(file_path) == normalize_path(self.filename):
             return True
 
         # Check project prefixes (for umbrella headers)
         if self.project_prefixes:
             for prefix in self.project_prefixes:
-                if prefix.lower() in file_path.lower():
+                if normalize_path(prefix) in normalize_path(file_path):
                     return True
 
         return False
