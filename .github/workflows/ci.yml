@@ -21,9 +21,7 @@ jobs:
           python-version: "3.12"
           cache: 'pip'
       - run: pip install -e '.[lint]'
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: mypy clangir/
+      - uses: pre-commit/action@v3.0.1
 
   test:
     uses: ./.github/workflows/test.yml
