@@ -45,7 +45,7 @@ jobs:
             echo "::error::Version mismatch: tag=$EXPECTED, pyproject.toml=$VERSION"
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
