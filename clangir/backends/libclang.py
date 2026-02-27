@@ -1590,14 +1590,11 @@ class ClangASTConverter:
             decl = clang_type.get_declaration()
             return CType(name=decl.spelling)
 
-        # Handle C++ reference types
+        # Handle C++ reference types - represent as the underlying type for C compatibility
         if kind == TypeKind.LVALUEREFERENCE:
-            pointee = self._convert_type(clang_type.get_pointee())
-            # Represent C++ references as the underlying type for C compatibility
-            return pointee
+            return self._convert_type(clang_type.get_pointee())
         if kind == TypeKind.RVALUEREFERENCE:
-            pointee = self._convert_type(clang_type.get_pointee())
-            return pointee
+            return self._convert_type(clang_type.get_pointee())
 
         # Handle nullptr_t type (C++11)
         # std::nullptr_t resolves to TypeKind.NULLPTR
