@@ -1378,10 +1378,10 @@
 <h2 id="the-pipeline">The Pipeline<a class="headerlink" href="#the-pipeline" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>graph TD
     A["C/C++ Source Code"] --&gt; B
-    B["Backend\n(ParserBackend protocol)"] --&gt; C
-    C["IR\n(Header, Declaration, TypeExpr)"] --&gt; D
-    D["Writer\n(WriterBackend protocol)"] --&gt; E
-    E["Output String\n(CFFI cdef, JSON, ...)"]
+    B["Backend&lt;br&gt;(ParserBackend protocol)"] --&gt; C
+    C["IR&lt;br&gt;(Header, Declaration, TypeExpr)"] --&gt; D
+    D["Writer&lt;br&gt;(WriterBackend protocol)"] --&gt; E
+    E["Output String&lt;br&gt;(CFFI cdef, JSON, ...)"]
 
     B -.- B1["e.g., LibclangBackend"]
     D -.- D1["e.g., CffiWriter, JsonWriter"]</code></pre>

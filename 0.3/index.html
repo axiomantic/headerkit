@@ -1193,8 +1193,8 @@
     B --&gt; C["IR"]
     C --&gt; D["Writer"]
     D --&gt; E["Output"]
-    B -.- B1["ParserBackend\nProtocol"]
-    D -.- D1["WriterBackend\nProtocol"]</code></pre>
+    B -.- B1["ParserBackend&lt;br&gt;Protocol"]
+    D -.- D1["WriterBackend&lt;br&gt;Protocol"]</code></pre>
 <ol>
 <li>A <strong>backend</strong> (e.g., <code>LibclangBackend</code>) parses C/C++ source code and produces an IR <code>Header</code> object containing <code>Declaration</code> nodes.</li>
 <li>A <strong>writer</strong> (e.g., <code>CffiWriter</code>, <code>JsonWriter</code>) consumes the IR and produces output in a target format.</li>
