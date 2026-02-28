@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-28
+
+### Added
+
+- PyPy support: compatibility shim for `c_interop_string` that avoids `c_char_p` subclassing
+- End-to-end integration tests for JSON writer pipeline (18 new roundtrip tests)
+- Unit tests for PyPy compatibility monkey-patch (20 tests)
+
 ## [0.3.3] - 2026-02-28
 
 ### Added
@@ -84,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
+[0.4.0]: https://github.com/axiomantic/clangir/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/axiomantic/clangir/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/axiomantic/clangir/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/axiomantic/clangir/compare/v0.3.0...v0.3.1

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clangir"
-version = "0.3.3"
+version = "0.4.0"
 description = "C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer"
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
