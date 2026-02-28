@@ -21,6 +21,10 @@
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
+         <loc>https://axiomantic.github.io/clangir/0.3/guides/install-libclang/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
          <loc>https://axiomantic.github.io/clangir/0.3/guides/installation/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
@@ -38,6 +42,10 @@
     </url>
     <url>
          <loc>https://axiomantic.github.io/clangir/0.3/reference/cffi/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://axiomantic.github.io/clangir/0.3/reference/install-libclang/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>

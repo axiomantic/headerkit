@@ -16,7 +16,7 @@
         <link rel="prev" href="../..">
       
       
-        <link rel="next" href="../quickstart/">
+        <link rel="next" href="../install-libclang/">
       
       
         
@@ -456,6 +456,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install-libclang/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installing libclang
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1064,6 +1092,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/install-libclang/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install Libclang CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1168,6 +1224,13 @@
 </code></pre></div>
 <h2 id="system-dependency-libclang">System Dependency: libclang<a class="headerlink" href="#system-dependency-libclang" title="Permanent link">&para;</a></h2>
 <p>clangir requires the <strong>libclang</strong> shared library to be installed on your system. This is the C API for LLVM's Clang compiler, used by the built-in <code>LibclangBackend</code> to parse C and C++ headers.</p>
+<div class="admonition tip">
+<p class="admonition-title">Automated installation</p>
+<p>For CI/CD, Docker, or quick setup, use the built-in installer:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>clangir-install-libclang
+</code></pre></div>
+<p>This detects your platform and runs the appropriate install command. See the <a href="../install-libclang/">Installing libclang</a> guide for details.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Vendored Python bindings</p>
 <p>clangir includes its own vendored copy of the Clang Python bindings that are automatically version-matched to your system's LLVM installation. You do <strong>not</strong> need to install <code>libclang</code> from PyPI.</p>
@@ -1176,25 +1239,25 @@
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>Install LLVM via Homebrew:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>brew<span class="w"> </span>install<span class="w"> </span>llvm
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>brew<span class="w"> </span>install<span class="w"> </span>llvm
 </code></pre></div>
 <p>clangir automatically searches common Homebrew paths (<code>/opt/homebrew/opt/llvm/lib/</code> on Apple Silicon, <code>/usr/local/opt/llvm/lib/</code> on Intel). Xcode Command Line Tools also include libclang.</p>
 </div>
 <div class="tabbed-block">
 <p>Install the libclang development package:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>libclang-dev
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>libclang-dev
 </code></pre></div>
 <p>For a specific LLVM version:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>libclang-17-dev
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>libclang-17-dev
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>sudo<span class="w"> </span>dnf<span class="w"> </span>install<span class="w"> </span>clang-devel
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>sudo<span class="w"> </span>dnf<span class="w"> </span>install<span class="w"> </span>clang-devel
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>Install LLVM from the <a href="https://github.com/llvm/llvm-project/releases">official releases</a> or via winget:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>winget<span class="w"> </span>install<span class="w"> </span>LLVM.LLVM
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>winget<span class="w"> </span>install<span class="w"> </span>LLVM.LLVM
 </code></pre></div>
 <p>clangir searches <code>Program Files\LLVM\bin\</code> and common package manager locations (Scoop, MSYS2).</p>
 <div class="admonition tip">
@@ -1206,16 +1269,16 @@
 </div>
 <h2 id="development-install">Development Install<a class="headerlink" href="#development-install" title="Permanent link">&para;</a></h2>
 <p>To contribute to clangir or run its test suite:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/axiomantic/clangir.git
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">cd</span><span class="w"> </span>clangir
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s1">&#39;.[dev]&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/axiomantic/clangir.git
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">cd</span><span class="w"> </span>clangir
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s1">&#39;.[dev]&#39;</span>
 </code></pre></div>
 <h2 id="verify-installation">Verify Installation<a class="headerlink" href="#verify-installation" title="Permanent link">&para;</a></h2>
 <p>Confirm everything is working:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from clangir import get_backend; b = get_backend(); print(f&#39;Backend: {b.name}&#39;)&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from clangir import get_backend; b = get_backend(); print(f&#39;Backend: {b.name}&#39;)&quot;</span>
 </code></pre></div>
 <p>Expected output:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Backend: libclang
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Backend: libclang
 </code></pre></div>
 <p>If you see a warning about missing backends, your libclang shared library was not found. Double-check the installation steps for your platform above.</p>
 
