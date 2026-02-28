@@ -33,6 +33,11 @@ jobs:
       - name: Install package
         shell: bash
         run: pip install -e '.[test]'
+      - name: Cache test header downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/clangir-test-headers
+          key: test-headers-v1
       - name: Run tests
         shell: bash
         run: pytest

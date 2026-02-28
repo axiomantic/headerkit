@@ -73,4 +73,5 @@ testpaths = ["tests"]
 timeout = 60
 markers = [
     "libclang: tests requiring system libclang installation",
+    "download: tests requiring network access to download headers",
 ]

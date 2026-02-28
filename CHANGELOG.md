@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - PyPy support: compatibility shim for `c_interop_string` that avoids `c_char_p` subclassing
 - End-to-end integration tests for JSON writer pipeline (18 new roundtrip tests)
+- Real-world library header tests: sqlite3, zlib, lua, libcurl, SDL2, CPython (21 tests)
+- CI caching for downloaded test headers
+- `download` pytest marker for tests requiring network access
 - Unit tests for PyPy compatibility monkey-patch (20 tests)
 
 ## [0.3.3] - 2026-02-28
