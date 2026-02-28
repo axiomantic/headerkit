@@ -79,8 +79,9 @@ class PxdWriter:
 
     INDENT: str = "    "
 
-    def __init__(self, header: Header) -> None:
+    def __init__(self, header: Header, *, stub_cimport_prefix: str | None = None) -> None:
         self.header: Header = header
+        self.stub_cimport_prefix: str | None = stub_cimport_prefix
         # Track declared struct/union/enum names for type reference cleanup
         self.known_structs: set[str] = set()
         self.known_unions: set[str] = set()
@@ -99,6 +100,7 @@ class PxdWriter:
         # Cimport tracking using registries
         self.cython_cimports: dict[str, set[str]] = {}  # module -> types
         self.libcpp_cimports: dict[str, set[str]] = {}  # module -> types
+        self.stub_cimports: dict[str, set[str]] = {}  # stub_module -> types
 
         # Current struct's inner typedefs for method return type resolution
         self._current_inner_typedefs: dict[str, str] = {}
@@ -267,8 +269,11 @@ class PxdWriter:
             types = sorted(self.libcpp_cimports[module])
             lines.append(f"from {module} cimport {', '.join(types)}")
 
-        # NOTE: headerkit does not ship stub .pxd files, so stub cimports
-        # are intentionally omitted.
+        # 3. Stub cimports (only when stub_cimport_prefix is configured)
+        if self.stub_cimport_prefix is not None:
+            for stub_module in sorted(self.stub_cimports.keys()):
+                types = sorted(self.stub_cimports[stub_module])
+                lines.append(f"from {self.stub_cimport_prefix}.{stub_module} cimport {', '.join(types)}")
 
         # Blank line before extern blocks if we had cimports
         if lines:
@@ -572,13 +577,14 @@ class PxdWriter:
         if module:
             self.libcpp_cimports.setdefault(module, set()).add(base_name)
 
+        # Collect stub cimports if a prefix is configured
+        if self.stub_cimport_prefix is not None and stub_module:
+            self.stub_cimports.setdefault(stub_module, set()).add(clean_name)
+
         # Also check template arguments recursively
         if "<" in cpp_name:
             self._check_template_args(cpp_name)
             return
-
-        # NOTE: stub cimports are intentionally not collected because
-        # headerkit does not ship stub .pxd files.
 
     def _check_template_args(self, type_str: str) -> None:
         """Recursively check template arguments for types that need cimports."""
@@ -1133,16 +1139,18 @@ class PxdWriter:
 # =====================================================================
 
 
-def write_pxd(header: Header) -> str:
+def write_pxd(header: Header, *, stub_cimport_prefix: str | None = None) -> str:
     """Convert an IR Header to Cython ``.pxd`` string.
 
     Convenience function that creates a :class:`PxdWriter` and calls
     :meth:`~PxdWriter.write`.
 
     :param header: Parsed header in IR format.
+    :param stub_cimport_prefix: If set, emit cimport lines for stub types
+        using this dotted module prefix (e.g. ``"autopxd.stubs"``).
     :returns: Complete ``.pxd`` file content as a string.
     """
-    writer = PxdWriter(header)
+    writer = PxdWriter(header, stub_cimport_prefix=stub_cimport_prefix)
     return writer.write()
 
 
@@ -1164,12 +1172,12 @@ class CythonWriter:
         pxd_string = writer.write(header)
     """
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, *, stub_cimport_prefix: str | None = None) -> None:
+        self.stub_cimport_prefix: str | None = stub_cimport_prefix
 
     def write(self, header: Header) -> str:
         """Convert header IR to Cython .pxd string."""
-        writer = PxdWriter(header)
+        writer = PxdWriter(header, stub_cimport_prefix=self.stub_cimport_prefix)
         return writer.write()
 
     @property
