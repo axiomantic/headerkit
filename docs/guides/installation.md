@@ -12,6 +12,15 @@ pip install clangir
 
 clangir requires the **libclang** shared library to be installed on your system. This is the C API for LLVM's Clang compiler, used by the built-in `LibclangBackend` to parse C and C++ headers.
 
+!!! tip "Automated installation"
+    For CI/CD, Docker, or quick setup, use the built-in installer:
+
+    ```bash
+    clangir-install-libclang
+    ```
+
+    This detects your platform and runs the appropriate install command. See the [Installing libclang](install-libclang.md) guide for details.
+
 !!! note "Vendored Python bindings"
     clangir includes its own vendored copy of the Clang Python bindings that are automatically version-matched to your system's LLVM installation. You do **not** need to install `libclang` from PyPI.
 

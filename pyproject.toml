@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clangir"
-version = "0.3.1"
+version = "0.3.2"
 description = "C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer"
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
@@ -38,6 +38,9 @@ Homepage = "https://github.com/axiomantic/clangir"
 Repository = "https://github.com/axiomantic/clangir"
 Issues = "https://github.com/axiomantic/clangir/issues"
 Changelog = "https://github.com/axiomantic/clangir/blob/main/CHANGELOG.md"
+
+[project.scripts]
+clangir-install-libclang = "clangir.install_libclang:main"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-timeout"]

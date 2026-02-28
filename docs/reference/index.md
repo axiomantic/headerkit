@@ -21,6 +21,12 @@ the registry functions mirror the backend API.
 | [CFFI](cffi.md) | `clangir.writers.cffi` | Generates `ffibuilder.cdef()` strings |
 | [JSON](json.md) | `clangir.writers.json` | Serializes IR to JSON for inspection and tooling |
 
+## CLI Tools
+
+| Tool | Module | Description |
+|------|--------|-------------|
+| [Install Libclang](install-libclang.md) | `clangir.install_libclang` | Installs the libclang system dependency for the current platform |
+
 ## Quick Example
 
 ```python

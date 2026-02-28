@@ -72,6 +72,7 @@ nav:
   - Home: index.md
   - Getting Started:
     - Installation: guides/installation.md
+    - Installing libclang: guides/install-libclang.md
     - Quick Start: guides/quickstart.md
   - Guides:
     - Architecture Overview: guides/architecture.md
@@ -90,6 +91,7 @@ nav:
     - Writers: reference/writers.md
     - CFFI Writer: reference/cffi.md
     - JSON Writer: reference/json.md
+    - Install Libclang CLI: reference/install-libclang.md
 
 extra:
   version:
