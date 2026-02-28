@@ -4,27 +4,16 @@ clangir is organized around a three-layer pipeline: **backends** parse C/C++ hea
 
 ## The Pipeline
 
-```
-C/C++ Source Code
-       |
-       v
-  +-----------+
-  |  Backend  |   ParserBackend protocol
-  +-----------+   e.g., LibclangBackend
-       |
-       v
-  +-----------+
-  |    IR     |   Header, Declaration, TypeExpr dataclasses
-  +-----------+
-       |
-       v
-  +-----------+
-  |  Writer   |   WriterBackend protocol
-  +-----------+   e.g., CffiWriter, JsonWriter
-       |
-       v
-  Output String
-  (CFFI cdef, JSON, ...)
+```mermaid
+graph TD
+    A["C/C++ Source Code"] --> B
+    B["Backend\n(ParserBackend protocol)"] --> C
+    C["IR\n(Header, Declaration, TypeExpr)"] --> D
+    D["Writer\n(WriterBackend protocol)"] --> E
+    E["Output String\n(CFFI cdef, JSON, ...)"]
+
+    B -.- B1["e.g., LibclangBackend"]
+    D -.- D1["e.g., CffiWriter, JsonWriter"]
 ```
 
 Each layer is independent. Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.
@@ -106,6 +95,38 @@ The IR is a tree of Python dataclasses rooted at [`Header`][clangir.ir.Header]. 
 
 Type expressions (`TypeExpr`) represent C types as composable trees:
 
+```mermaid
+classDiagram
+    class TypeExpr {
+        <<protocol>>
+    }
+    class CType {
+        name: str
+        qualifiers: list[str]
+    }
+    class Pointer {
+        pointee: TypeExpr
+        qualifiers: list[str]
+    }
+    class Array {
+        element_type: TypeExpr
+        size: int | None
+    }
+    class FunctionPointer {
+        return_type: TypeExpr
+        parameters: list[Parameter]
+        is_variadic: bool
+    }
+
+    TypeExpr <|-- CType
+    TypeExpr <|-- Pointer
+    TypeExpr <|-- Array
+    TypeExpr <|-- FunctionPointer
+    Pointer --> TypeExpr : pointee
+    Array --> TypeExpr : element_type
+    FunctionPointer --> TypeExpr : return_type
+```
+
 | Class | Represents | Example |
 |-------|-----------|---------|
 | [`CType`][clangir.ir.CType] | Base type with qualifiers | `int`, `const char`, `unsigned long` |
@@ -131,6 +152,46 @@ string_array = Array(Pointer(CType("char", ["const"])))
 ### Declarations
 
 Declarations (`Declaration`) represent top-level C/C++ constructs:
+
+```mermaid
+classDiagram
+    class Declaration {
+        <<protocol>>
+        name: str | None
+        location: SourceLocation | None
+    }
+    class Struct {
+        fields: list[Field]
+        is_union: bool
+        is_typedef: bool
+    }
+    class Enum {
+        values: list[EnumValue]
+        is_typedef: bool
+    }
+    class Function {
+        return_type: TypeExpr
+        parameters: list[Parameter]
+        is_variadic: bool
+    }
+    class Typedef {
+        underlying_type: TypeExpr
+    }
+    class Variable {
+        type: TypeExpr
+    }
+    class Constant {
+        value: int | str | None
+        is_macro: bool
+    }
+
+    Declaration <|-- Struct
+    Declaration <|-- Enum
+    Declaration <|-- Function
+    Declaration <|-- Typedef
+    Declaration <|-- Variable
+    Declaration <|-- Constant
+```
 
 | Class | Represents |
 |-------|-----------|

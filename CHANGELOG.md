@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-02-28
+
+### Added
+
+- Mermaid diagrams in documentation: pipeline flowcharts and IR class hierarchies
+
+### Fixed
+
+- JSON export tutorial incorrectly listed `is_union` as a JSON output field
+- Quickstart guide showed wrong pointer spacing (`char *` vs `char*`)
+- `header_to_cffi` docstring converted from Google-style to Sphinx-style for mkdocstrings
+
 ## [0.3.0] - 2026-02-27
 
 ### Added
@@ -52,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
+[0.3.1]: https://github.com/axiomantic/clangir/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/axiomantic/clangir/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/axiomantic/clangir/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/axiomantic/clangir/releases/tag/v0.1.0

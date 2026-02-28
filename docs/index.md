@@ -34,12 +34,14 @@ print(json_writer.write(header))
 
 ## How It Works
 
-```
-C/C++ Header --> [Backend] --> IR --> [Writer] --> Output
-                    ^                    ^
-                    |                    |
-              ParserBackend        WriterBackend
-                Protocol             Protocol
+```mermaid
+graph LR
+    A["C/C++ Header"] --> B["Backend"]
+    B --> C["IR"]
+    C --> D["Writer"]
+    D --> E["Output"]
+    B -.- B1["ParserBackend\nProtocol"]
+    D -.- D1["WriterBackend\nProtocol"]
 ```
 
 1. A **backend** (e.g., `LibclangBackend`) parses C/C++ source code and produces an IR `Header` object containing `Declaration` nodes.
