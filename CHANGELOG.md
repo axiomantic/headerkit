@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-02-28
+
+### Added
+
+- `stub_cimport_prefix` parameter for CythonWriter/PxdWriter: configurable stub cimport generation (e.g., `from autopxd.stubs.stdarg cimport va_list`)
+- Comprehensive Cython type registry tests (17 tests)
+- Additional Cython writer tests: full-text output assertions, pointer/array formatting, stub cimport integration (30 tests)
+
 ## [0.5.0] - 2026-02-28
 
 ### Added

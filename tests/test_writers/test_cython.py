@@ -16,7 +16,7 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
-from headerkit.writers.cython import CythonWriter, write_pxd
+from headerkit.writers.cython import CythonWriter, PxdWriter, write_pxd
 
 
 class TestSimpleStruct:
@@ -707,3 +707,377 @@ class TestExternBlock:
         result = write_pxd(header)
         assert 'cdef extern from "empty.h":' in result
         assert "    pass" in result
+
+
+class TestFullOutputFormat:
+    """Exact full-text output assertions ported from autopxd2."""
+
+    def test_empty_header_exact(self) -> None:
+        header = Header("test.h", [])
+        result = write_pxd(header)
+        assert result == 'cdef extern from "test.h":\n    pass\n'
+
+    def test_simple_function_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [Function("foo", CType("int"), [])],
+        )
+        result = write_pxd(header)
+        assert result == 'cdef extern from "test.h":\n\n    int foo()\n'
+
+    def test_struct_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [
+                Struct(
+                    "Point",
+                    [Field("x", CType("int")), Field("y", CType("int"))],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    cdef struct Point:\n        int x\n        int y\n'
+        assert result == expected
+
+    def test_union_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [
+                Struct(
+                    "Data",
+                    [Field("i", CType("int")), Field("f", CType("float"))],
+                    is_union=True,
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    cdef union Data:\n        int i\n        float f\n'
+        assert result == expected
+
+    def test_enum_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [
+                Enum(
+                    "Color",
+                    [
+                        EnumValue("RED", 0),
+                        EnumValue("GREEN", 1),
+                        EnumValue("BLUE", 2),
+                    ],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    cdef enum Color:\n        RED\n        GREEN\n        BLUE\n'
+        assert result == expected
+
+    def test_function_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "add",
+                    CType("int"),
+                    [Parameter("a", CType("int")), Parameter("b", CType("int"))],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    int add(int a, int b)\n'
+        assert result == expected
+
+    def test_variadic_function_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "printf",
+                    CType("int"),
+                    [Parameter("fmt", Pointer(CType("char", ["const"])))],
+                    is_variadic=True,
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    int printf(const char* fmt, ...)\n'
+        assert result == expected
+
+    def test_typedef_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [Typedef("myint", CType("int"))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    ctypedef int myint\n'
+        assert result == expected
+
+    def test_variable_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [Variable("count", CType("int"))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    int count\n'
+        assert result == expected
+
+
+class TestPointerArrayFormatting:
+    """Exact pointer and array formatting ported from autopxd2."""
+
+    def test_double_pointer_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [Variable("ptr", Pointer(Pointer(CType("char"))))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    char** ptr\n'
+        assert result == expected
+
+    def test_const_pointer_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [Variable("str_", Pointer(CType("char", ["const"])))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    const char* str_\n'
+        assert result == expected
+
+    def test_array_of_pointers_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [Variable("ptrs", Array(Pointer(CType("char")), 10))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    char* ptrs[10]\n'
+        assert result == expected
+
+    def test_array_in_struct_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [
+                Struct(
+                    "Buffer",
+                    [Field("data", Array(CType("char"), 256))],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    cdef struct Buffer:\n        char data[256]\n'
+        assert result == expected
+
+    def test_flexible_array_exact(self) -> None:
+        header = Header(
+            "test.h",
+            [Variable("arr", Array(CType("int"), None))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    int arr[]\n'
+        assert result == expected
+
+
+class TestCimportAdditions:
+    """Additional cimport tests ported from autopxd2."""
+
+    def test_multiple_cimport_groups(self) -> None:
+        """Multiple module cimports are grouped correctly."""
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "test",
+                    CType("uint32_t"),
+                    [Parameter("f", Pointer(CType("FILE")))],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        assert "from libc.stdint cimport" in result
+        assert "from libc.stdio cimport" in result
+
+    def test_cimports_before_extern(self) -> None:
+        """Cimport statements appear before extern from block."""
+        header = Header(
+            "test.h",
+            [
+                Function("test", CType("uint32_t"), []),
+            ],
+        )
+        result = write_pxd(header)
+        cimport_pos = result.find("from libc.stdint cimport")
+        extern_pos = result.find('cdef extern from "test.h"')
+        assert cimport_pos < extern_pos, "cimport should precede extern from"
+
+    def test_no_duplicate_cimports(self) -> None:
+        """Same type used multiple times generates single cimport."""
+        header = Header(
+            "test.h",
+            [
+                Function("func1", CType("uint32_t"), []),
+                Function(
+                    "func2",
+                    CType("uint32_t"),
+                    [Parameter("x", CType("uint32_t"))],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        cimport_line = [line for line in result.split("\n") if "from libc.stdint cimport" in line][0]
+        assert cimport_line.count("uint32_t") == 1
+
+    def test_size_t_no_cimport(self) -> None:
+        """size_t is a Cython built-in, so no cimport needed."""
+        header = Header(
+            "test.h",
+            [Struct("Data", [Field("val", CType("size_t"))])],
+        )
+        result = write_pxd(header)
+        assert "cimport" not in result
+        assert "size_t val" in result
+
+    def test_stdint_in_function_param(self) -> None:
+        """stdint type in function parameter generates cimport."""
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "foo",
+                    CType("void"),
+                    [Parameter("n", CType("uint16_t"))],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'from libc.stdint cimport uint16_t\n\ncdef extern from "test.h":\n\n    void foo(uint16_t n)\n'
+        assert result == expected
+
+
+class TestQualifiedTypes:
+    """Type qualifier formatting ported from autopxd2."""
+
+    def test_const_variable(self) -> None:
+        header = Header(
+            "test.h",
+            [Variable("val", CType("int", ["const"]))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    const int val\n'
+        assert result == expected
+
+    def test_volatile_variable(self) -> None:
+        header = Header(
+            "test.h",
+            [Variable("flag", CType("int", ["volatile"]))],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    volatile int flag\n'
+        assert result == expected
+
+
+class TestComplexCases:
+    """Complex declaration cases ported from autopxd2."""
+
+    def test_struct_prefix_stripped_for_known_type(self) -> None:
+        """'struct Point' return type becomes 'Point' when Point is declared."""
+        header = Header(
+            "test.h",
+            [
+                Struct("Point", [Field("x", CType("int"))]),
+                Function("get_point", CType("struct Point"), []),
+            ],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    cdef struct Point:\n        int x\n\n    Point get_point()\n'
+        assert result == expected
+
+    def test_empty_struct_forward_declaration(self) -> None:
+        """Empty struct is a forward declaration (no colon, no pass)."""
+        header = Header(
+            "test.h",
+            [Struct("Empty", [])],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    cdef struct Empty\n'
+        assert result == expected
+
+    def test_anonymous_enum_format(self) -> None:
+        """Anonymous enum has no name after 'cdef enum'."""
+        header = Header(
+            "test.h",
+            [Enum(None, [EnumValue("VALUE", 42)])],
+        )
+        result = write_pxd(header)
+        expected = 'cdef extern from "test.h":\n\n    cdef enum:\n        VALUE\n'
+        assert result == expected
+
+
+class TestStubCimportPrefix:
+    """Stub cimport prefix feature for emitting stub type cimports."""
+
+    def test_stub_cimport_prefix_none_no_output(self) -> None:
+        """Default behavior: no stub cimport lines emitted."""
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "vprintf_wrapper",
+                    CType("void"),
+                    [Parameter("args", CType("va_list"))],
+                ),
+            ],
+        )
+        result = write_pxd(header)
+        assert "cimport" not in result
+        assert "va_list args" in result
+
+    def test_stub_cimport_prefix_emits_cimport(self) -> None:
+        """With prefix, emits 'from prefix.stdarg cimport va_list'."""
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "vprintf_wrapper",
+                    CType("void"),
+                    [Parameter("args", CType("va_list"))],
+                ),
+            ],
+        )
+        result = write_pxd(header, stub_cimport_prefix="test.stubs")
+        assert "from test.stubs.stdarg cimport va_list" in result
+
+    def test_stub_cimport_prefix_multiple_types(self) -> None:
+        """Multiple stub types from different modules emit separate cimport lines."""
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "fn1",
+                    CType("void"),
+                    [Parameter("args", CType("va_list"))],
+                ),
+                Function(
+                    "fn2",
+                    CType("void"),
+                    [Parameter("addr", Pointer(CType("sockaddr")))],
+                ),
+            ],
+        )
+        result = write_pxd(header, stub_cimport_prefix="test.stubs")
+        assert "from test.stubs.stdarg cimport va_list" in result
+        assert "from test.stubs.sys_socket cimport sockaddr" in result
+
+    def test_stub_cimport_prefix_via_pxd_writer(self) -> None:
+        """PxdWriter accepts stub_cimport_prefix directly."""
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "fn",
+                    CType("void"),
+                    [Parameter("args", CType("va_list"))],
+                ),
+            ],
+        )
+        writer = PxdWriter(header, stub_cimport_prefix="my.pkg.stubs")
+        result = writer.write()
+        assert "from my.pkg.stubs.stdarg cimport va_list" in result
