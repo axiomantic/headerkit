@@ -550,7 +550,7 @@ class Function:
         if self.is_variadic:
             params = f"{params}, ..." if params else "..."
         cc = f" __{self.calling_convention}__" if self.calling_convention else ""
-        return f"{cc}{self.return_type} {self.name}({params})"
+        return f"{self.return_type}{cc} {self.name}({params})"
 
 
 @dataclass

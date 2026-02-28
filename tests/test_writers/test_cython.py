@@ -922,8 +922,9 @@ class TestCimportAdditions:
             ],
         )
         result = write_pxd(header)
-        cimport_line = [line for line in result.split("\n") if "from libc.stdint cimport" in line][0]
-        assert cimport_line.count("uint32_t") == 1
+        cimport_lines = [line for line in result.split("\n") if "from libc.stdint cimport" in line]
+        assert len(cimport_lines) == 1
+        assert cimport_lines[0].count("uint32_t") == 1
 
     def test_size_t_no_cimport(self) -> None:
         """size_t is a Cython built-in, so no cimport needed."""

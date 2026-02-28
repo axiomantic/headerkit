@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - README incorrectly claimed "zero runtime dependencies" when libclang is a required system dependency; clarified to "zero Python package dependencies"
+- `Function.__str__` now places calling convention after return type (`int __stdcall__ foo()` not `__stdcall__int foo()`)
+- `is_typedef` in JSON writer now only included when `True`, consistent with other boolean flags
+
+### Changed
+
+- Extract duplicated clang.exe version detection into `_get_version_from_clang_exe()` helper
+- Use `normalize_path()` in Windows search path tests instead of manual string replacement
+- Strengthen test assertions for const qualifiers on pointer types and cimport line detection
 
 ## [0.6.0] - 2026-02-28
 

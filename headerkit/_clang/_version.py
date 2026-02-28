@@ -175,6 +175,27 @@ def _try_clang_preprocessor() -> str | None:
     return None
 
 
+def _get_version_from_clang_exe(clang_exe: str) -> str | None:
+    """Run clang.exe and extract the major version number."""
+    try:
+        result = subprocess.run(
+            [clang_exe, "-dM", "-E", "-x", "c", "NUL"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            match = re.search(
+                r"#define\s+__clang_major__\s+(\d+)",
+                result.stdout,
+            )
+            if match:
+                return match.group(1)
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return None
+
+
 def _try_windows_registry() -> str | None:
     """Try to detect LLVM version from the Windows registry.
 
@@ -211,24 +232,7 @@ def _try_windows_registry() -> str | None:
     if not os.path.isfile(clang_exe):
         return None
 
-    try:
-        result = subprocess.run(
-            [clang_exe, "-dM", "-E", "-x", "c", "NUL"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            match = re.search(
-                r"#define\s+__clang_major__\s+(\d+)",
-                result.stdout,
-            )
-            if match:
-                return match.group(1)
-    except (subprocess.SubprocessError, OSError):
-        pass
-
-    return None
+    return _get_version_from_clang_exe(clang_exe)
 
 
 def _try_windows_program_files() -> str | None:
@@ -254,22 +258,9 @@ def _try_windows_program_files() -> str | None:
         if not os.path.isfile(clang_exe):
             continue
 
-        try:
-            result = subprocess.run(
-                [clang_exe, "-dM", "-E", "-x", "c", "NUL"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                match = re.search(
-                    r"#define\s+__clang_major__\s+(\d+)",
-                    result.stdout,
-                )
-                if match:
-                    return match.group(1)
-        except (subprocess.SubprocessError, OSError):
-            continue
+        version = _get_version_from_clang_exe(clang_exe)
+        if version is not None:
+            return version
 
     return None
 
