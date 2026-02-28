@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Function.__str__` now places calling convention after return type (`int __stdcall__ foo()` not `__stdcall__int foo()`)
 - `is_typedef` in JSON writer now only included when `True`, consistent with other boolean flags
 
+### Added
+
+- Auto-tag GitHub Action: automatically creates version tags when `pyproject.toml` version changes on main, triggering the release pipeline
+
 ### Changed
 
 - Extract duplicated clang.exe version detection into `_get_version_from_clang_exe()` helper
