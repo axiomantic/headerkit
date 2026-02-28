@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clangir"
-version = "0.2.0"
+version = "0.3.0"
 description = "C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer"
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
@@ -37,12 +37,13 @@ dependencies = []
 Homepage = "https://github.com/axiomantic/clangir"
 Repository = "https://github.com/axiomantic/clangir"
 Issues = "https://github.com/axiomantic/clangir/issues"
-Changelog = "https://github.com/axiomantic/clangir/releases"
+Changelog = "https://github.com/axiomantic/clangir/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-timeout"]
 lint = ["ruff", "mypy"]
-dev = ["clangir[test,lint]"]
+docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.27", "mike>=2.1"]
+dev = ["clangir[test,lint,docs]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["clangir"]

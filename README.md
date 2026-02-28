@@ -1,10 +1,13 @@
 # clangir
 
 [![CI](https://github.com/axiomantic/clangir/actions/workflows/ci.yml/badge.svg)](https://github.com/axiomantic/clangir/actions/workflows/ci.yml)
+[![Docs](https://github.com/axiomantic/clangir/actions/workflows/docs.yml/badge.svg)](https://axiomantic.github.io/clangir/)
 [![PyPI](https://img.shields.io/pypi/v/clangir)](https://pypi.org/project/clangir/)
 [![Python](https://img.shields.io/pypi/pyversions/clangir)](https://pypi.org/project/clangir/)
 
 C Intermediate Representation - a Python library for parsing C/C++ headers.
+
+Full documentation: https://axiomantic.github.io/clangir/
 
 Provides an IR data model for parsed C/C++ declarations, a libclang parser backend, and a CFFI cdef writer.
 

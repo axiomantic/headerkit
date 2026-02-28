@@ -1,0 +1,93 @@
+site_name: clangir
+site_description: C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer
+site_url: https://axiomantic.github.io/clangir/
+repo_url: https://github.com/axiomantic/clangir
+repo_name: axiomantic/clangir
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            docstring_style: sphinx
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            merge_init_into_class: true
+            show_if_no_docstring: false
+            signature_crossrefs: true
+            separate_signature: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: guides/installation.md
+    - Quick Start: guides/quickstart.md
+  - Guides:
+    - Architecture Overview: guides/architecture.md
+    - Using CFFI Writer: guides/cffi.md
+    - Writing Custom Backends: guides/custom-backends.md
+    - Writing Custom Writers: guides/custom-writers.md
+  - Tutorials:
+    - PXD Writer (Cython): tutorials/pxd-writer.md
+    - ctypes Writer: tutorials/ctypes-writer.md
+    - JSON Export: tutorials/json-export.md
+    - C Header Cleanup: tutorials/header-cleanup.md
+  - API Reference:
+    - Overview: reference/index.md
+    - IR Types: reference/ir.md
+    - Backends: reference/backends.md
+    - Writers: reference/writers.md
+    - CFFI Writer: reference/cffi.md
+    - JSON Writer: reference/json.md
+
+extra:
+  version:
+    provider: mike
+    default: latest

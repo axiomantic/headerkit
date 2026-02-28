@@ -1,16 +1,6 @@
 """Tests for the public API re-exports from clangir package."""
 
 
-def test_all_ir_types_importable_from_clangir():
-    """All public IR types should be importable directly from clangir."""
-    from clangir import (
-        CType,
-    )
-
-    # The imports above already verify availability; no additional assertion needed.
-    assert CType is not None  # sanity check that imports succeeded
-
-
 def test_all_matches_module_exports():
     """__all__ should list every public name exported from clangir."""
     import clangir
@@ -76,3 +66,35 @@ def test_backend_functions_match_direct_import():
     assert clangir.get_backend is backends.get_backend
     assert clangir.list_backends is backends.list_backends
     assert clangir.is_backend_available is backends.is_backend_available
+
+
+def test_writer_symbols_in_all():
+    """All writer symbols should be listed in clangir.__all__."""
+    import clangir
+
+    writer_names = [
+        "WriterBackend",
+        "get_default_writer",
+        "get_writer",
+        "get_writer_info",
+        "is_writer_available",
+        "list_writers",
+        "register_writer",
+    ]
+    all_set = set(clangir.__all__)
+    for name in writer_names:
+        assert name in all_set, f"{name!r} missing from clangir.__all__"
+
+
+def test_writer_functions_match_direct_import():
+    """Writer functions imported from clangir should match clangir.writers."""
+    import clangir
+    from clangir import writers
+
+    assert clangir.WriterBackend is writers.WriterBackend
+    assert clangir.get_default_writer is writers.get_default_writer
+    assert clangir.get_writer is writers.get_writer
+    assert clangir.get_writer_info is writers.get_writer_info
+    assert clangir.is_writer_available is writers.is_writer_available
+    assert clangir.list_writers is writers.list_writers
+    assert clangir.register_writer is writers.register_writer
