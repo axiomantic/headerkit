@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from clangir.backends import is_backend_available
-from clangir.ir import Header
-from clangir.writers.cffi import header_to_cffi
-from clangir.writers.json import header_to_json, header_to_json_dict
+from headerkit.backends import is_backend_available
+from headerkit.ir import Header
+from headerkit.writers.cffi import header_to_cffi
+from headerkit.writers.json import header_to_json, header_to_json_dict
 
 pytestmark = [
     pytest.mark.skipif(

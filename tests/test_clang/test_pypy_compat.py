@@ -1,4 +1,4 @@
-"""Tests for the PyPy compatibility monkey-patch in clangir._clang."""
+"""Tests for the PyPy compatibility monkey-patch in headerkit._clang."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import platform
 
 import pytest
 
-from clangir._clang import _compat_c_interop_string
+from headerkit._clang import _compat_c_interop_string
 
 
 class TestCompatCInteropStringInit:
@@ -110,39 +110,39 @@ class TestMonkeyPatchMechanism:
     """Tests for the _NEEDS_INTEROP_STRING_PATCH flag and monkey-patch logic."""
 
     def test_patch_flag_exists(self) -> None:
-        import clangir._clang
+        import headerkit._clang
 
-        assert hasattr(clangir._clang, "_NEEDS_INTEROP_STRING_PATCH")
-        assert isinstance(clangir._clang._NEEDS_INTEROP_STRING_PATCH, bool)
+        assert hasattr(headerkit._clang, "_NEEDS_INTEROP_STRING_PATCH")
+        assert isinstance(headerkit._clang._NEEDS_INTEROP_STRING_PATCH, bool)
 
     def test_patch_not_applied_on_cpython(self) -> None:
         """On CPython, c_interop_string should remain the original class."""
         if platform.python_implementation() != "CPython":
             pytest.skip("Only relevant on CPython")
 
-        import clangir._clang
-        from clangir._clang import get_cindex
+        import headerkit._clang
+        from headerkit._clang import get_cindex
 
-        saved = clangir._clang._cached_cindex
+        saved = headerkit._clang._cached_cindex
         try:
-            clangir._clang._cached_cindex = None
+            headerkit._clang._cached_cindex = None
             cindex = get_cindex()
             assert cindex.c_interop_string is not _compat_c_interop_string
         finally:
-            clangir._clang._cached_cindex = saved
+            headerkit._clang._cached_cindex = saved
 
     def test_patch_applied_when_forced(self) -> None:
         """When _NEEDS_INTEROP_STRING_PATCH is forced True, the compat class is used."""
-        import clangir._clang
-        from clangir._clang import get_cindex
+        import headerkit._clang
+        from headerkit._clang import get_cindex
 
-        saved_cindex = clangir._clang._cached_cindex
-        saved_flag = clangir._clang._NEEDS_INTEROP_STRING_PATCH
+        saved_cindex = headerkit._clang._cached_cindex
+        saved_flag = headerkit._clang._NEEDS_INTEROP_STRING_PATCH
         try:
-            clangir._clang._cached_cindex = None
-            clangir._clang._NEEDS_INTEROP_STRING_PATCH = True
+            headerkit._clang._cached_cindex = None
+            headerkit._clang._NEEDS_INTEROP_STRING_PATCH = True
             cindex = get_cindex()
             assert cindex.c_interop_string is _compat_c_interop_string
         finally:
-            clangir._clang._NEEDS_INTEROP_STRING_PATCH = saved_flag
-            clangir._clang._cached_cindex = saved_cindex
+            headerkit._clang._NEEDS_INTEROP_STRING_PATCH = saved_flag
+            headerkit._clang._cached_cindex = saved_cindex

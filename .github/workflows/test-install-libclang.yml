@@ -33,9 +33,9 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo python -m clangir.install_libclang --skip-verify
+            sudo python -m headerkit.install_libclang --skip-verify
           else
-            python -m clangir.install_libclang --skip-verify
+            python -m headerkit.install_libclang --skip-verify
           fi
 
       - name: Refresh PATH (Windows)
@@ -49,4 +49,4 @@ jobs:
 
       - name: Verify libclang is usable
         shell: bash
-        run: python -c "from clangir.backends.libclang import is_system_libclang_available; assert is_system_libclang_available(), 'libclang not available after install'"
+        run: python -c "from headerkit.backends.libclang import is_system_libclang_available; assert is_system_libclang_available(), 'libclang not available after install'"

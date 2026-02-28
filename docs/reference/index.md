@@ -1,37 +1,37 @@
 # API Reference
 
-The clangir API is organized into three layers:
+The headerkit API is organized into three layers:
 
 **[IR Types](ir.md)** -- The core data model. Dataclasses representing C/C++ declarations
 (structs, functions, enums, typedefs, etc.) and type expressions (pointers, arrays,
 function pointers). All backends produce these types; all writers consume them.
 
 **[Backends](backends.md)** -- Parsers that read C/C++ source code and produce IR.
-The [`ParserBackend`][clangir.ir.ParserBackend] protocol defines the interface;
+The [`ParserBackend`][headerkit.ir.ParserBackend] protocol defines the interface;
 the registry functions let you discover and instantiate backends.
 
 **[Writers](writers.md)** -- Output generators that consume IR and produce target formats.
-The [`WriterBackend`][clangir.writers.WriterBackend] protocol defines the interface;
+The [`WriterBackend`][headerkit.writers.WriterBackend] protocol defines the interface;
 the registry functions mirror the backend API.
 
 ## Writer Implementations
 
 | Writer | Module | Description |
 |--------|--------|-------------|
-| [CFFI](cffi.md) | `clangir.writers.cffi` | Generates `ffibuilder.cdef()` strings |
-| [JSON](json.md) | `clangir.writers.json` | Serializes IR to JSON for inspection and tooling |
+| [CFFI](cffi.md) | `headerkit.writers.cffi` | Generates `ffibuilder.cdef()` strings |
+| [JSON](json.md) | `headerkit.writers.json` | Serializes IR to JSON for inspection and tooling |
 
 ## CLI Tools
 
 | Tool | Module | Description |
 |------|--------|-------------|
-| [Install Libclang](install-libclang.md) | `clangir.install_libclang` | Installs the libclang system dependency for the current platform |
+| [Install Libclang](install-libclang.md) | `headerkit.install_libclang` | Installs the libclang system dependency for the current platform |
 
 ## Quick Example
 
 ```python
-from clangir.backends import get_backend
-from clangir.writers import get_writer
+from headerkit.backends import get_backend
+from headerkit.writers import get_writer
 
 # Parse a C header
 backend = get_backend()

@@ -1,8 +1,8 @@
-# clangir
+# headerkit
 
 **A C/C++ header parsing toolkit with pluggable backends and writers.**
 
-clangir parses C and C++ header files into a language-agnostic Intermediate Representation (IR), then transforms that IR into various output formats. Use it to generate FFI bindings, serialize header metadata to JSON, or build your own custom code generators.
+headerkit parses C and C++ header files into a language-agnostic Intermediate Representation (IR), then transforms that IR into various output formats. Use it to generate FFI bindings, serialize header metadata to JSON, or build your own custom code generators.
 
 ## Key Features
 
@@ -14,7 +14,7 @@ clangir parses C and C++ header files into a language-agnostic Intermediate Repr
 ## Quick Example
 
 ```python
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 
 # Parse a C header
 backend = get_backend()
@@ -47,7 +47,7 @@ graph LR
 1. A **backend** (e.g., `LibclangBackend`) parses C/C++ source code and produces an IR `Header` object containing `Declaration` nodes.
 2. A **writer** (e.g., `CffiWriter`, `JsonWriter`) consumes the IR and produces output in a target format.
 
-Both backends and writers follow simple protocols and are registered in a global registry, so you can add your own without modifying clangir itself.
+Both backends and writers follow simple protocols and are registered in a global registry, so you can add your own without modifying headerkit itself.
 
 ## Next Steps
 
@@ -57,7 +57,7 @@ Both backends and writers follow simple protocols and are registered in a global
 
     ---
 
-    Install clangir and its system dependency (libclang).
+    Install headerkit and its system dependency (libclang).
 
     [:octicons-arrow-right-24: Installation](guides/installation.md)
 

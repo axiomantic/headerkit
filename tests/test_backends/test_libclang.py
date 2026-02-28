@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from clangir.backends.libclang import (
+from headerkit.backends.libclang import (
     LibclangBackend,
     _deduplicate_declarations,
     _get_libclang_search_paths,
@@ -19,7 +19,7 @@ from clangir.backends.libclang import (
     is_system_libclang_available,
     normalize_path,
 )
-from clangir.ir import (
+from headerkit.ir import (
     CType,
     Enum,
     Field,
@@ -40,7 +40,7 @@ class TestImportability:
 
     def test_module_imports(self):
         """The libclang backend module can be imported."""
-        import clangir.backends.libclang  # noqa: F401
+        import headerkit.backends.libclang  # noqa: F401
 
     def test_is_system_libclang_available_returns_bool(self):
         """is_system_libclang_available() returns a boolean."""
@@ -236,7 +236,7 @@ class TestLibclangSearchPathsWindows:
 
     def test_includes_programfiles_path(self):
         with (
-            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch("headerkit.backends.libclang.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -251,7 +251,7 @@ class TestLibclangSearchPathsWindows:
 
     def test_includes_programfiles_x86_path(self):
         with (
-            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch("headerkit.backends.libclang.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -266,7 +266,7 @@ class TestLibclangSearchPathsWindows:
 
     def test_includes_scoop_path(self):
         with (
-            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch("headerkit.backends.libclang.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -282,7 +282,7 @@ class TestLibclangSearchPathsWindows:
 
     def test_includes_msys2_paths(self):
         with (
-            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch("headerkit.backends.libclang.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -300,7 +300,7 @@ class TestLibclangSearchPathsWindows:
     def test_uses_env_var_not_hardcoded_paths(self):
         """PROGRAMFILES env var is respected over hardcoded C:\\Program Files."""
         with (
-            patch("clangir.backends.libclang.sys.platform", "win32"),
+            patch("headerkit.backends.libclang.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -577,20 +577,20 @@ class TestBackendRegistration:
 
     def test_backend_registered(self):
         """If libclang is available, the backend should be registered."""
-        from clangir.backends import is_backend_available
+        from headerkit.backends import is_backend_available
 
         assert is_backend_available("libclang")
 
     def test_get_backend_returns_libclang(self):
         """get_backend('libclang') returns a LibclangBackend instance."""
-        from clangir.backends import get_backend
+        from headerkit.backends import get_backend
 
         backend = get_backend("libclang")
         assert isinstance(backend, LibclangBackend)
 
     def test_protocol_compliance(self):
         """LibclangBackend satisfies the ParserBackend protocol."""
-        from clangir.ir import ParserBackend
+        from headerkit.ir import ParserBackend
 
         backend = LibclangBackend()
         assert isinstance(backend, ParserBackend)
@@ -604,7 +604,7 @@ class TestGetSystemIncludeDirs:
 
     def setup_method(self):
         """Clear the cached include dirs before each test."""
-        import clangir.backends.libclang as mod
+        import headerkit.backends.libclang as mod
 
         self._saved_c = mod._system_include_cache_c
         self._saved_cxx = mod._system_include_cache_cxx
@@ -613,7 +613,7 @@ class TestGetSystemIncludeDirs:
 
     def teardown_method(self):
         """Restore cached include dirs after each test."""
-        import clangir.backends.libclang as mod
+        import headerkit.backends.libclang as mod
 
         mod._system_include_cache_c = self._saved_c
         mod._system_include_cache_cxx = self._saved_cxx
@@ -648,20 +648,20 @@ class TestGetSystemIncludeDirs:
 
     def test_clang_not_found_returns_empty(self):
         """When clang is not on PATH, returns empty list."""
-        import clangir.backends.libclang as mod
+        import headerkit.backends.libclang as mod
 
         mod._system_include_cache_c = None
-        with patch("clangir.backends.libclang.subprocess.run", side_effect=FileNotFoundError):
+        with patch("headerkit.backends.libclang.subprocess.run", side_effect=FileNotFoundError):
             result = get_system_include_dirs()
             assert result == []
 
     def test_clang_timeout_returns_empty(self):
         """When clang times out, returns empty list."""
-        import clangir.backends.libclang as mod
+        import headerkit.backends.libclang as mod
 
         mod._system_include_cache_c = None
         with patch(
-            "clangir.backends.libclang.subprocess.run",
+            "headerkit.backends.libclang.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="clang", timeout=10),
         ):
             result = get_system_include_dirs()
@@ -669,7 +669,7 @@ class TestGetSystemIncludeDirs:
 
     def test_parses_include_search_paths(self):
         """Parses clang -v output to extract include search paths."""
-        import clangir.backends.libclang as mod
+        import headerkit.backends.libclang as mod
 
         mod._system_include_cache_c = None
         mock_result = MagicMock()
@@ -680,14 +680,14 @@ class TestGetSystemIncludeDirs:
             " /usr/include\n"
             "End of search list.\n"
         )
-        with patch("clangir.backends.libclang.subprocess.run", return_value=mock_result):
+        with patch("headerkit.backends.libclang.subprocess.run", return_value=mock_result):
             result = get_system_include_dirs()
             assert "-isystem/usr/lib/clang/18/include" in result
             assert "-isystem/usr/include" in result
 
     def test_skips_framework_directories(self):
         """Framework directories are excluded from the result."""
-        import clangir.backends.libclang as mod
+        import headerkit.backends.libclang as mod
 
         mod._system_include_cache_c = None
         mock_result = MagicMock()
@@ -697,7 +697,7 @@ class TestGetSystemIncludeDirs:
             " /System/Library/Frameworks (framework directory)\n"
             "End of search list.\n"
         )
-        with patch("clangir.backends.libclang.subprocess.run", return_value=mock_result):
+        with patch("headerkit.backends.libclang.subprocess.run", return_value=mock_result):
             result = get_system_include_dirs()
             assert "-isystem/usr/include" in result
             assert len(result) == 1  # framework dir excluded
@@ -861,7 +861,7 @@ class TestTypeQualifierParsing:
         func = funcs[0]
         assert func.name == "copy"
         assert len(func.parameters) == 2
-        # __restrict is not a standard qualifier that clangir preserves in IR,
+        # __restrict is not a standard qualifier that headerkit preserves in IR,
         # but the function should still parse correctly
         assert func.parameters[0].name == "dst"
         assert func.parameters[1].name == "src"

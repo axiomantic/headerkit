@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from clangir.backends import get_backend, is_backend_available
-from clangir.writers.cffi import header_to_cffi
-from clangir.writers.json import header_to_json_dict
+from headerkit.backends import get_backend, is_backend_available
+from headerkit.writers.cffi import header_to_cffi
+from headerkit.writers.json import header_to_json_dict
 
 # Skip entire module if libclang is not available
 pytestmark = pytest.mark.skipif(

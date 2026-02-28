@@ -1,6 +1,6 @@
 """Tests for the IR module."""
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,

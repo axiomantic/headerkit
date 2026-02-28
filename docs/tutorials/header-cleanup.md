@@ -1,6 +1,6 @@
 # Tutorial: Building a C Header Cleanup Writer
 
-This tutorial builds a clangir writer that takes a parsed header and emits a clean, simplified C header. The writer strips preprocessor artifacts, normalizes typedefs, and filters declarations to produce a minimal public API header.
+This tutorial builds a headerkit writer that takes a parsed header and emits a clean, simplified C header. The writer strips preprocessor artifacts, normalizes typedefs, and filters declarations to produce a minimal public API header.
 
 ## Why Clean Up Headers?
 
@@ -11,7 +11,7 @@ Real-world C headers accumulate complexity over time:
 - Internal implementation details get mixed with public API
 - Inconsistent formatting makes headers hard to read
 
-By parsing a header into clangir's IR and writing it back as clean C, you get a normalized, minimal version that contains only the declarations you care about.
+By parsing a header into headerkit's IR and writing it back as clean C, you get a normalized, minimal version that contains only the declarations you care about.
 
 ## Step 1: Type Conversion
 
@@ -19,11 +19,11 @@ First, write a function to convert IR type expressions back into C syntax:
 
 ```python
 # header_cleanup_writer.py
-"""Generate clean, minimal C headers from clangir IR."""
+"""Generate clean, minimal C headers from headerkit IR."""
 
 from __future__ import annotations
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,
@@ -209,7 +209,7 @@ The real value of a cleanup writer is filtering. Add options to control which de
 
 ```python
 import re
-from clangir.writers import register_writer
+from headerkit.writers import register_writer
 
 
 class HeaderCleanupWriter:
@@ -310,7 +310,7 @@ register_writer(
 ## Step 4: Try It Out
 
 ```python
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 import header_cleanup_writer  # noqa: F401
 
 code = """
@@ -383,7 +383,7 @@ writer = get_writer(
 Combine with the [JSON writer](json-export.md) to create a CI pipeline that tracks your library's public API:
 
 ```python
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 
 backend = get_backend()
 

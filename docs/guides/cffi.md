@@ -1,13 +1,13 @@
 # Using the CFFI Writer
 
-The CFFI writer converts clangir IR into C declaration strings compatible with [CFFI](https://cffi.readthedocs.io/)'s `ffibuilder.cdef()`. This is the most common workflow: parse a C header, generate cdef declarations, and use them to build Python bindings for a C library.
+The CFFI writer converts headerkit IR into C declaration strings compatible with [CFFI](https://cffi.readthedocs.io/)'s `ffibuilder.cdef()`. This is the most common workflow: parse a C header, generate cdef declarations, and use them to build Python bindings for a C library.
 
 ## Basic Usage
 
 ### Using get_writer()
 
 ```python
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 
 backend = get_backend()
 header = backend.parse(open("mylib.h").read(), "mylib.h")
@@ -19,11 +19,11 @@ print(cdef_source)
 
 ### Using header_to_cffi() Directly
 
-The [`header_to_cffi()`][clangir.writers.cffi.header_to_cffi] function provides the same functionality without going through the writer registry:
+The [`header_to_cffi()`][headerkit.writers.cffi.header_to_cffi] function provides the same functionality without going through the writer registry:
 
 ```python
-from clangir import get_backend
-from clangir.writers.cffi import header_to_cffi
+from headerkit import get_backend
+from headerkit.writers.cffi import header_to_cffi
 
 backend = get_backend()
 header = backend.parse(open("mylib.h").read(), "mylib.h")
@@ -58,7 +58,7 @@ Generate and use the bindings:
 
 ```python
 from cffi import FFI
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 
 # Step 1: Parse the header
 backend = get_backend()
@@ -108,7 +108,7 @@ cdef_source = writer.write(header)
 You can also pass patterns directly to `header_to_cffi()`:
 
 ```python
-from clangir.writers.cffi import header_to_cffi
+from headerkit.writers.cffi import header_to_cffi
 
 cdef_source = header_to_cffi(header, exclude_patterns=["__.*", "test_.*"])
 ```

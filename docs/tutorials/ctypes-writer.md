@@ -1,6 +1,6 @@
 # Tutorial: Building a ctypes Writer
 
-This tutorial walks through building a clangir writer that generates Python `ctypes` binding code. The writer produces a standalone `.py` module that uses `ctypes` to load a shared library and expose its functions, structs, and enums as Python objects.
+This tutorial walks through building a headerkit writer that generates Python `ctypes` binding code. The writer produces a standalone `.py` module that uses `ctypes` to load a shared library and expose its functions, structs, and enums as Python objects.
 
 ## What Is ctypes?
 
@@ -40,11 +40,11 @@ The core challenge is mapping C types to ctypes equivalents. Create a lookup tab
 
 ```python
 # ctypes_writer.py
-"""Generate ctypes bindings from clangir IR."""
+"""Generate ctypes bindings from headerkit IR."""
 
 from __future__ import annotations
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     CType,
     Enum,
@@ -218,7 +218,7 @@ def _typedef_to_ctypes(decl: Typedef) -> list[str]:
 Assemble everything into a writer:
 
 ```python
-from clangir.writers import register_writer
+from headerkit.writers import register_writer
 
 
 class CtypesWriter:
@@ -288,7 +288,7 @@ register_writer("ctypes", CtypesWriter, description="Python ctypes binding code"
 ## Step 5: Try It Out
 
 ```python
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 import ctypes_writer  # noqa: F401  -- triggers registration
 
 code = """

@@ -1,13 +1,13 @@
 # Tutorial: JSON Export and IR Inspection
 
-The built-in JSON writer serializes clangir's IR into a structured JSON document. This is useful for inspecting parsed headers, building custom tooling, diffing API surfaces in CI/CD, and feeding header metadata into other programs.
+The built-in JSON writer serializes headerkit's IR into a structured JSON document. This is useful for inspecting parsed headers, building custom tooling, diffing API surfaces in CI/CD, and feeding header metadata into other programs.
 
 ## Basic Usage
 
 ### Using get_writer()
 
 ```python
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 
 backend = get_backend()
 header = backend.parse(open("mylib.h").read(), "mylib.h")
@@ -18,11 +18,11 @@ print(writer.write(header))
 
 ### Using header_to_json() Directly
 
-The [`header_to_json()`][clangir.writers.json.header_to_json] function provides the same functionality:
+The [`header_to_json()`][headerkit.writers.json.header_to_json] function provides the same functionality:
 
 ```python
-from clangir import get_backend
-from clangir.writers.json import header_to_json
+from headerkit import get_backend
+from headerkit.writers.json import header_to_json
 
 backend = get_backend()
 header = backend.parse(open("mylib.h").read(), "mylib.h")
@@ -31,10 +31,10 @@ json_str = header_to_json(header, indent=2)
 print(json_str)
 ```
 
-For programmatic use, [`header_to_json_dict()`][clangir.writers.json.header_to_json_dict] returns a Python dict instead of a string:
+For programmatic use, [`header_to_json_dict()`][headerkit.writers.json.header_to_json_dict] returns a Python dict instead of a string:
 
 ```python
-from clangir.writers.json import header_to_json_dict
+from headerkit.writers.json import header_to_json_dict
 
 data = header_to_json_dict(header)
 for decl in data["declarations"]:
@@ -163,8 +163,8 @@ The JSON output is:
 
 ```python
 import json
-from clangir import get_backend
-from clangir.writers.json import header_to_json_dict
+from headerkit import get_backend
+from headerkit.writers.json import header_to_json_dict
 
 backend = get_backend()
 header = backend.parse(open("mylib.h").read(), "mylib.h")
@@ -202,8 +202,8 @@ The JSON output is well-suited for processing with [jq](https://jqlang.github.io
 
 ```bash
 python -c "
-from clangir import get_backend
-from clangir.writers.json import header_to_json
+from headerkit import get_backend
+from headerkit.writers.json import header_to_json
 backend = get_backend()
 header = backend.parse(open('mylib.h').read(), 'mylib.h')
 print(header_to_json(header))
@@ -230,8 +230,8 @@ Use JSON export to detect API changes between releases:
 """Compare two header versions and report API changes."""
 
 import json
-from clangir import get_backend
-from clangir.writers.json import header_to_json_dict
+from headerkit import get_backend
+from headerkit.writers.json import header_to_json_dict
 
 
 def get_api_surface(header_path: str) -> dict[str, str]:
@@ -282,7 +282,7 @@ compact = writer.write(header)
 Or with the function:
 
 ```python
-from clangir.writers.json import header_to_json
+from headerkit.writers.json import header_to_json
 
 compact = header_to_json(header, indent=None)
 ```

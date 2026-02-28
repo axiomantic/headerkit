@@ -1,13 +1,13 @@
 # Writing Custom Backends
 
-clangir's backend system is pluggable. You can write your own parser backend to support alternative parsing strategies (tree-sitter, pycparser, hand-written parsers) and register it alongside the built-in `LibclangBackend`.
+headerkit's backend system is pluggable. You can write your own parser backend to support alternative parsing strategies (tree-sitter, pycparser, hand-written parsers) and register it alongside the built-in `LibclangBackend`.
 
 ## The ParserBackend Protocol
 
-Every backend must implement the [`ParserBackend`][clangir.ir.ParserBackend] protocol:
+Every backend must implement the [`ParserBackend`][headerkit.ir.ParserBackend] protocol:
 
 ```python
-from clangir.ir import Header, ParserBackend
+from headerkit.ir import Header, ParserBackend
 
 class ParserBackend(Protocol):
     def parse(
@@ -35,20 +35,20 @@ class ParserBackend(Protocol):
 
 ### Method and Property Details
 
-**`parse(code, filename, ...)`** -- Parse C/C++ source code and return a [`Header`][clangir.ir.Header] containing all extracted declarations. The `code` parameter is the source text (not a file path). The `filename` is used for error messages and `#line` directives; it does not need to exist on disk.
+**`parse(code, filename, ...)`** -- Parse C/C++ source code and return a [`Header`][headerkit.ir.Header] containing all extracted declarations. The `code` parameter is the source text (not a file path). The `filename` is used for error messages and `#line` directives; it does not need to exist on disk.
 
 **`name`** -- A human-readable name for the backend (e.g., `"tree-sitter"`). This is the string users pass to `get_backend()`.
 
-**`supports_macros`** -- Whether this backend can extract `#define` constants as [`Constant`][clangir.ir.Constant] declarations.
+**`supports_macros`** -- Whether this backend can extract `#define` constants as [`Constant`][headerkit.ir.Constant] declarations.
 
 **`supports_cpp`** -- Whether this backend can parse C++ code (classes, templates, namespaces).
 
 ## Registering a Backend
 
-Use [`register_backend()`][clangir.backends.register_backend] to add your backend to the global registry:
+Use [`register_backend()`][headerkit.backends.register_backend] to add your backend to the global registry:
 
 ```python
-from clangir.backends import register_backend
+from headerkit.backends import register_backend
 
 register_backend("mybackend", MyBackend, is_default=False)
 ```
@@ -67,12 +67,12 @@ Parameters:
 Here is a skeleton for a backend that uses [tree-sitter](https://tree-sitter.github.io/) to parse C headers:
 
 ```python
-"""Tree-sitter based parser backend for clangir."""
+"""Tree-sitter based parser backend for headerkit."""
 
 from __future__ import annotations
 
-from clangir.backends import register_backend
-from clangir.ir import (
+from headerkit.backends import register_backend
+from headerkit.ir import (
     CType,
     Enum,
     EnumValue,
@@ -132,7 +132,7 @@ class TreeSitterBackend:
         """Convert a tree-sitter node to an IR declaration.
 
         This is where the bulk of the work goes: mapping tree-sitter's
-        concrete syntax tree nodes to clangir IR types.
+        concrete syntax tree nodes to headerkit IR types.
         """
         # Implementation would handle:
         #   - "struct_specifier" -> Struct
@@ -157,7 +157,7 @@ except ImportError:
 Once registered, your backend is available through the standard API:
 
 ```python
-from clangir import get_backend, list_backends
+from headerkit import get_backend, list_backends
 
 # List all available backends
 print(list_backends())  # ['libclang', 'tree-sitter']
@@ -173,7 +173,7 @@ When implementing a backend, pay attention to these IR conventions:
 
 ### Typedefs vs. Tagged Types
 
-When C code uses `typedef struct { ... } Name;`, the IR should produce a [`Struct`][clangir.ir.Struct] with `is_typedef=True`. This tells writers to emit the typedef form rather than a bare struct declaration.
+When C code uses `typedef struct { ... } Name;`, the IR should produce a [`Struct`][headerkit.ir.Struct] with `is_typedef=True`. This tells writers to emit the typedef form rather than a bare struct declaration.
 
 ### Anonymous Types
 
@@ -181,7 +181,7 @@ Set `name=None` for truly anonymous structs, enums, or unions. The built-in writ
 
 ### Source Locations
 
-Populate [`SourceLocation`][clangir.ir.SourceLocation] on declarations when possible. This enables filtering by file (to exclude system headers) and better error messages:
+Populate [`SourceLocation`][headerkit.ir.SourceLocation] on declarations when possible. This enables filtering by file (to exclude system headers) and better error messages:
 
 ```python
 loc = SourceLocation(file=filename, line=node.start_point[0] + 1)
@@ -192,7 +192,7 @@ loc = SourceLocation(file=filename, line=node.start_point[0] + 1)
 Build types from the inside out. For `const char **`:
 
 ```python
-from clangir import CType, Pointer
+from headerkit import CType, Pointer
 
 const_char = CType("char", ["const"])
 const_char_ptr = Pointer(const_char)
@@ -204,7 +204,7 @@ const_char_ptr_ptr = Pointer(const_char_ptr)
 Test your backend by comparing its output against the built-in `LibclangBackend` for the same input:
 
 ```python
-from clangir import get_backend
+from headerkit import get_backend
 
 code = """
 struct Point {

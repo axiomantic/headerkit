@@ -7,25 +7,25 @@ integer constants.
 
 ## Writer Class
 
-::: clangir.writers.cffi.CffiWriter
+::: headerkit.writers.cffi.CffiWriter
     options:
       show_source: false
 
 ## Convenience Function
 
-::: clangir.writers.cffi.header_to_cffi
+::: headerkit.writers.cffi.header_to_cffi
     options:
       show_source: false
 
 ## Low-Level Functions
 
-These functions are used internally by [`header_to_cffi`][clangir.writers.cffi.header_to_cffi]
+These functions are used internally by [`header_to_cffi`][headerkit.writers.cffi.header_to_cffi]
 and can be useful when working with individual declarations or type expressions.
 
-::: clangir.writers.cffi.type_to_cffi
+::: headerkit.writers.cffi.type_to_cffi
     options:
       show_source: false
 
-::: clangir.writers.cffi.decl_to_cffi
+::: headerkit.writers.cffi.decl_to_cffi
     options:
       show_source: false

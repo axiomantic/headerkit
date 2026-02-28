@@ -1,4 +1,4 @@
-"""Serialize clangir IR to JSON.
+"""Serialize headerkit IR to JSON.
 
 Converts a Header and its declarations to a JSON string suitable for
 inspection, debugging, inter-process communication, or as input to
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,
@@ -199,7 +199,7 @@ def header_to_json_dict(header: Header) -> dict[str, Any]:
 
 
 class JsonWriter:
-    """Writer that serializes clangir IR to JSON.
+    """Writer that serializes headerkit IR to JSON.
 
     Options
     -------
@@ -210,7 +210,7 @@ class JsonWriter:
     -------
     ::
 
-        from clangir.writers import get_writer
+        from headerkit.writers import get_writer
 
         writer = get_writer("json", indent=4)
         json_string = writer.write(header)
@@ -238,7 +238,7 @@ class JsonWriter:
 # register_backend at the top and conditionally register at the bottom),
 # writers have no external dependencies so import and registration are
 # co-located.
-from clangir.writers import register_writer  # noqa: E402
+from headerkit.writers import register_writer  # noqa: E402
 
 register_writer(
     "json",

@@ -5,15 +5,15 @@ from unittest.mock import patch
 
 import pytest
 
-from clangir._clang import LATEST_VENDORED, OLDEST_VENDORED, VENDORED_VERSIONS, get_cindex
+from headerkit._clang import LATEST_VENDORED, OLDEST_VENDORED, VENDORED_VERSIONS, get_cindex
 
 
 class TestGetCindex:
     def setup_method(self):
         """Reset the cached module before each test."""
-        import clangir._clang
+        import headerkit._clang
 
-        clangir._clang._cached_cindex = None
+        headerkit._clang._cached_cindex = None
 
     def test_returns_module_with_config(self):
         """get_cindex should return a module with Config class."""
@@ -38,9 +38,9 @@ class TestGetCindex:
 
     def test_env_var_override(self):
         """CIR_CLANG_VERSION env var should select the version."""
-        import clangir._clang
+        import headerkit._clang
 
-        clangir._clang._cached_cindex = None
+        headerkit._clang._cached_cindex = None
         with patch.dict(os.environ, {"CIR_CLANG_VERSION": "18"}):
             cindex = get_cindex()
             assert cindex is not None
@@ -60,11 +60,11 @@ class TestGetCindex:
 
     def test_fallback_to_latest_when_detection_fails(self):
         """When version detection returns None, fall back to latest with warning."""
-        import clangir._clang
+        import headerkit._clang
 
-        clangir._clang._cached_cindex = None
+        headerkit._clang._cached_cindex = None
         with (
-            patch("clangir._clang._version.detect_llvm_version", return_value=None),
+            patch("headerkit._clang._version.detect_llvm_version", return_value=None),
             pytest.warns(UserWarning, match="Could not detect LLVM version"),
         ):
             cindex = get_cindex()
@@ -72,11 +72,11 @@ class TestGetCindex:
 
     def test_fallback_to_oldest_for_old_version(self):
         """When detected version is below oldest, fall back to oldest with warning."""
-        import clangir._clang
+        import headerkit._clang
 
-        clangir._clang._cached_cindex = None
+        headerkit._clang._cached_cindex = None
         with (
-            patch("clangir._clang._version.detect_llvm_version", return_value="15"),
+            patch("headerkit._clang._version.detect_llvm_version", return_value="15"),
             pytest.warns(UserWarning, match="older than oldest vendored"),
         ):
             cindex = get_cindex()
@@ -84,11 +84,11 @@ class TestGetCindex:
 
     def test_fallback_to_latest_for_new_version(self):
         """When detected version is above latest, fall back to latest with warning."""
-        import clangir._clang
+        import headerkit._clang
 
-        clangir._clang._cached_cindex = None
+        headerkit._clang._cached_cindex = None
         with (
-            patch("clangir._clang._version.detect_llvm_version", return_value="25"),
+            patch("headerkit._clang._version.detect_llvm_version", return_value="25"),
             pytest.warns(UserWarning, match="newer than latest vendored"),
         ):
             cindex = get_cindex()
@@ -99,7 +99,7 @@ class TestGetCindex:
         import importlib
 
         for version in VENDORED_VERSIONS:
-            module = importlib.import_module(f"clangir._clang.v{version}.cindex")
+            module = importlib.import_module(f"headerkit._clang.v{version}.cindex")
             assert hasattr(module, "Config"), f"v{version} missing Config"
             assert hasattr(module, "Index"), f"v{version} missing Index"
             assert hasattr(module, "CursorKind"), f"v{version} missing CursorKind"
@@ -108,13 +108,13 @@ class TestGetCindex:
 
     def test_exact_match_no_warning(self):
         """When detected version exactly matches a vendored version, no warning is emitted."""
-        import clangir._clang
+        import headerkit._clang
 
-        clangir._clang._cached_cindex = None
+        headerkit._clang._cached_cindex = None
         import warnings
 
         with (
-            patch("clangir._clang._version.detect_llvm_version", return_value="20"),
+            patch("headerkit._clang._version.detect_llvm_version", return_value="20"),
             warnings.catch_warnings(),
         ):
             warnings.simplefilter("error")  # Turn warnings into errors
@@ -123,14 +123,14 @@ class TestGetCindex:
 
     def test_cache_is_cleared_correctly(self):
         """After clearing cache, next call re-detects version."""
-        import clangir._clang
+        import headerkit._clang
 
         # Load once
         first = get_cindex()
         assert first is not None
 
         # Clear cache
-        clangir._clang._cached_cindex = None
+        headerkit._clang._cached_cindex = None
 
         # Load again with different version override
         with patch.dict(os.environ, {"CIR_CLANG_VERSION": "18"}):

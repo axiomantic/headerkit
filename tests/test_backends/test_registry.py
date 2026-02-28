@@ -2,7 +2,7 @@
 
 import pytest
 
-from clangir.backends import (
+from headerkit.backends import (
     get_backend,
     get_backend_info,
     get_default_backend,
@@ -10,7 +10,7 @@ from clangir.backends import (
     list_backends,
     register_backend,
 )
-from clangir.ir import Header
+from headerkit.ir import Header
 
 
 class MockBackend:
@@ -35,7 +35,7 @@ class MockBackend:
 class TestBackendRegistry:
     def setup_method(self):
         """Reset registry state before each test."""
-        import clangir.backends as b
+        import headerkit.backends as b
 
         self._saved_registry = dict(b._BACKEND_REGISTRY)
         self._saved_default = b._DEFAULT_BACKEND
@@ -46,7 +46,7 @@ class TestBackendRegistry:
 
     def teardown_method(self):
         """Restore registry state after each test."""
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKEND_REGISTRY.clear()
         b._BACKEND_REGISTRY.update(self._saved_registry)
@@ -61,7 +61,7 @@ class TestBackendRegistry:
 
     def test_get_default_backend(self):
         register_backend("mock", MockBackend, is_default=True)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True  # Prevent lazy loading
         name = get_default_backend()
@@ -69,7 +69,7 @@ class TestBackendRegistry:
 
     def test_list_backends(self):
         register_backend("mock", MockBackend)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         names = list_backends()
@@ -77,14 +77,14 @@ class TestBackendRegistry:
 
     def test_is_backend_available(self):
         register_backend("mock", MockBackend)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         assert is_backend_available("mock")
         assert not is_backend_available("nonexistent")
 
     def test_get_nonexistent_backend_raises(self):
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         with pytest.raises(ValueError, match="Unknown backend"):
@@ -92,14 +92,14 @@ class TestBackendRegistry:
 
     def test_get_backend_none_returns_default(self):
         register_backend("mock", MockBackend, is_default=True)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         backend = get_backend(None)
         assert isinstance(backend, MockBackend)
 
     def test_get_backend_no_default_raises(self):
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         with pytest.raises(ValueError, match="No backends available"):
@@ -107,7 +107,7 @@ class TestBackendRegistry:
 
     def test_get_backend_info(self):
         register_backend("mock", MockBackend)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         info = get_backend_info()
@@ -121,7 +121,7 @@ class TestBackendRegistry:
     def test_first_registered_becomes_default(self):
         register_backend("first", MockBackend)
         register_backend("second", MockBackend)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         assert get_default_backend() == "first"
@@ -129,7 +129,7 @@ class TestBackendRegistry:
     def test_is_default_overrides(self):
         register_backend("first", MockBackend)
         register_backend("second", MockBackend, is_default=True)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         assert get_default_backend() == "second"
@@ -155,7 +155,7 @@ class TestBackendRegistry:
 
         register_backend("mock", MockBackend)
         register_backend("mock", MockBackend2)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         backend = get_backend("mock")
@@ -164,7 +164,7 @@ class TestBackendRegistry:
     def test_get_backend_creates_new_instances(self):
         """Each call to get_backend should return a new instance."""
         register_backend("mock", MockBackend, is_default=True)
-        import clangir.backends as b
+        import headerkit.backends as b
 
         b._BACKENDS_LOADED = True
         first = get_backend("mock")

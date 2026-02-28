@@ -2,7 +2,7 @@
 
 import json
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,
@@ -25,7 +25,7 @@ class TestHeaderToJson:
     """Tests for the header_to_json() function."""
 
     def test_empty_header(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [])
         result = json.loads(header_to_json(header))
@@ -34,7 +34,7 @@ class TestHeaderToJson:
         assert "included_headers" not in result
 
     def test_function_declaration(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -51,7 +51,7 @@ class TestHeaderToJson:
         assert decl["is_variadic"] is False
 
     def test_struct_with_fields(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -66,7 +66,7 @@ class TestHeaderToJson:
         assert decl["fields"][1] == {"name": "y", "type": {"kind": "ctype", "name": "int"}}
 
     def test_union(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -77,7 +77,7 @@ class TestHeaderToJson:
         assert decl["kind"] == "union"
 
     def test_enum_with_values(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -93,7 +93,7 @@ class TestHeaderToJson:
         ]
 
     def test_enum_value_auto_increment(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -107,7 +107,7 @@ class TestHeaderToJson:
         ]
 
     def test_typedef(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -124,7 +124,7 @@ class TestHeaderToJson:
         }
 
     def test_variable(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Variable("count", CType("int"))])
         result = json.loads(header_to_json(header))
@@ -134,7 +134,7 @@ class TestHeaderToJson:
         assert decl["type"] == {"kind": "ctype", "name": "int"}
 
     def test_constant(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Constant("SIZE", 100, is_macro=True)])
         result = json.loads(header_to_json(header))
@@ -145,7 +145,7 @@ class TestHeaderToJson:
         assert decl["is_macro"] is True
 
     def test_constant_with_type(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Constant("MAX", 255, type=CType("int"))])
         result = json.loads(header_to_json(header))
@@ -153,7 +153,7 @@ class TestHeaderToJson:
         assert decl["type"] == {"kind": "ctype", "name": "int"}
 
     def test_constant_no_value(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Constant("UNKNOWN", None)])
         result = json.loads(header_to_json(header))
@@ -163,7 +163,7 @@ class TestHeaderToJson:
         assert "value" not in decl
 
     def test_constant_not_macro_omits_is_macro(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Constant("VAL", 42)])
         result = json.loads(header_to_json(header))
@@ -171,7 +171,7 @@ class TestHeaderToJson:
         assert "is_macro" not in decl
 
     def test_constant_with_location(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -182,7 +182,7 @@ class TestHeaderToJson:
         assert decl["location"] == {"file": "test.h", "line": 5}
 
     def test_pointer_type(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Variable("ptr", Pointer(CType("int")))])
         result = json.loads(header_to_json(header))
@@ -193,7 +193,7 @@ class TestHeaderToJson:
         }
 
     def test_pointer_with_qualifiers(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Variable("ptr", Pointer(CType("int"), ["const"]))])
         result = json.loads(header_to_json(header))
@@ -205,7 +205,7 @@ class TestHeaderToJson:
         }
 
     def test_array_type(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Variable("arr", Array(CType("int"), 10))])
         result = json.loads(header_to_json(header))
@@ -217,7 +217,7 @@ class TestHeaderToJson:
         }
 
     def test_array_flexible(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Variable("arr", Array(CType("char"), None))])
         result = json.loads(header_to_json(header))
@@ -228,7 +228,7 @@ class TestHeaderToJson:
         }
 
     def test_array_symbolic_size(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Variable("buf", Array(CType("char"), "BUFFER_SIZE"))])
         result = json.loads(header_to_json(header))
@@ -236,7 +236,7 @@ class TestHeaderToJson:
         assert decl["type"]["size"] == "BUFFER_SIZE"
 
     def test_function_pointer_type(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         fp = FunctionPointer(CType("void"), [Parameter("x", CType("int"))], is_variadic=False)
         header = Header("test.h", [Variable("cb", fp)])
@@ -247,7 +247,7 @@ class TestHeaderToJson:
         assert decl["type"]["is_variadic"] is False
 
     def test_nested_pointer(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [Variable("pp", Pointer(Pointer(CType("char"))))])
         result = json.loads(header_to_json(header))
@@ -261,21 +261,21 @@ class TestHeaderToJson:
         }
 
     def test_included_headers(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [], included_headers={"stdio.h", "stdlib.h"})
         result = json.loads(header_to_json(header))
         assert result["included_headers"] == ["stdio.h", "stdlib.h"]
 
     def test_indent_none_compact(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [])
         result = header_to_json(header, indent=None)
         assert "\n" not in result
 
     def test_indent_custom(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header("test.h", [])
         result = header_to_json(header, indent=4)
@@ -286,7 +286,7 @@ class TestHeaderToJson:
         assert "    " in result
 
     def test_output_is_valid_json(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -305,7 +305,7 @@ class TestHeaderToJson:
         assert len(parsed["declarations"]) == 6
 
     def test_variadic_function(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -323,7 +323,7 @@ class TestHeaderToJson:
         assert decl["is_variadic"] is True
 
     def test_function_with_namespace(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -334,7 +334,7 @@ class TestHeaderToJson:
         assert decl["namespace"] == "ns"
 
     def test_function_with_location(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -345,7 +345,7 @@ class TestHeaderToJson:
         assert decl["location"] == {"file": "test.h", "line": 42, "column": 1}
 
     def test_function_omits_namespace_when_none(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -356,7 +356,7 @@ class TestHeaderToJson:
         assert "namespace" not in decl
 
     def test_enum_with_location(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -367,7 +367,7 @@ class TestHeaderToJson:
         assert decl["location"] == {"file": "test.h", "line": 3}
 
     def test_typedef_with_location(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -378,7 +378,7 @@ class TestHeaderToJson:
         assert decl["location"] == {"file": "test.h", "line": 7}
 
     def test_variable_with_location(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -389,7 +389,7 @@ class TestHeaderToJson:
         assert decl["location"] == {"file": "test.h", "line": 12, "column": 3}
 
     def test_anonymous_parameter(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -405,7 +405,7 @@ class TestHeaderToJsonDict:
     """Tests for the header_to_json_dict() function."""
 
     def test_returns_dict(self) -> None:
-        from clangir.writers.json import header_to_json_dict
+        from headerkit.writers.json import header_to_json_dict
 
         header = Header("test.h", [Function("foo", CType("void"), [])])
         result = header_to_json_dict(header)
@@ -414,7 +414,7 @@ class TestHeaderToJsonDict:
         assert len(result["declarations"]) == 1
 
     def test_dict_is_json_serializable(self) -> None:
-        from clangir.writers.json import header_to_json_dict
+        from headerkit.writers.json import header_to_json_dict
 
         header = Header(
             "test.h",
@@ -430,26 +430,26 @@ class TestJsonWriter:
     """Tests for the JsonWriter class (protocol-compliant wrapper)."""
 
     def test_writer_protocol_compliance(self) -> None:
-        from clangir.writers import WriterBackend
-        from clangir.writers.json import JsonWriter
+        from headerkit.writers import WriterBackend
+        from headerkit.writers.json import JsonWriter
 
         writer = JsonWriter()
         assert isinstance(writer, WriterBackend)
 
     def test_writer_name(self) -> None:
-        from clangir.writers.json import JsonWriter
+        from headerkit.writers.json import JsonWriter
 
         writer = JsonWriter()
         assert writer.name == "json"
 
     def test_writer_format_description(self) -> None:
-        from clangir.writers.json import JsonWriter
+        from headerkit.writers.json import JsonWriter
 
         writer = JsonWriter()
         assert writer.format_description == "JSON serialization of IR for inspection and tooling"
 
     def test_writer_default_indent(self) -> None:
-        from clangir.writers.json import JsonWriter
+        from headerkit.writers.json import JsonWriter
 
         header = Header("test.h", [Function("foo", CType("void"), [])])
         writer = JsonWriter()
@@ -460,7 +460,7 @@ class TestJsonWriter:
         assert "\n" in result
 
     def test_writer_custom_indent(self) -> None:
-        from clangir.writers.json import JsonWriter
+        from headerkit.writers.json import JsonWriter
 
         header = Header("test.h", [])
         writer = JsonWriter(indent=None)
@@ -468,7 +468,7 @@ class TestJsonWriter:
         assert "\n" not in result
 
     def test_via_registry(self) -> None:
-        from clangir.writers import get_writer
+        from headerkit.writers import get_writer
 
         writer = get_writer("json")
         header = Header("test.h", [Function("bar", CType("int"), [])])
@@ -477,7 +477,7 @@ class TestJsonWriter:
         assert parsed["declarations"][0]["name"] == "bar"
 
     def test_via_registry_with_kwargs(self) -> None:
-        from clangir.writers import get_writer
+        from headerkit.writers import get_writer
 
         writer = get_writer("json", indent=None)
         header = Header("test.h", [])
@@ -489,7 +489,7 @@ class TestStructSerialization:
     """Detailed struct serialization edge cases."""
 
     def test_struct_with_location(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -500,7 +500,7 @@ class TestStructSerialization:
         assert decl["location"] == {"file": "test.h", "line": 10, "column": 5}
 
     def test_struct_with_location_no_column(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -511,7 +511,7 @@ class TestStructSerialization:
         assert decl["location"] == {"file": "test.h", "line": 10}
 
     def test_cppclass(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -522,7 +522,7 @@ class TestStructSerialization:
         assert decl["is_cppclass"] is True
 
     def test_struct_with_methods(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -541,7 +541,7 @@ class TestStructSerialization:
         assert decl["methods"][0]["name"] == "get"
 
     def test_struct_with_namespace(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -552,7 +552,7 @@ class TestStructSerialization:
         assert decl["namespace"] == "ns"
 
     def test_struct_with_template_params(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -563,7 +563,7 @@ class TestStructSerialization:
         assert decl["template_params"] == ["T"]
 
     def test_struct_with_cpp_name(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -574,7 +574,7 @@ class TestStructSerialization:
         assert decl["cpp_name"] == "std::vector"
 
     def test_struct_with_notes(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -585,7 +585,7 @@ class TestStructSerialization:
         assert decl["notes"] == ["opaque type"]
 
     def test_struct_with_inner_typedefs(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -596,7 +596,7 @@ class TestStructSerialization:
         assert decl["inner_typedefs"] == {"value_type": "int"}
 
     def test_struct_omits_empty_optional_fields(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -615,7 +615,7 @@ class TestStructSerialization:
         assert "location" not in decl
 
     def test_struct_is_typedef(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",
@@ -626,7 +626,7 @@ class TestStructSerialization:
         assert decl["is_typedef"] is True
 
     def test_struct_anonymous(self) -> None:
-        from clangir.writers.json import header_to_json
+        from headerkit.writers.json import header_to_json
 
         header = Header(
             "test.h",

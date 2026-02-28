@@ -1,6 +1,6 @@
 # Architecture Overview
 
-clangir is organized around a three-layer pipeline: **backends** parse C/C++ headers, producing an **IR** (Intermediate Representation), which **writers** consume to generate output.
+headerkit is organized around a three-layer pipeline: **backends** parse C/C++ headers, producing an **IR** (Intermediate Representation), which **writers** consume to generate output.
 
 ## The Pipeline
 
@@ -20,11 +20,11 @@ Each layer is independent. Backends know nothing about writers. Writers know not
 
 ## Layer 1: Backends (Parsing)
 
-A backend implements the [`ParserBackend`][clangir.ir.ParserBackend] protocol and converts C/C++ source code into IR.
+A backend implements the [`ParserBackend`][headerkit.ir.ParserBackend] protocol and converts C/C++ source code into IR.
 
 ```python
-from clangir import ParserBackend
-from clangir.ir import Header
+from headerkit import ParserBackend
+from headerkit.ir import Header
 
 class ParserBackend(Protocol):
     def parse(
@@ -60,7 +60,7 @@ The `LibclangBackend` uses LLVM's libclang to parse headers. It provides:
 - Recursive include processing for umbrella headers
 
 ```python
-from clangir import get_backend
+from headerkit import get_backend
 
 backend = get_backend("libclang")
 header = backend.parse(code, "myheader.h")
@@ -71,7 +71,7 @@ header = backend.parse(code, "myheader.h")
 Backends register themselves using `register_backend()`:
 
 ```python
-from clangir.backends import register_backend
+from headerkit.backends import register_backend
 
 register_backend("mybackend", MyBackendClass, is_default=False)
 ```
@@ -89,7 +89,7 @@ See [Writing Custom Backends](custom-backends.md) for a complete guide.
 
 ## Layer 2: IR (Intermediate Representation)
 
-The IR is a tree of Python dataclasses rooted at [`Header`][clangir.ir.Header]. It is designed to be parser-agnostic: any backend that can parse C/C++ can produce the same IR.
+The IR is a tree of Python dataclasses rooted at [`Header`][headerkit.ir.Header]. It is designed to be parser-agnostic: any backend that can parse C/C++ can produce the same IR.
 
 ### Type Expressions
 
@@ -129,15 +129,15 @@ classDiagram
 
 | Class | Represents | Example |
 |-------|-----------|---------|
-| [`CType`][clangir.ir.CType] | Base type with qualifiers | `int`, `const char`, `unsigned long` |
-| [`Pointer`][clangir.ir.Pointer] | Pointer to another type | `int*`, `const char*`, `void**` |
-| [`Array`][clangir.ir.Array] | Fixed or flexible array | `int[10]`, `char[]` |
-| [`FunctionPointer`][clangir.ir.FunctionPointer] | Function pointer | `void (*)(int, char*)` |
+| [`CType`][headerkit.ir.CType] | Base type with qualifiers | `int`, `const char`, `unsigned long` |
+| [`Pointer`][headerkit.ir.Pointer] | Pointer to another type | `int*`, `const char*`, `void**` |
+| [`Array`][headerkit.ir.Array] | Fixed or flexible array | `int[10]`, `char[]` |
+| [`FunctionPointer`][headerkit.ir.FunctionPointer] | Function pointer | `void (*)(int, char*)` |
 
 Types compose naturally:
 
 ```python
-from clangir import CType, Pointer, Array
+from headerkit import CType, Pointer, Array
 
 # const char*
 const_char_ptr = Pointer(CType("char", ["const"]))
@@ -195,19 +195,19 @@ classDiagram
 
 | Class | Represents |
 |-------|-----------|
-| [`Struct`][clangir.ir.Struct] | Structs, unions, and C++ classes |
-| [`Enum`][clangir.ir.Enum] | Enumerations with named constants |
-| [`Function`][clangir.ir.Function] | Function prototypes |
-| [`Typedef`][clangir.ir.Typedef] | Type aliases |
-| [`Variable`][clangir.ir.Variable] | Global/extern variables |
-| [`Constant`][clangir.ir.Constant] | `#define` macros and `const` values |
+| [`Struct`][headerkit.ir.Struct] | Structs, unions, and C++ classes |
+| [`Enum`][headerkit.ir.Enum] | Enumerations with named constants |
+| [`Function`][headerkit.ir.Function] | Function prototypes |
+| [`Typedef`][headerkit.ir.Typedef] | Type aliases |
+| [`Variable`][headerkit.ir.Variable] | Global/extern variables |
+| [`Constant`][headerkit.ir.Constant] | `#define` macros and `const` values |
 
 ### The Header Container
 
-[`Header`][clangir.ir.Header] is the top-level container returned by all backends:
+[`Header`][headerkit.ir.Header] is the top-level container returned by all backends:
 
 ```python
-from clangir.ir import Header
+from headerkit.ir import Header
 
 # Header fields:
 #   path: str                        -- original file path
@@ -217,11 +217,11 @@ from clangir.ir import Header
 
 ## Layer 3: Writers (Output)
 
-A writer implements the [`WriterBackend`][clangir.writers.WriterBackend] protocol and converts IR into a string output:
+A writer implements the [`WriterBackend`][headerkit.writers.WriterBackend] protocol and converts IR into a string output:
 
 ```python
-from clangir.writers import WriterBackend
-from clangir.ir import Header
+from headerkit.writers import WriterBackend
+from headerkit.ir import Header
 
 class WriterBackend(Protocol):
     def write(self, header: Header) -> str: ...
@@ -239,15 +239,15 @@ Writer-specific options (e.g., `exclude_patterns` for CFFI, `indent` for JSON) a
 
 | Writer | Output | Constructor Options |
 |--------|--------|-------------------|
-| [`CffiWriter`][clangir.writers.cffi.CffiWriter] | CFFI `cdef` strings | `exclude_patterns: list[str] \| None` |
-| [`JsonWriter`][clangir.writers.json.JsonWriter] | JSON serialization | `indent: int \| None` |
+| [`CffiWriter`][headerkit.writers.cffi.CffiWriter] | CFFI `cdef` strings | `exclude_patterns: list[str] \| None` |
+| [`JsonWriter`][headerkit.writers.json.JsonWriter] | JSON serialization | `indent: int \| None` |
 
 ### Writer Registry
 
 Writers use the same registry pattern as backends:
 
 ```python
-from clangir.writers import register_writer
+from headerkit.writers import register_writer
 
 register_writer("mywriter", MyWriterClass, description="My custom output format")
 ```
@@ -272,4 +272,4 @@ See [Writing Custom Writers](custom-writers.md) for a complete guide.
 
 **Best-effort output.** Writers silently skip declarations they cannot represent rather than raising exceptions. This makes the pipeline robust against headers with exotic constructs.
 
-**Self-registering plugins.** Both backends and writers register themselves at import time. Adding a new backend or writer requires zero changes to clangir's core code. Just implement the protocol, call `register_backend()` or `register_writer()`, and your plugin is available through `get_backend()` or `get_writer()`.
+**Self-registering plugins.** Both backends and writers register themselves at import time. Adding a new backend or writer requires zero changes to headerkit's core code. Just implement the protocol, call `register_backend()` or `register_writer()`, and your plugin is available through `get_backend()` or `get_writer()`.

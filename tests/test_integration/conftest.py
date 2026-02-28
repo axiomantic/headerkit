@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from clangir.backends import get_backend, is_backend_available
+from headerkit.backends import get_backend, is_backend_available
 
 # Skip entire module if libclang unavailable
 pytestmark = pytest.mark.skipif(
@@ -18,13 +18,13 @@ pytestmark = pytest.mark.skipif(
     reason="libclang backend not available",
 )
 
-CACHE_DIR = Path.home() / ".cache" / "clangir-test-headers"
+CACHE_DIR = Path.home() / ".cache" / "headerkit-test-headers"
 
 
 def _download_file(url: str, dest: Path) -> None:
     """Download a URL to a local file, creating parent dirs."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    req = Request(url, headers={"User-Agent": "clangir-test/1.0"})
+    req = Request(url, headers={"User-Agent": "headerkit-test/1.0"})
     with urlopen(req, timeout=60) as resp:  # noqa: S310
         dest.write_bytes(resp.read())
 
@@ -32,7 +32,7 @@ def _download_file(url: str, dest: Path) -> None:
 def _download_and_extract_tar(url: str, dest_dir: Path, members: list[str] | None = None) -> None:
     """Download a tar.gz/tar.xz and extract specific members (or all) to dest_dir."""
     dest_dir.mkdir(parents=True, exist_ok=True)
-    req = Request(url, headers={"User-Agent": "clangir-test/1.0"})
+    req = Request(url, headers={"User-Agent": "headerkit-test/1.0"})
     with urlopen(req, timeout=120) as resp:  # noqa: S310
         data = resp.read()
     mode = "r:xz" if url.endswith(".tar.xz") else "r:gz"
@@ -51,7 +51,7 @@ def _download_and_extract_tar(url: str, dest_dir: Path, members: list[str] | Non
 def _download_and_extract_zip(url: str, dest_dir: Path, members: list[str] | None = None) -> None:
     """Download a zip and extract specific members to dest_dir."""
     dest_dir.mkdir(parents=True, exist_ok=True)
-    req = Request(url, headers={"User-Agent": "clangir-test/1.0"})
+    req = Request(url, headers={"User-Agent": "headerkit-test/1.0"})
     with urlopen(req, timeout=120) as resp:  # noqa: S310
         data = resp.read()
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
@@ -150,7 +150,7 @@ def curl_headers() -> Path | None:
     if not header.exists():
         try:
             curl_dir.mkdir(parents=True, exist_ok=True)
-            req = Request(CURL_URL, headers={"User-Agent": "clangir-test/1.0"})
+            req = Request(CURL_URL, headers={"User-Agent": "headerkit-test/1.0"})
             with urlopen(req, timeout=120) as resp:  # noqa: S310
                 data = resp.read()
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
@@ -179,7 +179,7 @@ def sdl2_headers() -> Path | None:
     if not header.exists():
         try:
             sdl_dir.mkdir(parents=True, exist_ok=True)
-            req = Request(SDL_URL, headers={"User-Agent": "clangir-test/1.0"})
+            req = Request(SDL_URL, headers={"User-Agent": "headerkit-test/1.0"})
             with urlopen(req, timeout=120) as resp:  # noqa: S310
                 data = resp.read()
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
@@ -208,7 +208,7 @@ def cpython_headers() -> Path | None:
     if not header.exists():
         try:
             inc_dir.mkdir(parents=True, exist_ok=True)
-            req = Request(CPYTHON_URL, headers={"User-Agent": "clangir-test/1.0"})
+            req = Request(CPYTHON_URL, headers={"User-Agent": "headerkit-test/1.0"})
             with urlopen(req, timeout=120) as resp:  # noqa: S310
                 data = resp.read()
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:

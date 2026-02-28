@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from clangir.ir import CType, Function, Header
-from clangir.writers import (
+from headerkit.ir import CType, Function, Header
+from headerkit.writers import (
     WriterBackend,
     get_default_writer,
     get_writer,
@@ -62,7 +62,7 @@ class MockWriterWithDocstring:
 @pytest.fixture()
 def reset_writer_registry() -> Generator[None, None, None]:
     """Save and restore global writer registry state around each test."""
-    import clangir.writers as w
+    import headerkit.writers as w
 
     saved_registry = dict(w._WRITER_REGISTRY)
     saved_descriptions = dict(w._WRITER_DESCRIPTIONS)
@@ -95,7 +95,7 @@ class TestWriterRegistry:
 
     def test_register_and_get_writer(self) -> None:
         """Register a mock writer class, get_writer() returns instance."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("mock", MockWriter, is_default=True)
         w._WRITERS_LOADED = True
@@ -105,7 +105,7 @@ class TestWriterRegistry:
 
     def test_register_default(self) -> None:
         """Register with is_default=True, get_writer() without name returns it."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("first", MockWriter)
         register_writer("second", MockWriter, is_default=True)
@@ -117,7 +117,7 @@ class TestWriterRegistry:
 
     def test_list_writers(self) -> None:
         """list_writers() returns names of all registered writers."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("alpha", MockWriter)
         register_writer("beta", MockWriter)
@@ -137,7 +137,7 @@ class TestWriterRegistry:
 
     def test_get_nonexistent_writer(self) -> None:
         """get_writer('nonexistent') raises ValueError."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         w._WRITERS_LOADED = True
 
@@ -146,7 +146,7 @@ class TestWriterRegistry:
 
     def test_is_writer_available(self) -> None:
         """Returns True for registered, False for unregistered."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("mock", MockWriter)
         w._WRITERS_LOADED = True
@@ -156,7 +156,7 @@ class TestWriterRegistry:
 
     def test_get_writer_info(self) -> None:
         """Returns name + description dict for all registered writers."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("mock", MockWriter, description="A test writer")
         w._WRITERS_LOADED = True
@@ -171,7 +171,7 @@ class TestWriterRegistry:
 
     def test_description_from_docstring(self) -> None:
         """If no description passed, register_writer() extracts from class docstring."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("with-doc", MockWriterWithDocstring)
         w._WRITERS_LOADED = True
@@ -182,7 +182,7 @@ class TestWriterRegistry:
 
     def test_get_default_writer(self) -> None:
         """Returns the default writer name."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("mock", MockWriter, is_default=True)
         w._WRITERS_LOADED = True
@@ -191,7 +191,7 @@ class TestWriterRegistry:
 
     def test_get_writer_passes_kwargs(self) -> None:
         """get_writer('x', foo=1) passes foo=1 to constructor."""
-        import clangir.writers as w
+        import headerkit.writers as w
 
         register_writer("mock", MockWriter, is_default=True)
         w._WRITERS_LOADED = True

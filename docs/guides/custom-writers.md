@@ -1,14 +1,14 @@
 # Writing Custom Writers
 
-clangir writers convert IR into output strings. You can create custom writers for any target format: Cython `.pxd` files, ctypes bindings, documentation, or anything else you need.
+headerkit writers convert IR into output strings. You can create custom writers for any target format: Cython `.pxd` files, ctypes bindings, documentation, or anything else you need.
 
 ## The WriterBackend Protocol
 
-Every writer must implement the [`WriterBackend`][clangir.writers.WriterBackend] protocol:
+Every writer must implement the [`WriterBackend`][headerkit.writers.WriterBackend] protocol:
 
 ```python
-from clangir.ir import Header
-from clangir.writers import WriterBackend
+from headerkit.ir import Header
+from headerkit.writers import WriterBackend
 
 class WriterBackend(Protocol):
     def write(self, header: Header) -> str: ...
@@ -22,7 +22,7 @@ class WriterBackend(Protocol):
 
 ### Method and Property Details
 
-**`write(header)`** -- Convert a [`Header`][clangir.ir.Header] IR object into the target format string. Writers should produce best-effort output, silently skipping declarations they cannot represent. Writers must not raise exceptions for valid `Header` input.
+**`write(header)`** -- Convert a [`Header`][headerkit.ir.Header] IR object into the target format string. Writers should produce best-effort output, silently skipping declarations they cannot represent. Writers must not raise exceptions for valid `Header` input.
 
 **`name`** -- A human-readable name for the writer (e.g., `"markdown"`). This is the string users pass to `get_writer()`.
 
@@ -50,10 +50,10 @@ writer = get_writer("markdown", include_source_locations=True)
 
 ## Registering a Writer
 
-Use [`register_writer()`][clangir.writers.register_writer] to add your writer to the global registry:
+Use [`register_writer()`][headerkit.writers.register_writer] to add your writer to the global registry:
 
 ```python
-from clangir.writers import register_writer
+from headerkit.writers import register_writer
 
 register_writer(
     "markdown",
@@ -77,11 +77,11 @@ Parameters:
 Here is a complete writer that generates Markdown documentation from a parsed C header:
 
 ```python
-"""Generate Markdown API documentation from clangir IR."""
+"""Generate Markdown API documentation from headerkit IR."""
 
 from __future__ import annotations
 
-from clangir.ir import (
+from headerkit.ir import (
     Constant,
     Declaration,
     Enum,
@@ -91,7 +91,7 @@ from clangir.ir import (
     Typedef,
     Variable,
 )
-from clangir.writers import register_writer
+from headerkit.writers import register_writer
 
 
 class MarkdownWriter:
@@ -212,7 +212,7 @@ register_writer("markdown", MarkdownWriter, description="Markdown API documentat
 Once registered, your writer is available through the standard API:
 
 ```python
-from clangir import get_backend, get_writer, list_writers
+from headerkit import get_backend, get_writer, list_writers
 
 # List all available writers
 print(list_writers())  # ['cffi', 'json', 'markdown']
@@ -231,7 +231,7 @@ print(docs)
 When writing a custom writer, you need to handle the various IR types. Here is a reference for the type-dispatch pattern:
 
 ```python
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,
@@ -290,7 +290,7 @@ To distribute your writer as a separate package, register it in your package's `
 
 ```python
 # mywriter/__init__.py
-from clangir.writers import register_writer
+from headerkit.writers import register_writer
 from mywriter.core import MarkdownWriter
 
 register_writer("markdown", MarkdownWriter)
@@ -299,13 +299,13 @@ register_writer("markdown", MarkdownWriter)
 Users install your package and the writer becomes available:
 
 ```bash
-pip install clangir-markdown-writer
+pip install headerkit-markdown-writer
 ```
 
 ```python
 # The import triggers registration
 import mywriter  # noqa: F401
 
-from clangir import get_writer
+from headerkit import get_writer
 writer = get_writer("markdown")
 ```

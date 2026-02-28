@@ -1,15 +1,15 @@
 # IR Types
 
-The Intermediate Representation (IR) is the core data model of clangir. Parser backends
+The Intermediate Representation (IR) is the core data model of headerkit. Parser backends
 produce IR objects; writers consume them to generate output in various formats.
 
-All IR types are Python dataclasses defined in the `clangir.ir` module.
+All IR types are Python dataclasses defined in the `headerkit.ir` module.
 
 ## Container
 
 The top-level object returned by all parser backends.
 
-::: clangir.ir.Header
+::: headerkit.ir.Header
     options:
       show_source: false
 
@@ -18,19 +18,19 @@ The top-level object returned by all parser backends.
 Type expressions form a recursive tree structure representing C type syntax.
 For example, `const char**` becomes `Pointer(Pointer(CType("char", ["const"])))`.
 
-::: clangir.ir.CType
+::: headerkit.ir.CType
     options:
       show_source: false
 
-::: clangir.ir.Pointer
+::: headerkit.ir.Pointer
     options:
       show_source: false
 
-::: clangir.ir.Array
+::: headerkit.ir.Array
     options:
       show_source: false
 
-::: clangir.ir.FunctionPointer
+::: headerkit.ir.FunctionPointer
     options:
       show_source: false
 
@@ -38,45 +38,45 @@ For example, `const char**` becomes `Pointer(Pointer(CType("char", ["const"])))`
 
 Declaration types represent the top-level constructs found in C/C++ headers.
 
-::: clangir.ir.Enum
+::: headerkit.ir.Enum
     options:
       show_source: false
 
-::: clangir.ir.EnumValue
+::: headerkit.ir.EnumValue
     options:
       show_source: false
 
-::: clangir.ir.Struct
+::: headerkit.ir.Struct
     options:
       show_source: false
 
-::: clangir.ir.Field
+::: headerkit.ir.Field
     options:
       show_source: false
 
-::: clangir.ir.Function
+::: headerkit.ir.Function
     options:
       show_source: false
 
-::: clangir.ir.Parameter
+::: headerkit.ir.Parameter
     options:
       show_source: false
 
-::: clangir.ir.Typedef
+::: headerkit.ir.Typedef
     options:
       show_source: false
 
-::: clangir.ir.Variable
+::: headerkit.ir.Variable
     options:
       show_source: false
 
-::: clangir.ir.Constant
+::: headerkit.ir.Constant
     options:
       show_source: false
 
 ## Union Types
 
-These are `typing.Union` aliases used in type annotations throughout clangir.
+These are `typing.Union` aliases used in type annotations throughout headerkit.
 
 ### `Declaration`
 
@@ -84,7 +84,7 @@ These are `typing.Union` aliases used in type annotations throughout clangir.
 Declaration = Union[Enum, Struct, Function, Typedef, Variable, Constant]
 ```
 
-Any top-level declaration that can appear in a [`Header`][clangir.ir.Header].
+Any top-level declaration that can appear in a [`Header`][headerkit.ir.Header].
 
 ### `TypeExpr`
 
@@ -96,7 +96,7 @@ Any type expression that can appear in a declaration's type fields.
 
 ## Source Location
 
-::: clangir.ir.SourceLocation
+::: headerkit.ir.SourceLocation
     options:
       show_source: false
 
@@ -105,6 +105,6 @@ Any type expression that can appear in a declaration's type fields.
 The parser backend protocol is defined alongside the IR types since backends
 produce IR directly. See also the [Backends](backends.md) page for registry functions.
 
-::: clangir.ir.ParserBackend
+::: headerkit.ir.ParserBackend
     options:
       show_source: false

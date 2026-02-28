@@ -1,7 +1,7 @@
-"""Parser backends for clangir.
+"""Parser backends for headerkit.
 
 This package contains parser backend implementations that convert C/C++
-source code into the clangir IR (Intermediate Representation).
+source code into the headerkit IR (Intermediate Representation).
 
 Available Backends
 ------------------
@@ -13,7 +13,7 @@ Example
 -------
 ::
 
-    from clangir.backends import get_backend, list_backends
+    from headerkit.backends import get_backend, list_backends
 
     # Get the default backend
     backend = get_backend()
@@ -26,7 +26,7 @@ Example
         print(name)
 """
 
-from clangir.ir import (
+from headerkit.ir import (
     ParserBackend,
 )
 
@@ -45,7 +45,7 @@ def register_backend(name: str, backend_class: type[ParserBackend], is_default: 
     explicitly set on a later registration.
 
     :param name: Unique name for the backend (e.g., ``"libclang"``).
-    :param backend_class: Class implementing the :class:`~clangir.ir.ParserBackend` protocol.
+    :param backend_class: Class implementing the :class:`~headerkit.ir.ParserBackend` protocol.
     :param is_default: If True, this becomes the default backend for :func:`get_backend`.
     """
     global _DEFAULT_BACKEND  # pylint: disable=global-statement
@@ -63,7 +63,7 @@ def list_backends() -> list[str]:
     -------
     ::
 
-        from clangir.backends import list_backends
+        from headerkit.backends import list_backends
 
         for name in list_backends():
             print(f"Available: {name}")
@@ -121,7 +121,7 @@ def get_backend(name: str | None = None) -> ParserBackend:
     -------
     ::
 
-        from clangir.backends import get_backend
+        from headerkit.backends import get_backend
 
         # Get default backend
         backend = get_backend()
@@ -158,7 +158,7 @@ def get_default_backend() -> str:
     -------
     ::
 
-        from clangir.backends import get_default_backend
+        from headerkit.backends import get_default_backend
 
         default = get_default_backend()
         print(f"Default backend: {default}")
@@ -174,7 +174,7 @@ def _ensure_backends_loaded() -> None:
     """Lazily load backend modules to populate the registry.
 
     NOTE: Managed circular import pattern.
-    This module and clangir.backends.libclang have a circular dependency:
+    This module and headerkit.backends.libclang have a circular dependency:
     - This module defines the registry functions
     - libclang.py imports register_backend from here at load time
     - _ensure_backends_loaded() in this module imports libclang lazily
@@ -193,7 +193,7 @@ def _ensure_backends_loaded() -> None:
 
     # Import triggers module-level registration if libclang is available
     try:
-        import clangir.backends.libclang  # noqa: F401 (side effect import)
+        import headerkit.backends.libclang  # noqa: F401 (side effect import)
     except ImportError:
         import logging
 
@@ -202,7 +202,7 @@ def _ensure_backends_loaded() -> None:
     if not _BACKEND_REGISTRY:
         import sys as _sys
 
-        from clangir._clang._version import detect_llvm_version
+        from headerkit._clang._version import detect_llvm_version
 
         version = detect_llvm_version()
 
