@@ -1,79 +1,79 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/guides/architecture/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/guides/architecture/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/guides/cffi/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/guides/cffi/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/guides/custom-backends/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/guides/custom-backends/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/guides/custom-writers/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/guides/custom-writers/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/guides/install-libclang/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/guides/install-libclang/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/guides/installation/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/guides/installation/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/guides/quickstart/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/guides/quickstart/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/reference/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/reference/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/reference/backends/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/reference/backends/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/reference/cffi/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/reference/cffi/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/reference/install-libclang/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/reference/install-libclang/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/reference/ir/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/reference/ir/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/reference/json/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/reference/json/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/reference/writers/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/reference/writers/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/tutorials/ctypes-writer/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/tutorials/ctypes-writer/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/tutorials/header-cleanup/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/tutorials/header-cleanup/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/tutorials/json-export/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/tutorials/json-export/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
     <url>
-         <loc>https://axiomantic.github.io/clangir/0.3/tutorials/pxd-writer/</loc>
+         <loc>https://axiomantic.github.io/headerkit/0.3/tutorials/pxd-writer/</loc>
          <lastmod>2026-02-28</lastmod>
     </url>
 </urlset>
