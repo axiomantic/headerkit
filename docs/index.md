@@ -40,8 +40,8 @@ graph LR
     B --> C["IR"]
     C --> D["Writer"]
     D --> E["Output"]
-    B -.- B1["ParserBackend\nProtocol"]
-    D -.- D1["WriterBackend\nProtocol"]
+    B -.- B1["ParserBackend<br>Protocol"]
+    D -.- D1["WriterBackend<br>Protocol"]
 ```
 
 1. A **backend** (e.g., `LibclangBackend`) parses C/C++ source code and produces an IR `Header` object containing `Declaration` nodes.

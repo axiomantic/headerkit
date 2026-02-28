@@ -7,10 +7,10 @@ clangir is organized around a three-layer pipeline: **backends** parse C/C++ hea
 ```mermaid
 graph TD
     A["C/C++ Source Code"] --> B
-    B["Backend\n(ParserBackend protocol)"] --> C
-    C["IR\n(Header, Declaration, TypeExpr)"] --> D
-    D["Writer\n(WriterBackend protocol)"] --> E
-    E["Output String\n(CFFI cdef, JSON, ...)"]
+    B["Backend<br>(ParserBackend protocol)"] --> C
+    C["IR<br>(Header, Declaration, TypeExpr)"] --> D
+    D["Writer<br>(WriterBackend protocol)"] --> E
+    E["Output String<br>(CFFI cdef, JSON, ...)"]
 
     B -.- B1["e.g., LibclangBackend"]
     D -.- D1["e.g., CffiWriter, JsonWriter"]
