@@ -1611,7 +1611,11 @@
 <tbody>
 <tr>
 <td><code>"struct"</code></td>
-<td><code>name</code>, <code>fields</code>, <code>is_typedef</code>, <code>is_union</code> (when union)</td>
+<td><code>name</code>, <code>fields</code>, <code>is_typedef</code></td>
+</tr>
+<tr>
+<td><code>"union"</code></td>
+<td><code>name</code>, <code>fields</code>, <code>is_typedef</code></td>
 </tr>
 <tr>
 <td><code>"enum"</code></td>
@@ -1635,7 +1639,7 @@
 </tr>
 </tbody>
 </table>
-<p>Structs and unions share the same schema. Unions have <code>"kind": "union"</code> while structs have <code>"kind": "struct"</code>.</p>
+<p>Structs and unions share the same schema but use distinct <code>"kind"</code> values.</p>
 <h2 id="worked-example">Worked Example<a class="headerlink" href="#worked-example" title="Permanent link">&para;</a></h2>
 <p>Given this C header:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">// calculator.h</span>

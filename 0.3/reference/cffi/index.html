@@ -1411,12 +1411,82 @@ cdef_string = writer.write(header)
     <div class="doc doc-contents first">
 
         <p>Convert all declarations in a Header to a CFFI cdef string.</p>
-<p>Args:
-    header: Parsed header IR from clangir.
-    exclude_patterns: List of regex patterns. Declarations with names
-        matching any pattern will be excluded.</p>
-<p>Returns:
-    A string suitable for passing to <code>ffibuilder.cdef()</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>header</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            Header
+
+
+  
+      dataclass
+   (clangir.ir.Header)" href="../ir/#clangir.ir.Header">Header</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Parsed header IR from clangir.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>exclude_patterns</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>List of regex patterns. Declarations with names
+matching any pattern will be excluded.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A string suitable for passing to <code>ffibuilder.cdef()</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
