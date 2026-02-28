@@ -252,6 +252,9 @@ class FunctionPointer:
     :param parameters: List of function parameters.
     :param is_variadic: True if the function accepts variable arguments
         (ends with ``...``).
+    :param calling_convention: The calling convention if non-default
+        (e.g., ``"stdcall"``, ``"cdecl"``, ``"fastcall"``). None for
+        the platform default calling convention.
 
     Examples
     --------
@@ -278,12 +281,14 @@ class FunctionPointer:
     return_type: TypeExpr
     parameters: list[Parameter] = field(default_factory=list)
     is_variadic: bool = False
+    calling_convention: str | None = None
 
     def __str__(self) -> str:
         params = ", ".join(str(p) for p in self.parameters)
         if self.is_variadic:
             params = f"{params}, ..." if params else "..."
-        return f"{self.return_type} (*)({params})"
+        cc = f" __{self.calling_convention}__" if self.calling_convention else ""
+        return f"{self.return_type} ({cc}*)({params})"
 
 
 # Type alias for any type expression
@@ -303,6 +308,11 @@ class Field:
 
     :param name: The field name.
     :param type: The field's type expression.
+    :param bit_width: C bitfield width in bits, or None for non-bitfield
+        fields. For example, ``uint32_t flags : 4`` has ``bit_width=4``.
+    :param anonymous_struct: When this field is an anonymous nested
+        struct or union, holds the :class:`Struct` IR node for the
+        anonymous type. None for regular fields.
 
     Examples
     --------
@@ -317,13 +327,27 @@ class Field:
     Array field::
 
         buffer = Field("buffer", Array(CType("char"), 256))  # char buffer[256]
+
+    Bitfield::
+
+        flags = Field("flags", CType("uint32_t"), bit_width=4)  # uint32_t flags : 4
+
+    Anonymous nested struct::
+
+        inner = Struct(None, [Field("x", CType("int"))], is_union=False)
+        field = Field("pos", CType("void"), anonymous_struct=inner)
     """
 
     name: str
     type: TypeExpr
+    bit_width: int | None = None
+    anonymous_struct: Struct | None = None
 
     def __str__(self) -> str:
-        return f"{self.type} {self.name}"
+        base = f"{self.type} {self.name}"
+        if self.bit_width is not None:
+            base += f" : {self.bit_width}"
+        return base
 
 
 @dataclass
@@ -411,6 +435,8 @@ class Struct:
     :param is_union: True for unions, False for structs.
     :param is_cppclass: True for C++ classes (uses ``cppclass`` in Cython).
     :param is_typedef: True if this came from a typedef declaration.
+    :param is_packed: True if the struct has ``__attribute__((packed))``,
+        which disables padding and alignment. Affects memory layout.
     :param location: Source location for error reporting.
 
     Examples
@@ -451,6 +477,7 @@ class Struct:
     is_union: bool = False
     is_cppclass: bool = False
     is_typedef: bool = False
+    is_packed: bool = False
     namespace: str | None = None
     template_params: list[str] = field(default_factory=list)
     cpp_name: str | None = None
@@ -466,7 +493,8 @@ class Struct:
         else:
             kind = "struct"
         name_str = self.name or "(anonymous)"
-        return f"{kind} {name_str}"
+        packed_str = " __attribute__((packed))" if self.is_packed else ""
+        return f"{kind} {name_str}{packed_str}"
 
 
 @dataclass
@@ -480,6 +508,9 @@ class Function:
     :param return_type: The function's return type.
     :param parameters: List of function parameters.
     :param is_variadic: True if the function accepts variable arguments.
+    :param calling_convention: The calling convention if non-default
+        (e.g., ``"stdcall"``, ``"cdecl"``, ``"fastcall"``). None for
+        the platform default calling convention.
     :param location: Source location for error reporting.
 
     Examples
@@ -510,6 +541,7 @@ class Function:
     return_type: TypeExpr
     parameters: list[Parameter] = field(default_factory=list)
     is_variadic: bool = False
+    calling_convention: str | None = None
     namespace: str | None = None
     location: SourceLocation | None = None
 
@@ -517,7 +549,8 @@ class Function:
         params = ", ".join(str(p) for p in self.parameters)
         if self.is_variadic:
             params = f"{params}, ..." if params else "..."
-        return f"{self.return_type} {self.name}({params})"
+        cc = f" __{self.calling_convention}__" if self.calling_convention else ""
+        return f"{cc}{self.return_type} {self.name}({params})"
 
 
 @dataclass

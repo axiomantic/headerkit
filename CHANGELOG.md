@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-02-28
+
+### Added
+
+- `Field.bit_width` IR field for C bitfield support
+- `Field.anonymous_struct` IR field for anonymous nested struct/union members
+- `Struct.is_packed` IR field for `__attribute__((packed))` structs
+- `Function.calling_convention` and `FunctionPointer.calling_convention` IR fields
+- CtypesWriter: generates complete Python ctypes binding modules
+- CythonWriter: generates Cython .pxd declaration files with C++ support (ported from autopxd2)
+- DiffWriter: generates API compatibility reports in JSON or Markdown format
+- PromptWriter: generates token-optimized IR output for LLM context (compact/standard/verbose)
+- LuaWriter: generates LuaJIT FFI binding files
+
 ## [0.4.0] - 2026-02-28
 
 ### Added
@@ -100,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
+[0.5.0]: https://github.com/axiomantic/headerkit/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/axiomantic/headerkit/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/axiomantic/headerkit/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/axiomantic/headerkit/compare/v0.3.1...v0.3.2

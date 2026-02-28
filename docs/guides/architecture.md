@@ -10,10 +10,10 @@ graph TD
     B["Backend<br>(ParserBackend protocol)"] --> C
     C["IR<br>(Header, Declaration, TypeExpr)"] --> D
     D["Writer<br>(WriterBackend protocol)"] --> E
-    E["Output String<br>(CFFI cdef, JSON, ...)"]
+    E["Output String<br>(CFFI cdef, ctypes, Cython .pxd, ...)"]
 
     B -.- B1["e.g., LibclangBackend"]
-    D -.- D1["e.g., CffiWriter, JsonWriter"]
+    D -.- D1["e.g., CffiWriter, CtypesWriter,<br>CythonWriter, LuaWriter, ..."]
 ```
 
 Each layer is independent. Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.
@@ -237,10 +237,15 @@ Writer-specific options (e.g., `exclude_patterns` for CFFI, `indent` for JSON) a
 
 ### Built-in Writers
 
-| Writer | Output | Constructor Options |
-|--------|--------|-------------------|
-| [`CffiWriter`][headerkit.writers.cffi.CffiWriter] | CFFI `cdef` strings | `exclude_patterns: list[str] \| None` |
-| [`JsonWriter`][headerkit.writers.json.JsonWriter] | JSON serialization | `indent: int \| None` |
+| Writer | Registry Name | Output | Constructor Options |
+|--------|--------------|--------|-------------------|
+| [`CffiWriter`][headerkit.writers.cffi.CffiWriter] | `cffi` (default) | CFFI `cdef` strings | `exclude_patterns: list[str] \| None` |
+| [`CtypesWriter`][headerkit.writers.ctypes.CtypesWriter] | `ctypes` | Python ctypes binding modules | `lib_name: str` |
+| [`CythonWriter`][headerkit.writers.cython.CythonWriter] | `cython` | Cython `.pxd` declarations | -- |
+| [`DiffWriter`][headerkit.writers.diff.DiffWriter] | `diff` | API compatibility diff reports (JSON or Markdown) | `baseline: Header \| None`, `format: str` |
+| [`JsonWriter`][headerkit.writers.json.JsonWriter] | `json` | JSON serialization of IR | `indent: int \| None` |
+| [`LuaWriter`][headerkit.writers.lua.LuaWriter] | `lua` | LuaJIT FFI bindings | -- |
+| [`PromptWriter`][headerkit.writers.prompt.PromptWriter] | `prompt` | Token-optimized output for LLM context | `verbosity: str` |
 
 ### Writer Registry
 

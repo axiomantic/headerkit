@@ -127,20 +127,37 @@ def _format_params(
 def _format_field(f: Field, tag_kinds: TagKinds | None = None) -> str:
     """Format a struct/union field declaration."""
     tags = tag_kinds or {}
+
+    if f.anonymous_struct is not None:
+        return _format_anonymous_struct_field(f.anonymous_struct, tags)
+
+    bit_suffix = f" : {f.bit_width}" if f.bit_width is not None else ""
+
     if isinstance(f.type, Array):
         size_str = str(f.type.size) if f.type.size is not None else ""
-        return f"    {type_to_cffi(f.type.element_type, tags)} {f.name}[{size_str}];"
+        return f"    {type_to_cffi(f.type.element_type, tags)} {f.name}[{size_str}]{bit_suffix};"
     elif isinstance(f.type, FunctionPointer):
         fp = f.type
         fp_params = _format_params(fp.parameters, fp.is_variadic, tags)
         return f"    {type_to_cffi(fp.return_type, tags)} (*{f.name})({fp_params});"
     elif isinstance(f.type, Pointer) and isinstance(f.type.pointee, FunctionPointer):
-        # Pointer to function pointer
         fp = f.type.pointee
         fp_params = _format_params(fp.parameters, fp.is_variadic, tags)
         return f"    {type_to_cffi(fp.return_type, tags)} (**{f.name})({fp_params});"
     else:
-        return f"    {type_to_cffi(f.type, tags)} {f.name};"
+        return f"    {type_to_cffi(f.type, tags)} {f.name}{bit_suffix};"
+
+
+def _format_anonymous_struct_field(anon: Struct, tag_kinds: TagKinds | None = None) -> str:
+    """Format an anonymous struct/union as an inline field block."""
+    tags = tag_kinds or {}
+    kind = "union" if anon.is_union else "struct"
+    lines = [f"    {kind} {{"]
+    for inner_f in anon.fields:
+        inner_line = _format_field(inner_f, tags)
+        lines.append(f"    {inner_line}")
+    lines.append("    };")
+    return "\n".join(lines)
 
 
 def decl_to_cffi(
@@ -191,6 +208,8 @@ def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | No
             return f"{kind} {decl.name} {{ ...; }};"
 
     lines = []
+    if decl.is_packed:
+        lines.append("/* packed */")
     if decl.is_typedef:
         lines.append(f"typedef {kind} {decl.name} {{")
     else:

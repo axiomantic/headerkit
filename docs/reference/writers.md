@@ -14,7 +14,12 @@ what is available.
 | Writer | Module | Description |
 |--------|--------|-------------|
 | [`cffi`](cffi.md) | `headerkit.writers.cffi` | CFFI cdef declarations for `ffibuilder.cdef()` |
+| [`ctypes`](ctypes.md) | `headerkit.writers.ctypes` | Python ctypes binding modules |
+| [`cython`](cython.md) | `headerkit.writers.cython` | Cython `.pxd` declarations with full C++ support |
+| [`diff`](diff.md) | `headerkit.writers.diff` | API compatibility reports (JSON/Markdown) |
 | [`json`](json.md) | `headerkit.writers.json` | JSON serialization for inspection and tooling |
+| [`lua`](lua.md) | `headerkit.writers.lua` | LuaJIT FFI bindings |
+| [`prompt`](prompt.md) | `headerkit.writers.prompt` | Token-optimized LLM context (compact/standard/verbose) |
 
 ## Protocol
 

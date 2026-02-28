@@ -90,7 +90,12 @@ nav:
     - Backends: reference/backends.md
     - Writers: reference/writers.md
     - CFFI Writer: reference/cffi.md
+    - ctypes Writer: reference/ctypes.md
+    - Cython Writer: reference/cython.md
+    - Diff Writer: reference/diff.md
     - JSON Writer: reference/json.md
+    - Lua Writer: reference/lua.md
+    - Prompt Writer: reference/prompt.md
     - Install Libclang CLI: reference/install-libclang.md
 
 extra:

@@ -49,12 +49,15 @@ def _type_to_dict(t: TypeExpr) -> dict[str, Any]:
             d["size"] = t.size
         return d
     elif isinstance(t, FunctionPointer):
-        return {
+        d = {
             "kind": "function_pointer",
             "return_type": _type_to_dict(t.return_type),
             "parameters": [_param_to_dict(p) for p in t.parameters],
             "is_variadic": t.is_variadic,
         }
+        if t.calling_convention:
+            d["calling_convention"] = t.calling_convention
+        return d
     else:
         return {"kind": "unknown", "repr": repr(t)}
 
@@ -77,7 +80,12 @@ def _param_to_dict(p: Parameter) -> dict[str, Any]:
 
 def _field_to_dict(f: Field) -> dict[str, Any]:
     """Convert a Field to a dict."""
-    return {"name": f.name, "type": _type_to_dict(f.type)}
+    d: dict[str, Any] = {"name": f.name, "type": _type_to_dict(f.type)}
+    if f.bit_width is not None:
+        d["bit_width"] = f.bit_width
+    if f.anonymous_struct is not None:
+        d["anonymous_struct"] = _decl_to_dict(f.anonymous_struct)
+    return d
 
 
 def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
@@ -99,6 +107,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["template_params"] = decl.template_params
         if decl.cpp_name:
             d["cpp_name"] = decl.cpp_name
+        if decl.is_packed:
+            d["is_packed"] = True
         if decl.notes:
             d["notes"] = decl.notes
         if decl.inner_typedefs:
@@ -124,6 +134,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             "parameters": [_param_to_dict(p) for p in decl.parameters],
             "is_variadic": decl.is_variadic,
         }
+        if decl.calling_convention:
+            d["calling_convention"] = decl.calling_convention
         if decl.namespace:
             d["namespace"] = decl.namespace
         if decl.location is not None:

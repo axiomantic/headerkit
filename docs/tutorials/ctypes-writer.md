@@ -1,5 +1,8 @@
 # Tutorial: Building a ctypes Writer
 
+!!! note "Built-in ctypes writer available"
+    headerkit includes a built-in ctypes writer. Use `get_writer("ctypes")` to generate ctypes bindings directly. This tutorial walks through how a ctypes writer works internally, which is useful for understanding the writer architecture or customizing behavior beyond what the built-in writer provides.
+
 This tutorial walks through building a headerkit writer that generates Python `ctypes` binding code. The writer produces a standalone `.py` module that uses `ctypes` to load a shared library and expose its functions, structs, and enums as Python objects.
 
 ## What Is ctypes?
@@ -286,6 +289,16 @@ register_writer("ctypes", CtypesWriter, description="Python ctypes binding code"
 ```
 
 ## Step 5: Try It Out
+
+If you just need ctypes output, use the built-in writer:
+
+```python
+from headerkit import get_backend, get_writer
+
+writer = get_writer("ctypes")
+```
+
+To test the custom writer from this tutorial instead, import it to trigger registration:
 
 ```python
 from headerkit import get_backend, get_writer

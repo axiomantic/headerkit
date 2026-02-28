@@ -8,7 +8,7 @@ headerkit parses C and C++ header files into a language-agnostic Intermediate Re
 
 - **Pluggable parser backends** -- swap between parsing implementations (libclang ships built-in) without changing your code
 - **Dataclass-based IR** -- a clean, inspectable Python representation of C/C++ declarations: structs, functions, enums, typedefs, and more
-- **Pluggable output writers** -- generate CFFI bindings, JSON, or write your own writer for any target format
+- **Pluggable output writers** -- generate CFFI bindings, ctypes modules, Cython `.pxd` files, LuaJIT FFI bindings, JSON, API diffs, LLM-optimized prompts, or write your own writer for any target format
 - **Registry pattern** -- backends and writers self-register, making the system extensible without modifying core code
 
 ## Quick Example
@@ -23,12 +23,17 @@ header = backend.parse(
     "mylib.h",
 )
 
-# Generate CFFI bindings
+# Generate CFFI bindings (default writer)
 writer = get_writer("cffi")
 cdef_source = writer.write(header)
 
-# Or serialize to JSON for inspection
-json_writer = get_writer("json", indent=2)
+# Or pick another built-in writer
+ctypes_writer = get_writer("ctypes")      # Python ctypes bindings
+cython_writer = get_writer("cython")      # Cython .pxd declarations
+lua_writer = get_writer("lua")            # LuaJIT FFI bindings
+json_writer = get_writer("json", indent=2)  # JSON for inspection
+prompt_writer = get_writer("prompt")      # Token-optimized LLM context
+
 print(json_writer.write(header))
 ```
 
@@ -45,7 +50,7 @@ graph LR
 ```
 
 1. A **backend** (e.g., `LibclangBackend`) parses C/C++ source code and produces an IR `Header` object containing `Declaration` nodes.
-2. A **writer** (e.g., `CffiWriter`, `JsonWriter`) consumes the IR and produces output in a target format.
+2. A **writer** (e.g., `CffiWriter`, `CtypesWriter`, `CythonWriter`, `LuaWriter`, `JsonWriter`, `DiffWriter`, `PromptWriter`) consumes the IR and produces output in a target format.
 
 Both backends and writers follow simple protocols and are registered in a global registry, so you can add your own without modifying headerkit itself.
 
