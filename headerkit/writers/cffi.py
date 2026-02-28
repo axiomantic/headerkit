@@ -1,10 +1,10 @@
-"""Generate CFFI cdef strings from clangir IR declarations.
+"""Generate CFFI cdef strings from headerkit IR declarations.
 
-This module converts clangir IR (Intermediate Representation) objects into
+This module converts headerkit IR (Intermediate Representation) objects into
 CFFI-compatible C declaration strings suitable for passing to
 ``ffibuilder.cdef()``.
 
-The IR types come from ``clangir.ir`` and represent parsed C headers.
+The IR types come from ``headerkit.ir`` and represent parsed C headers.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,
@@ -408,7 +408,7 @@ def header_to_cffi(
 ) -> str:
     """Convert all declarations in a Header to a CFFI cdef string.
 
-    :param header: Parsed header IR from clangir.
+    :param header: Parsed header IR from headerkit.
     :param exclude_patterns: List of regex patterns. Declarations with names
         matching any pattern will be excluded.
     :returns: A string suitable for passing to ``ffibuilder.cdef()``.
@@ -476,7 +476,7 @@ def _enum_to_cffi_as_typedef(decl: Enum) -> str | None:
 
 
 class CffiWriter:
-    """Writer that generates CFFI cdef strings from clangir IR.
+    """Writer that generates CFFI cdef strings from headerkit IR.
 
     Options
     -------
@@ -488,13 +488,13 @@ class CffiWriter:
     -------
     ::
 
-        from clangir.writers import get_writer
+        from headerkit.writers import get_writer
 
         writer = get_writer("cffi", exclude_patterns=["__.*"])
         cdef_string = writer.write(header)
 
         # Or directly:
-        from clangir.writers.cffi import CffiWriter
+        from headerkit.writers.cffi import CffiWriter
         writer = CffiWriter(exclude_patterns=["__.*"])
         cdef_string = writer.write(header)
     """
@@ -519,7 +519,7 @@ class CffiWriter:
 # register_backend at the top and conditionally register at the bottom),
 # writers have no external dependencies so import and registration are
 # co-located.
-from clangir.writers import register_writer  # noqa: E402
+from headerkit.writers import register_writer  # noqa: E402
 
 register_writer(
     "cffi",

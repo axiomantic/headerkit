@@ -26,4 +26,4 @@ repos:
         args: [--strict]
         additional_dependencies: []
         pass_filenames: false
-        entry: mypy clangir/
+        entry: mypy headerkit/

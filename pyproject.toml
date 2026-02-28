@@ -3,12 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "clangir"
-version = "0.3.3"
+name = "headerkit"
+version = "0.4.0"
 description = "C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer"
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
-license-files = ["LICENSE", "clangir/_clang/LICENSE"]
+license-files = ["LICENSE", "headerkit/_clang/LICENSE"]
 authors = [
     { name = "elijahr", email = "elijahr+cir@gmail.com" },
 ]
@@ -34,43 +34,44 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/axiomantic/clangir"
-Repository = "https://github.com/axiomantic/clangir"
-Issues = "https://github.com/axiomantic/clangir/issues"
-Changelog = "https://github.com/axiomantic/clangir/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/axiomantic/headerkit"
+Repository = "https://github.com/axiomantic/headerkit"
+Issues = "https://github.com/axiomantic/headerkit/issues"
+Changelog = "https://github.com/axiomantic/headerkit/blob/main/CHANGELOG.md"
 
 [project.scripts]
-clangir-install-libclang = "clangir.install_libclang:main"
+headerkit-install-libclang = "headerkit.install_libclang:main"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-timeout"]
 lint = ["ruff", "mypy"]
 docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.27", "mike>=2.1"]
-dev = ["clangir[test,lint,docs]"]
+dev = ["headerkit[test,lint,docs]"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["clangir"]
+packages = ["headerkit"]
 
 [tool.ruff]
 line-length = 120
 target-version = "py310"
-extend-exclude = ["clangir/_clang/v*/"]
+extend-exclude = ["headerkit/_clang/v*/"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM"]
 ignore = ["E501", "ARG002", "SIM102", "SIM108", "SIM110", "UP007"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["clangir"]
+known-first-party = ["headerkit"]
 
 [tool.mypy]
 python_version = "3.10"
 strict = true
-exclude = ["clangir/_clang/v\\d+/"]
+exclude = ["headerkit/_clang/v\\d+/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 timeout = 60
 markers = [
     "libclang: tests requiring system libclang installation",
+    "download: tests requiring network access to download headers",
 ]

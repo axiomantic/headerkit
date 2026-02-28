@@ -1,6 +1,6 @@
-"""Writers that convert clangir IR to various output formats.
+"""Writers that convert headerkit IR to various output formats.
 
-This package contains writer implementations that convert clangir IR
+This package contains writer implementations that convert headerkit IR
 (Intermediate Representation) into various output formats such as CFFI
 cdef strings, JSON, etc.
 
@@ -15,7 +15,7 @@ Example
 -------
 ::
 
-    from clangir.writers import get_writer, list_writers
+    from headerkit.writers import get_writer, list_writers
 
     # Get the default writer (cffi)
     writer = get_writer()
@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from clangir.ir import Header
+from headerkit.ir import Header
 
 __all__ = [
     "WriterBackend",
@@ -53,7 +53,7 @@ __all__ = [
 class WriterBackend(Protocol):
     """Protocol defining the interface for output writers.
 
-    Writers convert clangir IR (Header objects) into various output
+    Writers convert headerkit IR (Header objects) into various output
     formats: CFFI cdef strings, JSON, PXD files, ctypes code, etc.
 
     Writer-specific options (e.g. exclude_patterns for CFFI, indent
@@ -65,7 +65,7 @@ class WriterBackend(Protocol):
     -------
     ::
 
-        from clangir.writers import get_writer
+        from headerkit.writers import get_writer
 
         writer = get_writer("cffi")
         output = writer.write(header)
@@ -145,7 +145,7 @@ def list_writers() -> list[str]:
     -------
     ::
 
-        from clangir.writers import list_writers
+        from headerkit.writers import list_writers
 
         for name in list_writers():
             print(f"Available: {name}")
@@ -172,7 +172,7 @@ def get_writer_info() -> list[dict[str, str | bool]]:
     class docstring's first line if no description was provided.
 
     .. note::
-        Keys differ from :func:`~clangir.backends.get_backend_info`:
+        Keys differ from :func:`~headerkit.backends.get_backend_info`:
         uses ``"is_default"`` (not ``"default"``), and omits the
         ``"available"`` key (writers have no external dependencies
         that could make them unavailable).
@@ -238,14 +238,14 @@ def _ensure_writers_loaded() -> None:
     """Lazily load writer modules to populate the registry.
 
     NOTE: Managed circular import pattern.
-    This module and clangir.writers.cffi / clangir.writers.json have a
+    This module and headerkit.writers.cffi / headerkit.writers.json have a
     circular dependency:
 
     - This module defines the registry functions
     - Writer modules import register_writer from here at load time
     - _ensure_writers_loaded() in this module imports writer modules lazily
 
-    This is intentional and mirrors the pattern in clangir/backends/__init__.py.
+    This is intentional and mirrors the pattern in headerkit/backends/__init__.py.
     Do not restructure without understanding the full cycle.
     """
     global _WRITERS_LOADED  # pylint: disable=global-statement
@@ -256,5 +256,5 @@ def _ensure_writers_loaded() -> None:
     _WRITERS_LOADED = True
 
     # Import triggers module-level registration
-    import clangir.writers.cffi  # noqa: F401
-    import clangir.writers.json  # noqa: F401
+    import headerkit.writers.cffi  # noqa: F401
+    import headerkit.writers.json  # noqa: F401

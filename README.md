@@ -1,13 +1,13 @@
-# clangir
+# headerkit
 
-[![CI](https://github.com/axiomantic/clangir/actions/workflows/ci.yml/badge.svg)](https://github.com/axiomantic/clangir/actions/workflows/ci.yml)
-[![Docs](https://github.com/axiomantic/clangir/actions/workflows/docs.yml/badge.svg)](https://axiomantic.github.io/clangir/)
-[![PyPI](https://img.shields.io/pypi/v/clangir)](https://pypi.org/project/clangir/)
-[![Python](https://img.shields.io/pypi/pyversions/clangir)](https://pypi.org/project/clangir/)
+[![CI](https://github.com/axiomantic/headerkit/actions/workflows/ci.yml/badge.svg)](https://github.com/axiomantic/headerkit/actions/workflows/ci.yml)
+[![Docs](https://github.com/axiomantic/headerkit/actions/workflows/docs.yml/badge.svg)](https://axiomantic.github.io/headerkit/)
+[![PyPI](https://img.shields.io/pypi/v/headerkit)](https://pypi.org/project/headerkit/)
+[![Python](https://img.shields.io/pypi/pyversions/headerkit)](https://pypi.org/project/headerkit/)
 
-C Intermediate Representation - a Python library for parsing C/C++ headers.
+A Python toolkit for parsing C/C++ headers with pluggable backends and writers.
 
-Full documentation: https://axiomantic.github.io/clangir/
+Full documentation: https://axiomantic.github.io/headerkit/
 
 Provides an IR data model for parsed C/C++ declarations, a libclang parser backend, and a CFFI cdef writer.
 
@@ -16,7 +16,7 @@ Provides an IR data model for parsed C/C++ declarations, a libclang parser backe
 Requires Python 3.10+.
 
 ```bash
-pip install clangir
+pip install headerkit
 ```
 
 ## System Requirements
@@ -33,8 +33,8 @@ Supports LLVM 18, 19, 20, and 21. The appropriate version is detected automatica
 ## Usage
 
 ```python
-from clangir.backends import get_backend
-from clangir.writers.cffi import header_to_cffi
+from headerkit.backends import get_backend
+from headerkit.writers.cffi import header_to_cffi
 
 backend = get_backend("libclang")
 header = backend.parse('#include "mylib.h"', "wrapper.h", include_dirs=["/path/to/include"])
@@ -55,8 +55,8 @@ void my_function(int arg);
 ## Development
 
 ```bash
-git clone https://github.com/axiomantic/clangir.git
-cd clangir
+git clone https://github.com/axiomantic/headerkit.git
+cd headerkit
 pip install -e '.[dev]'
 pytest
 ```
@@ -65,6 +65,6 @@ pytest
 
 This project is licensed under the [MIT License](LICENSE).
 
-The vendored clang Python bindings in `clangir/_clang/v*/` are from the
+The vendored clang Python bindings in `headerkit/_clang/v*/` are from the
 [LLVM Project](https://llvm.org/) and are licensed under the
-[Apache License v2.0 with LLVM Exceptions](clangir/_clang/LICENSE).
+[Apache License v2.0 with LLVM Exceptions](headerkit/_clang/LICENSE).

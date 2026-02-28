@@ -6,7 +6,7 @@ It provides full C/C++ support including templates, namespaces, and classes.
 Requirements
 ------------
 * System libclang library must be installed
-* clangir includes vendored clang Python bindings that are version-matched
+* headerkit includes vendored clang Python bindings that are version-matched
   automatically to the system LLVM version
 
 If system libclang is not available, the backend will not register itself
@@ -28,7 +28,7 @@ Example
 -------
 ::
 
-    from clangir.backends.libclang import LibclangBackend
+    from headerkit.backends.libclang import LibclangBackend
 
     backend = LibclangBackend()
     header = backend.parse(code, "myheader.hpp", extra_args=["-std=c++17"])
@@ -45,11 +45,11 @@ from collections import deque
 from dataclasses import replace
 from typing import Any
 
-from clangir._clang import get_cindex as _get_cindex
-from clangir.backends import (
+from headerkit._clang import get_cindex as _get_cindex
+from headerkit.backends import (
     register_backend,
 )
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,
@@ -449,10 +449,10 @@ def _mangle_specialization_name(cpp_name: str) -> str:
 
 
 class ClangASTConverter:
-    """Converts libclang cursors to clangir IR.
+    """Converts libclang cursors to headerkit IR.
 
     This class walks a libclang translation unit and produces the
-    equivalent clangir IR declarations. It handles C and C++ constructs
+    equivalent headerkit IR declarations. It handles C and C++ constructs
     including structs, unions, enums, typedefs, functions, classes, and variables.
 
     :param filename: Source filename for filtering declarations.
@@ -1704,7 +1704,7 @@ class LibclangBackend:
     -------
     ::
 
-        from clangir.backends.libclang import LibclangBackend
+        from headerkit.backends.libclang import LibclangBackend
 
         backend = LibclangBackend()
 
@@ -1941,7 +1941,7 @@ class LibclangBackend:
         :param project_prefixes: Optional tuple of path prefixes to treat as project
             headers (not system). Use this for umbrella headers of libraries installed
             in system locations (e.g., ``("/opt/homebrew/include/sodium",)``).
-        :returns: :class:`~clangir.ir.Header` containing parsed declarations.
+        :returns: :class:`~headerkit.ir.Header` containing parsed declarations.
         :raises RuntimeError: If parsing fails with errors.
 
         Example

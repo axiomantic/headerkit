@@ -5,7 +5,7 @@ import subprocess
 import sys
 from unittest.mock import MagicMock, patch
 
-from clangir._clang._version import (
+from headerkit._clang._version import (
     _try_windows_program_files,
     _try_windows_registry,
 )
@@ -29,11 +29,11 @@ class TestWindowsRegistry:
         mock_result.stdout = "#define __clang_major__ 18\n#define __clang_minor__ 1\n"
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": mock_winreg}),
-            patch("clangir._clang._version.os.path.isdir", return_value=True),
-            patch("clangir._clang._version.os.path.isfile", return_value=True),
-            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
+            patch("headerkit._clang._version.os.path.isdir", return_value=True),
+            patch("headerkit._clang._version.os.path.isfile", return_value=True),
+            patch("headerkit._clang._version.subprocess.run", return_value=mock_result),
         ):
             result = _try_windows_registry()
             assert result == "18"
@@ -47,7 +47,7 @@ class TestWindowsRegistry:
         mock_winreg.KEY_WOW64_64KEY = 0x0100
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": mock_winreg}),
         ):
             result = _try_windows_registry()
@@ -64,9 +64,9 @@ class TestWindowsRegistry:
         mock_winreg.KEY_WOW64_64KEY = 0x0100
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": mock_winreg}),
-            patch("clangir._clang._version.os.path.isdir", return_value=False),
+            patch("headerkit._clang._version.os.path.isdir", return_value=False),
         ):
             result = _try_windows_registry()
             assert result is None
@@ -82,10 +82,10 @@ class TestWindowsRegistry:
         mock_winreg.KEY_WOW64_64KEY = 0x0100
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": mock_winreg}),
-            patch("clangir._clang._version.os.path.isdir", return_value=True),
-            patch("clangir._clang._version.os.path.isfile", return_value=False),
+            patch("headerkit._clang._version.os.path.isdir", return_value=True),
+            patch("headerkit._clang._version.os.path.isfile", return_value=False),
         ):
             result = _try_windows_registry()
             assert result is None
@@ -105,18 +105,18 @@ class TestWindowsRegistry:
         mock_result.stdout = "#define __STDC__ 1\n"
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": mock_winreg}),
-            patch("clangir._clang._version.os.path.isdir", return_value=True),
-            patch("clangir._clang._version.os.path.isfile", return_value=True),
-            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
+            patch("headerkit._clang._version.os.path.isdir", return_value=True),
+            patch("headerkit._clang._version.os.path.isfile", return_value=True),
+            patch("headerkit._clang._version.subprocess.run", return_value=mock_result),
         ):
             result = _try_windows_registry()
             assert result is None
 
     def test_skipped_on_non_windows(self):
         """Returns None immediately on non-Windows platforms."""
-        with patch("clangir._clang._version.sys.platform", "linux"):
+        with patch("headerkit._clang._version.sys.platform", "linux"):
             result = _try_windows_registry()
             assert result is None
 
@@ -131,12 +131,12 @@ class TestWindowsRegistry:
         mock_winreg.KEY_WOW64_64KEY = 0x0100
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": mock_winreg}),
-            patch("clangir._clang._version.os.path.isdir", return_value=True),
-            patch("clangir._clang._version.os.path.isfile", return_value=True),
+            patch("headerkit._clang._version.os.path.isdir", return_value=True),
+            patch("headerkit._clang._version.os.path.isfile", return_value=True),
             patch(
-                "clangir._clang._version.subprocess.run",
+                "headerkit._clang._version.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd="clang.exe", timeout=5),
             ),
         ):
@@ -146,7 +146,7 @@ class TestWindowsRegistry:
     def test_winreg_import_error(self):
         """When winreg module is not importable, returns None."""
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": None}),
         ):
             result = _try_windows_registry()
@@ -163,7 +163,7 @@ class TestWindowsProgramFiles:
         mock_result.stdout = "#define __clang_major__ 20\n"
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -171,8 +171,8 @@ class TestWindowsProgramFiles:
                     "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
                 },
             ),
-            patch("clangir._clang._version.os.path.isfile", return_value=True),
-            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
+            patch("headerkit._clang._version.os.path.isfile", return_value=True),
+            patch("headerkit._clang._version.subprocess.run", return_value=mock_result),
         ):
             result = _try_windows_program_files()
             assert result == "20"
@@ -188,7 +188,7 @@ class TestWindowsProgramFiles:
             return "x86" in path.lower()
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -196,8 +196,8 @@ class TestWindowsProgramFiles:
                     "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
                 },
             ),
-            patch("clangir._clang._version.os.path.isfile", side_effect=isfile_side_effect),
-            patch("clangir._clang._version.subprocess.run", return_value=mock_result),
+            patch("headerkit._clang._version.os.path.isfile", side_effect=isfile_side_effect),
+            patch("headerkit._clang._version.subprocess.run", return_value=mock_result),
         ):
             result = _try_windows_program_files()
             assert result == "19"
@@ -209,7 +209,7 @@ class TestWindowsProgramFiles:
         env.pop("PROGRAMFILES(X86)", None)
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(os.environ, env, clear=True),
         ):
             result = _try_windows_program_files()
@@ -218,21 +218,21 @@ class TestWindowsProgramFiles:
     def test_clang_exe_not_found(self):
         """PROGRAMFILES set but no clang.exe at the expected path."""
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
                     "PROGRAMFILES": r"C:\Program Files",
                 },
             ),
-            patch("clangir._clang._version.os.path.isfile", return_value=False),
+            patch("headerkit._clang._version.os.path.isfile", return_value=False),
         ):
             result = _try_windows_program_files()
             assert result is None
 
     def test_skipped_on_non_windows(self):
         """Returns None on non-Windows platforms."""
-        with patch("clangir._clang._version.sys.platform", "darwin"):
+        with patch("headerkit._clang._version.sys.platform", "darwin"):
             result = _try_windows_program_files()
             assert result is None
 
@@ -252,7 +252,7 @@ class TestWindowsProgramFiles:
             return success_result
 
         with (
-            patch("clangir._clang._version.sys.platform", "win32"),
+            patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(
                 os.environ,
                 {
@@ -260,8 +260,8 @@ class TestWindowsProgramFiles:
                     "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
                 },
             ),
-            patch("clangir._clang._version.os.path.isfile", return_value=True),
-            patch("clangir._clang._version.subprocess.run", side_effect=run_side_effect),
+            patch("headerkit._clang._version.os.path.isfile", return_value=True),
+            patch("headerkit._clang._version.subprocess.run", side_effect=run_side_effect),
         ):
             result = _try_windows_program_files()
             assert result == "21"

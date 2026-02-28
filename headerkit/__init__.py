@@ -1,7 +1,7 @@
-"""clangir - C/C++ header parsing toolkit."""
+"""headerkit - C/C++ header parsing toolkit."""
 
-from clangir.backends import get_backend, is_backend_available, list_backends
-from clangir.ir import (
+from headerkit.backends import get_backend, is_backend_available, list_backends
+from headerkit.ir import (
     Array,
     Constant,
     # Type expressions
@@ -25,7 +25,7 @@ from clangir.ir import (
     TypeExpr,
     Variable,
 )
-from clangir.writers import (
+from headerkit.writers import (
     WriterBackend,
     get_default_writer,
     get_writer,

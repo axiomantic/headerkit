@@ -1,28 +1,28 @@
 # Installation
 
-## Install clangir
+## Install headerkit
 
 Install from PyPI:
 
 ```bash
-pip install clangir
+pip install headerkit
 ```
 
 ## System Dependency: libclang
 
-clangir requires the **libclang** shared library to be installed on your system. This is the C API for LLVM's Clang compiler, used by the built-in `LibclangBackend` to parse C and C++ headers.
+headerkit requires the **libclang** shared library to be installed on your system. This is the C API for LLVM's Clang compiler, used by the built-in `LibclangBackend` to parse C and C++ headers.
 
 !!! tip "Automated installation"
     For CI/CD, Docker, or quick setup, use the built-in installer:
 
     ```bash
-    clangir-install-libclang
+    headerkit-install-libclang
     ```
 
     This detects your platform and runs the appropriate install command. See the [Installing libclang](install-libclang.md) guide for details.
 
 !!! note "Vendored Python bindings"
-    clangir includes its own vendored copy of the Clang Python bindings that are automatically version-matched to your system's LLVM installation. You do **not** need to install `libclang` from PyPI.
+    headerkit includes its own vendored copy of the Clang Python bindings that are automatically version-matched to your system's LLVM installation. You do **not** need to install `libclang` from PyPI.
 
 === "macOS"
 
@@ -32,7 +32,7 @@ clangir requires the **libclang** shared library to be installed on your system.
     brew install llvm
     ```
 
-    clangir automatically searches common Homebrew paths (`/opt/homebrew/opt/llvm/lib/` on Apple Silicon, `/usr/local/opt/llvm/lib/` on Intel). Xcode Command Line Tools also include libclang.
+    headerkit automatically searches common Homebrew paths (`/opt/homebrew/opt/llvm/lib/` on Apple Silicon, `/usr/local/opt/llvm/lib/` on Intel). Xcode Command Line Tools also include libclang.
 
 === "Ubuntu / Debian"
 
@@ -62,18 +62,18 @@ clangir requires the **libclang** shared library to be installed on your system.
     winget install LLVM.LLVM
     ```
 
-    clangir searches `Program Files\LLVM\bin\` and common package manager locations (Scoop, MSYS2).
+    headerkit searches `Program Files\LLVM\bin\` and common package manager locations (Scoop, MSYS2).
 
     !!! tip "GitHub Actions"
         GitHub Actions Windows runners come with LLVM pre-installed, so no additional setup is needed in CI.
 
 ## Development Install
 
-To contribute to clangir or run its test suite:
+To contribute to headerkit or run its test suite:
 
 ```bash
-git clone https://github.com/axiomantic/clangir.git
-cd clangir
+git clone https://github.com/axiomantic/headerkit.git
+cd headerkit
 pip install -e '.[dev]'
 ```
 
@@ -82,7 +82,7 @@ pip install -e '.[dev]'
 Confirm everything is working:
 
 ```bash
-python -c "from clangir import get_backend; b = get_backend(); print(f'Backend: {b.name}')"
+python -c "from headerkit import get_backend; b = get_backend(); print(f'Backend: {b.name}')"
 ```
 
 Expected output:

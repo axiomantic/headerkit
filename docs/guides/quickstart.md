@@ -1,10 +1,10 @@
 # Quick Start
 
-This guide walks through parsing a C header file with clangir and generating output in two formats: CFFI bindings and JSON.
+This guide walks through parsing a C header file with headerkit and generating output in two formats: CFFI bindings and JSON.
 
 ## Prerequisites
 
-Make sure you have [installed clangir and libclang](installation.md).
+Make sure you have [installed headerkit and libclang](installation.md).
 
 ## 1. Create a Sample C Header
 
@@ -29,7 +29,7 @@ size_t point_format(Point p, char *buf, size_t bufsize);
 Use `get_backend()` to obtain a parser backend, then call its `parse()` method with the header source code:
 
 ```python
-from clangir import get_backend
+from headerkit import get_backend
 
 backend = get_backend()
 
@@ -51,7 +51,7 @@ Header(point.h, 5 declarations)
 The `header.declarations` list contains typed IR nodes. You can inspect them directly:
 
 ```python
-from clangir import Struct, Function, Typedef
+from headerkit import Struct, Function, Typedef
 
 for decl in header.declarations:
     if isinstance(decl, Struct):
@@ -81,7 +81,7 @@ Function: size_t point_format(Point p, char* buf, size_t bufsize)
 Use the built-in CFFI writer to produce `cdef`-compatible declarations:
 
 ```python
-from clangir import get_writer
+from headerkit import get_writer
 
 writer = get_writer("cffi")
 cdef_source = writer.write(header)

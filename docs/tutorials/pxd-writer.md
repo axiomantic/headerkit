@@ -1,6 +1,6 @@
 # Tutorial: Building a PXD Writer (Cython)
 
-This tutorial walks through building a clangir writer that generates Cython `.pxd` declaration files from parsed C headers. By the end, you will have a working writer that handles functions, structs, enums, and typedefs.
+This tutorial walks through building a headerkit writer that generates Cython `.pxd` declaration files from parsed C headers. By the end, you will have a working writer that handles functions, structs, enums, and typedefs.
 
 ## What Are .pxd Files?
 
@@ -34,11 +34,11 @@ Create a file for the writer:
 
 ```python
 # pxd_writer.py
-"""Generate Cython .pxd declarations from clangir IR."""
+"""Generate Cython .pxd declarations from headerkit IR."""
 
 from __future__ import annotations
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     CType,
     Enum,
@@ -193,7 +193,7 @@ def _variable_to_pxd(decl: Variable, indent: str = "    ") -> list[str]:
 Assemble the declaration handlers into a full writer class:
 
 ```python
-from clangir.writers import register_writer
+from headerkit.writers import register_writer
 
 
 class PxdWriter:
@@ -250,7 +250,7 @@ register_writer("pxd", PxdWriter, description="Cython .pxd declaration files")
 Test the writer with a sample header:
 
 ```python
-from clangir import get_backend, get_writer
+from headerkit import get_backend, get_writer
 
 # Make sure pxd_writer is imported so it registers itself
 import pxd_writer  # noqa: F401

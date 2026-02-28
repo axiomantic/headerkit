@@ -1,6 +1,6 @@
 name: Check LLVM Releases
 
-# Detect new stable LLVM major versions that aren't yet vendored in clangir/_clang/
+# Detect new stable LLVM major versions that aren't yet vendored in headerkit/_clang/
 # and open an issue with vendoring instructions.
 
 on:
@@ -39,8 +39,8 @@ jobs:
 
           # Get vendored major versions
           vendored_majors=$(
-            ls -d clangir/_clang/v*/ 2>/dev/null \
-            | sed 's|clangir/_clang/v||; s|/||' \
+            ls -d headerkit/_clang/v*/ 2>/dev/null \
+            | sed 's|headerkit/_clang/v||; s|/||' \
             | sort -n
           )
 
@@ -91,7 +91,7 @@ jobs:
               | tail -1
             )
 
-            body="A new LLVM major version ($major) has stable releases (latest: $latest) but no vendored bindings in \`clangir/_clang/\`.
+            body="A new LLVM major version ($major) has stable releases (latest: $latest) but no vendored bindings in \`headerkit/_clang/\`.
 
           ## Steps to vendor
 
@@ -99,11 +99,11 @@ jobs:
              \`\`\`
              https://github.com/llvm/llvm-project/tree/llvmorg-$latest/clang/bindings/python/clang
              \`\`\`
-          2. Create \`clangir/_clang/v$major/\` with:
+          2. Create \`headerkit/_clang/v$major/\` with:
              - \`__init__.py\`
              - \`cindex.py\` (from the LLVM source)
              - \`PROVENANCE\` (source URL, SHA256, license)
-          3. Update \`clangir/_clang/__init__.py\` if the loader needs changes for the new version.
+          3. Update \`headerkit/_clang/__init__.py\` if the loader needs changes for the new version.
           4. Add tests and verify with \`pytest\`.
 
           *This issue was automatically created by the check-llvm workflow.*"

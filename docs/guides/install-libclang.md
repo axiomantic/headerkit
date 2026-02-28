@@ -1,19 +1,19 @@
 # Installing libclang
 
-The `clangir-install-libclang` CLI tool automates installing the **libclang** system dependency for your platform. It detects your OS and package manager, runs the appropriate install command, and verifies that clangir can load the library afterward.
+The `headerkit-install-libclang` CLI tool automates installing the **libclang** system dependency for your platform. It detects your OS and package manager, runs the appropriate install command, and verifies that headerkit can load the library afterward.
 
 ## Usage
 
-Run as a console script (installed with clangir):
+Run as a console script (installed with headerkit):
 
 ```bash
-clangir-install-libclang
+headerkit-install-libclang
 ```
 
 Or invoke as a Python module:
 
 ```bash
-python -m clangir.install_libclang
+python -m headerkit.install_libclang
 ```
 
 ## CLI Options
@@ -21,7 +21,7 @@ python -m clangir.install_libclang
 | Option | Description |
 |--------|-------------|
 | `--version VERSION` | LLVM version to install (default: `21.1.8`). Only affects Windows ARM64 direct downloads; package managers use their own default version. |
-| `--skip-verify` | Skip the post-install verification step that checks whether libclang is loadable by clangir. |
+| `--skip-verify` | Skip the post-install verification step that checks whether libclang is loadable by headerkit. |
 
 ## Platform Behavior
 
@@ -65,11 +65,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install clangir
-        run: pip install clangir
+      - name: Install headerkit
+        run: pip install headerkit
 
       - name: Install libclang
-        run: clangir-install-libclang
+        run: headerkit-install-libclang
 
       - name: Run tests
         run: pytest
@@ -79,7 +79,7 @@ For Windows ARM64 runners, specify the LLVM version explicitly:
 
 ```yaml
       - name: Install libclang (Windows ARM64)
-        run: clangir-install-libclang --version 21.1.8
+        run: headerkit-install-libclang --version 21.1.8
 ```
 
 ## Verification
@@ -88,6 +88,6 @@ By default, the tool verifies that libclang is loadable after installation. If v
 
 - Set your library path (e.g., `LD_LIBRARY_PATH` on Linux)
 - Restart your shell to pick up new PATH entries
-- Check that the installed LLVM version is compatible (clangir supports LLVM 18-21)
+- Check that the installed LLVM version is compatible (headerkit supports LLVM 18-21)
 
 Skip verification with `--skip-verify` if you know the library will not be on the default search path until a later step configures it.

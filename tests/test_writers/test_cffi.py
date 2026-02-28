@@ -1,6 +1,6 @@
 """Tests for the CFFI cdef writer."""
 
-from clangir.ir import (
+from headerkit.ir import (
     Array,
     Constant,
     CType,
@@ -16,7 +16,7 @@ from clangir.ir import (
     Typedef,
     Variable,
 )
-from clangir.writers.cffi import _format_field, _format_params, decl_to_cffi, header_to_cffi, type_to_cffi
+from headerkit.writers.cffi import _format_field, _format_params, decl_to_cffi, header_to_cffi, type_to_cffi
 
 
 class TestTypeToCffi:
@@ -265,7 +265,7 @@ class TestCffiWriter:
 
     def test_writer_produces_same_output_as_function(self):
         """CffiWriter.write() should produce identical output to header_to_cffi()."""
-        from clangir.writers.cffi import CffiWriter
+        from headerkit.writers.cffi import CffiWriter
 
         header = Header(
             "test.h",
@@ -279,7 +279,7 @@ class TestCffiWriter:
 
     def test_writer_with_exclude_patterns(self):
         """CffiWriter should forward exclude_patterns to header_to_cffi."""
-        from clangir.writers.cffi import CffiWriter
+        from headerkit.writers.cffi import CffiWriter
 
         header = Header(
             "test.h",
@@ -295,20 +295,20 @@ class TestCffiWriter:
 
     def test_writer_protocol_compliance(self):
         """CffiWriter should satisfy the WriterBackend protocol."""
-        from clangir.writers import WriterBackend
-        from clangir.writers.cffi import CffiWriter
+        from headerkit.writers import WriterBackend
+        from headerkit.writers.cffi import CffiWriter
 
         writer = CffiWriter()
         assert isinstance(writer, WriterBackend)
 
     def test_writer_name(self):
-        from clangir.writers.cffi import CffiWriter
+        from headerkit.writers.cffi import CffiWriter
 
         writer = CffiWriter()
         assert writer.name == "cffi"
 
     def test_writer_format_description(self):
-        from clangir.writers.cffi import CffiWriter
+        from headerkit.writers.cffi import CffiWriter
 
         writer = CffiWriter()
         assert writer.format_description == "CFFI cdef declarations for ffibuilder.cdef()"

@@ -2,9 +2,9 @@
 
 Usage::
 
-    python -m clangir.install_libclang [--version VERSION]
+    python -m headerkit.install_libclang [--version VERSION]
 
-This module installs the libclang shared library so that clangir's libclang
+This module installs the libclang shared library so that headerkit's libclang
 backend can function. It handles platform-specific installation:
 
 - **Linux (RHEL/Fedora/AlmaLinux)**: ``dnf install clang-devel``
@@ -14,7 +14,7 @@ backend can function. It handles platform-specific installation:
 - **Windows x64**: ``choco install llvm`` (via Chocolatey)
 - **Windows ARM64**: Downloads native woa64 installer from LLVM GitHub releases
 
-After installation, verifies that libclang is loadable by clangir.
+After installation, verifies that libclang is loadable by headerkit.
 """
 
 from __future__ import annotations
@@ -140,15 +140,15 @@ def _install_windows_x64() -> bool:
 
 
 def verify_libclang() -> bool:
-    """Verify that libclang is now loadable by clangir."""
+    """Verify that libclang is now loadable by headerkit."""
     try:
-        from clangir.backends.libclang import is_system_libclang_available
+        from headerkit.backends.libclang import is_system_libclang_available
 
         if is_system_libclang_available():
             print("Verification: libclang is available and loadable.")
             return True
         else:
-            print("WARNING: libclang was installed but could not be loaded by clangir.")
+            print("WARNING: libclang was installed but could not be loaded by headerkit.")
             print("You may need to set your library path or restart your shell.")
             return False
     except (ImportError, OSError, RuntimeError) as e:
@@ -162,7 +162,7 @@ DEFAULT_LLVM_VERSION = "21.1.8"
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m clangir.install_libclang",
+        prog="python -m headerkit.install_libclang",
         description="Install libclang for the current platform.",
     )
     parser.add_argument(
