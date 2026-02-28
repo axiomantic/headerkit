@@ -33,7 +33,7 @@ C/C++ headers --> [libclang backend] --> IR --> [writer] --> output
 
 ## Installation
 
-Requires Python 3.10+. Zero runtime dependencies.
+Requires Python 3.10+. Zero Python package dependencies (nothing extra pulled from PyPI).
 
 ```bash
 pip install headerkit
