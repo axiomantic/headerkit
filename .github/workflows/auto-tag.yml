@@ -1,0 +1,66 @@
+name: Auto-tag on version change
+
+# When a push to main changes the version in pyproject.toml,
+# create and push a git tag (e.g., v0.6.1). This triggers the
+# release workflow which handles PyPI publish and GitHub release.
+
+on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Check for version change
+        id: version
+        run: |
+          NEW_VERSION=$(python3 -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          OLD_VERSION=$(git show HEAD~1:pyproject.toml 2>/dev/null | python3 -c "
+          import sys, tomllib
+          print(tomllib.loads(sys.stdin.read())['project']['version'])
+          " 2>/dev/null || echo "")
+
+          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "old=$OLD_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "$NEW_VERSION" != "$OLD_VERSION" ] && [ -n "$OLD_VERSION" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Version changed: $OLD_VERSION -> $NEW_VERSION"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No version change (old=$OLD_VERSION, new=$NEW_VERSION)"
+          fi
+
+      - name: Check tag does not already exist
+        if: steps.version.outputs.changed == 'true'
+        id: check-tag
+        run: |
+          TAG="v${{ steps.version.outputs.new }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Tag $TAG already exists, skipping"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.version.outputs.changed == 'true' && steps.check-tag.outputs.exists == 'false'
+        run: |
+          TAG="v${{ steps.version.outputs.new }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Created and pushed tag: $TAG"

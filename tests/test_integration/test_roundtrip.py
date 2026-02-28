@@ -437,6 +437,10 @@ class TestJsonFunctionRoundtrip:
         assert fn["is_variadic"] is True
         assert len(fn["parameters"]) >= 1
         assert fn["parameters"][0]["type"]["kind"] == "pointer"
+        pointee = fn["parameters"][0]["type"]["pointee"]
+        assert pointee["kind"] == "ctype"
+        assert pointee["name"] == "char"
+        assert "const" in pointee.get("qualifiers", [])
 
 
 class TestJsonEnumRoundtrip:
@@ -596,4 +600,7 @@ class TestJsonFunctionPointerTypedefRoundtrip:
         # Verify parameter types are pointers to const void
         for param in fn_ptr["parameters"]:
             assert param["type"]["kind"] == "pointer"
-            assert param["type"]["pointee"]["name"] == "void"
+            pointee = param["type"]["pointee"]
+            assert pointee["kind"] == "ctype"
+            assert pointee["name"] == "void"
+            assert "const" in pointee.get("qualifiers", [])

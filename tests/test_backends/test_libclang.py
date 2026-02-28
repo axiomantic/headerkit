@@ -246,7 +246,7 @@ class TestLibclangSearchPathsWindows:
             ),
         ):
             paths = _get_libclang_search_paths()
-            normalized = [p.replace("\\", "/").lower() for p in paths]
+            normalized = [normalize_path(p) for p in paths]
             assert any("program files/llvm/bin/libclang.dll" in p for p in normalized)
 
     def test_includes_programfiles_x86_path(self):
@@ -261,7 +261,7 @@ class TestLibclangSearchPathsWindows:
             ),
         ):
             paths = _get_libclang_search_paths()
-            normalized = [p.replace("\\", "/").lower() for p in paths]
+            normalized = [normalize_path(p) for p in paths]
             assert any("program files (x86)/llvm/bin/libclang.dll" in p for p in normalized)
 
     def test_includes_scoop_path(self):
@@ -277,7 +277,7 @@ class TestLibclangSearchPathsWindows:
             ),
         ):
             paths = _get_libclang_search_paths()
-            normalized = [p.replace("\\", "/").lower() for p in paths]
+            normalized = [normalize_path(p) for p in paths]
             assert any("scoop/apps/llvm" in p for p in normalized)
 
     def test_includes_msys2_paths(self):
@@ -292,7 +292,7 @@ class TestLibclangSearchPathsWindows:
             ),
         ):
             paths = _get_libclang_search_paths()
-            normalized = [p.replace("\\", "/").lower() for p in paths]
+            normalized = [normalize_path(p) for p in paths]
             assert any("msys64/mingw64/bin/libclang.dll" in p for p in normalized)
             assert any("msys64/ucrt64/bin/libclang.dll" in p for p in normalized)
             assert any("msys64/clang64/bin/libclang.dll" in p for p in normalized)
@@ -310,7 +310,7 @@ class TestLibclangSearchPathsWindows:
             ),
         ):
             paths = _get_libclang_search_paths()
-            normalized = [p.replace("\\", "/").lower() for p in paths]
+            normalized = [normalize_path(p) for p in paths]
             assert any("d:/custom/programs/llvm/bin/libclang.dll" in p for p in normalized)
 
 

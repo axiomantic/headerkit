@@ -95,8 +95,9 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             "kind": "union" if decl.is_union else "struct",
             "name": decl.name,
             "fields": [_field_to_dict(f) for f in decl.fields] if decl.fields else [],
-            "is_typedef": decl.is_typedef,
         }
+        if decl.is_typedef:
+            d["is_typedef"] = True
         if decl.methods:
             d["methods"] = [_decl_to_dict(m) for m in decl.methods]
         if decl.is_cppclass:
@@ -121,8 +122,9 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             "kind": "enum",
             "name": decl.name,
             "values": [_enum_value_to_dict(v) for v in decl.values],
-            "is_typedef": decl.is_typedef,
         }
+        if decl.is_typedef:
+            d["is_typedef"] = True
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
