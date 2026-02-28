@@ -95,6 +95,43 @@ class TestFunctionPointer:
         fp = FunctionPointer(CType("int"), [], is_variadic=True)
         assert str(fp) == "int (*)(...)"
 
+    def test_calling_convention(self):
+        fp = FunctionPointer(CType("void"), [], calling_convention="stdcall")
+        assert fp.calling_convention == "stdcall"
+        assert "stdcall" in str(fp)
+
+    def test_calling_convention_default_none(self):
+        fp = FunctionPointer(CType("int"), [])
+        assert fp.calling_convention is None
+
+
+class TestField:
+    def test_simple_field(self):
+        f = Field("x", CType("int"))
+        assert f.name == "x"
+        assert f.bit_width is None
+        assert f.anonymous_struct is None
+        assert str(f) == "int x"
+
+    def test_bitfield(self):
+        f = Field("flags", CType("unsigned int"), bit_width=3)
+        assert f.bit_width == 3
+        assert str(f) == "unsigned int flags : 3"
+
+    def test_anonymous_struct_field(self):
+        inner = Struct(
+            None,
+            [
+                Field("i", CType("int")),
+                Field("f", CType("float")),
+            ],
+            is_union=True,
+        )
+        f = Field("", CType(""), anonymous_struct=inner)
+        assert f.anonymous_struct is not None
+        assert f.anonymous_struct.is_union
+        assert len(f.anonymous_struct.fields) == 2
+
 
 class TestEnum:
     def test_simple_enum(self):
@@ -169,6 +206,15 @@ class TestStruct:
         assert s.cpp_name == "MyClass<int>"
         assert s.inner_typedefs == {"iterator": "Iterator<T>"}
 
+    def test_packed_struct(self):
+        s = Struct("Packed", [Field("x", CType("int"))], is_packed=True)
+        assert s.is_packed
+        assert "packed" in str(s)
+
+    def test_packed_default_false(self):
+        s = Struct("Normal", [])
+        assert not s.is_packed
+
 
 class TestFunction:
     def test_simple_function(self):
@@ -191,6 +237,15 @@ class TestFunction:
             is_variadic=True,
         )
         assert str(f) == "int printf(const char* fmt, ...)"
+
+    def test_calling_convention(self):
+        f = Function("WinMain", CType("int"), [], calling_convention="stdcall")
+        assert f.calling_convention == "stdcall"
+        assert "stdcall" in str(f)
+
+    def test_calling_convention_default_none(self):
+        f = Function("main", CType("int"), [])
+        assert f.calling_convention is None
 
 
 class TestTypedef:

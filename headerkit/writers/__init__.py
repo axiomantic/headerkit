@@ -2,14 +2,24 @@
 
 This package contains writer implementations that convert headerkit IR
 (Intermediate Representation) into various output formats such as CFFI
-cdef strings, JSON, etc.
+cdef strings, JSON, ctypes modules, Cython .pxd files, and more.
 
 Available Writers
 -----------------
 cffi
     CFFI cdef declarations for ``ffibuilder.cdef()``.
+ctypes
+    Python ctypes binding modules.
+cython
+    Cython .pxd declaration files with C++ support.
+diff
+    API compatibility reports in JSON or Markdown format.
 json
     JSON serialization of IR for inspection and tooling.
+lua
+    LuaJIT FFI binding files.
+prompt
+    Token-optimized IR output for LLM context.
 
 Example
 -------
@@ -257,4 +267,9 @@ def _ensure_writers_loaded() -> None:
 
     # Import triggers module-level registration
     import headerkit.writers.cffi  # noqa: F401
+    import headerkit.writers.ctypes  # noqa: F401
+    import headerkit.writers.cython  # noqa: F401
+    import headerkit.writers.diff  # noqa: F401
     import headerkit.writers.json  # noqa: F401
+    import headerkit.writers.lua  # noqa: F401
+    import headerkit.writers.prompt  # noqa: F401

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "headerkit"
-version = "0.4.0"
-description = "C/C++ header parsing toolkit with IR, libclang backend, and CFFI writer"
+version = "0.5.0"
+description = "C/C++ header analysis toolkit with pluggable backends and writers for ctypes, Cython, CFFI, LuaJIT FFI, and more"
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
 license-files = ["LICENSE", "headerkit/_clang/LICENSE"]

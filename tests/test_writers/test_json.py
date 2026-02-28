@@ -635,3 +635,137 @@ class TestStructSerialization:
         result = json.loads(header_to_json(header))
         decl = result["declarations"][0]
         assert decl["name"] is None
+
+    def test_struct_is_packed(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        header = Header(
+            "test.h",
+            [Struct("Packed", [Field("x", CType("int"))], is_packed=True)],
+        )
+        result = json.loads(header_to_json(header))
+        decl = result["declarations"][0]
+        assert decl["is_packed"] is True
+
+    def test_struct_not_packed_omits_is_packed(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        header = Header(
+            "test.h",
+            [Struct("Normal", [Field("x", CType("int"))])],
+        )
+        result = json.loads(header_to_json(header))
+        decl = result["declarations"][0]
+        assert "is_packed" not in decl
+
+
+class TestFieldSerialization:
+    """Tests for Field serialization with new fields."""
+
+    def test_field_with_bit_width(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        header = Header(
+            "test.h",
+            [Struct("Flags", [Field("flags", CType("unsigned int"), bit_width=4)])],
+        )
+        result = json.loads(header_to_json(header))
+        field = result["declarations"][0]["fields"][0]
+        assert field["name"] == "flags"
+        assert field["bit_width"] == 4
+
+    def test_field_without_bit_width_omits_key(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        header = Header(
+            "test.h",
+            [Struct("S", [Field("x", CType("int"))])],
+        )
+        result = json.loads(header_to_json(header))
+        field = result["declarations"][0]["fields"][0]
+        assert "bit_width" not in field
+
+    def test_field_with_anonymous_struct(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        anon = Struct(None, [Field("a", CType("int")), Field("b", CType("float"))])
+        header = Header(
+            "test.h",
+            [Struct("Outer", [Field("inner", CType("int"), anonymous_struct=anon)])],
+        )
+        result = json.loads(header_to_json(header))
+        field = result["declarations"][0]["fields"][0]
+        assert "anonymous_struct" in field
+        anon_dict = field["anonymous_struct"]
+        assert anon_dict["kind"] == "struct"
+        assert len(anon_dict["fields"]) == 2
+        assert anon_dict["fields"][0]["name"] == "a"
+        assert anon_dict["fields"][1]["name"] == "b"
+
+    def test_field_with_anonymous_union(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        anon = Struct(None, [Field("i", CType("int")), Field("f", CType("float"))], is_union=True)
+        header = Header(
+            "test.h",
+            [Struct("Data", [Field("u", CType("int"), anonymous_struct=anon)])],
+        )
+        result = json.loads(header_to_json(header))
+        field = result["declarations"][0]["fields"][0]
+        anon_dict = field["anonymous_struct"]
+        assert anon_dict["kind"] == "union"
+
+    def test_field_without_anonymous_struct_omits_key(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        header = Header(
+            "test.h",
+            [Struct("S", [Field("x", CType("int"))])],
+        )
+        result = json.loads(header_to_json(header))
+        field = result["declarations"][0]["fields"][0]
+        assert "anonymous_struct" not in field
+
+
+class TestCallingConventionSerialization:
+    """Tests for calling convention serialization."""
+
+    def test_function_with_calling_convention(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        header = Header(
+            "test.h",
+            [Function("WinMain", CType("int"), [], calling_convention="stdcall")],
+        )
+        result = json.loads(header_to_json(header))
+        decl = result["declarations"][0]
+        assert decl["calling_convention"] == "stdcall"
+
+    def test_function_without_calling_convention_omits_key(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        header = Header(
+            "test.h",
+            [Function("foo", CType("void"), [])],
+        )
+        result = json.loads(header_to_json(header))
+        decl = result["declarations"][0]
+        assert "calling_convention" not in decl
+
+    def test_function_pointer_with_calling_convention(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        fp = FunctionPointer(CType("void"), [], calling_convention="stdcall")
+        header = Header("test.h", [Variable("cb", fp)])
+        result = json.loads(header_to_json(header))
+        decl = result["declarations"][0]
+        assert decl["type"]["calling_convention"] == "stdcall"
+
+    def test_function_pointer_without_calling_convention_omits_key(self) -> None:
+        from headerkit.writers.json import header_to_json
+
+        fp = FunctionPointer(CType("void"), [])
+        header = Header("test.h", [Variable("cb", fp)])
+        result = json.loads(header_to_json(header))
+        decl = result["declarations"][0]
+        assert "calling_convention" not in decl["type"]

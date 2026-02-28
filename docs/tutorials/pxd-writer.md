@@ -1,5 +1,8 @@
 # Tutorial: Building a PXD Writer (Cython)
 
+!!! note "Built-in Cython writer available"
+    headerkit includes a built-in Cython writer with full C++ support (namespaces, templates, operator aliasing). Use `get_writer("cython")` to generate `.pxd` files directly. This tutorial walks through how a Cython `.pxd` writer works internally, which is useful for understanding the writer architecture or customizing behavior beyond what the built-in writer provides.
+
 This tutorial walks through building a headerkit writer that generates Cython `.pxd` declaration files from parsed C headers. By the end, you will have a working writer that handles functions, structs, enums, and typedefs.
 
 ## What Are .pxd Files?
@@ -247,7 +250,15 @@ register_writer("pxd", PxdWriter, description="Cython .pxd declaration files")
 
 ## Step 5: Try It Out
 
-Test the writer with a sample header:
+If you just need Cython `.pxd` output, use the built-in writer:
+
+```python
+from headerkit import get_backend, get_writer
+
+writer = get_writer("cython")
+```
+
+To test the custom writer from this tutorial instead, import it to trigger registration:
 
 ```python
 from headerkit import get_backend, get_writer

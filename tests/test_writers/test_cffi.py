@@ -260,6 +260,73 @@ class TestHeaderToCffi:
         assert "typedef struct inner_s outer_t;" in result
 
 
+class TestBitfieldFormatting:
+    def test_bitfield_regular_type(self):
+        f = Field("flags", CType("unsigned int"), bit_width=4)
+        result = _format_field(f)
+        assert result == "    unsigned int flags : 4;"
+
+    def test_bitfield_single_bit(self):
+        f = Field("valid", CType("unsigned int"), bit_width=1)
+        result = _format_field(f)
+        assert result == "    unsigned int valid : 1;"
+
+    def test_no_bitwidth_omits_suffix(self):
+        f = Field("count", CType("int"))
+        result = _format_field(f)
+        assert result == "    int count;"
+        assert ":" not in result
+
+
+class TestAnonymousStructField:
+    def test_anonymous_struct_inline(self):
+        anon = Struct(None, [Field("x", CType("int")), Field("y", CType("int"))])
+        f = Field("pos", CType("int"), anonymous_struct=anon)
+        result = _format_field(f)
+        assert "struct {" in result
+        assert "    int x;" in result
+        assert "    int y;" in result
+        assert result.endswith("    };")
+
+    def test_anonymous_union_inline(self):
+        anon = Struct(None, [Field("i", CType("int")), Field("f", CType("float"))], is_union=True)
+        f = Field("data", CType("int"), anonymous_struct=anon)
+        result = _format_field(f)
+        assert "union {" in result
+        assert "    int i;" in result
+        assert "    float f;" in result
+
+
+class TestPackedStruct:
+    def test_packed_struct_has_comment(self):
+        s = Struct("Packed", [Field("x", CType("int"))], is_packed=True)
+        result = decl_to_cffi(s)
+        assert result is not None
+        assert "/* packed */" in result
+        assert "struct Packed {" in result
+
+    def test_non_packed_struct_no_comment(self):
+        s = Struct("Normal", [Field("x", CType("int"))])
+        result = decl_to_cffi(s)
+        assert result is not None
+        assert "/* packed */" not in result
+
+
+class TestCallingConventionCffi:
+    def test_function_calling_convention_omitted(self):
+        f = Function("WinMain", CType("int"), [], calling_convention="stdcall")
+        result = decl_to_cffi(f)
+        assert result is not None
+        assert "stdcall" not in result
+        assert result == "int WinMain(void);"
+
+    def test_function_pointer_calling_convention_omitted(self):
+        fp = FunctionPointer(CType("void"), [], calling_convention="stdcall")
+        result = type_to_cffi(fp)
+        assert "stdcall" not in result
+        assert result == "void(*)(void)"
+
+
 class TestCffiWriter:
     """Tests for the CffiWriter class (protocol-compliant wrapper)."""
 

@@ -19,7 +19,12 @@ the registry functions mirror the backend API.
 | Writer | Module | Description |
 |--------|--------|-------------|
 | [CFFI](cffi.md) | `headerkit.writers.cffi` | Generates `ffibuilder.cdef()` strings |
+| [ctypes](ctypes.md) | `headerkit.writers.ctypes` | Generates Python ctypes binding modules |
+| [Cython](cython.md) | `headerkit.writers.cython` | Generates Cython `.pxd` declarations with C++ support |
+| [Diff](diff.md) | `headerkit.writers.diff` | Produces API compatibility diff reports (JSON/Markdown) |
 | [JSON](json.md) | `headerkit.writers.json` | Serializes IR to JSON for inspection and tooling |
+| [Lua](lua.md) | `headerkit.writers.lua` | Generates LuaJIT FFI binding files |
+| [Prompt](prompt.md) | `headerkit.writers.prompt` | Token-optimized output for LLM context |
 
 ## CLI Tools
 

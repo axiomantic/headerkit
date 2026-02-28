@@ -1,6 +1,6 @@
 # Writing Custom Writers
 
-headerkit writers convert IR into output strings. You can create custom writers for any target format: Cython `.pxd` files, ctypes bindings, documentation, or anything else you need.
+headerkit writers convert IR into output strings. headerkit ships with seven built-in writers (cffi, ctypes, cython, diff, json, lua, prompt), and you can create custom writers for any additional target format: documentation generators, language-specific bindings, or anything else you need.
 
 ## The WriterBackend Protocol
 
@@ -215,7 +215,7 @@ Once registered, your writer is available through the standard API:
 from headerkit import get_backend, get_writer, list_writers
 
 # List all available writers
-print(list_writers())  # ['cffi', 'json', 'markdown']
+print(list_writers())  # ['cffi', 'ctypes', 'cython', 'diff', 'json', 'lua', 'prompt', 'markdown']
 
 # Use your writer
 backend = get_backend()

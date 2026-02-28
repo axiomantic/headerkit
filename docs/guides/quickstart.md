@@ -1,6 +1,6 @@
 # Quick Start
 
-This guide walks through parsing a C header file with headerkit and generating output in two formats: CFFI bindings and JSON.
+This guide walks through parsing a C header file with headerkit and generating output using the built-in writers.
 
 ## Prerequisites
 
@@ -142,6 +142,43 @@ Output (abbreviated):
 ```
 
 See the [JSON Export tutorial](../tutorials/json-export.md) for advanced JSON processing techniques.
+
+## 6. Other Built-in Writers
+
+headerkit ships with seven writers. Beyond CFFI and JSON shown above, you can generate output for several other targets:
+
+```python
+# Python ctypes bindings
+ctypes_writer = get_writer("ctypes", lib_name="_lib")
+print(ctypes_writer.write(header))
+
+# Cython .pxd declarations
+cython_writer = get_writer("cython")
+print(cython_writer.write(header))
+
+# LuaJIT FFI bindings
+lua_writer = get_writer("lua")
+print(lua_writer.write(header))
+
+# Token-optimized output for LLM context
+prompt_writer = get_writer("prompt", verbosity="compact")
+print(prompt_writer.write(header))
+
+# API compatibility diff between two header versions
+from headerkit import get_backend
+old_header = get_backend().parse(old_code, "point.h")
+new_header = get_backend().parse(new_code, "point.h")
+diff_writer = get_writer("diff", baseline=old_header, format="markdown")
+print(diff_writer.write(new_header))
+```
+
+Use `list_writers()` to see all registered writers at runtime:
+
+```python
+from headerkit import list_writers
+print(list_writers())
+# ['cffi', 'ctypes', 'cython', 'diff', 'json', 'lua', 'prompt']
+```
 
 ## What's Next?
 
