@@ -85,14 +85,15 @@ Example -- `const char*`:
 
 | Kind | Key Fields |
 |------|-----------|
-| `"struct"` | `name`, `fields`, `is_typedef`, `is_union` (when union) |
+| `"struct"` | `name`, `fields`, `is_typedef` |
+| `"union"` | `name`, `fields`, `is_typedef` |
 | `"enum"` | `name`, `values` (list of `{name, value}`), `is_typedef` |
 | `"function"` | `name`, `return_type`, `parameters`, `is_variadic` |
 | `"typedef"` | `name`, `underlying_type` |
 | `"variable"` | `name`, `type` |
 | `"constant"` | `name`, `value`, `is_macro` (optional) |
 
-Structs and unions share the same schema. Unions have `"kind": "union"` while structs have `"kind": "struct"`.
+Structs and unions share the same schema but use distinct `"kind"` values.
 
 ## Worked Example
 

@@ -408,13 +408,10 @@ def header_to_cffi(
 ) -> str:
     """Convert all declarations in a Header to a CFFI cdef string.
 
-    Args:
-        header: Parsed header IR from clangir.
-        exclude_patterns: List of regex patterns. Declarations with names
-            matching any pattern will be excluded.
-
-    Returns:
-        A string suitable for passing to ``ffibuilder.cdef()``.
+    :param header: Parsed header IR from clangir.
+    :param exclude_patterns: List of regex patterns. Declarations with names
+        matching any pattern will be excluded.
+    :returns: A string suitable for passing to ``ffibuilder.cdef()``.
     """
     compiled_patterns = None
     if exclude_patterns:

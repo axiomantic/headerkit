@@ -73,7 +73,7 @@ Struct: Point
 Function: Point point_add(Point a, Point b)
 Function: Point point_scale(Point p, double factor)
 Function: double point_distance(Point a, Point b)
-Function: size_t point_format(Point p, char *buf, size_t bufsize)
+Function: size_t point_format(Point p, char* buf, size_t bufsize)
 ```
 
 ## 4. Generate CFFI Bindings
