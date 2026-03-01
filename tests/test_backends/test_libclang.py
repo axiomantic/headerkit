@@ -772,7 +772,8 @@ class TestHeaderInclusionTracking:
         # stdio.h typically includes other headers transitively
         code = "#include <stdio.h>\nvoid test(void);\n"
         header = backend.parse(code, "test.h")
-        # Should have at least stdio.h plus its transitive includes
+        # Should have stdio.h plus its transitive includes
+        assert any("stdio.h" in h for h in header.included_headers)
         assert len(header.included_headers) > 1
 
 
@@ -873,7 +874,8 @@ class TestTypeQualifierParsing:
         assert counter.name == "counter"
         assert len(counter.fields) == 1
         assert counter.fields[0].name == "value"
-        assert counter.fields[0].type is not None, "Field type should not be None"
+        assert isinstance(counter.fields[0].type, CType)
+        assert "int" in counter.fields[0].type.name
 
     def test_restrict_in_function_param(self, backend):
         """__restrict qualifier in function parameters is handled."""
@@ -931,6 +933,7 @@ class TestMacroParsing:
         constants = [d for d in header.declarations if isinstance(d, Constant)]
         mask_consts = [c for c in constants if c.name == "MASK"]
         assert len(mask_consts) == 1
+        assert mask_consts[0].value == 255, f"Expected 255 for 0xFF, got {mask_consts[0].value}"
 
     def test_negative_integer_macro(self):
         code = "#define ERROR_CODE -1\nvoid f(void);\n"
@@ -938,6 +941,9 @@ class TestMacroParsing:
         constants = [d for d in header.declarations if isinstance(d, Constant)]
         err_consts = [c for c in constants if c.name == "ERROR_CODE"]
         assert len(err_consts) == 1
+        # Negative macro is a multi-token expression; value is None but type is int
+        assert err_consts[0].type is not None
+        assert err_consts[0].type.name == "int"
 
     def test_string_macro_skipped_or_captured(self):
         code = '#define VERSION "1.0"\nvoid f(void);\n'
@@ -945,9 +951,11 @@ class TestMacroParsing:
         constants = [d for d in header.declarations if isinstance(d, Constant)]
         ver_consts = [c for c in constants if c.name == "VERSION"]
         # String macros may or may not be captured depending on implementation
-        # If captured, value should be the string
+        # If captured, value should be the quoted string and type should be const char
         if ver_consts:
-            assert ver_consts[0].value is not None
+            assert ver_consts[0].value == '"1.0"'
+            assert ver_consts[0].type is not None
+            assert ver_consts[0].type.name == "char"
 
     def test_function_like_macro_not_captured(self):
         code = "#define MAX(a,b) ((a)>(b)?(a):(b))\nvoid f(void);\n"

@@ -82,13 +82,11 @@ class TestArray:
 
     def test_array_of_pointers(self):
         arr = Array(Pointer(CType("int")), 10)
-        assert "int" in str(arr)
-        assert "10" in str(arr)
+        assert str(arr) == "int*[10]"
 
     def test_multidimensional_array(self):
         arr = Array(Array(CType("int"), 3), 3)
-        assert "int" in str(arr)
-        assert "3" in str(arr)
+        assert str(arr) == "int[3][3]"
 
 
 class TestFunctionPointer:

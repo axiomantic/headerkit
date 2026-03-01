@@ -16,7 +16,6 @@ class TestCythonStdlibRegistry:
     """Tests for Cython standard library mappings."""
 
     def test_stdlib_headers_not_empty(self) -> None:
-        assert len(CYTHON_STDLIB_HEADERS) > 0
         assert "stdint.h" in CYTHON_STDLIB_HEADERS
         assert "stdio.h" in CYTHON_STDLIB_HEADERS
 

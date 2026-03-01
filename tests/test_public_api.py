@@ -32,24 +32,16 @@ def test_type_aliases_are_unions():
         Array,
         Constant,
         CType,
-        Declaration,
         Enum,
         Function,
         FunctionPointer,
         Pointer,
         Struct,
         Typedef,
-        TypeExpr,
         Variable,
     )
 
     # These are Union types, so get_args should return their members
-    type_expr_args = typing.get_args(TypeExpr)
-    assert len(type_expr_args) > 0, "TypeExpr should be a Union with multiple members"
-
-    decl_args = typing.get_args(Declaration)
-    assert len(decl_args) > 0, "Declaration should be a Union with multiple members"
-
     type_expr_members = set(typing.get_args(headerkit.TypeExpr))
     assert CType in type_expr_members
     assert Pointer in type_expr_members

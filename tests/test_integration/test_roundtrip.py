@@ -616,18 +616,20 @@ class TestComplexPatternRoundtrip:
         code = "struct Flags { unsigned int a : 3; unsigned int b : 5; };"
         cdef = parse_and_convert(backend, code)
         assert "struct Flags" in cdef
-        assert "a" in cdef
-        assert "b" in cdef
+        # Bitfield widths may be lost during libclang roundtrip,
+        # but field names and types must survive
+        assert "unsigned int a" in cdef
+        assert "unsigned int b" in cdef
 
     def test_array_in_struct_field(self, backend):
         code = "struct Buffer { char data[256]; int sizes[4]; };"
         cdef = parse_and_convert(backend, code)
         assert "struct Buffer" in cdef
-        assert "data" in cdef
-        assert "sizes" in cdef
+        assert "char data[256];" in cdef
+        assert "int sizes[4];" in cdef
 
     def test_nested_struct_field(self, backend):
         code = "struct Outer { struct Inner { int x; } inner; };"
         cdef = parse_and_convert(backend, code)
-        assert "Outer" in cdef
-        assert "Inner" in cdef
+        assert "struct Outer" in cdef
+        assert "struct Inner inner;" in cdef

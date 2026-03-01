@@ -42,11 +42,8 @@ class TestInstallLinux:
         assert result is True
         assert mock_run.call_count == 2
         calls = mock_run.call_args_list
-        apt_calls = [c for c in calls if "apt-get" in str(c)]
-        assert len(apt_calls) >= 2
-        update_idx = next(i for i, c in enumerate(calls) if "update" in str(c))
-        install_idx = next(i for i, c in enumerate(calls) if "install" in str(c))
-        assert update_idx < install_idx, "apt-get update must come before apt-get install"
+        assert calls[0].args[0][:2] == ["apt-get", "update"]
+        assert calls[1].args[0][:3] == ["apt-get", "install", "-y"]
 
     @patch("headerkit.install_libclang.subprocess.run", return_value=_completed(0))
     @patch("headerkit.install_libclang.shutil.which")
@@ -86,8 +83,11 @@ class TestInstallLinux:
         ):
             result = install_linux()
             assert result is True
-            apt_calls = [c for c in mock_run.call_args_list if "apt-get" in str(c)]
-            assert len(apt_calls) > 0
+            calls = mock_run.call_args_list
+            apt_update = [c for c in calls if c.args[0][0:2] == ["apt-get", "update"]]
+            apt_install = [c for c in calls if c.args[0][0:2] == ["apt-get", "install"]]
+            assert len(apt_update) == 1, "Expected one apt-get update call"
+            assert len(apt_install) == 1, "Expected one apt-get install call"
 
 
 class TestInstallMacos:
