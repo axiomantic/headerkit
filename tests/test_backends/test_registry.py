@@ -1,5 +1,7 @@
 """Tests for the backend registry."""
 
+from unittest.mock import patch
+
 import pytest
 
 from headerkit.backends import (
@@ -117,6 +119,8 @@ class TestBackendRegistry:
         entry = info[0]
         assert entry["name"] == "mock"
         assert entry["available"] is True
+        assert "default" in entry
+        assert "description" in entry
 
     def test_first_registered_becomes_default(self):
         register_backend("first", MockBackend)
@@ -170,3 +174,22 @@ class TestBackendRegistry:
         first = get_backend("mock")
         second = get_backend("mock")
         assert first is not second
+
+    def test_get_default_backend_raises_when_empty(self):
+        import headerkit.backends as b
+
+        b._BACKENDS_LOADED = True
+        # Registry is already cleared in setup_method
+        with pytest.raises(ValueError, match="No backends available"):
+            get_default_backend()
+
+    def test_ensure_backends_loaded_handles_import_error(self):
+        """Test that _ensure_backends_loaded catches ImportError gracefully."""
+        import headerkit.backends as b
+
+        b._BACKEND_REGISTRY.clear()
+        b._DEFAULT_BACKEND = None
+        b._BACKENDS_LOADED = False
+        with patch("headerkit.backends.libclang", side_effect=ImportError("test")):
+            b._ensure_backends_loaded()
+        assert b._BACKENDS_LOADED is True

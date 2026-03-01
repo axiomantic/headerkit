@@ -432,6 +432,7 @@ class TestStandardMode:
         writer = PromptWriter(verbosity="standard")
         output = writer.write(header)
         assert "..." in output
+        assert "fmt" in output
 
 
 # =============================================================================
@@ -649,3 +650,9 @@ class TestPromptWriterGeneral:
             writer = PromptWriter(verbosity=mode)
             output = writer.write(header)
             assert len(output) > 0
+            if mode == "compact":
+                assert any(keyword in output for keyword in ["STRUCT", "ENUM", "FUNC", "TYPEDEF", "VAR", "CONST"])
+            elif mode == "standard":
+                assert "functions:" in output or "structs:" in output or "enums:" in output
+            elif mode == "verbose":
+                assert len(output) > 50

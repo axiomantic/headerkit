@@ -46,6 +46,18 @@ class TestEnvVarOverride:
         with patch.dict(os.environ, {"CIR_CLANG_VERSION": "  19  "}):
             assert detect_llvm_version() == "19"
 
+    def test_cir_clang_version_invalid_falls_through(self):
+        """Non-numeric CIR_CLANG_VERSION is ignored, falls through to other strategies."""
+        with (
+            patch.dict(os.environ, {"CIR_CLANG_VERSION": "abc"}, clear=False),
+            patch("shutil.which", return_value=None),
+            patch("headerkit._clang._version.glob.glob", return_value=[]),
+            patch("headerkit._clang._version._try_windows_registry", return_value=None),
+            patch("headerkit._clang._version._try_windows_program_files", return_value=None),
+        ):
+            result = detect_llvm_version()
+            assert result is None
+
 
 class TestLlvmConfig:
     def test_llvm_config_full_version(self):
@@ -306,7 +318,7 @@ class TestLlvmDir:
             patch("headerkit._clang._version.sys.platform", "linux"),
             patch(
                 "headerkit._clang._version.glob.glob",
-                return_value=["/usr/lib/llvm-20/", "/usr/lib/llvm-18/"],
+                return_value=["/usr/lib/llvm-18/", "/usr/lib/llvm-20/"],
             ),
         ):
             os.environ.pop("CIR_CLANG_VERSION", None)

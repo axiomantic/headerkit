@@ -264,6 +264,12 @@ class TestCppClass:
         assert "    int width" in result
         assert "    void resize(int w, int h)" in result
 
+        lines = result.strip().split("\n")
+        cppclass_line = next(i for i, ln in enumerate(lines) if "cdef cppclass Widget:" in ln)
+        method_line = next(i for i, ln in enumerate(lines) if "void resize" in ln)
+        assert method_line > cppclass_line, "Method should come after class declaration"
+        assert lines[method_line].startswith("    ") or lines[method_line].startswith("\t")
+
     def test_cppclass_with_cpp_name(self) -> None:
         header = Header(
             "lib.h",

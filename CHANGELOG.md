@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-03-01
+
+### Fixed
+
+- `get_backend_info()` always reported backends as `available: True` due to tautological check; now attempts instantiation to determine real availability
+- Integration test fixtures silently swallowed all download exceptions, causing the entire integration suite to report green with zero assertions; fixtures now emit warnings on failure
+- `_parse_header` test helper caught overly broad `Exception`, masking parser regressions as skipped tests; narrowed to `RuntimeError`
+- Clang loader fallback tests did not verify which version module was loaded, allowing wrong-version regressions to survive
+- Windows clang detection tests did not verify constructed file paths, allowing path construction bugs to survive
+- `test_anonymous_struct_skipped` in ctypes writer contained a tautological assertion that could never fail
+- `test_output_is_valid_json` serialized 6 declaration types but never verified any content
+- `test_mixed_declarations` in prompt writer ran 3 modes x 7 declarations but only checked output was non-empty
+
+### Added
+
+- Macro parsing test coverage: integer, hex, negative, string, and function-like macro tests for the libclang backend (~190 lines of previously untested production code)
+- Forward-declaration-to-definition replacement test for libclang backend
+- `_ensure_backends_loaded` error handling and lazy loading tests
+- Complex pattern roundtrip tests: bitfield structs, array-in-struct fields, nested structs
+- Minimum declaration count assertions for real-world header integration tests (sqlite3, zlib, lua, curl, SDL2)
+- Type-aware symbol verification in integration tests (checks declaration kind, not just name)
+- JSON roundtrip count consistency checks (writer output count must match parse result)
+- Invalid `CIR_CLANG_VERSION` env var fallthrough test
+- Union member verification for `TypeExpr` and `Declaration` public API type aliases
+- Registry cardinality and content checks for Cython type registries
+- Anonymous declaration skip test for diff writer
+- Variable integration test for Lua writer
+- `--skip-verify` flag test and package manager fallthrough test for install_libclang
+- PROVENANCE file hash verification in vendor tests
+
 ## [0.7.2] - 2026-03-01
 
 ### Fixed
@@ -170,6 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
+[0.7.3]: https://github.com/axiomantic/headerkit/compare/v0.7.2...v0.7.3
+[0.7.2]: https://github.com/axiomantic/headerkit/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/axiomantic/headerkit/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/axiomantic/headerkit/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/axiomantic/headerkit/compare/v0.6.0...v0.6.1

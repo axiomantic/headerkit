@@ -55,6 +55,17 @@ class TestPointer:
         assert str(p) == "const int*"
         assert p.qualifiers == ["const"]
 
+    def test_pointer_qualifier_data_model(self):
+        # const pointer to int (pointer itself is const)
+        const_ptr = Pointer(CType("int"), ["const"])
+        assert const_ptr.qualifiers == ["const"]
+        assert const_ptr.pointee.qualifiers == []
+
+        # pointer to const int (pointee is const)
+        ptr_to_const = Pointer(CType("int", ["const"]))
+        assert ptr_to_const.qualifiers == []
+        assert ptr_to_const.pointee.qualifiers == ["const"]
+
 
 class TestArray:
     def test_fixed_size_array(self):
@@ -68,6 +79,16 @@ class TestArray:
     def test_expression_size(self):
         a = Array(CType("int"), "SIZE")
         assert str(a) == "int[SIZE]"
+
+    def test_array_of_pointers(self):
+        arr = Array(Pointer(CType("int")), 10)
+        assert "int" in str(arr)
+        assert "10" in str(arr)
+
+    def test_multidimensional_array(self):
+        arr = Array(Array(CType("int"), 3), 3)
+        assert "int" in str(arr)
+        assert "3" in str(arr)
 
 
 class TestFunctionPointer:
@@ -151,6 +172,14 @@ class TestEnum:
     def test_anonymous_enum(self):
         e = Enum(None, [EnumValue("VALUE", 42)])
         assert str(e) == "enum (anonymous)"
+
+    def test_enum_is_typedef(self):
+        enum = Enum("Color", [EnumValue("RED", 0)], is_typedef=True)
+        assert enum.is_typedef is True
+
+    def test_enum_default_not_typedef(self):
+        enum = Enum("Color", [EnumValue("RED", 0)])
+        assert enum.is_typedef is False
 
 
 class TestStruct:
@@ -272,6 +301,16 @@ class TestVariable:
     def test_simple_variable(self):
         v = Variable("count", CType("int"))
         assert str(v) == "int count"
+
+    def test_variable_with_pointer(self):
+        var = Variable("ptr", Pointer(CType("void")))
+        assert var.name == "ptr"
+        assert isinstance(var.type, Pointer)
+
+    def test_variable_with_array(self):
+        var = Variable("buf", Array(CType("char"), 256))
+        assert var.name == "buf"
+        assert isinstance(var.type, Array)
 
 
 class TestConstant:

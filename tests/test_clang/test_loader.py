@@ -69,6 +69,7 @@ class TestGetCindex:
         ):
             cindex = get_cindex()
             assert cindex is not None
+            assert f"v{LATEST_VENDORED}" in cindex.__name__
 
     def test_fallback_to_oldest_for_old_version(self):
         """When detected version is below oldest, fall back to oldest with warning."""
@@ -81,6 +82,7 @@ class TestGetCindex:
         ):
             cindex = get_cindex()
             assert cindex is not None
+            assert f"v{OLDEST_VENDORED}" in cindex.__name__
 
     def test_fallback_to_latest_for_new_version(self):
         """When detected version is above latest, fall back to latest with warning."""
@@ -93,6 +95,7 @@ class TestGetCindex:
         ):
             cindex = get_cindex()
             assert cindex is not None
+            assert f"v{LATEST_VENDORED}" in cindex.__name__
 
     def test_each_vendored_version_loads(self):
         """Every vendored version can be imported and has required attributes."""
@@ -120,6 +123,7 @@ class TestGetCindex:
             warnings.simplefilter("error")  # Turn warnings into errors
             cindex = get_cindex()
             assert cindex is not None
+            assert "v20" in cindex.__name__
 
     def test_cache_is_cleared_correctly(self):
         """After clearing cache, next call re-detects version."""

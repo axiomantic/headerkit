@@ -615,6 +615,15 @@ class TestDiffWriter:
         output = writer.write(target)
         assert "## Breaking Changes" in output
 
+    def test_anonymous_declarations_skipped(self) -> None:
+        anon_struct = Struct(None, [Field("x", CType("int"))])
+        baseline = Header("test.h", [anon_struct])
+        target = Header("test.h", [anon_struct])
+        writer = DiffWriter(baseline=baseline)
+        output = writer.write(target)
+        parsed = json.loads(output)
+        assert len(parsed["entries"]) == 0
+
 
 # =============================================================================
 # Severity classification comprehensive check

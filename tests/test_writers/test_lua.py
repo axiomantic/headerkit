@@ -463,6 +463,8 @@ class TestHeaderToLua:
         assert "ffi.cdef[[" in result
         assert "]]" in result
         assert "return {}" in result
+        assert result.index('local ffi = require("ffi")') < result.index("ffi.cdef[[")
+        assert result.index("ffi.cdef[[") < result.index("]]")
 
     def test_integer_constant_in_cdef(self) -> None:
         header = Header("test.h", [Constant("BUFFER_SIZE", 1024, is_macro=True)])
@@ -608,6 +610,13 @@ class TestHeaderToLua:
         assert "void init(void * cb);" in result
         assert "]]" in result
         assert "return {}" in result
+
+    def test_variable_in_output(self) -> None:
+        var = Variable("count", CType("int"))
+        header = Header("test.h", [var])
+        writer = LuaWriter()
+        result = writer.write(header)
+        assert "int count;" in result
 
     def test_packed_struct_in_output(self) -> None:
         header = Header(

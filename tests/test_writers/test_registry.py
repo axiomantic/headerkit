@@ -200,6 +200,15 @@ class TestWriterRegistry:
         assert isinstance(writer, MockWriter)
         assert writer.kwargs == {"foo": 1, "bar": "hello"}
 
+    def test_get_writer_no_writers_raises(self) -> None:
+        """get_writer() with no writers registered and no default raises ValueError."""
+        import headerkit.writers as w
+
+        w._WRITERS_LOADED = True
+
+        with pytest.raises(ValueError, match="No writers available"):
+            get_writer()
+
 
 class TestWriterRegistryIntegration:
     """Tests using real registered writers (CffiWriter, JsonWriter).
