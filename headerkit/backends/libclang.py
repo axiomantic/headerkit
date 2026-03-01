@@ -110,6 +110,8 @@ def _get_xcrun_libclang_paths() -> list[str]:
         )
         if result.returncode == 0:
             clang_path = result.stdout.strip()
+            if not clang_path:
+                return []
             # clang_path is e.g. /.../usr/bin/clang; libclang.dylib is in /.../usr/lib/
             bin_dir = os.path.dirname(clang_path)
             lib_dir = os.path.normpath(os.path.join(bin_dir, "..", "lib"))
