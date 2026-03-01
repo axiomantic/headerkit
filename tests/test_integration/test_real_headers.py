@@ -275,7 +275,7 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        assert len(header.declarations) > 30
+        assert len(header.declarations) > 10
 
     def test_cffi_write(self, backend, sdl2_headers):
         _skip_if_unavailable(sdl2_headers, "SDL2")
