@@ -9,17 +9,24 @@ on:
     branches: [main]
     paths: [pyproject.toml]
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   auto-tag:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AXIOMANTIC_APP_ID }}
+          private-key: ${{ secrets.AXIOMANTIC_PRIVATE_KEY }}
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Check for version change
         id: version
