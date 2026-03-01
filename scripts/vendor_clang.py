@@ -89,7 +89,7 @@ def update_init_py(init_path: Path, major: str) -> None:
     content = init_path.read_text()
 
     # Parse current VENDORED_VERSIONS tuple
-    match = re.search(r"VENDORED_VERSIONS\s*=\s*\(([^)]+)\)", content)
+    match = re.search(r"VENDORED_VERSIONS\s*=\s*\((.*?)\)", content, re.DOTALL)
     if not match:
         raise RuntimeError("Could not find VENDORED_VERSIONS in __init__.py")
 
@@ -100,11 +100,12 @@ def update_init_py(init_path: Path, major: str) -> None:
         versions.append(major)
         versions.sort(key=int)
 
-    new_tuple = "(" + ", ".join(f'"{v}"' for v in versions) + ")"
+    new_tuple = "(" + ", ".join(f'"{v}"' for v in versions) + ",)"
     content = re.sub(
-        r"VENDORED_VERSIONS\s*=\s*\([^)]+\)",
+        r"VENDORED_VERSIONS\s*=\s*\(.*?\)",
         f"VENDORED_VERSIONS = {new_tuple}",
         content,
+        flags=re.DOTALL,
     )
 
     # Update LATEST_VENDORED if this is the newest

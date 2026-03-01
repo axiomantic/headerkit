@@ -153,9 +153,9 @@ class TestVendor:
         vendor_clang.vendor("22", "22.1.0", repo_root)
 
         content = (clang_dir / "__init__.py").read_text()
-        match = re.search(r"VENDORED_VERSIONS\s*=\s*\(([^)]+)\)", content)
+        match = re.search(r"VENDORED_VERSIONS\s*=\s*\((.*?)\)", content, re.DOTALL)
         assert match is not None
-        versions = [v.strip().strip('"') for v in match.group(1).split(",")]
+        versions = [v.strip().strip('"') for v in match.group(1).split(",") if v.strip()]
         assert "22" in versions
         assert versions == sorted(versions, key=int)
 
