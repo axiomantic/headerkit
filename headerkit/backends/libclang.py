@@ -188,17 +188,6 @@ def _get_libclang_search_paths() -> list[str]:
     return paths
 
 
-def _find_libclang_path() -> str | None:
-    """Search common locations for libclang library.
-
-    :returns: Path to libclang if found, None otherwise.
-    """
-    for path in _get_libclang_search_paths():
-        if os.path.isfile(path):
-            return path
-    return None
-
-
 # Module-level flag to track if we've already attempted configuration
 _libclang_configured: bool = False
 
