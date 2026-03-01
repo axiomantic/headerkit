@@ -90,11 +90,15 @@ class TestInstallWindows:
     @patch("headerkit.install_libclang.shutil.which", return_value=r"C:\ProgramData\chocolatey\bin\choco.exe")
     @patch.dict("os.environ", {"PROCESSOR_ARCHITECTURE": "AMD64"}, clear=False)
     def test_install_windows_x64(self, mock_which: MagicMock, mock_run: MagicMock) -> None:
-        """On x64 Windows with choco, install_windows runs 'choco install llvm -y'."""
+        """On x64 Windows with choco, install_windows pins the LLVM version."""
         result = install_windows(DEFAULT_LLVM_VERSION)
 
         assert result is True
-        mock_run.assert_called_once_with(["choco", "install", "llvm", "-y"], check=False, text=True)
+        mock_run.assert_called_once_with(
+            ["choco", "install", "llvm", f"--version={DEFAULT_LLVM_VERSION}", "-y"],
+            check=False,
+            text=True,
+        )
 
     @patch("headerkit.install_libclang.subprocess.run")
     @patch("headerkit.install_libclang.shutil.which", return_value=None)

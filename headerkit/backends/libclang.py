@@ -88,6 +88,40 @@ def normalize_path(path: str) -> str:
     return path.replace("\\", "/").lower()
 
 
+def _get_xcrun_libclang_paths() -> list[str]:
+    """Use xcrun to locate libclang on macOS.
+
+    ``xcrun --find clang`` returns the path to the active clang binary, which
+    lives alongside libclang inside the active Xcode toolchain.  This handles
+    non-standard Xcode install locations (e.g. ``Xcode_16.2.app`` on GitHub
+    Actions runners) that static glob patterns miss.
+    """
+    import shutil
+
+    if not shutil.which("xcrun"):
+        return []
+
+    try:
+        result = subprocess.run(
+            ["xcrun", "--find", "clang"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            clang_path = result.stdout.strip()
+            # clang_path is e.g. /.../usr/bin/clang; libclang.dylib is in /.../usr/lib/
+            bin_dir = os.path.dirname(clang_path)
+            lib_dir = os.path.normpath(os.path.join(bin_dir, "..", "lib"))
+            candidate = os.path.join(lib_dir, "libclang.dylib")
+            if candidate not in ("",):
+                return [candidate]
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    return []
+
+
 def _get_libclang_search_paths() -> list[str]:
     """Get platform-specific paths to search for libclang.
 
@@ -106,10 +140,22 @@ def _get_libclang_search_paths() -> list[str]:
         paths.extend(sorted(glob.glob("/usr/local/Cellar/llvm/*/lib/libclang.dylib"), reverse=True))
         # Xcode Command Line Tools
         paths.append("/Library/Developer/CommandLineTools/usr/lib/libclang.dylib")
-        # Xcode.app
+        # Xcode.app (canonical path)
         paths.append(
             "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libclang.dylib"
         )
+        # Xcode versioned app bundles (e.g. Xcode_16.2.app on GitHub Actions runners)
+        paths.extend(
+            sorted(
+                glob.glob(
+                    "/Applications/Xcode*.app/Contents/Developer/Toolchains"
+                    "/XcodeDefault.xctoolchain/usr/lib/libclang.dylib"
+                ),
+                reverse=True,
+            )
+        )
+        # xcrun-based discovery (works for any Xcode installation)
+        paths.extend(_get_xcrun_libclang_paths())
 
     elif sys.platform == "linux":
         # Debian/Ubuntu versioned LLVM packages (sorted newest first)
@@ -162,11 +208,26 @@ def _configure_libclang() -> bool:
     then attempts default loading first (respects DYLD_LIBRARY_PATH,
     LD_LIBRARY_PATH, etc.), then searches common platform-specific locations.
 
+    Disables the compatibility check so that minor version mismatches between
+    the vendored bindings and the system libclang do not cause hard failures.
+    Functions present in the bindings but absent from the loaded library are
+    silently skipped; they raise AttributeError only if actually called.
+
     :returns: True if libclang is available and configured, False otherwise.
     """
     global _libclang_configured, _cindex, CursorKind, TypeKind
 
     _cindex = _get_cindex()
+
+    # Disable the strict compatibility check before the library is loaded.
+    # headerkit already selects the closest vendored bindings for the detected
+    # LLVM version, but minor version differences (e.g., v21 bindings with a
+    # v19 libclang) can introduce functions that exist in the bindings but not
+    # in the library.  With the check disabled, those functions are silently
+    # skipped during registration and only raise if actually called.
+    if not _cindex.Config.loaded:
+        _cindex.Config.set_compatibility_check(False)
+
     CursorKind = _cindex.CursorKind
     TypeKind = _cindex.TypeKind
 
