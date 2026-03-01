@@ -1,7 +1,7 @@
 name: Check LLVM Releases
 
-# Detect new stable LLVM major versions that aren't yet vendored in headerkit/_clang/
-# and open an issue with vendoring instructions.
+# Detect new stable LLVM major versions that aren't yet vendored in headerkit/_clang/.
+# Automatically vendor if possible, falling back to opening an issue for failures.
 
 on:
   schedule:
@@ -9,6 +9,8 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: write
+  pull-requests: write
   issues: write
 
 jobs:
@@ -16,7 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AXIOMANTIC_APP_ID }}
+          private-key: ${{ secrets.AXIOMANTIC_PRIVATE_KEY }}
+
       - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Detect new LLVM versions
         id: detect
@@ -59,21 +70,80 @@ jobs:
           echo "Missing: ${missing:-none}"
           echo "missing=$missing" >> "$GITHUB_OUTPUT"
 
-          # Save tag list for reuse in the next step
+          # Save tag list for reuse in later steps
           {
             echo "all_tags<<TAGS_EOF"
             echo "$all_tags"
             echo "TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Open issues for missing versions
+      - uses: actions/setup-python@v6
+        if: steps.detect.outputs.missing != ''
+        with:
+          python-version: "3.12"
+
+      - name: Attempt auto-vendor
+        id: vendor
         if: steps.detect.outputs.missing != ''
         env:
-          GH_TOKEN: ${{ github.token }}
           MISSING: ${{ steps.detect.outputs.missing }}
           ALL_TAGS: ${{ steps.detect.outputs.all_tags }}
         run: |
+          vendored=""
+          failed=""
+
           for major in $MISSING; do
+            # Get latest patch version for this major from cached tags
+            latest=$(
+              echo "$ALL_TAGS" \
+              | grep "^${major}\." \
+              | sort -t. -k1,1n -k2,2n -k3,3n \
+              | tail -1
+            )
+
+            echo "Attempting to vendor LLVM $major (tag: $latest)..."
+            if python scripts/vendor_clang.py "$major" "$latest"; then
+              echo "Successfully vendored LLVM $major"
+              vendored="$vendored $major"
+            else
+              echo "Failed to vendor LLVM $major"
+              failed="$failed $major"
+            fi
+          done
+
+          vendored=$(echo "$vendored" | xargs)
+          failed=$(echo "$failed" | xargs)
+
+          echo "Vendored: ${vendored:-none}"
+          echo "Failed: ${failed:-none}"
+          echo "vendored=$vendored" >> "$GITHUB_OUTPUT"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request for vendored versions
+        if: steps.vendor.outputs.vendored != ''
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: "Vendor clang bindings for LLVM ${{ steps.vendor.outputs.vendored }}"
+          title: "Vendor clang bindings for LLVM ${{ steps.vendor.outputs.vendored }}"
+          body: |
+            Automatically vendored clang Python bindings for new LLVM version(s): ${{ steps.vendor.outputs.vendored }}.
+
+            Run the test suite locally to verify:
+            ```
+            pytest
+            ```
+          branch: auto/vendor-llvm
+          delete-branch: true
+
+      - name: Open issues for failed versions
+        if: steps.vendor.outputs.failed != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          FAILED: ${{ steps.vendor.outputs.failed }}
+          ALL_TAGS: ${{ steps.detect.outputs.all_tags }}
+        run: |
+          for major in $FAILED; do
             title="Vendor clang Python bindings for LLVM $major"
 
             # Skip if issue already exists (open or closed)
@@ -92,6 +162,8 @@ jobs:
             )
 
             body="A new LLVM major version ($major) has stable releases (latest: $latest) but no vendored bindings in \`headerkit/_clang/\`.
+
+          Auto-vendoring was attempted but failed. Manual vendoring is required.
 
           ## Steps to vendor
 
