@@ -210,6 +210,11 @@ def _configure_libclang() -> bool:
     then attempts default loading first (respects DYLD_LIBRARY_PATH,
     LD_LIBRARY_PATH, etc.), then searches common platform-specific locations.
 
+    Iterates through all candidate paths until one loads successfully.  This
+    handles cross-architecture scenarios (e.g. an x86_64 process on an Apple
+    Silicon Mac where the first candidate is an arm64-only Homebrew dylib that
+    passes ``os.path.isfile()`` but fails ``cdll.LoadLibrary()``).
+
     Disables the compatibility check so that minor version mismatches between
     the vendored bindings and the system libclang do not cause hard failures.
     Functions present in the bindings but absent from the loaded library are
@@ -250,16 +255,22 @@ def _configure_libclang() -> bool:
     except _cindex.LibclangError:
         pass
 
-    # Default failed, search common locations
-    libclang_path = _find_libclang_path()
-    if libclang_path:
-        _cindex.Config.set_library_file(libclang_path)
-        # Verify it works now
+    # Default failed, iterate through all candidate paths and try loading each.
+    # A path may exist on disk but fail to load (e.g. arm64-only dylib loaded
+    # from an x86_64 process under Rosetta), so we must try the next candidate.
+    for candidate in _get_libclang_search_paths():
+        if not os.path.isfile(candidate):
+            continue
+        _cindex.Config.set_library_file(candidate)
         try:
             _cindex.Config().get_cindex_library()
             return True
         except _cindex.LibclangError:
-            return False
+            # Reset library_file so the next candidate can be tried.
+            # Config.loaded is only set when the .lib property is accessed
+            # (i.e. on success), so set_library_file() remains callable here.
+            _cindex.Config.library_file = None
+            continue
 
     return False
 

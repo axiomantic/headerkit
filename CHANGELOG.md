@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-03-01
+
+### Fixed
+
+- macOS cross-architecture: `ValueError: Unknown backend: 'libclang'` when an x86_64 process (e.g. cibuildwheel x86_64 test phase on Apple Silicon) finds an arm64-only Homebrew libclang first; `_configure_libclang` now iterates through all candidate paths instead of giving up after the first architecture-incompatible dylib fails to load
+
 ## [0.7.1] - 2026-02-28
 
 ### Fixed
