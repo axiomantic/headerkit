@@ -22,6 +22,16 @@ jobs:
           cache: 'pip'
       - run: pip install -e '.[lint]'
       - uses: pre-commit/action@v3.0.1
+      - name: stubtest vendored clang bindings
+        run: |
+          for version in 18 19 20 21; do
+            echo "::group::stubtest v${version}"
+            python -m mypy.stubtest "headerkit._clang.v${version}.cindex"
+            echo "::endgroup::"
+          done
+          echo "::group::stubtest v18 enumerations"
+          python -m mypy.stubtest "headerkit._clang.v18.enumerations"
+          echo "::endgroup::"
 
   test:
     uses: ./.github/workflows/test.yml

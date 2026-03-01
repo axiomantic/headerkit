@@ -1,0 +1,48 @@
+name: Pre-commit Autoupdate
+
+on:
+  schedule:
+    - cron: "0 10 * * 3" # Wednesdays at 10 AM UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AXIOMANTIC_APP_ID }}
+          private-key: ${{ secrets.AXIOMANTIC_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - run: pip install pre-commit
+
+      - run: pre-commit autoupdate
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: "Update pre-commit hooks"
+          title: "Update pre-commit hooks"
+          body: |
+            Automated weekly update of pre-commit hook versions.
+
+            Run `pre-commit run --all-files` locally to verify.
+          branch: auto/pre-commit-autoupdate
+          delete-branch: true
