@@ -16,6 +16,10 @@ on:
   schedule:
     - cron: '0 10 * * 1'  # Weekly on Monday
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest

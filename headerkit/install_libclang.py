@@ -82,14 +82,14 @@ def install_windows(llvm_version: str) -> bool:
     """Install libclang on Windows.
 
     On ARM64, downloads the native woa64 installer from LLVM GitHub releases.
-    On x64, uses Chocolatey.
+    On x64, uses Chocolatey with the same pinned LLVM version.
     """
     arch = os.environ.get("PROCESSOR_ARCHITECTURE", "").upper()
 
     if arch == "ARM64":
         return _install_windows_arm64(llvm_version)
     else:
-        return _install_windows_x64()
+        return _install_windows_x64(llvm_version)
 
 
 def _install_windows_arm64(llvm_version: str) -> bool:
@@ -128,14 +128,24 @@ def _install_windows_arm64(llvm_version: str) -> bool:
     return True
 
 
-def _install_windows_x64() -> bool:
-    """Install LLVM on x64 Windows using Chocolatey."""
+def _install_windows_x64(llvm_version: str) -> bool:
+    """Install LLVM on x64 Windows using Chocolatey.
+
+    Pins to *llvm_version* so the installed library matches the vendored
+    cindex bindings.  Chocolatey's default (unpinned) LLVM may lag behind
+    the version that headerkit's bindings expect, causing
+    ``LibclangError: function 'clang_getFullyQualifiedName' not found``
+    and similar failures at load time.
+    """
     if not _is_command_available("choco"):
         print("ERROR: Chocolatey not found. Install it from https://chocolatey.org/")
         return False
 
-    print("Detected x64 Windows, installing LLVM via Chocolatey...")
-    result = _run(["choco", "install", "llvm", "-y"], check=False)
+    print(f"Detected x64 Windows, installing LLVM {llvm_version} via Chocolatey...")
+    result = _run(
+        ["choco", "install", "llvm", f"--version={llvm_version}", "-y"],
+        check=False,
+    )
     return result.returncode == 0
 
 

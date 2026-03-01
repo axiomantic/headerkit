@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-02-28
+
+### Fixed
+
+- Windows x64: `LibclangError: function 'clang_getFullyQualifiedName' not found` when system LLVM is older than the vendored v21 bindings; disable cindex compatibility check so unused functions are silently skipped
+- Windows x64: `install_libclang` now pins the Chocolatey LLVM version to match the vendored bindings instead of installing whatever default Chocolatey provides
+- macOS CI: `ValueError: Unknown backend: 'libclang'` in test environments where libclang is bundled inside a versioned Xcode app bundle (e.g. `Xcode_16.2.app`); added xcrun-based discovery and glob for versioned Xcode paths
+- Missing `concurrency` groups on six GitHub Actions workflows (auto-tag, check-llvm, check-python, docs, pre-commit-autoupdate, release)
+
 ## [0.7.0] - 2026-02-28
 
 ### Added
@@ -155,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
+[0.7.1]: https://github.com/axiomantic/headerkit/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/axiomantic/headerkit/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/axiomantic/headerkit/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/axiomantic/headerkit/compare/v0.5.0...v0.6.0
