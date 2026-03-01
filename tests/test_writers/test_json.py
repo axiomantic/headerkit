@@ -263,9 +263,9 @@ class TestHeaderToJson:
     def test_included_headers(self) -> None:
         from headerkit.writers.json import header_to_json
 
-        header = Header("test.h", [], included_headers={"stdio.h", "stdlib.h"})
+        header = Header("test.h", [], included_headers={"stdlib.h", "aaa.h"})
         result = json.loads(header_to_json(header))
-        assert result["included_headers"] == ["stdio.h", "stdlib.h"]
+        assert result["included_headers"] == ["aaa.h", "stdlib.h"]
 
     def test_indent_none_compact(self) -> None:
         from headerkit.writers.json import header_to_json
@@ -303,6 +303,8 @@ class TestHeaderToJson:
         parsed = json.loads(result)
         assert isinstance(parsed, dict)
         assert len(parsed["declarations"]) == 6
+        kinds = {d["kind"] for d in parsed["declarations"]}
+        assert kinds == {"struct", "enum", "function", "typedef", "variable", "constant"}
 
     def test_variadic_function(self) -> None:
         from headerkit.writers.json import header_to_json

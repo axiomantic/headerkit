@@ -203,6 +203,8 @@ class TestHeaderToCffi:
         result = header_to_cffi(header)
         assert "struct Point" in result
         assert "get_point" in result
+        assert "int x;" in result
+        assert "int y;" in result
 
     def test_exclude_patterns(self):
         header = Header(

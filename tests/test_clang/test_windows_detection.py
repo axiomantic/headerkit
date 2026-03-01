@@ -32,11 +32,14 @@ class TestWindowsRegistry:
             patch("headerkit._clang._version.sys.platform", "win32"),
             patch.dict(sys.modules, {"winreg": mock_winreg}),
             patch("headerkit._clang._version.os.path.isdir", return_value=True),
-            patch("headerkit._clang._version.os.path.isfile", return_value=True),
+            patch("headerkit._clang._version.os.path.isfile", return_value=True) as mock_isfile,
             patch("headerkit._clang._version.subprocess.run", return_value=mock_result),
         ):
             result = _try_windows_registry()
             assert result == "18"
+            # Verify the correct path was constructed
+            expected_path = os.path.join(r"C:\Program Files\LLVM", "bin", "clang.exe")
+            mock_isfile.assert_any_call(expected_path)
 
     def test_registry_key_not_found(self):
         """Registry key does not exist, returns None."""
@@ -171,11 +174,14 @@ class TestWindowsProgramFiles:
                     "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
                 },
             ),
-            patch("headerkit._clang._version.os.path.isfile", return_value=True),
+            patch("headerkit._clang._version.os.path.isfile", return_value=True) as mock_isfile,
             patch("headerkit._clang._version.subprocess.run", return_value=mock_result),
         ):
             result = _try_windows_program_files()
             assert result == "20"
+            # Verify the correct path was constructed
+            expected_path = os.path.join(r"C:\Program Files", "LLVM", "bin", "clang.exe")
+            mock_isfile.assert_any_call(expected_path)
 
     def test_finds_version_from_programfiles_x86(self):
         """Finds LLVM in PROGRAMFILES(X86) when PROGRAMFILES path has no clang."""
@@ -185,7 +191,8 @@ class TestWindowsProgramFiles:
 
         def isfile_side_effect(path):
             # Only the x86 path has clang.exe
-            return "x86" in path.lower()
+            expected = os.path.join(r"C:\Program Files (x86)", "LLVM", "bin", "clang.exe")
+            return os.path.normpath(path) == os.path.normpath(expected)
 
         with (
             patch("headerkit._clang._version.sys.platform", "win32"),

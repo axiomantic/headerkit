@@ -198,6 +198,7 @@ class TestMacroConstantRoundtrip:
         cdef = parse_and_convert(backend, code)
         # String macros are not supported by CFFI and should be omitted
         assert "VERSION" not in cdef
+        assert "void func(void);" in cdef
 
 
 class TestFunctionPointerTypedefRoundtrip:
@@ -486,6 +487,7 @@ class TestJsonEnumRoundtrip:
         switch_td = [t for t in typedefs if t["name"] == "Switch"]
         if switch_td:
             assert switch_td[0]["underlying_type"]["name"] == "enum Switch"
+        # typedef presence is version-dependent; not a failure if absent
 
 
 class TestJsonTypedefRoundtrip:
@@ -604,3 +606,30 @@ class TestJsonFunctionPointerTypedefRoundtrip:
             assert pointee["kind"] == "ctype"
             assert pointee["name"] == "void"
             assert "const" in pointee.get("qualifiers", [])
+
+
+@pytest.mark.libclang
+class TestComplexPatternRoundtrip:
+    """Test roundtrip for complex C patterns through CFFI output."""
+
+    def test_bitfield_struct(self, backend):
+        code = "struct Flags { unsigned int a : 3; unsigned int b : 5; };"
+        cdef = parse_and_convert(backend, code)
+        assert "struct Flags" in cdef
+        # Bitfield widths may be lost during libclang roundtrip,
+        # but field names and types must survive
+        assert "unsigned int a" in cdef
+        assert "unsigned int b" in cdef
+
+    def test_array_in_struct_field(self, backend):
+        code = "struct Buffer { char data[256]; int sizes[4]; };"
+        cdef = parse_and_convert(backend, code)
+        assert "struct Buffer" in cdef
+        assert "char data[256];" in cdef
+        assert "int sizes[4];" in cdef
+
+    def test_nested_struct_field(self, backend):
+        code = "struct Outer { struct Inner { int x; } inner; };"
+        cdef = parse_and_convert(backend, code)
+        assert "struct Outer" in cdef
+        assert "struct Inner inner;" in cdef

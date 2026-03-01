@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -20,6 +21,7 @@ from headerkit.backends.libclang import (
     normalize_path,
 )
 from headerkit.ir import (
+    Constant,
     CType,
     Enum,
     Field,
@@ -503,6 +505,15 @@ class TestLibclangParsing:
         assert s.is_typedef is True
         assert len(s.fields) == 2
 
+    def test_forward_decl_replaced_by_definition(self, backend):
+        """Forward declaration should be replaced by full definition."""
+        code = "struct Opaque;\nstruct Opaque { int x; };\n"
+        header = backend.parse(code, "test.h")
+        structs = [d for d in header.declarations if isinstance(d, Struct) and d.name == "Opaque"]
+        assert len(structs) == 1, "Forward decl should be replaced by definition"
+        assert len(structs[0].fields) == 1
+        assert structs[0].fields[0].name == "x"
+
     def test_parse_error_raises_runtime_error(self, backend):
         """Parse error raises RuntimeError."""
         code = "this is not valid C code @#$%;"
@@ -622,12 +633,16 @@ class TestGetSystemIncludeDirs:
         """get_system_include_dirs returns a list of strings."""
         result = get_system_include_dirs()
         assert isinstance(result, list)
+        if shutil.which("clang") is not None:
+            assert len(result) > 0, "clang is available but no include dirs found"
         for item in result:
             assert isinstance(item, str)
 
     def test_entries_are_isystem_flags(self):
         """Each entry should be an -isystem flag if any paths are found."""
         result = get_system_include_dirs()
+        if shutil.which("clang") is not None:
+            assert len(result) > 0, "clang is available but no include dirs found"
         for item in result:
             assert item.startswith("-isystem"), f"Expected -isystem prefix, got: {item}"
 
@@ -645,6 +660,11 @@ class TestGetSystemIncludeDirs:
         # But both should be lists
         assert isinstance(c_dirs, list)
         assert isinstance(cxx_dirs, list)
+        # Verify they are separate cache entries
+        c_dirs_again = get_system_include_dirs(cplus=False)
+        assert c_dirs is c_dirs_again, "C dirs should be cached"
+        cxx_dirs_again = get_system_include_dirs(cplus=True)
+        assert cxx_dirs is cxx_dirs_again, "C++ dirs should be cached"
 
     def test_clang_not_found_returns_empty(self):
         """When clang is not on PATH, returns empty list."""
@@ -745,14 +765,16 @@ class TestHeaderInclusionTracking:
         code = "void standalone_func(int x);\n"
         header = backend.parse(code, "test.h")
         assert isinstance(header.included_headers, set)
+        assert len(header.included_headers) == 0
 
     def test_includes_transitive(self, backend):
         """Tracks transitive includes (headers included by other headers)."""
         # stdio.h typically includes other headers transitively
         code = "#include <stdio.h>\nvoid test(void);\n"
         header = backend.parse(code, "test.h")
-        # Should have at least stdio.h plus its transitive includes
-        assert len(header.included_headers) >= 1
+        # Should have stdio.h plus its transitive includes
+        assert any("stdio.h" in h for h in header.included_headers)
+        assert len(header.included_headers) > 1
 
 
 @libclang
@@ -834,7 +856,8 @@ class TestTypeQualifierParsing:
         assert td.name == "atomic_int"
         # _Atomic may be stripped by libclang's type canonicalization;
         # the key thing is that the typedef is parsed and the base type is int
-        assert "int" in str(td.underlying_type)
+        assert isinstance(td.underlying_type, CType)
+        assert "int" in td.underlying_type.name
 
     def test_atomic_in_struct_field(self, backend):
         """_Atomic types in struct fields are parsed."""
@@ -851,6 +874,8 @@ class TestTypeQualifierParsing:
         assert counter.name == "counter"
         assert len(counter.fields) == 1
         assert counter.fields[0].name == "value"
+        assert isinstance(counter.fields[0].type, CType)
+        assert "int" in counter.fields[0].type.name
 
     def test_restrict_in_function_param(self, backend):
         """__restrict qualifier in function parameters is handled."""
@@ -865,6 +890,9 @@ class TestTypeQualifierParsing:
         # but the function should still parse correctly
         assert func.parameters[0].name == "dst"
         assert func.parameters[1].name == "src"
+        # dst should be a pointer type
+        dst_param = func.parameters[0]
+        assert isinstance(dst_param.type, Pointer), "dst should be a pointer type"
         # src should have const on its pointee
         src_param = func.parameters[1]
         assert isinstance(src_param.type, Pointer)
@@ -880,3 +908,59 @@ class TestTypeQualifierParsing:
         assert func.name == "abort_program"
         assert isinstance(func.return_type, CType)
         assert func.return_type.name == "void"
+
+
+@libclang
+class TestMacroParsing:
+    """Tests for macro parsing via libclang backend."""
+
+    def setup_method(self):
+        if not is_system_libclang_available():
+            pytest.skip("libclang not available")
+        self.backend = LibclangBackend()
+
+    def test_simple_integer_macro(self):
+        code = "#define SIZE 100\nvoid f(void);\n"
+        header = self.backend.parse(code, "test.h")
+        constants = [d for d in header.declarations if isinstance(d, Constant)]
+        size_consts = [c for c in constants if c.name == "SIZE"]
+        assert len(size_consts) == 1
+        assert size_consts[0].value == 100 or size_consts[0].value == "100"
+
+    def test_hex_macro(self):
+        code = "#define MASK 0xFF\nvoid f(void);\n"
+        header = self.backend.parse(code, "test.h")
+        constants = [d for d in header.declarations if isinstance(d, Constant)]
+        mask_consts = [c for c in constants if c.name == "MASK"]
+        assert len(mask_consts) == 1
+        assert mask_consts[0].value == 255, f"Expected 255 for 0xFF, got {mask_consts[0].value}"
+
+    def test_negative_integer_macro(self):
+        code = "#define ERROR_CODE -1\nvoid f(void);\n"
+        header = self.backend.parse(code, "test.h")
+        constants = [d for d in header.declarations if isinstance(d, Constant)]
+        err_consts = [c for c in constants if c.name == "ERROR_CODE"]
+        assert len(err_consts) == 1
+        # Negative macro is a multi-token expression; value is None but type is int
+        assert err_consts[0].type is not None
+        assert err_consts[0].type.name == "int"
+
+    def test_string_macro_skipped_or_captured(self):
+        code = '#define VERSION "1.0"\nvoid f(void);\n'
+        header = self.backend.parse(code, "test.h")
+        constants = [d for d in header.declarations if isinstance(d, Constant)]
+        ver_consts = [c for c in constants if c.name == "VERSION"]
+        # String macros may or may not be captured depending on implementation
+        # If captured, value should be the quoted string and type should be const char
+        if ver_consts:
+            assert ver_consts[0].value == '"1.0"'
+            assert ver_consts[0].type is not None
+            assert ver_consts[0].type.name == "char"
+
+    def test_function_like_macro_not_captured(self):
+        code = "#define MAX(a,b) ((a)>(b)?(a):(b))\nvoid f(void);\n"
+        header = self.backend.parse(code, "test.h")
+        constants = [d for d in header.declarations if isinstance(d, Constant)]
+        max_consts = [c for c in constants if c.name == "MAX"]
+        # Function-like macros should not produce Constants
+        assert len(max_consts) == 0

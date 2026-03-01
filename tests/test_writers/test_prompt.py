@@ -432,6 +432,7 @@ class TestStandardMode:
         writer = PromptWriter(verbosity="standard")
         output = writer.write(header)
         assert "..." in output
+        assert "fmt" in output
 
 
 # =============================================================================
@@ -645,7 +646,29 @@ class TestPromptWriterGeneral:
             ],
         )
 
-        for mode in ("compact", "standard", "verbose"):
-            writer = PromptWriter(verbosity=mode)
-            output = writer.write(header)
-            assert len(output) > 0
+        # Compact mode: verify ALL 7 declaration types appear
+        compact_output = PromptWriter(verbosity="compact").write(header)
+        assert "CONST VER=1" in compact_output
+        assert "ENUM E: A=0" in compact_output
+        assert "STRUCT S {x:int}" in compact_output
+        assert "FUNC f(a:int) -> void" in compact_output
+        assert "TYPEDEF T = int" in compact_output
+        assert "VAR v:int" in compact_output
+        assert "CALLBACK Cb(x:int) -> void" in compact_output
+
+        # Standard mode: verify ALL section headers present
+        standard_output = PromptWriter(verbosity="standard").write(header)
+        assert "constants:" in standard_output
+        assert "enums:" in standard_output
+        assert "structs:" in standard_output
+        assert "functions:" in standard_output
+        assert "typedefs:" in standard_output
+        assert "variables:" in standard_output
+        assert "callbacks:" in standard_output
+
+        # Verbose mode: verify valid JSON with all declarations
+        verbose_output = PromptWriter(verbosity="verbose").write(header)
+        parsed = json.loads(verbose_output)
+        assert len(parsed["declarations"]) == 7
+        names = {d["name"] for d in parsed["declarations"]}
+        assert names == {"VER", "E", "S", "f", "T", "v", "Cb"}

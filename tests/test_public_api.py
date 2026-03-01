@@ -20,19 +20,41 @@ def test_all_matches_module_exports():
     missing = public_attrs - all_set
     assert missing == set(), f"Public attributes missing from __all__: {missing}"
 
+    assert len(headerkit.__all__) >= 20, f"Expected at least 20 exports, got {len(headerkit.__all__)}"
+
 
 def test_type_aliases_are_unions():
     """TypeExpr and Declaration should be Union type aliases."""
     import typing
 
-    from headerkit import Declaration, TypeExpr
+    import headerkit
+    from headerkit import (
+        Array,
+        Constant,
+        CType,
+        Enum,
+        Function,
+        FunctionPointer,
+        Pointer,
+        Struct,
+        Typedef,
+        Variable,
+    )
 
     # These are Union types, so get_args should return their members
-    type_expr_args = typing.get_args(TypeExpr)
-    assert len(type_expr_args) > 0, "TypeExpr should be a Union with multiple members"
+    type_expr_members = set(typing.get_args(headerkit.TypeExpr))
+    assert CType in type_expr_members
+    assert Pointer in type_expr_members
+    assert Array in type_expr_members
+    assert FunctionPointer in type_expr_members
 
-    decl_args = typing.get_args(Declaration)
-    assert len(decl_args) > 0, "Declaration should be a Union with multiple members"
+    decl_members = set(typing.get_args(headerkit.Declaration))
+    assert Enum in decl_members
+    assert Struct in decl_members
+    assert Function in decl_members
+    assert Typedef in decl_members
+    assert Variable in decl_members
+    assert Constant in decl_members
 
 
 def test_ir_types_match_direct_import():

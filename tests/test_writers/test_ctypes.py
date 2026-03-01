@@ -294,10 +294,9 @@ class TestStructToCtypes:
     def test_anonymous_struct_skipped(self) -> None:
         header = Header("test.h", [Struct(None, [Field("x", CType("int"))])])
         result = header_to_ctypes(header)
-        assert "class " not in result or "class " in result.split("Structures")[0]
-        # Actually, the anonymous struct should simply not generate a class
-        # Check that no _fields_ line appears
         assert "_fields_" not in result
+        assert "ctypes.Structure" not in result
+        assert "# Structures and Unions" not in result
 
 
 class TestEnumToCtypes:
@@ -326,6 +325,12 @@ class TestEnumToCtypes:
         assert "# enum anonymous" in result
         assert "FLAG_A = 1" in result
         assert "FLAG_B = 2" in result
+
+    def test_enum_auto_value(self) -> None:
+        enum = Enum("AutoEnum", [EnumValue("FIRST", None), EnumValue("SECOND", 1)])
+        result = header_to_ctypes(Header("test.h", [enum]))
+        assert "# FIRST = <auto>" in result
+        assert "SECOND = 1" in result
 
     def test_empty_enum_skipped(self) -> None:
         header = Header("test.h", [Enum("Empty", [])])
@@ -561,6 +566,15 @@ class TestModuleStructure:
         assert "# Structures and Unions" in result
         assert "# Typedefs" in result
         assert "# Function Prototypes" in result
+
+        # Verify sections appear in correct order
+        section_positions = []
+        for section in ["Constants", "Enums", "Structures and Unions", "Function Prototypes"]:
+            header_text = f"# {section}"
+            if header_text in result:
+                section_positions.append((result.index(header_text), section))
+        positions_only = [pos for pos, _ in section_positions]
+        assert positions_only == sorted(positions_only), f"Sections out of order: {[s for _, s in section_positions]}"
 
 
 class TestCtypesWriter:

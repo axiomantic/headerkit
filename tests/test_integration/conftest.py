@@ -91,7 +91,10 @@ def sqlite3_header() -> Path | None:
     if not header.exists():
         try:
             _download_and_extract_zip(SQLITE_URL, cache, ["sqlite3.h"])
-        except Exception:
+        except Exception as exc:
+            import warnings
+
+            warnings.warn(f"Failed to download sqlite3: {exc}", stacklevel=2)
             return None
     return header if header.exists() else None
 
@@ -110,7 +113,10 @@ def zlib_header() -> Path | None:
     if not header.exists():
         try:
             _download_file(ZLIB_URL, header)
-        except Exception:
+        except Exception as exc:
+            import warnings
+
+            warnings.warn(f"Failed to download zlib: {exc}", stacklevel=2)
             return None
     return header if header.exists() else None
 
@@ -129,7 +135,10 @@ def lua_headers() -> Path | None:
     if not header.exists():
         try:
             _download_and_extract_tar(LUA_URL, cache, ["lua.h", "lauxlib.h", "luaconf.h"])
-        except Exception:
+        except Exception as exc:
+            import warnings
+
+            warnings.warn(f"Failed to download lua: {exc}", stacklevel=2)
             return None
     return cache if header.exists() else None
 
@@ -159,7 +168,10 @@ def curl_headers() -> Path | None:
                     if member.name.startswith(prefix) and member.isfile():
                         member.name = Path(member.name).name
                         tf.extract(member, curl_dir, filter="data")
-        except Exception:
+        except Exception as exc:
+            import warnings
+
+            warnings.warn(f"Failed to download curl: {exc}", stacklevel=2)
             return None
     return cache if header.exists() else None
 
@@ -188,7 +200,10 @@ def sdl2_headers() -> Path | None:
                     if member.name.startswith(prefix) and member.isfile():
                         member.name = Path(member.name).name
                         tf.extract(member, sdl_dir, filter="data")
-        except Exception:
+        except Exception as exc:
+            import warnings
+
+            warnings.warn(f"Failed to download SDL2: {exc}", stacklevel=2)
             return None
     return cache if header.exists() else None
 
@@ -220,6 +235,9 @@ def cpython_headers() -> Path | None:
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         member.name = rel
                         tf.extract(member, inc_dir, filter="data")
-        except Exception:
+        except Exception as exc:
+            import warnings
+
+            warnings.warn(f"Failed to download CPython: {exc}", stacklevel=2)
             return None
     return cache if header.exists() else None

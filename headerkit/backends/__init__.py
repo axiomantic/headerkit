@@ -95,10 +95,15 @@ def get_backend_info() -> list[dict[str, str | bool]]:
 
     result: list[dict[str, str | bool]] = []
     for name in _BACKEND_REGISTRY:
+        try:
+            _BACKEND_REGISTRY[name]()
+            available = True
+        except Exception:
+            available = False
         result.append(
             {
                 "name": name,
-                "available": name in _BACKEND_REGISTRY,
+                "available": available,
                 "default": name == _DEFAULT_BACKEND,
                 "description": descriptions.get(name, ""),
             }

@@ -15,6 +15,10 @@ from headerkit.writers._cython_types import (
 class TestCythonStdlibRegistry:
     """Tests for Cython standard library mappings."""
 
+    def test_stdlib_headers_not_empty(self) -> None:
+        assert "stdint.h" in CYTHON_STDLIB_HEADERS
+        assert "stdio.h" in CYTHON_STDLIB_HEADERS
+
     def test_stdint_header_mapping(self) -> None:
         """stdint.h maps to libc.stdint with expected types."""
         assert "stdint.h" in CYTHON_STDLIB_HEADERS

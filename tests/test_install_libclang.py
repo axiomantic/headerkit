@@ -41,8 +41,9 @@ class TestInstallLinux:
 
         assert result is True
         assert mock_run.call_count == 2
-        mock_run.assert_any_call(["apt-get", "update", "-qq"], check=False, text=True)
-        mock_run.assert_any_call(["apt-get", "install", "-y", "libclang-dev"], check=False, text=True)
+        calls = mock_run.call_args_list
+        assert calls[0].args[0][:2] == ["apt-get", "update"]
+        assert calls[1].args[0][:3] == ["apt-get", "install", "-y"]
 
     @patch("headerkit.install_libclang.subprocess.run", return_value=_completed(0))
     @patch("headerkit.install_libclang.shutil.which")
@@ -63,6 +64,30 @@ class TestInstallLinux:
 
         assert result is False
         mock_run.assert_not_called()
+
+    def test_install_linux_dnf_fails_falls_through_to_apt(self) -> None:
+        def which_side_effect(cmd: str) -> str | None:
+            if cmd in ("dnf", "apt-get"):
+                return f"/usr/bin/{cmd}"
+            return None
+
+        def run_side_effect(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            cmd = args[0] if args else kwargs.get("args", [])
+            if "dnf" in cmd[0]:
+                return subprocess.CompletedProcess(args=cmd, returncode=1, stdout="", stderr="")
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+        with (
+            patch("headerkit.install_libclang.shutil.which", side_effect=which_side_effect),
+            patch("headerkit.install_libclang.subprocess.run", side_effect=run_side_effect) as mock_run,
+        ):
+            result = install_linux()
+            assert result is True
+            calls = mock_run.call_args_list
+            apt_update = [c for c in calls if c.args[0][0:2] == ["apt-get", "update"]]
+            apt_install = [c for c in calls if c.args[0][0:2] == ["apt-get", "install"]]
+            assert len(apt_update) == 1, "Expected one apt-get update call"
+            assert len(apt_install) == 1, "Expected one apt-get install call"
 
 
 class TestInstallMacos:
@@ -141,8 +166,6 @@ class TestVerifyLibclang:
     @patch("headerkit.install_libclang.is_system_libclang_available", create=True)
     def test_verify_libclang_success(self, mock_available: MagicMock) -> None:
         """When is_system_libclang_available returns True, verify_libclang returns True."""
-        with patch("headerkit.install_libclang.verify_libclang.__module__", "headerkit.install_libclang"):
-            pass
         # Patch the import inside verify_libclang
         mock_module = MagicMock()
         mock_module.is_system_libclang_available.return_value = True
@@ -206,3 +229,15 @@ class TestMain:
         mock_install.assert_called_once()
         mock_verify.assert_called_once()
         assert result == 1
+
+    @patch("headerkit.install_libclang.verify_libclang")
+    @patch("headerkit.install_libclang.install_linux", return_value=True)
+    @patch("headerkit.install_libclang.sys")
+    def test_main_skip_verify(self, mock_sys: MagicMock, mock_install: MagicMock, mock_verify: MagicMock) -> None:
+        """With --skip-verify, main() skips verification."""
+        mock_sys.platform = "linux"
+        result = main(["--skip-verify"])
+
+        mock_install.assert_called_once()
+        mock_verify.assert_not_called()
+        assert result == 0

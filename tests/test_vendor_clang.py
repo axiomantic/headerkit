@@ -1,5 +1,6 @@
 """Tests for scripts/vendor_clang.py."""
 
+import hashlib
 import re
 import sys
 import textwrap
@@ -121,6 +122,10 @@ class TestVendor:
         )
         assert lines[1].startswith("sha256: ")
         assert len(lines[1].split(": ", 1)[1]) == 64  # hex sha256
+        expected_hash = hashlib.sha256(b"# fake cindex.py content\n").hexdigest()
+        sha_line = [line for line in lines if line.startswith("sha256:")][0]
+        actual_hash = sha_line.split(": ")[1]
+        assert actual_hash == expected_hash
         assert lines[2] == "llvm_version: 22.1.0"
         assert re.match(r"vendored_date: \d{4}-\d{2}-\d{2}", lines[3])
         assert lines[4] == "license: Apache-2.0 WITH LLVM-exception"
@@ -156,8 +161,10 @@ class TestVendor:
         match = re.search(r"VENDORED_VERSIONS\s*=\s*\((.*?)\)", content, re.DOTALL)
         assert match is not None
         versions = [v.strip().strip('"') for v in match.group(1).split(",") if v.strip()]
+        assert "20" in versions
+        assert "21" in versions
         assert "22" in versions
-        assert versions == sorted(versions, key=int)
+        assert versions == ["20", "21", "22"]
 
     def test_updates_latest_vendored(
         self,
