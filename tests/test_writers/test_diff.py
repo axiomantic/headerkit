@@ -458,6 +458,8 @@ class TestJsonOutput:
         output = diff_to_json(report)
         parsed = json.loads(output)
         assert isinstance(parsed, dict)
+        assert "schema_version" in parsed
+        assert "entries" in parsed
 
     def test_schema_version(self) -> None:
         report = DiffReport("a.h", "b.h", [])
@@ -569,7 +571,7 @@ class TestDiffWriter:
 
     def test_format_description_property(self) -> None:
         writer = DiffWriter()
-        assert "diff" in writer.format_description.lower() or "compatibility" in writer.format_description.lower()
+        assert writer.format_description == "API compatibility diff reports (JSON or Markdown)"
 
     def test_write_json_default(self) -> None:
         baseline = _header_with(Function("f", CType("int"), []))
@@ -698,3 +700,64 @@ class TestSeverityClassification:
         target = _header_with(Variable("v", Pointer(CType("int"))))
         report = diff_headers(baseline, target)
         assert report.entries[0].severity == "breaking"
+
+
+# =============================================================================
+# No-change invariant tests
+# =============================================================================
+
+
+class TestNoChangeInvariant:
+    """Identical declarations should produce zero diff entries."""
+
+    def test_identical_functions_produce_no_diff(self) -> None:
+        """Unchanged functions should produce zero diff entries."""
+        f = Function("test", CType("int"), [Parameter("x", CType("int"))])
+        baseline = Header(path="a.h", declarations=[f])
+        target = Header(path="b.h", declarations=[f])
+        report = diff_headers(baseline, target)
+        assert len(report.entries) == 0
+
+    def test_identical_structs_produce_no_diff(self) -> None:
+        """Unchanged structs should produce zero diff entries."""
+        s = Struct("S", [Field("x", CType("int")), Field("y", CType("float"))])
+        baseline = Header(path="a.h", declarations=[s])
+        target = Header(path="b.h", declarations=[s])
+        report = diff_headers(baseline, target)
+        assert len(report.entries) == 0
+
+    def test_identical_enums_produce_no_diff(self) -> None:
+        """Unchanged enums should produce zero diff entries."""
+        e = Enum("Color", [EnumValue("RED", 0), EnumValue("GREEN", 1)])
+        baseline = Header(path="a.h", declarations=[e])
+        target = Header(path="b.h", declarations=[e])
+        report = diff_headers(baseline, target)
+        assert len(report.entries) == 0
+
+
+# =============================================================================
+# Struct field ordering edge cases
+# =============================================================================
+
+
+class TestStructFieldMiddleInsertion:
+    """Test that inserting a field in the middle is classified as breaking."""
+
+    def test_field_added_in_middle_is_breaking(self) -> None:
+        """A field inserted between existing fields is a breaking change."""
+        baseline = _header_with(Struct("S", [Field("x", CType("int")), Field("z", CType("int"))]))
+        target = _header_with(
+            Struct(
+                "S",
+                [
+                    Field("x", CType("int")),
+                    Field("y", CType("int")),
+                    Field("z", CType("int")),
+                ],
+            )
+        )
+        report = diff_headers(baseline, target)
+        added = [e for e in report.entries if e.kind == "struct_field_added"]
+        assert len(added) == 1
+        assert added[0].severity == "breaking"
+        assert added[0].detail == "field 'y' added"

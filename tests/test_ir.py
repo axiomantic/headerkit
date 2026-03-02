@@ -50,7 +50,7 @@ class TestPointer:
         assert str(p) == "int**"
 
     def test_pointer_with_qualifiers(self):
-        """Pointer with qualifiers represents 'int * const'."""
+        """Pointer with qualifiers ['const'] prepends qualifiers: 'const int*'."""
         p = Pointer(CType("int"), ["const"])
         assert str(p) == "const int*"
         assert p.qualifiers == ["const"]
@@ -117,7 +117,7 @@ class TestFunctionPointer:
     def test_calling_convention(self):
         fp = FunctionPointer(CType("void"), [], calling_convention="stdcall")
         assert fp.calling_convention == "stdcall"
-        assert "stdcall" in str(fp)
+        assert str(fp) == "void ( __stdcall__*)()"
 
     def test_calling_convention_default_none(self):
         fp = FunctionPointer(CType("int"), [])
@@ -150,6 +150,10 @@ class TestField:
         assert f.anonymous_struct is not None
         assert f.anonymous_struct.is_union
         assert len(f.anonymous_struct.fields) == 2
+        assert f.anonymous_struct.fields[0].name == "i"
+        assert str(f.anonymous_struct.fields[0].type) == "int"
+        assert f.anonymous_struct.fields[1].name == "f"
+        assert str(f.anonymous_struct.fields[1].type) == "float"
 
 
 class TestEnum:
@@ -236,7 +240,7 @@ class TestStruct:
     def test_packed_struct(self):
         s = Struct("Packed", [Field("x", CType("int"))], is_packed=True)
         assert s.is_packed
-        assert "packed" in str(s)
+        assert str(s) == "struct Packed __attribute__((packed))"
 
     def test_packed_default_false(self):
         s = Struct("Normal", [])
@@ -268,7 +272,7 @@ class TestFunction:
     def test_calling_convention(self):
         f = Function("WinMain", CType("int"), [], calling_convention="stdcall")
         assert f.calling_convention == "stdcall"
-        assert "stdcall" in str(f)
+        assert str(f) == "int __stdcall__ WinMain()"
 
     def test_calling_convention_default_none(self):
         f = Function("main", CType("int"), [])
@@ -304,11 +308,13 @@ class TestVariable:
         var = Variable("ptr", Pointer(CType("void")))
         assert var.name == "ptr"
         assert isinstance(var.type, Pointer)
+        assert str(var) == "void* ptr"
 
     def test_variable_with_array(self):
         var = Variable("buf", Array(CType("char"), 256))
         assert var.name == "buf"
         assert isinstance(var.type, Array)
+        assert str(var) == "char[256] buf"
 
 
 class TestConstant:

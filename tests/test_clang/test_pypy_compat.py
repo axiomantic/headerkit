@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import platform
 
 import pytest
@@ -21,17 +22,14 @@ class TestCompatCInteropStringInit:
         assert obj.value == "hello"
 
     def test_init_with_none(self) -> None:
+        # None is coerced to empty bytes, so value is "" and a buffer is allocated
         obj = _compat_c_interop_string(None)
-        # None is treated as empty bytes internally, so value is ""
         assert obj.value == ""
+        assert obj._buffer is not None, "Buffer must be allocated even for None input"
 
     def test_init_default(self) -> None:
         obj = _compat_c_interop_string()
         assert obj.value == ""
-
-    def test_value_property(self) -> None:
-        obj = _compat_c_interop_string("test value")
-        assert obj.value == "test value"
 
 
 class TestCompatCInteropStringStr:
@@ -73,6 +71,8 @@ class TestCompatCInteropStringToPython:
     """Tests for _compat_c_interop_string.to_python_string static method."""
 
     def test_to_python_string(self) -> None:
+        # Documents the public API contract: to_python_string is a static method
+        # that extracts the string value from a _compat_c_interop_string instance.
         obj = _compat_c_interop_string("result")
         assert _compat_c_interop_string.to_python_string(obj) == "result"
 
@@ -128,6 +128,7 @@ class TestMonkeyPatchMechanism:
             headerkit._clang._cached_cindex = None
             cindex = get_cindex()
             assert cindex.c_interop_string is not _compat_c_interop_string
+            assert inspect.isclass(cindex.c_interop_string), "Original c_interop_string should be a class"
         finally:
             headerkit._clang._cached_cindex = saved
 

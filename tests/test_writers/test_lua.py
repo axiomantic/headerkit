@@ -160,7 +160,12 @@ class TestAnonymousStructField:
         assert "struct {" in result
         assert "int x;" in result
         assert "int y;" in result
-        assert result.strip().endswith("};")
+        assert result.endswith("};")
+        # Verify indentation: outer fields at 4 spaces, inner at 8
+        assert "    struct {" in result
+        assert "        int x;" in result
+        assert "        int y;" in result
+        assert "    };" in result
 
     def test_anonymous_union_inline(self) -> None:
         anon = Struct(
@@ -306,6 +311,10 @@ class TestStructToCdef:
         assert "typedef struct Handle Handle;" in result
 
     def test_opaque_typedef_struct(self) -> None:
+        # Opaque structs (no fields) always emit the same forward declaration
+        # regardless of is_typedef, because the opaque path in _struct_to_cdef
+        # returns early before checking is_typedef. This test documents that
+        # intentional behavior: both produce "typedef struct Handle Handle;".
         s = Struct("Handle", [], is_typedef=True)
         result = _struct_to_cdef(s)
         assert result is not None
@@ -408,7 +417,6 @@ class TestFunctionToCdef:
     def test_no_calling_convention(self) -> None:
         f = Function("normal", CType("void"), [])
         result = _function_to_cdef(f)
-        assert "__stdcall__" not in result
         assert result == "void normal(void);"
 
 
@@ -655,8 +663,8 @@ class TestLuaWriter:
         writer = LuaWriter()
         assert writer.format_description == "LuaJIT FFI bindings"
 
-    def test_writer_produces_same_output_as_function(self) -> None:
-        """LuaWriter.write() should produce identical output to header_to_lua()."""
+    def test_writer_produces_expected_output(self) -> None:
+        """LuaWriter.write() should produce correct LuaJIT FFI bindings."""
         header = Header(
             "test.h",
             [
@@ -665,7 +673,18 @@ class TestLuaWriter:
             ],
         )
         writer = LuaWriter()
-        assert writer.write(header) == header_to_lua(header)
+        result = writer.write(header)
+        assert "-- Source: test.h" in result
+        assert 'local ffi = require("ffi")' in result
+        assert "ffi.cdef[[" in result
+        assert "/* Structs */" in result
+        assert "    int x;" in result
+        assert "    int y;" in result
+        assert "} Point;" in result
+        assert "/* Functions */" in result
+        assert "Point * get_point(void);" in result
+        assert "]]" in result
+        assert "return {}" in result
 
     def test_writer_registered(self) -> None:
         """LuaWriter should be registered in the writer registry."""

@@ -102,6 +102,15 @@ class TestWriterRegistry:
 
         writer = get_writer("mock")
         assert isinstance(writer, MockWriter)
+        # Verify the writer actually works: write() returns a string
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function(name="test_fn", return_type=CType(name="void"), parameters=[]),
+            ],
+        )
+        result = writer.write(header)
+        assert isinstance(result, str)
 
     def test_register_default(self) -> None:
         """Register with is_default=True, get_writer() without name returns it."""
@@ -255,7 +264,7 @@ class TestWriterRegistryIntegration:
         writer = get_writer("cffi")
         output = writer.write(header)
 
-        assert "int test_func(void);" in output
+        assert output == "int test_func(void);"
 
     def test_roundtrip_json(self) -> None:
         """Parse a simple header, write with json writer, verify JSON is valid."""

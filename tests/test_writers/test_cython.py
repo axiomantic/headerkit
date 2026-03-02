@@ -41,11 +41,8 @@ class TestSimpleStruct:
     def test_opaque_struct(self) -> None:
         header = Header("test.h", [Struct("Opaque", [])])
         result = write_pxd(header)
-        assert "cdef struct Opaque" in result
-        # No colon for forward declaration
-        lines = result.strip().split("\n")
-        opaque_line = [ln for ln in lines if "Opaque" in ln][0]
-        assert not opaque_line.rstrip().endswith(":")
+        # Opaque struct emits a forward declaration (no colon, no body)
+        assert result == 'cdef extern from "test.h":\n\n    cdef struct Opaque\n'
 
     def test_typedef_struct(self) -> None:
         header = Header(
@@ -104,6 +101,11 @@ class TestEnum:
         assert "    RED" in result
         assert "    GREEN" in result
         assert "    BLUE" in result
+        # Verify members appear in source order
+        red_pos = result.index("RED")
+        green_pos = result.index("GREEN")
+        blue_pos = result.index("BLUE")
+        assert red_pos < green_pos < blue_pos
 
     def test_typedef_enum(self) -> None:
         header = Header(
@@ -268,7 +270,7 @@ class TestCppClass:
         cppclass_line = next(i for i, ln in enumerate(lines) if "cdef cppclass Widget:" in ln)
         method_line = next(i for i, ln in enumerate(lines) if "void resize" in ln)
         assert method_line > cppclass_line, "Method should come after class declaration"
-        assert lines[method_line].startswith("    ") or lines[method_line].startswith("\t")
+        assert lines[method_line].startswith("        "), "Method should be indented with 8 spaces (2 levels)"
 
     def test_cppclass_with_cpp_name(self) -> None:
         header = Header(
@@ -484,10 +486,20 @@ class TestWriterProtocol:
     """WriterBackend protocol compliance."""
 
     def test_protocol_compliance(self) -> None:
-        from headerkit.writers import WriterBackend
-
         writer = CythonWriter()
-        assert isinstance(writer, WriterBackend)
+        # Verify required attributes exist and have correct types
+        assert isinstance(writer.name, str)
+        assert len(writer.name) > 0
+        assert isinstance(writer.format_description, str)
+        assert len(writer.format_description) > 0
+        # Verify write() produces string output
+        header = Header(
+            "test.h",
+            [Function("foo", CType("void"), [])],
+        )
+        result = writer.write(header)
+        assert isinstance(result, str)
+        assert "void foo()" in result
 
     def test_name(self) -> None:
         writer = CythonWriter()
@@ -497,7 +509,7 @@ class TestWriterProtocol:
         writer = CythonWriter()
         assert writer.format_description == "Cython .pxd declarations for C/C++ interop"
 
-    def test_writer_produces_same_output_as_function(self) -> None:
+    def test_writer_produces_output_with_expected_content(self) -> None:
         header = Header(
             "test.h",
             [
@@ -509,7 +521,12 @@ class TestWriterProtocol:
             ],
         )
         writer = CythonWriter()
-        assert writer.write(header) == write_pxd(header)
+        result = writer.write(header)
+        assert 'cdef extern from "test.h":' in result
+        assert "cdef struct Point:" in result
+        assert "    int x" in result
+        assert "    int y" in result
+        assert "Point* get_point()" in result
 
 
 class TestKeywordEscaping:

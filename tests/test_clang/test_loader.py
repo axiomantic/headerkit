@@ -1,9 +1,9 @@
 """Tests for the vendored cindex module loader."""
 
+import inspect
 import os
+import warnings
 from unittest.mock import patch
-
-import pytest
 
 from headerkit._clang import LATEST_VENDORED, OLDEST_VENDORED, VENDORED_VERSIONS, get_cindex
 
@@ -15,20 +15,20 @@ class TestGetCindex:
 
         headerkit._clang._cached_cindex = None
 
-    def test_returns_module_with_config(self):
-        """get_cindex should return a module with Config class."""
+    def test_returns_module_with_config_class(self):
+        """get_cindex should return a module containing a Config class."""
         cindex = get_cindex()
-        assert hasattr(cindex, "Config")
+        assert inspect.isclass(cindex.Config)
 
-    def test_returns_module_with_index(self):
-        """get_cindex should return a module with Index class."""
+    def test_returns_module_with_index_class(self):
+        """get_cindex should return a module containing an Index class."""
         cindex = get_cindex()
-        assert hasattr(cindex, "Index")
+        assert inspect.isclass(cindex.Index)
 
-    def test_returns_module_with_cursor_kind(self):
-        """get_cindex should return a module with CursorKind."""
+    def test_returns_module_with_cursor_kind_class(self):
+        """get_cindex should return a module containing a CursorKind class."""
         cindex = get_cindex()
-        assert hasattr(cindex, "CursorKind")
+        assert inspect.isclass(cindex.CursorKind)
 
     def test_caching(self):
         """Second call should return the exact same module object."""
@@ -38,13 +38,9 @@ class TestGetCindex:
 
     def test_env_var_override(self):
         """CIR_CLANG_VERSION env var should select the version."""
-        import headerkit._clang
-
-        headerkit._clang._cached_cindex = None
         with patch.dict(os.environ, {"CIR_CLANG_VERSION": "18"}):
             cindex = get_cindex()
-            assert cindex is not None
-            assert hasattr(cindex, "Config")
+            assert inspect.isclass(cindex.Config)
             assert "v18" in cindex.__name__
 
     def test_vendored_versions_tuple(self):
@@ -54,91 +50,85 @@ class TestGetCindex:
         assert "20" in VENDORED_VERSIONS
         assert "21" in VENDORED_VERSIONS
 
-    def test_latest_and_oldest(self):
-        assert OLDEST_VENDORED == "18"
-        assert LATEST_VENDORED == "21"
+    def test_latest_is_newer_than_oldest(self):
+        """LATEST_VENDORED and OLDEST_VENDORED should be consistent with VENDORED_VERSIONS."""
+        assert int(LATEST_VENDORED) > int(OLDEST_VENDORED)
+        assert OLDEST_VENDORED in VENDORED_VERSIONS
+        assert LATEST_VENDORED in VENDORED_VERSIONS
 
     def test_fallback_to_latest_when_detection_fails(self):
-        """When version detection returns None, fall back to latest with warning."""
-        import headerkit._clang
-
-        headerkit._clang._cached_cindex = None
+        """When version detection returns None, emit exactly one warning and fall back to latest."""
         with (
             patch("headerkit._clang._version.detect_llvm_version", return_value=None),
-            pytest.warns(UserWarning, match="Could not detect LLVM version"),
+            warnings.catch_warnings(record=True) as w,
         ):
+            warnings.simplefilter("always")
             cindex = get_cindex()
-            assert cindex is not None
             assert f"v{LATEST_VENDORED}" in cindex.__name__
+            user_warnings = [x for x in w if issubclass(x.category, UserWarning)]
+            assert len(user_warnings) == 1
+            assert "Could not detect LLVM version" in str(user_warnings[0].message)
 
     def test_fallback_to_oldest_for_old_version(self):
-        """When detected version is below oldest, fall back to oldest with warning."""
-        import headerkit._clang
-
-        headerkit._clang._cached_cindex = None
+        """When detected version is below oldest, emit exactly one warning and fall back to oldest."""
         with (
             patch("headerkit._clang._version.detect_llvm_version", return_value="15"),
-            pytest.warns(UserWarning, match="older than oldest vendored"),
+            warnings.catch_warnings(record=True) as w,
         ):
+            warnings.simplefilter("always")
             cindex = get_cindex()
-            assert cindex is not None
             assert f"v{OLDEST_VENDORED}" in cindex.__name__
+            user_warnings = [x for x in w if issubclass(x.category, UserWarning)]
+            assert len(user_warnings) == 1
+            assert "older than oldest vendored" in str(user_warnings[0].message)
 
     def test_fallback_to_latest_for_new_version(self):
-        """When detected version is above latest, fall back to latest with warning."""
-        import headerkit._clang
-
-        headerkit._clang._cached_cindex = None
+        """When detected version is above latest, emit exactly one warning and fall back to latest."""
         with (
             patch("headerkit._clang._version.detect_llvm_version", return_value="25"),
-            pytest.warns(UserWarning, match="newer than latest vendored"),
+            warnings.catch_warnings(record=True) as w,
         ):
+            warnings.simplefilter("always")
             cindex = get_cindex()
-            assert cindex is not None
             assert f"v{LATEST_VENDORED}" in cindex.__name__
+            user_warnings = [x for x in w if issubclass(x.category, UserWarning)]
+            assert len(user_warnings) == 1
+            assert "newer than latest vendored" in str(user_warnings[0].message)
 
     def test_each_vendored_version_loads(self):
-        """Every vendored version can be imported and has required attributes."""
+        """Every vendored version can be imported and has required classes."""
         import importlib
 
         for version in VENDORED_VERSIONS:
             module = importlib.import_module(f"headerkit._clang.v{version}.cindex")
-            assert hasattr(module, "Config"), f"v{version} missing Config"
-            assert hasattr(module, "Index"), f"v{version} missing Index"
-            assert hasattr(module, "CursorKind"), f"v{version} missing CursorKind"
-            assert hasattr(module, "TypeKind"), f"v{version} missing TypeKind"
-            assert hasattr(module, "TranslationUnit"), f"v{version} missing TranslationUnit"
+            assert inspect.isclass(module.Config), f"v{version} Config is not a class"
+            assert inspect.isclass(module.Index), f"v{version} Index is not a class"
+            assert inspect.isclass(module.CursorKind), f"v{version} CursorKind is not a class"
+            assert inspect.isclass(module.TypeKind), f"v{version} TypeKind is not a class"
+            assert inspect.isclass(module.TranslationUnit), f"v{version} TranslationUnit is not a class"
 
     def test_exact_match_no_warning(self):
         """When detected version exactly matches a vendored version, no warning is emitted."""
-        import headerkit._clang
-
-        headerkit._clang._cached_cindex = None
-        import warnings
-
         with (
             patch("headerkit._clang._version.detect_llvm_version", return_value="20"),
             warnings.catch_warnings(),
         ):
             warnings.simplefilter("error")  # Turn warnings into errors
             cindex = get_cindex()
-            assert cindex is not None
             assert "v20" in cindex.__name__
 
-    def test_cache_is_cleared_correctly(self):
-        """After clearing cache, next call re-detects version."""
+    def test_cache_cleared_causes_fresh_load(self):
+        """After clearing cache, next call returns a different module object."""
         import headerkit._clang
 
-        # Load once
+        # Load once (cache is already clear from setup_method)
         first = get_cindex()
-        assert first is not None
 
-        # Clear cache
+        # Clear cache to force re-detection
         headerkit._clang._cached_cindex = None
 
         # Load again with different version override
         with patch.dict(os.environ, {"CIR_CLANG_VERSION": "18"}):
             second = get_cindex()
-            assert second is not None
-            # Module names should reflect the version
+            assert first is not second, "Cache clear should produce a fresh module"
             assert "v18" in second.__name__

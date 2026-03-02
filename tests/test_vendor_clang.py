@@ -116,7 +116,8 @@ class TestVendor:
 
         provenance = (clang_dir / "v22" / "PROVENANCE").read_text()
         lines = provenance.strip().split("\n")
-        assert len(lines) == 5
+        # Guard against unexpected format changes - update count when adding new fields
+        assert len(lines) == 5, f"PROVENANCE format changed: expected 5 lines, got {len(lines)}: {lines}"
         assert lines[0] == (
             "source: https://github.com/llvm/llvm-project/blob/llvmorg-22.1.0/clang/bindings/python/clang/cindex.py"
         )

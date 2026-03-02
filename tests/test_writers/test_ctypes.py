@@ -124,7 +124,37 @@ class TestTypeMapping:
 
     def test_type_map_completeness(self) -> None:
         """Verify the type map has all expected entries."""
-        assert len(CTYPES_TYPE_MAP) == 28
+        expected_types = {
+            "void",
+            "char",
+            "signed char",
+            "unsigned char",
+            "short",
+            "unsigned short",
+            "int",
+            "unsigned int",
+            "long",
+            "unsigned long",
+            "long long",
+            "unsigned long long",
+            "float",
+            "double",
+            "long double",
+            "size_t",
+            "ssize_t",
+            "wchar_t",
+            "_Bool",
+            "bool",
+            "int8_t",
+            "int16_t",
+            "int32_t",
+            "int64_t",
+            "uint8_t",
+            "uint16_t",
+            "uint32_t",
+            "uint64_t",
+        }
+        assert set(CTYPES_TYPE_MAP.keys()) == expected_types
 
 
 class TestPointerTypes:
@@ -297,6 +327,9 @@ class TestStructToCtypes:
         assert "_fields_" not in result
         assert "ctypes.Structure" not in result
         assert "# Structures and Unions" not in result
+        # Boilerplate (docstring, imports) should still be present
+        assert '"""ctypes bindings generated from test.h."""' in result
+        assert "import ctypes" in result
 
 
 class TestEnumToCtypes:
@@ -569,7 +602,7 @@ class TestModuleStructure:
 
         # Verify sections appear in correct order
         section_positions = []
-        for section in ["Constants", "Enums", "Structures and Unions", "Function Prototypes"]:
+        for section in ["Constants", "Enums", "Structures and Unions", "Typedefs", "Function Prototypes"]:
             header_text = f"# {section}"
             if header_text in result:
                 section_positions.append((result.index(header_text), section))
@@ -580,7 +613,7 @@ class TestModuleStructure:
 class TestCtypesWriter:
     """Tests for the CtypesWriter class (protocol-compliant wrapper)."""
 
-    def test_writer_produces_same_output_as_function(self) -> None:
+    def test_writer_produces_output_with_expected_content(self) -> None:
         header = Header(
             "test.h",
             [
@@ -589,7 +622,12 @@ class TestCtypesWriter:
             ],
         )
         writer = CtypesWriter()
-        assert writer.write(header) == header_to_ctypes(header)
+        result = writer.write(header)
+        assert "class Point(ctypes.Structure):" in result
+        assert '("x", ctypes.c_int),' in result
+        assert '("y", ctypes.c_int),' in result
+        assert "_lib.get_point.argtypes = []" in result
+        assert "_lib.get_point.restype = ctypes.POINTER(Point)" in result
 
     def test_writer_custom_lib_name(self) -> None:
         header = Header(
@@ -599,12 +637,23 @@ class TestCtypesWriter:
         writer = CtypesWriter(lib_name="mylib")
         result = writer.write(header)
         assert "mylib.foo.argtypes" in result
+        assert "mylib.foo.restype = None" in result
 
     def test_writer_protocol_compliance(self) -> None:
-        from headerkit.writers import WriterBackend
-
         writer = CtypesWriter()
-        assert isinstance(writer, WriterBackend)
+        # Verify required attributes exist and have correct types
+        assert isinstance(writer.name, str)
+        assert len(writer.name) > 0
+        assert isinstance(writer.format_description, str)
+        assert len(writer.format_description) > 0
+        # Verify write() produces string output
+        header = Header(
+            "test.h",
+            [Function("foo", CType("void"), [])],
+        )
+        result = writer.write(header)
+        assert isinstance(result, str)
+        assert "_lib.foo.restype = None" in result
 
     def test_writer_name(self) -> None:
         writer = CtypesWriter()

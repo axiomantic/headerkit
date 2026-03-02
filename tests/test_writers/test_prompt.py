@@ -244,6 +244,27 @@ class TestCompactTypedef:
         assert "CALLBACK EventCb(id:int, ctx:void*) -> void" in output
 
 
+class TestCompactPointerToFunctionPointerTypedef:
+    """Typedef of Pointer(FunctionPointer(...)) vs direct FunctionPointer."""
+
+    def test_pointer_to_function_pointer_typedef(self) -> None:
+        """Typedef of Pointer(FunctionPointer(...)) should be TYPEDEF, not CALLBACK.
+
+        Only a direct FunctionPointer underlying type triggers the CALLBACK
+        rendering. A Pointer wrapping a FunctionPointer falls through to
+        the generic TYPEDEF path in _typedef_compact.
+        """
+        from headerkit.writers.prompt import PromptWriter
+
+        fp = FunctionPointer(CType("void"), [Parameter("data", Pointer(CType("void")))])
+        td = Typedef("EventCb", Pointer(fp))
+        header = Header(path="test.h", declarations=[td])
+        writer = PromptWriter(verbosity="compact")
+        result = writer.write(header)
+        assert "TYPEDEF" in result
+        assert "CALLBACK" not in result
+
+
 class TestCompactVariable:
     """Variable rendering in compact mode."""
 
@@ -464,7 +485,17 @@ class TestVerboseMode:
         output = writer.write(header)
         parsed = json.loads(output)
         assert isinstance(parsed, dict)
+        assert parsed["path"] == "test.h"
         assert "declarations" in parsed
+        assert len(parsed["declarations"]) == 2
+        # Verify declaration structure
+        point_decl = parsed["declarations"][0]
+        assert point_decl["kind"] == "struct"
+        assert point_decl["name"] == "Point"
+        assert len(point_decl["fields"]) == 2
+        fn_decl = parsed["declarations"][1]
+        assert fn_decl["kind"] == "function"
+        assert fn_decl["name"] == "make_point"
 
     def test_cross_references_present(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -593,7 +624,14 @@ class TestPromptWriterGeneral:
         assert "constants:" in output
 
     def test_token_ordering(self) -> None:
-        """compact < standard < verbose token count for same header."""
+        """compact < standard < verbose token count for same header.
+
+        This is a characterization test for emergent ordering, not a strict
+        behavioral contract. The three verbosity tiers are designed to produce
+        increasingly detailed output, so compact should always be the shortest
+        and verbose the longest. If this test fails, it indicates a regression
+        in the relative density of the verbosity tiers.
+        """
         from headerkit.writers.prompt import PromptWriter
 
         header = Header(
@@ -626,11 +664,9 @@ class TestPromptWriterGeneral:
 
         assert len(compact) < len(standard) < len(verbose)
 
-    def test_mixed_declarations(self) -> None:
-        """Header with all declaration types renders in all modes."""
-        from headerkit.writers.prompt import PromptWriter
-
-        header = Header(
+    def _mixed_header(self) -> Header:
+        """Build a header with all seven declaration types."""
+        return Header(
             "test.h",
             [
                 Constant("VER", 1),
@@ -646,29 +682,38 @@ class TestPromptWriterGeneral:
             ],
         )
 
-        # Compact mode: verify ALL 7 declaration types appear
-        compact_output = PromptWriter(verbosity="compact").write(header)
-        assert "CONST VER=1" in compact_output
-        assert "ENUM E: A=0" in compact_output
-        assert "STRUCT S {x:int}" in compact_output
-        assert "FUNC f(a:int) -> void" in compact_output
-        assert "TYPEDEF T = int" in compact_output
-        assert "VAR v:int" in compact_output
-        assert "CALLBACK Cb(x:int) -> void" in compact_output
+    def test_mixed_declarations_compact(self) -> None:
+        """Compact mode renders all 7 declaration types."""
+        from headerkit.writers.prompt import PromptWriter
 
-        # Standard mode: verify ALL section headers present
-        standard_output = PromptWriter(verbosity="standard").write(header)
-        assert "constants:" in standard_output
-        assert "enums:" in standard_output
-        assert "structs:" in standard_output
-        assert "functions:" in standard_output
-        assert "typedefs:" in standard_output
-        assert "variables:" in standard_output
-        assert "callbacks:" in standard_output
+        output = PromptWriter(verbosity="compact").write(self._mixed_header())
+        assert "CONST VER=1" in output
+        assert "ENUM E: A=0" in output
+        assert "STRUCT S {x:int}" in output
+        assert "FUNC f(a:int) -> void" in output
+        assert "TYPEDEF T = int" in output
+        assert "VAR v:int" in output
+        assert "CALLBACK Cb(x:int) -> void" in output
 
-        # Verbose mode: verify valid JSON with all declarations
-        verbose_output = PromptWriter(verbosity="verbose").write(header)
-        parsed = json.loads(verbose_output)
+    def test_mixed_declarations_standard(self) -> None:
+        """Standard mode renders all section headers for 7 declaration types."""
+        from headerkit.writers.prompt import PromptWriter
+
+        output = PromptWriter(verbosity="standard").write(self._mixed_header())
+        assert "constants:" in output
+        assert "enums:" in output
+        assert "structs:" in output
+        assert "functions:" in output
+        assert "typedefs:" in output
+        assert "variables:" in output
+        assert "callbacks:" in output
+
+    def test_mixed_declarations_verbose(self) -> None:
+        """Verbose mode serializes all 7 declaration types as valid JSON."""
+        from headerkit.writers.prompt import PromptWriter
+
+        output = PromptWriter(verbosity="verbose").write(self._mixed_header())
+        parsed = json.loads(output)
         assert len(parsed["declarations"]) == 7
         names = {d["name"] for d in parsed["declarations"]}
         assert names == {"VER", "E", "S", "f", "T", "v", "Cb"}

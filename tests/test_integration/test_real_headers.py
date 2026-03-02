@@ -6,6 +6,7 @@ pipeline for both CFFI and JSON writers.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -29,12 +30,12 @@ def _parse_header(
     header_path: Path,
     include_dirs: list[str] | None = None,
 ) -> Header:
-    """Parse a header file, skipping the test on parse failure."""
+    """Parse a header file, failing the test on parse failure."""
     code = header_path.read_text()
     try:
         return backend.parse(code, header_path.name, include_dirs=include_dirs)
     except RuntimeError as exc:
-        pytest.skip(f"Parse failed: {exc}")
+        pytest.fail(f"Parse failed (should not happen on known-good headers): {exc}")
 
 
 def _skip_if_unavailable(fixture_value: Path | None, name: str) -> None:
@@ -55,22 +56,31 @@ class TestSqlite3:
     def test_parse(self, backend, sqlite3_header):
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        assert len(header.declarations) > 100
+        assert len(header.declarations) > 100, (
+            f"Expected >100 declarations from sqlite3, got {len(header.declarations)}"
+        )
 
     def test_cffi_write(self, backend, sqlite3_header):
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
         cffi_output = header_to_cffi(header)
-        assert len(cffi_output) > 0
+        assert "sqlite3_open" in cffi_output
+        assert "sqlite3_close" in cffi_output
+        assert "sqlite3_exec" in cffi_output
 
     def test_json_write(self, backend, sqlite3_header):
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
         json_output = header_to_json(header)
-        assert len(json_output) > 0
+        parsed = json.loads(json_output)
+        assert isinstance(parsed, dict)
+        assert "declarations" in parsed
+        assert len(parsed["declarations"]) > 0, "Expected declarations in JSON output"
+        names = {d["name"] for d in parsed["declarations"] if "name" in d}
+        assert "sqlite3_open" in names
+        assert "sqlite3_close" in names
         json_dict = header_to_json_dict(header)
         assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) > 0
         assert len(json_dict["declarations"]) == len(header.declarations)
 
     def test_known_symbols(self, backend, sqlite3_header):
@@ -98,22 +108,29 @@ class TestZlib:
     def test_parse(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header)
-        assert len(header.declarations) > 20
+        assert len(header.declarations) > 20, f"Expected >20 declarations from zlib, got {len(header.declarations)}"
 
     def test_cffi_write(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header)
         cffi_output = header_to_cffi(header)
-        assert len(cffi_output) > 0
+        assert "deflate" in cffi_output
+        assert "inflate" in cffi_output
+        assert "compress" in cffi_output
 
     def test_json_write(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header)
         json_output = header_to_json(header)
-        assert len(json_output) > 0
+        parsed = json.loads(json_output)
+        assert isinstance(parsed, dict)
+        assert "declarations" in parsed
+        assert len(parsed["declarations"]) > 0, "Expected declarations in JSON output"
+        names = {d["name"] for d in parsed["declarations"] if "name" in d}
+        assert "deflate" in names
+        assert "inflate" in names
         json_dict = header_to_json_dict(header)
         assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) > 0
         assert len(json_dict["declarations"]) == len(header.declarations)
 
     def test_known_symbols(self, backend, zlib_header):
@@ -147,7 +164,7 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        assert len(header.declarations) > 20
+        assert len(header.declarations) > 20, f"Expected >20 declarations from lua, got {len(header.declarations)}"
 
     def test_cffi_write(self, backend, lua_headers):
         _skip_if_unavailable(lua_headers, "lua")
@@ -157,7 +174,8 @@ class TestLua:
             include_dirs=[str(lua_headers)],
         )
         cffi_output = header_to_cffi(header)
-        assert len(cffi_output) > 0
+        assert "lua_pushstring" in cffi_output
+        assert "lua_close" in cffi_output
 
     def test_json_write(self, backend, lua_headers):
         _skip_if_unavailable(lua_headers, "lua")
@@ -167,10 +185,15 @@ class TestLua:
             include_dirs=[str(lua_headers)],
         )
         json_output = header_to_json(header)
-        assert len(json_output) > 0
+        parsed = json.loads(json_output)
+        assert isinstance(parsed, dict)
+        assert "declarations" in parsed
+        assert len(parsed["declarations"]) > 0, "Expected declarations in JSON output"
+        names = {d["name"] for d in parsed["declarations"] if "name" in d}
+        assert "lua_pushstring" in names
+        assert "lua_close" in names
         json_dict = header_to_json_dict(header)
         assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) > 0
         assert len(json_dict["declarations"]) == len(header.declarations)
 
     def test_known_symbols(self, backend, lua_headers):
@@ -209,7 +232,7 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        assert len(header.declarations) > 50
+        assert len(header.declarations) > 50, f"Expected >50 declarations from curl, got {len(header.declarations)}"
 
     def test_cffi_write(self, backend, curl_headers):
         _skip_if_unavailable(curl_headers, "curl")
@@ -220,7 +243,8 @@ class TestCurl:
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
         cffi_output = header_to_cffi(header)
-        assert len(cffi_output) > 0
+        assert "curl_global_init" in cffi_output
+        assert "curl_version" in cffi_output
 
     def test_json_write(self, backend, curl_headers):
         _skip_if_unavailable(curl_headers, "curl")
@@ -231,10 +255,15 @@ class TestCurl:
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
         json_output = header_to_json(header)
-        assert len(json_output) > 0
+        parsed = json.loads(json_output)
+        assert isinstance(parsed, dict)
+        assert "declarations" in parsed
+        assert len(parsed["declarations"]) > 0, "Expected declarations in JSON output"
+        names = {d["name"] for d in parsed["declarations"] if "name" in d}
+        assert "curl_global_init" in names
+        assert "curl_version" in names
         json_dict = header_to_json_dict(header)
         assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) > 0
         assert len(json_dict["declarations"]) == len(header.declarations)
 
     def test_known_symbols(self, backend, curl_headers):
@@ -275,7 +304,10 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        assert len(header.declarations) > 10
+        # SDL.h is an umbrella header whose own declarations are mostly
+        # SDL_Init* functions/macros. The libclang backend filters to the
+        # main file, so sub-header declarations are not counted here.
+        assert len(header.declarations) > 10, f"Expected >10 declarations from SDL2, got {len(header.declarations)}"
 
     def test_cffi_write(self, backend, sdl2_headers):
         _skip_if_unavailable(sdl2_headers, "SDL2")
@@ -286,7 +318,8 @@ class TestSDL2:
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
         cffi_output = header_to_cffi(header)
-        assert len(cffi_output) > 0
+        assert "SDL_Init" in cffi_output
+        assert "SDL_Quit" in cffi_output
 
     def test_json_write(self, backend, sdl2_headers):
         _skip_if_unavailable(sdl2_headers, "SDL2")
@@ -297,10 +330,15 @@ class TestSDL2:
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
         json_output = header_to_json(header)
-        assert len(json_output) > 0
+        parsed = json.loads(json_output)
+        assert isinstance(parsed, dict)
+        assert "declarations" in parsed
+        assert len(parsed["declarations"]) > 0, "Expected declarations in JSON output"
+        names = {d["name"] for d in parsed["declarations"] if "name" in d}
+        assert "SDL_Init" in names
+        assert "SDL_Quit" in names
         json_dict = header_to_json_dict(header)
         assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) > 0
         assert len(json_dict["declarations"]) == len(header.declarations)
 
     def test_known_symbols(self, backend, sdl2_headers):

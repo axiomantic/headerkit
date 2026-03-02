@@ -285,7 +285,8 @@ class TestHeaderToJson:
         # Verify 4-space indent in raw output
         assert "    " in result
 
-    def test_output_is_valid_json(self) -> None:
+    def test_all_declaration_kinds_serialized(self) -> None:
+        """All six declaration types serialize to JSON with correct kind labels."""
         from headerkit.writers.json import header_to_json
 
         header = Header(
@@ -415,17 +416,25 @@ class TestHeaderToJsonDict:
         assert result["path"] == "test.h"
         assert len(result["declarations"]) == 1
 
-    def test_dict_is_json_serializable(self) -> None:
+    def test_dict_has_expected_structure(self) -> None:
+        """header_to_json_dict returns a dict with correct top-level structure."""
         from headerkit.writers.json import header_to_json_dict
 
         header = Header(
             "test.h",
-            [Struct("S", [Field("x", CType("int"))])],
+            [
+                Function("foo", CType("void"), []),
+            ],
         )
         result = header_to_json_dict(header)
-        # Round-trip: serialize and deserialize should produce identical dict
-        json_str = json.dumps(result)
-        assert json.loads(json_str) == result
+        assert isinstance(result, dict)
+        assert result["path"] == "test.h"
+        assert "declarations" in result
+        assert len(result["declarations"]) == 1
+        decl = result["declarations"][0]
+        assert decl["kind"] == "function"
+        assert decl["name"] == "foo"
+        assert decl["return_type"]["name"] == "void"
 
 
 class TestJsonWriter:
@@ -458,8 +467,8 @@ class TestJsonWriter:
         result = writer.write(header)
         parsed = json.loads(result)
         assert parsed["declarations"][0]["name"] == "foo"
-        # Default indent=2 means newlines present
-        assert "\n" in result
+        # Default indent=2 means 2-space indentation is present
+        assert "  " in result
 
     def test_writer_custom_indent(self) -> None:
         from headerkit.writers.json import JsonWriter
@@ -727,6 +736,27 @@ class TestFieldSerialization:
         result = json.loads(header_to_json(header))
         field = result["declarations"][0]["fields"][0]
         assert "anonymous_struct" not in field
+
+
+class TestUnknownDeclarationFallback:
+    """Test the 'unknown' kind fallback path in _decl_to_dict."""
+
+    def test_unknown_declaration_kind(self) -> None:
+        """Non-standard declaration types should produce kind='unknown' with repr."""
+        from headerkit.writers.json import _decl_to_dict
+
+        # Create a minimal object that is not one of the known IR declaration types.
+        # _decl_to_dict checks isinstance for each known type and falls through
+        # to the else branch for anything else.
+        class CustomDecl:
+            """A fake declaration type not in the IR union."""
+
+            def __repr__(self) -> str:
+                return "CustomDecl()"
+
+        result = _decl_to_dict(CustomDecl())  # type: ignore[arg-type]
+        assert result["kind"] == "unknown"
+        assert result["repr"] == "CustomDecl()"
 
 
 class TestCallingConventionSerialization:

@@ -89,8 +89,7 @@ class TestDeclToCffi:
     def test_function(self):
         f = Function("add", CType("int"), [Parameter("a", CType("int")), Parameter("b", CType("int"))])
         result = decl_to_cffi(f)
-        assert result is not None
-        assert "int add(int a, int b);" in result
+        assert result == "int add(int a, int b);"
 
     def test_variadic_function(self):
         f = Function(
@@ -105,8 +104,7 @@ class TestDeclToCffi:
     def test_typedef(self):
         t = Typedef("myint", CType("unsigned int"))
         result = decl_to_cffi(t)
-        assert result is not None
-        assert "typedef unsigned int myint;" in result
+        assert result == "typedef unsigned int myint;"
 
     def test_constant_integer(self):
         c = Constant("SIZE", 100, is_macro=True)
@@ -136,8 +134,7 @@ class TestDeclToCffi:
     def test_variable(self):
         v = Variable("count", CType("int"))
         result = decl_to_cffi(v)
-        assert result is not None
-        assert "int count;" in result
+        assert result == "int count;"
 
     def test_anonymous_struct_skipped(self):
         s = Struct(None, [Field("x", CType("int"))])
@@ -303,14 +300,12 @@ class TestPackedStruct:
     def test_packed_struct_has_comment(self):
         s = Struct("Packed", [Field("x", CType("int"))], is_packed=True)
         result = decl_to_cffi(s)
-        assert result is not None
-        assert "/* packed */" in result
-        assert "struct Packed {" in result
+        assert result == "/* packed */\nstruct Packed {\n    int x;\n};"
 
     def test_non_packed_struct_no_comment(self):
         s = Struct("Normal", [Field("x", CType("int"))])
         result = decl_to_cffi(s)
-        assert result is not None
+        assert result == "struct Normal {\n    int x;\n};"
         assert "/* packed */" not in result
 
 
@@ -332,19 +327,29 @@ class TestCallingConventionCffi:
 class TestCffiWriter:
     """Tests for the CffiWriter class (protocol-compliant wrapper)."""
 
-    def test_writer_produces_same_output_as_function(self):
-        """CffiWriter.write() should produce identical output to header_to_cffi()."""
+    def test_writer_produces_output_with_expected_content(self):
+        """CffiWriter.write() should produce output with expected declarations."""
         from headerkit.writers.cffi import CffiWriter
 
         header = Header(
-            "test.h",
-            [
+            path="test.h",
+            declarations=[
+                Function(
+                    "get_point",
+                    CType("int"),
+                    [
+                        Parameter("x", CType("float")),
+                    ],
+                ),
                 Struct("Point", [Field("x", CType("int")), Field("y", CType("int"))]),
-                Function("get_point", Pointer(CType("Point")), []),
             ],
         )
         writer = CffiWriter()
-        assert writer.write(header) == header_to_cffi(header)
+        result = writer.write(header)
+        assert "struct Point" in result
+        assert "int x;" in result
+        assert "int y;" in result
+        assert "int get_point(float x);" in result
 
     def test_writer_with_exclude_patterns(self):
         """CffiWriter should forward exclude_patterns to header_to_cffi."""
@@ -364,11 +369,24 @@ class TestCffiWriter:
 
     def test_writer_protocol_compliance(self):
         """CffiWriter should satisfy the WriterBackend protocol."""
-        from headerkit.writers import WriterBackend
         from headerkit.writers.cffi import CffiWriter
 
         writer = CffiWriter()
-        assert isinstance(writer, WriterBackend)
+        # Verify required attributes exist and have correct types
+        assert isinstance(writer.name, str)
+        assert len(writer.name) > 0
+        assert isinstance(writer.format_description, str)
+        assert len(writer.format_description) > 0
+        # Verify write() produces string output
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("foo", CType("void"), []),
+            ],
+        )
+        result = writer.write(header)
+        assert isinstance(result, str)
+        assert "void foo(void);" in result
 
     def test_writer_name(self):
         from headerkit.writers.cffi import CffiWriter

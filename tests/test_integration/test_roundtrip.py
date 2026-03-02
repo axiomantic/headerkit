@@ -210,6 +210,16 @@ class TestFunctionPointerTypedefRoundtrip:
         assert "typedef" in cdef
         assert "comparator_fn" in cdef
         assert "..." not in cdef  # should not be variadic
+        # Verify return type is int
+        assert "int (*comparator_fn)" in cdef or "int ( * comparator_fn)" in cdef
+        # Verify parameter types are const void pointers
+        assert "const void *" in cdef or "void *" in cdef
+        # Should have two parameters (two void pointers)
+        # Count occurrences of "void *" in the typedef line
+        typedef_line = [line for line in cdef.splitlines() if "comparator_fn" in line][0]
+        assert typedef_line.count("void *") == 2, (
+            f"Expected 2 void* parameters in comparator_fn typedef, got: {typedef_line}"
+        )
 
 
 class TestMultipleDeclarations:
@@ -483,11 +493,13 @@ class TestJsonEnumRoundtrip:
         assert value_map["OFF"] == 0
         assert value_map["ON"] == 1
         # libclang emits a separate typedef declaration for typedef enums
+        # alongside the enum itself. Both must be present.
         typedefs = [d for d in decls if d["kind"] == "typedef"]
         switch_td = [t for t in typedefs if t["name"] == "Switch"]
-        if switch_td:
-            assert switch_td[0]["underlying_type"]["name"] == "enum Switch"
-        # typedef presence is version-dependent; not a failure if absent
+        assert len(switch_td) == 1, (
+            f"Expected typedef 'Switch' in declarations, got typedefs: {[t['name'] for t in typedefs]}"
+        )
+        assert switch_td[0]["underlying_type"]["name"] == "enum Switch"
 
 
 class TestJsonTypedefRoundtrip:
@@ -575,11 +587,15 @@ class TestJsonMacroConstantRoundtrip:
         result = parse_and_json_dict(backend, code)
         decls = result["declarations"]
         constants = [d for d in decls if d["kind"] == "constant"]
-        # String macros may or may not appear in JSON (unlike CFFI which skips them).
-        # If present, verify the structure is valid.
+        # The libclang backend extracts string macros as Constants with
+        # type CType("char", ["const"]) and the raw string token as value.
+        # JSON writer includes all Constants, so VERSION must appear.
         version_constants = [c for c in constants if c["name"] == "VERSION"]
-        if version_constants:
-            assert version_constants[0]["is_macro"] is True
+        assert len(version_constants) == 1, (
+            f"Expected string macro VERSION in JSON output, got constants: {[c['name'] for c in constants]}"
+        )
+        assert version_constants[0]["is_macro"] is True
+        assert version_constants[0]["value"] == '"1.0"'
 
 
 class TestJsonFunctionPointerTypedefRoundtrip:
@@ -616,10 +632,14 @@ class TestComplexPatternRoundtrip:
         code = "struct Flags { unsigned int a : 3; unsigned int b : 5; };"
         cdef = parse_and_convert(backend, code)
         assert "struct Flags" in cdef
-        # Bitfield widths may be lost during libclang roundtrip,
-        # but field names and types must survive
+        # Field names and types must survive the roundtrip
         assert "unsigned int a" in cdef
         assert "unsigned int b" in cdef
+        # The libclang backend does not extract bitfield widths (Field.bit_width
+        # is never populated in _convert_field), so bitfield annotations are
+        # expected to be absent from the CFFI output.
+        assert ": 3" not in cdef, "Bitfield widths should not appear because the libclang backend does not extract them"
+        assert ": 5" not in cdef, "Bitfield widths should not appear because the libclang backend does not extract them"
 
     def test_array_in_struct_field(self, backend):
         code = "struct Buffer { char data[256]; int sizes[4]; };"
