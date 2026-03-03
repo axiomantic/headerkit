@@ -39,7 +39,7 @@ class TestCompactStruct:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "STRUCT Point {x:int, y:int}" in output
+        assert output == "// test.h (headerkit compact)\nSTRUCT Point {x:int, y:int}\n"
 
     def test_opaque_struct(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -47,7 +47,7 @@ class TestCompactStruct:
         header = Header("test.h", [Struct("Handle", [])])
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "STRUCT Handle (opaque)" in output
+        assert output == "// test.h (headerkit compact)\nSTRUCT Handle (opaque)\n"
 
     def test_packed_struct(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -58,7 +58,7 @@ class TestCompactStruct:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "STRUCT __packed Packed {x:int}" in output
+        assert output == "// test.h (headerkit compact)\nSTRUCT __packed Packed {x:int}\n"
 
     def test_union(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -75,7 +75,7 @@ class TestCompactStruct:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "UNION Data {i:int, f:float}" in output
+        assert output == "// test.h (headerkit compact)\nUNION Data {i:int, f:float}\n"
 
     def test_bitfield(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -91,7 +91,7 @@ class TestCompactStruct:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "flags:uint32:4b" in output
+        assert output == "// test.h (headerkit compact)\nSTRUCT Flags {flags:uint32:4b}\n"
 
 
 class TestCompactEnum:
@@ -115,7 +115,7 @@ class TestCompactEnum:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "ENUM Status: OK=0, ERROR=1, TIMEOUT=2" in output
+        assert output == "// test.h (headerkit compact)\nENUM Status: OK=0, ERROR=1, TIMEOUT=2\n"
 
     def test_enum_with_auto_values(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -126,7 +126,7 @@ class TestCompactEnum:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "RED, GREEN=1" in output
+        assert output == "// test.h (headerkit compact)\nENUM Color: RED, GREEN=1\n"
 
 
 class TestCompactFunction:
@@ -150,7 +150,7 @@ class TestCompactFunction:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "FUNC open(path:const char*, flags:int) -> Handle*" in output
+        assert output == "// test.h (headerkit compact)\nFUNC open(path:const char*, flags:int) -> Handle*\n"
 
     def test_variadic_function(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -168,7 +168,7 @@ class TestCompactFunction:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "FUNC printf(fmt:const char*, ...) -> int" in output
+        assert output == "// test.h (headerkit compact)\nFUNC printf(fmt:const char*, ...) -> int\n"
 
     def test_void_function(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -176,7 +176,7 @@ class TestCompactFunction:
         header = Header("test.h", [Function("init", CType("void"), [])])
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "FUNC init() -> void" in output
+        assert output == "// test.h (headerkit compact)\nFUNC init() -> void\n"
 
 
 class TestCompactConstant:
@@ -188,7 +188,7 @@ class TestCompactConstant:
         header = Header("test.h", [Constant("MYLIB_VERSION", 42)])
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "CONST MYLIB_VERSION=42" in output
+        assert output == "// test.h (headerkit compact)\nCONST MYLIB_VERSION=42\n"
 
     def test_constant_string_value(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -196,7 +196,7 @@ class TestCompactConstant:
         header = Header("test.h", [Constant("VERSION", '"1.0"')])
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert 'CONST VERSION="1.0"' in output
+        assert output == '// test.h (headerkit compact)\nCONST VERSION="1.0"\n'
 
     def test_constant_no_value(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -204,7 +204,7 @@ class TestCompactConstant:
         header = Header("test.h", [Constant("UNKNOWN", None)])
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "CONST UNKNOWN=?" in output
+        assert output == "// test.h (headerkit compact)\nCONST UNKNOWN=?\n"
 
 
 class TestCompactTypedef:
@@ -219,7 +219,7 @@ class TestCompactTypedef:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "TYPEDEF myint = unsigned int" in output
+        assert output == "// test.h (headerkit compact)\nTYPEDEF myint = unsigned int\n"
 
     def test_function_pointer_typedef_as_callback(self) -> None:
         from headerkit.writers.prompt import PromptWriter
@@ -241,7 +241,7 @@ class TestCompactTypedef:
         )
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "CALLBACK EventCb(id:int, ctx:void*) -> void" in output
+        assert output == "// test.h (headerkit compact)\nCALLBACK EventCb(id:int, ctx:void*) -> void\n"
 
 
 class TestCompactVariable:
@@ -253,7 +253,7 @@ class TestCompactVariable:
         header = Header("test.h", [Variable("count", CType("int"))])
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert "VAR count:int" in output
+        assert output == "// test.h (headerkit compact)\nVAR count:int\n"
 
 
 class TestCompactHeader:
@@ -265,7 +265,7 @@ class TestCompactHeader:
         header = Header("mylib.h", [])
         writer = PromptWriter(verbosity="compact")
         output = writer.write(header)
-        assert output.startswith("// mylib.h (headerkit compact)\n")
+        assert output == "// mylib.h (headerkit compact)\n"
 
 
 # =============================================================================
