@@ -127,7 +127,7 @@ class TestZlib:
 
     def test_parse(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         # zlib.h defines at least ~20 functions/types across all known versions.
         assert len(header.declarations) >= 20, f"Expected >=20 declarations from zlib, got {len(header.declarations)}"
         # Verify specific well-known symbols are present regardless of version.
@@ -138,7 +138,7 @@ class TestZlib:
 
     def test_cffi_write(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         cffi_output = header_to_cffi(header)
         # Parse CFFI output into individual declaration lines so we can
         # assert that each target symbol appears as a complete declaration.
@@ -154,7 +154,7 @@ class TestZlib:
 
     def test_json_write(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         json_output = header_to_json(header)
         parsed = json.loads(json_output)
         assert isinstance(parsed, dict)
@@ -169,7 +169,7 @@ class TestZlib:
 
     def test_known_symbols(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         names = {d.name for d in header.declarations}
         assert "deflate" in names
         assert "inflate" in names

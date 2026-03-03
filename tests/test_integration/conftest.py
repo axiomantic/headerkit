@@ -43,10 +43,10 @@ def _download_and_extract_tar(url: str, dest_dir: Path, members: list[str] | Non
                 for wanted in members:
                     if member.name.endswith(wanted):
                         member.name = Path(member.name).name
-                        tf.extract(member, dest_dir, filter="data")
+                        tf.extract(member, dest_dir)
                         break
         else:
-            tf.extractall(dest_dir, filter="data")
+            tf.extractall(dest_dir)
 
 
 def _download_and_extract_zip(url: str, dest_dir: Path, members: list[str] | None = None) -> None:
@@ -112,11 +112,12 @@ def zlib_header() -> Path | None:
     """Download zlib.h and its required zconf.h companion header."""
     cache = CACHE_DIR / f"zlib-{ZLIB_VERSION}"
     header = cache / "zlib.h"
-    if not header.exists():
+    zconf = cache / "zconf.h"
+    # Download both files if either is missing (zlib.h includes zconf.h).
+    if not header.exists() or not zconf.exists():
         try:
             _download_file(ZLIB_URL, header)
-            # zlib.h includes zconf.h; both must be present for libclang to parse it.
-            _download_file(ZLIB_ZCONF_URL, cache / "zconf.h")
+            _download_file(ZLIB_ZCONF_URL, zconf)
         except (TimeoutError, urllib.error.URLError, OSError) as exc:
             import warnings
 
@@ -171,7 +172,7 @@ def curl_headers() -> Path | None:
                 for member in tf.getmembers():
                     if member.name.startswith(prefix) and member.isfile():
                         member.name = Path(member.name).name
-                        tf.extract(member, curl_dir, filter="data")
+                        tf.extract(member, curl_dir)
         except (TimeoutError, urllib.error.URLError, OSError) as exc:
             import warnings
 
@@ -209,7 +210,7 @@ def sdl2_headers(backend) -> Path | None:
                 for member in tf.getmembers():
                     if member.name.startswith(prefix) and member.isfile():
                         member.name = Path(member.name).name
-                        tf.extract(member, sdl_dir, filter="data")
+                        tf.extract(member, sdl_dir)
         except (TimeoutError, urllib.error.URLError, OSError) as exc:
             import warnings
 
@@ -255,7 +256,7 @@ def cpython_headers() -> Path | None:
                         dest = inc_dir / rel
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         member.name = rel
-                        tf.extract(member, inc_dir, filter="data")
+                        tf.extract(member, inc_dir)
         except (TimeoutError, urllib.error.URLError, OSError) as exc:
             import warnings
 
