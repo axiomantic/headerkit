@@ -69,6 +69,10 @@ known-first-party = ["headerkit"]
 python_version = "3.10"
 strict = true
 
+[[tool.mypy.overrides]]
+module = "headerkit._config"
+warn_unused_ignores = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 timeout = 60
