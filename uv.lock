@@ -124,51 +124,6 @@ wheels = [
 ]
 
 [[package]]
-name = "clangir"
-version = "0.3.3"
-source = { editable = "." }
-
-[package.optional-dependencies]
-dev = [
-    { name = "mike" },
-    { name = "mkdocs" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-timeout" },
-    { name = "ruff" },
-]
-docs = [
-    { name = "mike" },
-    { name = "mkdocs" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
-]
-lint = [
-    { name = "mypy" },
-    { name = "ruff" },
-]
-test = [
-    { name = "pytest" },
-    { name = "pytest-timeout" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "clangir", extras = ["test", "lint", "docs"], marker = "extra == 'dev'" },
-    { name = "mike", marker = "extra == 'docs'", specifier = ">=2.1" },
-    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.27" },
-    { name = "mypy", marker = "extra == 'lint'" },
-    { name = "pytest", marker = "extra == 'test'" },
-    { name = "pytest-timeout", marker = "extra == 'test'" },
-    { name = "ruff", marker = "extra == 'lint'" },
-]
-provides-extras = ["test", "lint", "docs", "dev"]
-
-[[package]]
 name = "click"
 version = "8.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -220,6 +175,51 @@ source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/51/c936033e16d12b627ea334aaaaf42229c37620d0f15593456ab69ab48161/griffelib-2.0.0-py3-none-any.whl", hash = "sha256:01284878c966508b6d6f1dbff9b6fa607bc062d8261c5c7253cb285b06422a7f", size = 142004, upload-time = "2026-02-09T19:09:40.561Z" },
 ]
+
+[[package]]
+name = "headerkit"
+version = "0.7.3"
+source = { editable = "." }
+
+[package.optional-dependencies]
+dev = [
+    { name = "mike" },
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-timeout" },
+    { name = "ruff" },
+]
+docs = [
+    { name = "mike" },
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+]
+lint = [
+    { name = "mypy" },
+    { name = "ruff" },
+]
+test = [
+    { name = "pytest" },
+    { name = "pytest-timeout" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "headerkit", extras = ["test", "lint", "docs"], marker = "extra == 'dev'" },
+    { name = "mike", marker = "extra == 'docs'", specifier = ">=2.1" },
+    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
+    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
+    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.27" },
+    { name = "mypy", marker = "extra == 'lint'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-timeout", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'lint'" },
+]
+provides-extras = ["test", "lint", "docs", "dev"]
 
 [[package]]
 name = "idna"
