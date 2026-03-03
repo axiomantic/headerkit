@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Generator
 from pathlib import Path
@@ -155,12 +156,14 @@ class TestParseWriterSpecs:
             _parse_writer_specs(["cffi"], ["key=value"])
         assert exc_info.value.code == 1
 
-    def test_parse_orphaned_opt_skipped(self) -> None:
-        """--writer-opt for a writer not in the writer list is silently skipped."""
+    def test_parse_orphaned_opt_skipped(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """--writer-opt for a writer not in the writer list warns to stderr and is skipped."""
         specs = _parse_writer_specs(["cffi"], ["json:key=value"])
         assert len(specs) == 1
         assert specs[0].name == "cffi"
         assert specs[0].options == {}
+        captured = capsys.readouterr()
+        assert captured.err != "", "Expected a warning on stderr for orphaned --writer-opt"
 
 
 # =============================================================================
@@ -241,7 +244,7 @@ class TestMain:
         self.mock_get_backend, self.mock_get_writer = setup_mocks
 
     def test_main_version(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-        """--version prints version string and exits 0."""
+        """--version prints version string with semver and exits 0."""
         monkeypatch.setattr(sys, "argv", ["headerkit", "--version"])
         with pytest.raises(SystemExit) as exc_info:
             from headerkit._cli import main
@@ -251,6 +254,9 @@ class TestMain:
         captured = capsys.readouterr()
         version_output = captured.out or captured.err
         assert "headerkit" in version_output
+        assert re.search(r"\d+\.\d+\.\d+", version_output), (
+            f"Expected semver pattern in version output, got: {version_output!r}"
+        )
 
     def test_main_no_input_exits(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
         """No input files produces nonzero exit (argparse error)."""
@@ -274,6 +280,8 @@ class TestMain:
         assert result == 0
         captured = capsys.readouterr()
         assert captured.out == "mock-output"
+        self.mock_get_backend.assert_called_once()
+        self.mock_get_writer.assert_called_once_with("mock")
 
     def test_main_single_writer_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Single writer with output path writes to file."""
@@ -290,6 +298,8 @@ class TestMain:
         result = main()
         assert result == 0
         assert output_file.read_text(encoding="utf-8") == "mock-output"
+        self.mock_get_backend.assert_called_once()
+        self.mock_get_writer.assert_called_once_with("mock")
 
     def test_main_multiple_stdout_exits(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -338,3 +348,70 @@ class TestMain:
         assert result == 1
         captured = capsys.readouterr()
         assert "not found" in captured.err
+
+    def test_main_config_and_no_config_exclusive(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """--config and --no-config together produce exit code 1 with error on stderr."""
+        header_file = tmp_path / "test.h"
+        header_file.write_text("// test\n")
+        config_file = tmp_path / ".headerkit.toml"
+        config_file.write_text('backend = "libclang"\n')
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["headerkit", "--config", str(config_file), "--no-config", str(header_file)],
+        )
+        from headerkit._cli import main
+
+        result = main()
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "mutually exclusive" in captured.err
+
+    def test_main_no_config_skips_config_loading(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--no-config prevents find_config_file and load_config from being called."""
+        header_file = tmp_path / "test.h"
+        header_file.write_text("// test\n")
+        monkeypatch.setattr(sys, "argv", ["headerkit", "--no-config", "-w", "mock", str(header_file)])
+
+        with (
+            patch("headerkit._cli.find_config_file") as mock_find,
+            patch("headerkit._cli.load_config") as mock_load,
+        ):
+            from headerkit._cli import main
+
+            result = main()
+
+        assert result == 0
+        mock_find.assert_not_called()
+        mock_load.assert_not_called()
+
+    def test_main_plugin_loaders_called(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """main() calls _load_backend_plugins() and _load_writer_plugins() exactly once."""
+        header_file = tmp_path / "test.h"
+        header_file.write_text("// test\n")
+        monkeypatch.setattr(sys, "argv", ["headerkit", "--no-config", "-w", "mock", str(header_file)])
+
+        with (
+            patch("headerkit._cli._load_backend_plugins") as mock_load_backends,
+            patch("headerkit._cli._load_writer_plugins") as mock_load_writers,
+        ):
+            from headerkit._cli import main
+
+            result = main()
+
+        assert result == 0
+        mock_load_backends.assert_called_once()
+        mock_load_writers.assert_called_once()

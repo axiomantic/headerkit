@@ -178,7 +178,9 @@ class TestLoadConfig:
             load_config(config_file)
         assert exc_info.value.code == 1
 
-    def test_load_config_no_tomllib(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_load_config_no_tomllib(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Exits with code 1 with install hint when tomllib is unavailable."""
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text('backend = "libclang"\n')
@@ -186,6 +188,10 @@ class TestLoadConfig:
         with pytest.raises(SystemExit) as exc_info:
             load_config(config_file)
         assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "tomli" in captured.err or "pip install" in captured.err, (
+            f"Expected install hint in stderr, got: {captured.err!r}"
+        )
 
 
 class TestMergeConfig:

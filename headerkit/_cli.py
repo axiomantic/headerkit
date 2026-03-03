@@ -292,6 +292,11 @@ def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
 
+    # Reject mutually exclusive flags
+    if args.no_config and args.config is not None:
+        print("headerkit: --config and --no-config are mutually exclusive", file=sys.stderr)
+        return 1
+
     # typed locals (F2: use correct dest= names, not design doc section 10.2 names)
     backend_name: str = args.backend
     include_dirs: list[str] = args.include_dirs
