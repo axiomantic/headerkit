@@ -44,6 +44,37 @@ Registry tests (`test_backends/test_registry.py`, `test_writers/test_registry.py
 
 Tests requiring a system libclang installation use the `@pytest.mark.libclang` marker.
 
+## Multi-line string literals
+
+Use `textwrap.dedent` with a triple-quoted string instead of concatenating fragments with `+` and `"\n"`. Use an `f`-string prefix for interpolation. The backslash after the opening `"""` suppresses the leading newline.
+
+```python
+# Preferred
+import textwrap
+
+assert output == textwrap.dedent(f"""\
+    {_PREAMBLE}
+    # ========================
+    # Typedefs
+    # ========================
+
+    callback_fn = ctypes.CFUNCTYPE(None, ctypes.c_int)
+""")
+
+# Avoid
+assert output == (
+    _PREAMBLE
+    + "\n"
+    + "# ========================\n"
+    + "# Typedefs\n"
+    + "# ========================\n"
+    + "\n"
+    + "callback_fn = ctypes.CFUNCTYPE(None, ctypes.c_int)\n"
+)
+```
+
+This applies anywhere a multi-line string literal appears: assertions, expected-value variables, template strings, error messages.
+
 ## Zero runtime dependencies
 
 The project has no runtime dependencies (`dependencies = []` in pyproject.toml). Keep it that way. If a feature needs an external package, make it an optional dependency with graceful degradation when absent.
