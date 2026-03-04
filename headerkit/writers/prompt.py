@@ -129,9 +129,16 @@ def _function_compact(decl: Function) -> str:
 
 def _typedef_compact(decl: Typedef) -> str:
     """Render a typedef in compact form."""
-    if isinstance(decl.underlying_type, FunctionPointer):
+    if isinstance(decl.underlying_type, FunctionPointer) or (
+        isinstance(decl.underlying_type, Pointer) and isinstance(decl.underlying_type.pointee, FunctionPointer)
+    ):
         # Function pointer typedef -> CALLBACK
-        fp = decl.underlying_type
+        # libclang represents `typedef void (*fn)(int);` as
+        # Typedef(underlying=Pointer(FunctionPointer(...))). Hand-constructed
+        # IR or other backends may use Typedef(underlying=FunctionPointer(...))
+        # directly. Both forms are handled by the outer isinstance check.
+        fp = decl.underlying_type.pointee if isinstance(decl.underlying_type, Pointer) else decl.underlying_type
+        assert isinstance(fp, FunctionPointer)
         params_parts = [_param_compact(p) for p in fp.parameters]
         if fp.is_variadic:
             params_parts.append("...")
@@ -197,7 +204,9 @@ def _header_to_standard(header: Header) -> str:
         elif isinstance(decl, Function):
             functions.append(decl)
         elif isinstance(decl, Typedef):
-            if isinstance(decl.underlying_type, FunctionPointer):
+            if isinstance(decl.underlying_type, FunctionPointer) or (
+                isinstance(decl.underlying_type, Pointer) and isinstance(decl.underlying_type.pointee, FunctionPointer)
+            ):
                 callbacks.append(decl)
             else:
                 typedefs.append(decl)
@@ -244,7 +253,7 @@ def _header_to_standard(header: Header) -> str:
         lines.append("")
         lines.append("callbacks:")
         for td in callbacks:
-            fp = td.underlying_type
+            fp = td.underlying_type.pointee if isinstance(td.underlying_type, Pointer) else td.underlying_type
             assert isinstance(fp, FunctionPointer)
             params_parts = [_param_standard(p) for p in fp.parameters]
             if fp.is_variadic:
@@ -360,7 +369,13 @@ def _get_decl_referenced_types(decl: Declaration) -> set[str]:
 
 
 def _compute_cross_refs(header: Header) -> dict[str, list[str]]:
-    """Map type names to declarations that use them."""
+    """Map type names to declarations that use them.
+
+    Type names from the IR may carry struct/union/enum prefixes (e.g.
+    'struct Config') because libclang preserves the elaborated type spelling.
+    Declaration dicts use bare names (e.g. 'Config'). Strip the prefix so
+    cross-ref keys match declaration names.
+    """
     refs: dict[str, list[str]] = {}
     for decl in header.declarations:
         decl_name = _get_decl_name(decl)
@@ -368,10 +383,15 @@ def _compute_cross_refs(header: Header) -> dict[str, list[str]]:
             continue
         referenced = _get_decl_referenced_types(decl)
         for type_name in referenced:
-            if type_name not in refs:
-                refs[type_name] = []
-            if decl_name not in refs[type_name]:
-                refs[type_name].append(decl_name)
+            bare_name = type_name
+            for prefix in ("struct ", "union ", "enum "):
+                if bare_name.startswith(prefix):
+                    bare_name = bare_name[len(prefix) :]
+                    break
+            if bare_name not in refs:
+                refs[bare_name] = []
+            if decl_name not in refs[bare_name]:
+                refs[bare_name].append(decl_name)
     return refs
 
 

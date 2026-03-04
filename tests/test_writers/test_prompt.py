@@ -245,29 +245,6 @@ class TestCompactTypedef:
         assert output == "// test.h (headerkit compact)\nCALLBACK EventCb(id:int, ctx:void*) -> void\n"
 
 
-class TestCompactPointerToFunctionPointerTypedef:
-    """Typedef of Pointer(FunctionPointer(...)) vs direct FunctionPointer."""
-
-    def test_pointer_to_function_pointer_typedef(self) -> None:
-        """Typedef of Pointer(FunctionPointer(...)) should be TYPEDEF, not CALLBACK.
-
-        Only a direct FunctionPointer underlying type triggers the CALLBACK
-        rendering. A Pointer wrapping a FunctionPointer falls through to
-        the generic TYPEDEF path in _typedef_compact.
-        """
-        from headerkit.writers.prompt import PromptWriter
-
-        fp = FunctionPointer(CType("void"), [Parameter("data", Pointer(CType("void")))])
-        td = Typedef("EventCb", Pointer(fp))
-        header = Header(path="test.h", declarations=[td])
-        writer = PromptWriter(verbosity="compact")
-        result = writer.write(header)
-        lines = result.splitlines()
-        assert lines[0] == "// test.h (headerkit compact)"
-        assert lines[1].startswith("TYPEDEF")
-        assert "CALLBACK" not in result
-
-
 class TestCompactVariable:
     """Variable rendering in compact mode."""
 
@@ -795,3 +772,146 @@ class TestPromptWriterGeneral:
         assert len(parsed["declarations"]) == 7
         names = {d["name"] for d in parsed["declarations"]}
         assert names == {"VER", "E", "S", "f", "T", "v", "Cb"}
+
+
+# =============================================================================
+# Bug fix tests: function pointer typedefs via Pointer(FunctionPointer(...))
+# =============================================================================
+
+
+class TestBugATypedefCompactFunctionPointerViaPointer:
+    """Bug A: _typedef_compact() misclassifies Typedef(Pointer(FunctionPointer)).
+
+    libclang represents `typedef void (*fn)(int);` as
+    Typedef(underlying=Pointer(FunctionPointer(...))). The prior code only
+    checked isinstance(decl.underlying_type, FunctionPointer), which is False
+    for this representation, causing the typedef to be rendered as
+    TYPEDEF instead of CALLBACK.
+    """
+
+    def test_function_pointer_typedef_via_pointer_wrapper_renders_as_callback(
+        self,
+    ) -> None:
+        from headerkit.writers.prompt import PromptWriter
+
+        # Represents: typedef void (*callback_fn)(int status);
+        # libclang IR: Typedef("callback_fn", Pointer(FunctionPointer(...)))
+        header = Header(
+            "test.h",
+            [
+                Typedef(
+                    "callback_fn",
+                    Pointer(
+                        FunctionPointer(
+                            CType("void"),
+                            [Parameter("status", CType("int"))],
+                        )
+                    ),
+                )
+            ],
+        )
+        writer = PromptWriter(verbosity="compact")
+        output = writer.write(header)
+        assert output == "// test.h (headerkit compact)\nCALLBACK callback_fn(status:int) -> void\n"
+
+
+class TestBugBStandardFunctionPointerViaPointer:
+    """Bug B: _header_to_standard() misclassifies Typedef(Pointer(FunctionPointer)).
+
+    Same root cause as Bug A: the isinstance check only handles
+    Typedef(FunctionPointer), not Typedef(Pointer(FunctionPointer)).
+    This causes function pointer typedefs from libclang to appear in the
+    `typedefs:` section instead of the `callbacks:` section.
+    """
+
+    def test_function_pointer_typedef_via_pointer_wrapper_appears_in_callbacks_section(
+        self,
+    ) -> None:
+        from headerkit.writers.prompt import PromptWriter
+
+        # Represents: typedef void (*on_event_fn)(int code);
+        # libclang IR: Typedef("on_event_fn", Pointer(FunctionPointer(...)))
+        header = Header(
+            "test.h",
+            [
+                Typedef(
+                    "on_event_fn",
+                    Pointer(
+                        FunctionPointer(
+                            CType("void"),
+                            [Parameter("code", CType("int"))],
+                        )
+                    ),
+                )
+            ],
+        )
+        writer = PromptWriter(verbosity="standard")
+        output = writer.write(header)
+        assert output == ("# test.h (headerkit standard)\n\ncallbacks:\n  on_event_fn: (code: int) -> void\n")
+
+
+class TestBugCCrossRefPrefixMismatch:
+    """Bug C: _compute_cross_refs() uses full type names like 'struct Config'
+    while declaration dicts use bare names like 'Config', so used_in is never
+    populated for struct/union/enum types referenced by pointer.
+    """
+
+    def test_struct_used_in_function_param_by_prefixed_ctype_gets_cross_ref(
+        self,
+    ) -> None:
+        from headerkit.writers.prompt import PromptWriter
+
+        # Represents:
+        #   struct Config { int flags; };
+        #   void init(struct Config *cfg);
+        # The function parameter type is CType("struct Config") -- the prefixed
+        # form that libclang produces. The struct declaration has name "Config".
+        header = Header(
+            "test.h",
+            [
+                Struct("Config", [Field("flags", CType("int"))]),
+                Function(
+                    "init",
+                    CType("void"),
+                    [Parameter("cfg", Pointer(CType("struct Config")))],
+                ),
+            ],
+        )
+        writer = PromptWriter(verbosity="verbose")
+        output = writer.write(header)
+        parsed = json.loads(output)
+
+        assert parsed == {
+            "path": "test.h",
+            "declarations": [
+                {
+                    "kind": "struct",
+                    "name": "Config",
+                    "fields": [
+                        {
+                            "name": "flags",
+                            "type": {"kind": "ctype", "name": "int"},
+                        }
+                    ],
+                    "used_in": ["init"],
+                },
+                {
+                    "kind": "function",
+                    "name": "init",
+                    "return_type": {"kind": "ctype", "name": "void"},
+                    "parameters": [
+                        {
+                            "name": "cfg",
+                            "type": {
+                                "kind": "pointer",
+                                "pointee": {
+                                    "kind": "ctype",
+                                    "name": "struct Config",
+                                },
+                            },
+                        }
+                    ],
+                    "is_variadic": False,
+                },
+            ],
+        }

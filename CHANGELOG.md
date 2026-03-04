@@ -5,10 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.4] - 2026-03-02
+## [0.7.4] - 2026-03-03
 
 ### Fixed
 
+- Prompt writer incorrectly classified `typedef void (*fn)(int);` as a plain typedef in compact and standard modes when libclang represents the underlying type as `Pointer(FunctionPointer(...))`. Compact mode now emits `CALLBACK fn(...) -> void` and standard mode places it in the `callbacks:` section.
+- Prompt writer cross-reference map built keys with `struct`/`union`/`enum` prefixes (e.g. `struct Config`) while declaration dicts use bare names (`Config`), so `used_in` was never populated. Keys are now normalized to bare names.
 - Tautological writer tests: all 4 writer test files asserted `writer.write(h) == writer_function(h)`, which is always true since write() delegates to the function; replaced with specific output content assertions
 - Tautological protocol checks: `isinstance(writer, WriterBackend)` only checks attribute names exist on runtime-checkable Protocol; replaced with behavioral verification in all writer test files
 - Integration writer tests used `len(output) > 0` as sole assertion; replaced with known-symbol checks in all 10 cffi/json writer integration tests
@@ -38,8 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Integration roundtrip tests for ctypes, Cython, Lua, prompt, and diff writers: full `libclang → IR → writer output` pipeline coverage for each writer, exercising structs, enums, functions, typedefs, constants, anonymous types, and empty headers.
+- Integration smoke tests for all seven writers against real-world library headers (sqlite3, zlib, lua, curl, SDL2) in `test_real_headers.py`.
 - `test_unknown_declaration_kind` for JSON writer's `"unknown"` fallback path (previously untested code path)
-- `test_pointer_to_function_pointer_typedef` for prompt writer's `Pointer(FunctionPointer(...))` rendering (distinct from direct FunctionPointer)
 - `test_identical_functions/structs/enums_produce_no_diff` verifying unchanged declarations produce zero diff entries
 - `test_field_added_in_middle_is_breaking` for struct diff edge case (middle insertion vs end append)
 - `test_is_umbrella_header_system_headers_excluded` verifying system header filtering in umbrella detection
