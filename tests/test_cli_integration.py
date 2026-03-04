@@ -551,7 +551,9 @@ class TestCliConfigFile:
         header.write_text('#include "dep.h"\n')
 
         config = tmp_path / ".headerkit.toml"
-        config.write_text(f'include_dirs = ["{inc_dir}"]\n')
+        # Use as_posix() to produce forward slashes; Windows backslashes are
+        # not valid in TOML basic strings (they are interpreted as escapes).
+        config.write_text(f'include_dirs = ["{inc_dir.as_posix()}"]\n')
 
         monkeypatch.setattr(
             sys,

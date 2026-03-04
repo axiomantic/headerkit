@@ -285,7 +285,7 @@ class TestZlib:
         #           argtypes fails the argtypes assertion.
         # ESCAPE: A writer that returns non-empty but omits all argtypes lines fails the check.
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         output = header_to_ctypes(header)
         assert isinstance(output, str) and len(output) > 0
         assert "_lib.compress.argtypes = " in output
@@ -301,7 +301,7 @@ class TestZlib:
         #           compress silently fails the name assertion.
         # ESCAPE: An extern-only header (no declarations) passes extern check but fails compress.
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         output = write_pxd(header)
         assert isinstance(output, str) and len(output) > 0
         assert "cdef extern from" in output
@@ -317,7 +317,7 @@ class TestZlib:
         # MUTATION: Omitting ffi.cdef[[ fails that assertion. Dropping compress fails the name check.
         # ESCAPE: An ffi.cdef[[ block without declarations passes the opener but fails the name check.
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         output = header_to_lua(header)
         assert isinstance(output, str) and len(output) > 0
         assert "ffi.cdef[[" in output
@@ -333,7 +333,7 @@ class TestZlib:
         # MUTATION: A writer emitting 'fn compress' instead of 'FUNC compress' fails.
         # ESCAPE: A string with only 'FUNC compress' passes; structural prefix + name is sufficient.
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         output = PromptWriter(verbosity="compact").write(header)
         assert isinstance(output, str) and len(output) > 0
         assert "FUNC compress" in output
@@ -347,7 +347,7 @@ class TestZlib:
         # MUTATION: Spurious entries generation fails total==0. entries=None fails entries==[].
         # ESCAPE: '{"summary": {"total": 0}, "entries": null}' fails entries==[].
         _skip_if_unavailable(zlib_header, "zlib")
-        header = _parse_header(backend, zlib_header)
+        header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
         result = json.loads(DiffWriter(baseline=header).write(header))
         assert result["summary"]["total"] == 0
         assert result["entries"] == []
