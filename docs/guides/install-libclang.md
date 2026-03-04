@@ -1,13 +1,13 @@
 # Installing libclang
 
-The `headerkit-install-libclang` CLI tool automates installing the **libclang** system dependency for your platform. It detects your OS and package manager, runs the appropriate install command, and verifies that headerkit can load the library afterward.
+The `headerkit install-libclang` subcommand automates installing the **libclang** system dependency for your platform. It detects your OS and package manager, runs the appropriate install command, and verifies that headerkit can load the library afterward.
 
 ## Usage
 
-Run as a console script (installed with headerkit):
+Run as a subcommand of the `headerkit` CLI:
 
 ```bash
-headerkit-install-libclang
+headerkit install-libclang
 ```
 
 Or invoke as a Python module:
@@ -69,7 +69,7 @@ jobs:
         run: pip install headerkit
 
       - name: Install libclang
-        run: headerkit-install-libclang
+        run: headerkit install-libclang
 
       - name: Run tests
         run: pytest
@@ -79,7 +79,7 @@ For Windows ARM64 runners, specify the LLVM version explicitly:
 
 ```yaml
       - name: Install libclang (Windows ARM64)
-        run: headerkit-install-libclang --version 21.1.8
+        run: headerkit install-libclang --version 21.1.8
 ```
 
 ## Verification

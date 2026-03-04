@@ -16,7 +16,7 @@ headerkit requires the **libclang** shared library to be installed on your syste
     For CI/CD, Docker, or quick setup, use the built-in installer:
 
     ```bash
-    headerkit-install-libclang
+    headerkit install-libclang
     ```
 
     This detects your platform and runs the appropriate install command. See the [Installing libclang](install-libclang.md) guide for details.

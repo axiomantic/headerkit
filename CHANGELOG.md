@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-03-04
+
+### Removed
+
+- `headerkit-install-libclang` standalone console script. Use `headerkit install-libclang` instead.
+
 ## [0.8.0] - 2026-03-03
 
 ### Fixed
@@ -255,6 +261,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
+[0.8.1]: https://github.com/axiomantic/headerkit/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/axiomantic/headerkit/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/axiomantic/headerkit/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/axiomantic/headerkit/compare/v0.7.1...v0.7.2

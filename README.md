@@ -21,8 +21,7 @@ Requires Python 3.10+. No Python runtime dependencies.
 Then install libclang:
 
 ```bash
-headerkit install-libclang     # subcommand form
-headerkit-install-libclang     # standalone script alias
+headerkit install-libclang
 ```
 
 Or install it manually:

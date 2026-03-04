@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "headerkit"
-version = "0.8.0"
+version = "0.8.1"
 description = "C/C++ header analysis toolkit with pluggable backends and writers for ctypes, Cython, CFFI, LuaJIT FFI, and more"
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
@@ -41,7 +41,6 @@ Changelog = "https://github.com/axiomantic/headerkit/blob/main/CHANGELOG.md"
 
 [project.scripts]
 headerkit = "headerkit._cli:main"
-headerkit-install-libclang = "headerkit.install_libclang:main"
 
 [project.optional-dependencies]
 toml = ["tomli>=1.1.0; python_version < '3.11'"]
