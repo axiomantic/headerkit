@@ -43,7 +43,7 @@ headerkit = "headerkit._cli:main"
 
 [project.optional-dependencies]
 toml = []
-test = ["pytest", "pytest-timeout", "bigfoot @ /Users/elijahrutschman/Development/bigfoot"]
+test = ["pytest", "pytest-timeout", "bigfoot>=0.3.0"]
 lint = ["ruff", "mypy"]
 docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.27", "mike>=2.1"]
 dev = ["headerkit[test,lint,docs,toml]"]
@@ -51,8 +51,6 @@ dev = ["headerkit[test,lint,docs,toml]"]
 [tool.hatch.build.targets.wheel]
 packages = ["headerkit"]
 
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.ruff]
 line-length = 120

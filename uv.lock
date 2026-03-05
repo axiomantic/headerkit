@@ -27,27 +27,12 @@ wheels = [
 
 [[package]]
 name = "bigfoot"
-version = "0.2.0"
-source = { directory = "../bigfoot" }
-
-[package.metadata]
-requires-dist = [
-    { name = "bigfoot", extras = ["http", "matchers", "docs"], marker = "extra == 'dev'" },
-    { name = "dirty-equals", marker = "extra == 'matchers'", specifier = ">=0.7.0" },
-    { name = "httpx", marker = "extra == 'http'", specifier = ">=0.25.0" },
-    { name = "mike", marker = "extra == 'docs'", specifier = ">=2.1" },
-    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.27" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.7.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "requests", marker = "extra == 'http'", specifier = ">=2.31.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "types-requests", marker = "extra == 'http'", specifier = ">=2.31.0" },
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/31/37cd0a0d0ac45bbc01ceff770ebc279b59c52b2303dd0a15e3855bd6a9ef/bigfoot-0.3.0.tar.gz", hash = "sha256:8d042e2acbcb07c9d48e701eab09a3fc18a2092b6f4f59405577037872359e3b", size = 85272, upload-time = "2026-03-05T10:17:34.06Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/5c/7ce27a0fbad532ea860cb856c252d21567decf036489479ee6d1a7f95001/bigfoot-0.3.0-py3-none-any.whl", hash = "sha256:8a474c3c5a652e6744039187cd1dda685f699227afb4f0b3ff63fe8b0988f5a7", size = 30328, upload-time = "2026-03-05T10:17:32.66Z" },
 ]
-provides-extras = ["http", "matchers", "docs", "dev"]
 
 [[package]]
 name = "certifi"
@@ -207,7 +192,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bigfoot", marker = "extra == 'test'", directory = "../bigfoot" },
+    { name = "bigfoot", marker = "extra == 'test'", specifier = ">=0.3.0" },
     { name = "headerkit", extras = ["test", "lint", "docs", "toml"], marker = "extra == 'dev'" },
     { name = "mike", marker = "extra == 'docs'", specifier = ">=2.1" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },

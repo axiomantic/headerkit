@@ -50,6 +50,69 @@ def _skip_if_unavailable(fixture_value: Path | None, name: str) -> None:
         pytest.skip(f"{name} header not available (download failed)")
 
 
+def _check_ctypes_write(header: Header, symbol: str) -> None:
+    """Assert the ctypes writer produces a non-empty binding with argtypes for symbol."""
+    output = header_to_ctypes(header)
+    assert isinstance(output, str) and len(output) > 0
+    assert f"_lib.{symbol}.argtypes = " in output
+
+
+def _check_cython_write(header: Header, symbol: str) -> None:
+    """Assert the cython writer produces a .pxd with cdef extern from and the given symbol."""
+    output = write_pxd(header)
+    assert isinstance(output, str) and len(output) > 0
+    assert "cdef extern from" in output
+    assert symbol in output
+
+
+def _check_lua_write(header: Header, symbol: str) -> None:
+    """Assert the lua writer produces a LuaJIT FFI binding with ffi.cdef[[ and the given symbol."""
+    output = header_to_lua(header)
+    assert isinstance(output, str) and len(output) > 0
+    assert "ffi.cdef[[" in output
+    assert symbol in output
+
+
+def _check_prompt_write(header: Header, symbol: str) -> None:
+    """Assert the prompt writer (compact) produces a non-empty string with FUNC {symbol}."""
+    output = PromptWriter(verbosity="compact").write(header)
+    assert isinstance(output, str) and len(output) > 0
+    assert f"FUNC {symbol}" in output
+
+
+def _check_diff_write(header: Header) -> None:
+    """Assert an identity diff via DiffWriter produces total==0 and entries==[]."""
+    result = json.loads(DiffWriter(baseline=header).write(header))
+    assert result["summary"]["total"] == 0
+    assert result["entries"] == []
+
+
+def _check_cffi_write(header: Header, *symbols: str) -> None:
+    """Assert the cffi writer produces complete C declarations for each symbol."""
+    cffi_output = header_to_cffi(header)
+    cffi_lines = cffi_output.splitlines()
+    for symbol in symbols:
+        matching = [line for line in cffi_lines if re.search(rf"\b{symbol}\b", line)]
+        assert len(matching) >= 1, f"Expected CFFI declaration for {symbol}"
+        assert all(line.rstrip().endswith(";") for line in matching), (
+            f"CFFI line for {symbol} does not end with ';': {matching}"
+        )
+
+
+def _check_json_write(header: Header, *symbols: str) -> None:
+    """Assert the json writer produces a valid declarations dict containing each symbol."""
+    json_output = header_to_json(header)
+    parsed = json.loads(json_output)
+    assert isinstance(parsed, dict)
+    assert "declarations" in parsed
+    names = {d["name"] for d in parsed["declarations"] if "name" in d}
+    for symbol in symbols:
+        assert symbol in names
+    json_dict = header_to_json_dict(header)
+    assert "declarations" in json_dict
+    assert len(json_dict["declarations"]) == len(header.declarations)
+
+
 # =============================================================================
 # sqlite3
 # =============================================================================
@@ -76,37 +139,20 @@ class TestSqlite3:
     def test_cffi_write(self, backend, sqlite3_header):
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        cffi_output = header_to_cffi(header)
         # Parse CFFI output into individual declaration lines so we can
         # assert that each target symbol appears as a complete declaration
         # (not just as a substring within an unrelated identifier).
         # Full signature equality is omitted because parameter types/names
         # vary slightly across sqlite3 versions and OS-bundled headers.
-        cffi_lines = cffi_output.splitlines()
-        for symbol in ("sqlite3_open", "sqlite3_close", "sqlite3_exec"):
-            # Use word-boundary match to avoid false positives from longer names
-            # (e.g. sqlite3_open_v2 would match a bare "sqlite3_open" substring search).
-            matching = [line for line in cffi_lines if re.search(rf"\b{symbol}\b", line)]
-            assert len(matching) >= 1, f"Expected CFFI declaration for {symbol}"
-            # Each match must look like a complete C declaration ending in ';'
-            assert all(line.rstrip().endswith(";") for line in matching), (
-                f"CFFI line for {symbol} does not end with ';': {matching}"
-            )
+        # Use word-boundary match to avoid false positives from longer names
+        # (e.g. sqlite3_open_v2 would match a bare "sqlite3_open" substring search).
+        _check_cffi_write(header, "sqlite3_open", "sqlite3_close", "sqlite3_exec")
 
     def test_json_write(self, backend, sqlite3_header):
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        json_output = header_to_json(header)
-        parsed = json.loads(json_output)
-        assert isinstance(parsed, dict)
-        assert "declarations" in parsed
         # Verify specific known symbols appear in the JSON output.
-        names = {d["name"] for d in parsed["declarations"] if "name" in d}
-        assert "sqlite3_open" in names
-        assert "sqlite3_close" in names
-        json_dict = header_to_json_dict(header)
-        assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) == len(header.declarations)
+        _check_json_write(header, "sqlite3_open", "sqlite3_close")
 
     def test_known_symbols(self, backend, sqlite3_header):
         _skip_if_unavailable(sqlite3_header, "sqlite3")
@@ -132,9 +178,7 @@ class TestSqlite3:
         # ESCAPE: A writer that returns "x" passes len>0 but fails the argtypes assertion.
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        output = header_to_ctypes(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "_lib.sqlite3_open.argtypes = " in output
+        _check_ctypes_write(header, "sqlite3_open")
 
     def test_cython_write(self, backend, sqlite3_header):
         # ESCAPE: test_cython_write (TestSqlite3)
@@ -150,10 +194,7 @@ class TestSqlite3:
         #         extern check but fails the sqlite3_open name check.
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        output = write_pxd(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "cdef extern from" in output
-        assert "sqlite3_open" in output
+        _check_cython_write(header, "sqlite3_open")
 
     def test_lua_write(self, backend, sqlite3_header):
         # ESCAPE: test_lua_write (TestSqlite3)
@@ -168,10 +209,7 @@ class TestSqlite3:
         #         the ffi.cdef[[ check but fails the sqlite3_open check.
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        output = header_to_lua(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "ffi.cdef[[" in output
-        assert "sqlite3_open" in output
+        _check_lua_write(header, "sqlite3_open")
 
     def test_prompt_write(self, backend, sqlite3_header):
         # ESCAPE: test_prompt_write (TestSqlite3)
@@ -186,9 +224,7 @@ class TestSqlite3:
         #         this is acceptable -- the structural prefix plus name is sufficient signal.
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        output = PromptWriter(verbosity="compact").write(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "FUNC sqlite3_open" in output
+        _check_prompt_write(header, "sqlite3_open")
 
     def test_diff_write(self, backend, sqlite3_header):
         # ESCAPE: test_diff_write (TestSqlite3)
@@ -204,9 +240,7 @@ class TestSqlite3:
         #         fail entries==[] (null != []).
         _skip_if_unavailable(sqlite3_header, "sqlite3")
         header = _parse_header(backend, sqlite3_header)
-        result = json.loads(DiffWriter(baseline=header).write(header))
-        assert result["summary"]["total"] == 0
-        assert result["entries"] == []
+        _check_diff_write(header)
 
 
 # =============================================================================
@@ -232,33 +266,17 @@ class TestZlib:
     def test_cffi_write(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
-        cffi_output = header_to_cffi(header)
         # Parse CFFI output into individual declaration lines so we can
         # assert that each target symbol appears as a complete declaration.
         # Full signature equality is omitted because zlib function signatures
         # vary across header versions (e.g., z_const, uLong vs uInt).
-        cffi_lines = cffi_output.splitlines()
-        for symbol in ("deflate", "inflate", "compress"):
-            matching = [line for line in cffi_lines if re.search(rf"\b{symbol}\b", line)]
-            assert len(matching) >= 1, f"Expected CFFI declaration for {symbol}"
-            assert all(line.rstrip().endswith(";") for line in matching), (
-                f"CFFI line for {symbol} does not end with ';': {matching}"
-            )
+        _check_cffi_write(header, "deflate", "inflate", "compress")
 
     def test_json_write(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
-        json_output = header_to_json(header)
-        parsed = json.loads(json_output)
-        assert isinstance(parsed, dict)
-        assert "declarations" in parsed
         # Verify specific known symbols appear in the JSON output.
-        names = {d["name"] for d in parsed["declarations"] if "name" in d}
-        assert "deflate" in names
-        assert "inflate" in names
-        json_dict = header_to_json_dict(header)
-        assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) == len(header.declarations)
+        _check_json_write(header, "deflate", "inflate")
 
     def test_known_symbols(self, backend, zlib_header):
         _skip_if_unavailable(zlib_header, "zlib")
@@ -286,9 +304,7 @@ class TestZlib:
         # ESCAPE: A writer that returns non-empty but omits all argtypes lines fails the check.
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
-        output = header_to_ctypes(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "_lib.compress.argtypes = " in output
+        _check_ctypes_write(header, "compress")
 
     def test_cython_write(self, backend, zlib_header):
         # ESCAPE: test_cython_write (TestZlib)
@@ -302,10 +318,7 @@ class TestZlib:
         # ESCAPE: An extern-only header (no declarations) passes extern check but fails compress.
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
-        output = write_pxd(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "cdef extern from" in output
-        assert "compress" in output
+        _check_cython_write(header, "compress")
 
     def test_lua_write(self, backend, zlib_header):
         # ESCAPE: test_lua_write (TestZlib)
@@ -318,10 +331,7 @@ class TestZlib:
         # ESCAPE: An ffi.cdef[[ block without declarations passes the opener but fails the name check.
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
-        output = header_to_lua(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "ffi.cdef[[" in output
-        assert "compress" in output
+        _check_lua_write(header, "compress")
 
     def test_prompt_write(self, backend, zlib_header):
         # ESCAPE: test_prompt_write (TestZlib)
@@ -334,9 +344,7 @@ class TestZlib:
         # ESCAPE: A string with only 'FUNC compress' passes; structural prefix + name is sufficient.
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
-        output = PromptWriter(verbosity="compact").write(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "FUNC compress" in output
+        _check_prompt_write(header, "compress")
 
     def test_diff_write(self, backend, zlib_header):
         # ESCAPE: test_diff_write (TestZlib)
@@ -348,9 +356,7 @@ class TestZlib:
         # ESCAPE: '{"summary": {"total": 0}, "entries": null}' fails entries==[].
         _skip_if_unavailable(zlib_header, "zlib")
         header = _parse_header(backend, zlib_header, include_dirs=[str(zlib_header.parent)])
-        result = json.loads(DiffWriter(baseline=header).write(header))
-        assert result["summary"]["total"] == 0
-        assert result["entries"] == []
+        _check_diff_write(header)
 
 
 # =============================================================================
@@ -383,18 +389,11 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        cffi_output = header_to_cffi(header)
         # Parse CFFI output into individual declaration lines so we can
         # assert that each target symbol appears as a complete declaration.
         # Full signature equality is omitted because Lua function signatures
         # include lua_State* which may be qualified differently per version.
-        cffi_lines = cffi_output.splitlines()
-        for symbol in ("lua_pushstring", "lua_close"):
-            matching = [line for line in cffi_lines if re.search(rf"\b{symbol}\b", line)]
-            assert len(matching) >= 1, f"Expected CFFI declaration for {symbol}"
-            assert all(line.rstrip().endswith(";") for line in matching), (
-                f"CFFI line for {symbol} does not end with ';': {matching}"
-            )
+        _check_cffi_write(header, "lua_pushstring", "lua_close")
 
     def test_json_write(self, backend, lua_headers):
         _skip_if_unavailable(lua_headers, "lua")
@@ -403,17 +402,8 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        json_output = header_to_json(header)
-        parsed = json.loads(json_output)
-        assert isinstance(parsed, dict)
-        assert "declarations" in parsed
         # Verify specific known symbols appear in the JSON output.
-        names = {d["name"] for d in parsed["declarations"] if "name" in d}
-        assert "lua_pushstring" in names
-        assert "lua_close" in names
-        json_dict = header_to_json_dict(header)
-        assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) == len(header.declarations)
+        _check_json_write(header, "lua_pushstring", "lua_close")
 
     def test_known_symbols(self, backend, lua_headers):
         _skip_if_unavailable(lua_headers, "lua")
@@ -448,9 +438,7 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        output = header_to_ctypes(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "_lib.lua_close.argtypes = " in output
+        _check_ctypes_write(header, "lua_close")
 
     def test_cython_write(self, backend, lua_headers):
         # ESCAPE: test_cython_write (TestLua)
@@ -467,10 +455,7 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        output = write_pxd(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "cdef extern from" in output
-        assert "lua_close" in output
+        _check_cython_write(header, "lua_close")
 
     def test_lua_write(self, backend, lua_headers):
         # ESCAPE: test_lua_write (TestLua)
@@ -487,10 +472,7 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        output = header_to_lua(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "ffi.cdef[[" in output
-        assert "lua_close" in output
+        _check_lua_write(header, "lua_close")
 
     def test_prompt_write(self, backend, lua_headers):
         # ESCAPE: test_prompt_write (TestLua)
@@ -507,9 +489,7 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        output = PromptWriter(verbosity="compact").write(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "FUNC lua_close" in output
+        _check_prompt_write(header, "lua_close")
 
     def test_diff_write(self, backend, lua_headers):
         # ESCAPE: test_diff_write (TestLua)
@@ -525,9 +505,7 @@ class TestLua:
             lua_headers / "lua.h",
             include_dirs=[str(lua_headers)],
         )
-        result = json.loads(DiffWriter(baseline=header).write(header))
-        assert result["summary"]["total"] == 0
-        assert result["entries"] == []
+        _check_diff_write(header)
 
 
 # =============================================================================
@@ -562,18 +540,11 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        cffi_output = header_to_cffi(header)
         # Parse CFFI output into individual declaration lines so we can
         # assert that each target symbol appears as a complete declaration.
         # Full signature equality is omitted because curl parameter types
         # vary across libcurl versions (e.g., curl_off_t, CURL* typedef names).
-        cffi_lines = cffi_output.splitlines()
-        for symbol in ("curl_global_init", "curl_version"):
-            matching = [line for line in cffi_lines if re.search(rf"\b{symbol}\b", line)]
-            assert len(matching) >= 1, f"Expected CFFI declaration for {symbol}"
-            assert all(line.rstrip().endswith(";") for line in matching), (
-                f"CFFI line for {symbol} does not end with ';': {matching}"
-            )
+        _check_cffi_write(header, "curl_global_init", "curl_version")
 
     def test_json_write(self, backend, curl_headers):
         _skip_if_unavailable(curl_headers, "curl")
@@ -583,17 +554,8 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        json_output = header_to_json(header)
-        parsed = json.loads(json_output)
-        assert isinstance(parsed, dict)
-        assert "declarations" in parsed
         # Verify specific known symbols appear in the JSON output.
-        names = {d["name"] for d in parsed["declarations"] if "name" in d}
-        assert "curl_global_init" in names
-        assert "curl_version" in names
-        json_dict = header_to_json_dict(header)
-        assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) == len(header.declarations)
+        _check_json_write(header, "curl_global_init", "curl_version")
 
     def test_known_symbols(self, backend, curl_headers):
         _skip_if_unavailable(curl_headers, "curl")
@@ -631,9 +593,7 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        output = header_to_ctypes(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "_lib.curl_global_init.argtypes = " in output
+        _check_ctypes_write(header, "curl_global_init")
 
     def test_cython_write(self, backend, curl_headers):
         # ESCAPE: test_cython_write (TestCurl)
@@ -651,10 +611,7 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        output = write_pxd(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "cdef extern from" in output
-        assert "curl_global_init" in output
+        _check_cython_write(header, "curl_global_init")
 
     def test_lua_write(self, backend, curl_headers):
         # ESCAPE: test_lua_write (TestCurl)
@@ -672,10 +629,7 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        output = header_to_lua(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "ffi.cdef[[" in output
-        assert "curl_global_init" in output
+        _check_lua_write(header, "curl_global_init")
 
     def test_prompt_write(self, backend, curl_headers):
         # ESCAPE: test_prompt_write (TestCurl)
@@ -693,9 +647,7 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        output = PromptWriter(verbosity="compact").write(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "FUNC curl_global_init" in output
+        _check_prompt_write(header, "curl_global_init")
 
     def test_diff_write(self, backend, curl_headers):
         # ESCAPE: test_diff_write (TestCurl)
@@ -712,9 +664,7 @@ class TestCurl:
             curl_dir / "curl.h",
             include_dirs=[str(curl_headers), str(curl_dir)],
         )
-        result = json.loads(DiffWriter(baseline=header).write(header))
-        assert result["summary"]["total"] == 0
-        assert result["entries"] == []
+        _check_diff_write(header)
 
 
 # =============================================================================
@@ -751,18 +701,11 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        cffi_output = header_to_cffi(header)
         # Parse CFFI output into individual declaration lines so we can
         # assert that each target symbol appears as a complete declaration.
         # Full signature equality is omitted because SDL_Init/SDL_Quit
         # parameter types vary slightly across SDL2 versions.
-        cffi_lines = cffi_output.splitlines()
-        for symbol in ("SDL_Init", "SDL_Quit"):
-            matching = [line for line in cffi_lines if re.search(rf"\b{symbol}\b", line)]
-            assert len(matching) >= 1, f"Expected CFFI declaration for {symbol}"
-            assert all(line.rstrip().endswith(";") for line in matching), (
-                f"CFFI line for {symbol} does not end with ';': {matching}"
-            )
+        _check_cffi_write(header, "SDL_Init", "SDL_Quit")
 
     def test_json_write(self, backend, sdl2_headers):
         _skip_if_unavailable(sdl2_headers, "SDL2")
@@ -772,17 +715,8 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        json_output = header_to_json(header)
-        parsed = json.loads(json_output)
-        assert isinstance(parsed, dict)
-        assert "declarations" in parsed
         # Verify specific known symbols appear in the JSON output.
-        names = {d["name"] for d in parsed["declarations"] if "name" in d}
-        assert "SDL_Init" in names
-        assert "SDL_Quit" in names
-        json_dict = header_to_json_dict(header)
-        assert "declarations" in json_dict
-        assert len(json_dict["declarations"]) == len(header.declarations)
+        _check_json_write(header, "SDL_Init", "SDL_Quit")
 
     def test_known_symbols(self, backend, sdl2_headers):
         _skip_if_unavailable(sdl2_headers, "SDL2")
@@ -817,9 +751,7 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        output = header_to_ctypes(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "_lib.SDL_Init.argtypes = " in output
+        _check_ctypes_write(header, "SDL_Init")
 
     def test_cython_write(self, backend, sdl2_headers):
         # ESCAPE: test_cython_write (TestSDL2)
@@ -837,10 +769,7 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        output = write_pxd(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "cdef extern from" in output
-        assert "SDL_Init" in output
+        _check_cython_write(header, "SDL_Init")
 
     def test_lua_write(self, backend, sdl2_headers):
         # ESCAPE: test_lua_write (TestSDL2)
@@ -858,10 +787,7 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        output = header_to_lua(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "ffi.cdef[[" in output
-        assert "SDL_Init" in output
+        _check_lua_write(header, "SDL_Init")
 
     def test_prompt_write(self, backend, sdl2_headers):
         # ESCAPE: test_prompt_write (TestSDL2)
@@ -879,9 +805,7 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        output = PromptWriter(verbosity="compact").write(header)
-        assert isinstance(output, str) and len(output) > 0
-        assert "FUNC SDL_Init" in output
+        _check_prompt_write(header, "SDL_Init")
 
     def test_diff_write(self, backend, sdl2_headers):
         # ESCAPE: test_diff_write (TestSDL2)
@@ -898,9 +822,7 @@ class TestSDL2:
             sdl_dir / "SDL.h",
             include_dirs=[str(sdl2_headers), str(sdl_dir)],
         )
-        result = json.loads(DiffWriter(baseline=header).write(header))
-        assert result["summary"]["total"] == 0
-        assert result["entries"] == []
+        _check_diff_write(header)
 
 
 # =============================================================================
