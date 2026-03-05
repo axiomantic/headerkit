@@ -540,14 +540,19 @@ class TestHomebrewLlvm:
         # run(["/usr/local/bin/brew", "--prefix", "llvm"]) -> rc=0, stdout="/opt/homebrew/opt/llvm\n"
         # os.path.isfile("/opt/homebrew/opt/llvm/bin/llvm-config") -> True (patched)
         # run(["/opt/homebrew/opt/llvm/bin/llvm-config", "--version"]) -> rc=0, stdout="20.1.0\n"
+        #
+        # Use os.path.join so the expected command matches what the production code
+        # builds on the current OS (backslashes on Windows, forward slashes elsewhere).
+        _brew_prefix = "/opt/homebrew/opt/llvm"
+        _llvm_config = os.path.join(_brew_prefix, "bin", "llvm-config")
         bigfoot.subprocess_mock.mock_which("brew", returns="/usr/local/bin/brew")
         bigfoot.subprocess_mock.mock_run(
             ["/usr/local/bin/brew", "--prefix", "llvm"],
             returncode=0,
-            stdout="/opt/homebrew/opt/llvm\n",
+            stdout=f"{_brew_prefix}\n",
         )
         bigfoot.subprocess_mock.mock_run(
-            ["/opt/homebrew/opt/llvm/bin/llvm-config", "--version"],
+            [_llvm_config, "--version"],
             returncode=0,
             stdout="20.1.0\n",
         )
@@ -567,7 +572,7 @@ class TestHomebrewLlvm:
         )
         bigfoot.assert_interaction(
             bigfoot.subprocess_mock.run,
-            command=["/opt/homebrew/opt/llvm/bin/llvm-config", "--version"],
+            command=[_llvm_config, "--version"],
         )
 
     def test_brew_skipped_on_linux(self):
