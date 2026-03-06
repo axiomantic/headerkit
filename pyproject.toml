@@ -12,9 +12,9 @@ license-files = ["LICENSE", "headerkit/_clang/LICENSE"]
 authors = [
     { name = "elijahr", email = "elijahr+cir@gmail.com" },
 ]
-keywords = ["c", "c++", "parser", "cffi", "libclang", "ir", "code-generation"]
+keywords = ["c", "c++", "parser", "cffi", "libclang", "ir", "code-generation", "ctypes", "cython", "ffi", "bindings", "header-parser"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Code Generators",
     "Topic :: Software Development :: Compilers",
@@ -37,6 +37,7 @@ Homepage = "https://github.com/axiomantic/headerkit"
 Repository = "https://github.com/axiomantic/headerkit"
 Issues = "https://github.com/axiomantic/headerkit/issues"
 Changelog = "https://github.com/axiomantic/headerkit/blob/main/CHANGELOG.md"
+Documentation = "https://axiomantic.github.io/headerkit/"
 
 [project.scripts]
 headerkit = "headerkit._cli:main"
