@@ -39,7 +39,7 @@ jobs:
       - run: pre-commit autoupdate
 
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           commit-message: "Update pre-commit hooks"
