@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 from unittest.mock import MagicMock, patch
 
 import bigfoot
@@ -863,4 +864,5 @@ class TestFallback:
             bigfoot.assert_interaction(bigfoot.subprocess_mock.which, name="pkg-config", returns=None)
             for name in _CLANG_PROBE_NAMES:
                 bigfoot.assert_interaction(bigfoot.subprocess_mock.which, name=name, returns=None)
-            bigfoot.assert_interaction(bigfoot.subprocess_mock.which, name="brew", returns=None)
+            if sys.platform == "darwin":
+                bigfoot.assert_interaction(bigfoot.subprocess_mock.which, name="brew", returns=None)
