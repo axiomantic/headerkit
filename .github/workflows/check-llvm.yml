@@ -125,7 +125,7 @@ jobs:
 
       - name: Create pull request for vendored versions
         if: steps.vendor.outputs.vendored != ''
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           commit-message: "Vendor clang bindings for LLVM ${{ steps.vendor.outputs.vendored }}"
