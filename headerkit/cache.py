@@ -16,9 +16,12 @@ import importlib.metadata
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tomllib  # type: ignore[import-not-found]
+
+if TYPE_CHECKING:
+    from headerkit.writers import WriterBackend
 
 logger = logging.getLogger("headerkit.cache")
 
@@ -53,6 +56,65 @@ def compute_hash(
         writer_options=writer_options,
         extra_inputs=extra_inputs,
     )
+
+
+def save_hash(
+    *,
+    output_path: str | Path,
+    header_paths: Sequence[str | Path],
+    writer_name: str,
+    writer_options: dict[str, Any] | None = None,
+    extra_inputs: Sequence[str | Path] | None = None,
+    writer: WriterBackend | None = None,
+) -> Path:
+    """Compute and save cache hash metadata for a generated output file.
+
+    If the writer supports embedded comments (has ``hash_comment_format()``),
+    the hash is prepended to the output file as a comment block. Otherwise,
+    a sidecar ``.hkcache`` file is written alongside the output.
+
+    When ``writer`` is None, sidecar ``.hkcache`` storage is always used
+    regardless of ``writer_name``. Callers who want embedded storage must
+    pass the writer instance.
+
+    :param output_path: Path to the generated output file.
+    :param header_paths: Paths to C/C++ header files.
+    :param writer_name: Name of the writer used for generation.
+    :param writer_options: Writer configuration options.
+    :param extra_inputs: Additional file paths included in hash.
+    :param writer: Writer instance (used to detect comment support).
+    :returns: Path where hash was saved (output_path if embedded, .hkcache if sidecar).
+    :raises FileNotFoundError: If output_path or any input file does not exist.
+    :raises ValueError: If header_paths is empty.
+    """
+    out = Path(output_path)
+    if not out.exists():
+        raise FileNotFoundError(f"Output not found: {output_path}")
+
+    hash_digest = _compute_hash_digest(
+        header_paths=header_paths,
+        writer_name=writer_name,
+        writer_options=writer_options,
+        extra_inputs=extra_inputs,
+    )
+
+    try:
+        version = importlib.metadata.version("headerkit")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+
+    metadata_toml = _build_metadata_toml(hash_digest, writer_name, version)
+
+    # Check if writer supports embedded comments
+    format_fn = getattr(writer, "hash_comment_format", None) if writer is not None else None
+    if format_fn is not None:
+        comment_format: str = format_fn()
+        _write_embedded_hash(out, metadata_toml, comment_format)
+        return out
+    else:
+        sidecar = _sidecar_path(out)
+        _write_sidecar(sidecar, metadata_toml)
+        return sidecar
 
 
 # =============================================================================
@@ -223,3 +285,22 @@ def _parse_embedded_toml(content: str) -> dict[str, Any] | None:
 def _sidecar_path(output_path: Path) -> Path:
     """Return the sidecar path: output_path with .hkcache extension appended."""
     return output_path.parent / (output_path.name + ".hkcache")
+
+
+def _write_embedded_hash(output_path: Path, metadata_toml: str, comment_format: str) -> None:
+    """Prepend hash metadata as comments to the output file.
+
+    Each line of the TOML metadata is wrapped using the comment_format
+    string, then a blank line separator is added before the original content.
+    """
+    original = output_path.read_text(encoding="utf-8")
+    comment_lines: list[str] = []
+    for line in metadata_toml.splitlines():
+        comment_lines.append(comment_format.format(line=line))
+    header_block = "\n".join(comment_lines) + "\n"
+    output_path.write_text(header_block + "\n" + original, encoding="utf-8")
+
+
+def _write_sidecar(sidecar_path: Path, metadata_toml: str) -> None:
+    """Write hash metadata to sidecar .hkcache file."""
+    sidecar_path.write_text(metadata_toml, encoding="utf-8")
