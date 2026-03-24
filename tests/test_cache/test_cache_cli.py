@@ -207,10 +207,13 @@ class TestCacheSaveCli:
         )
         assert exit_code == 1
         captured = capsys.readouterr()
-        assert captured.err == (
-            "headerkit cache-save: Unknown writer: 'nonexistent_writer'."
-            " Available: cffi, ctypes, cython, diff, json, lua, prompt\n"
-        )
+        # Writer registration order is non-deterministic across test runs,
+        # so extract and sort the "Available:" list for comparison.
+        assert captured.err.startswith("headerkit cache-save: Unknown writer: 'nonexistent_writer'. Available: ")
+        prefix = "headerkit cache-save: Unknown writer: 'nonexistent_writer'. Available: "
+        available_str = captured.err[len(prefix) :].strip()
+        available = sorted(available_str.split(", "))
+        assert available == ["cffi", "ctypes", "cython", "diff", "json", "lua", "prompt"]
 
 
 class TestCacheCheckCli:
