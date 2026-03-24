@@ -229,9 +229,9 @@ def _compute_hash_digest(
     # Feed headerkit version
     try:
         version = importlib.metadata.version("headerkit")
-    except importlib.metadata.PackageNotFoundError:
+    except importlib.metadata.PackageNotFoundError as exc:
         version = "unknown"
-        logger.warning("Could not determine headerkit version; using 'unknown'")
+        logger.warning("Could not determine headerkit version; using 'unknown': %s", exc)
     hasher.update(b"headerkit-version:")
     hasher.update(version.encode("utf-8"))
     hasher.update(b"\x00")
