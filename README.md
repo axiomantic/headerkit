@@ -220,9 +220,9 @@ Or load plugins explicitly from the config file:
 plugins = ["mypkg.headerkit_plugin"]
 ```
 
-## Cache system
+## Cache and build backend
 
-headerkit includes a two-layer cache that stores parsed IR and generated output in `.hkcache/`. This enables libclang-free builds by committing the cache to your repository.
+headerkit includes a two-layer cache that stores parsed IR and generated output in `.hkcache/`. Commit the cache to version control and downstream consumers can build without libclang installed.
 
 ```python
 from headerkit import generate
@@ -234,7 +234,20 @@ output = generate("mylib.h", "cffi")
 output = generate("mylib.h", "cffi")
 ```
 
-See the [Cache Strategy Guide](docs/guides/cache.md) for details on cache layout, bypass flags, configuration, and CI integration.
+```bash
+# CLI: generate with caching (on by default)
+headerkit mylib.h -w cffi:bindings.py --cache-dir .hkcache
+```
+
+headerkit also ships a PEP 517 build backend. Consumer projects declare it in `pyproject.toml` and get bindings generated automatically during `pip install` or `python -m build`, with no libclang required when the cache is committed:
+
+```toml
+[build-system]
+requires = ["headerkit", "hatchling"]
+build-backend = "headerkit._build_backend"
+```
+
+See the [Cache Strategy Guide](docs/guides/cache.md) for cache layout, bypass flags, and CI integration, and the [Build Backend Guide](docs/guides/build-backend.md) for full setup instructions.
 
 ## Python API
 

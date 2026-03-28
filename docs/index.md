@@ -90,6 +90,14 @@ Both backends and writers follow simple protocols and are registered in a global
 
     [:octicons-arrow-right-24: Cache Guide](guides/cache.md)
 
+-   **Build Backend**
+
+    ---
+
+    PEP 517 build backend for libclang-free installs via pip.
+
+    [:octicons-arrow-right-24: Build Backend Guide](guides/build-backend.md)
+
 -   **API Reference**
 
     ---
