@@ -123,6 +123,17 @@ class TestSlugSanitization:
         )
         assert slug == "libclang.t.d.FOO_BAR"
 
+    def test_colon_in_path_sanitized(self) -> None:
+        """Windows drive letters must be sanitized."""
+        slug = build_slug(
+            backend_name="libclang",
+            header_path="C:\\Users\\test\\mylib.h",
+            defines=[],
+            includes=[],
+            other_args=[],
+        )
+        assert ":" not in slug
+
     def test_consecutive_dashes_collapsed(self) -> None:
         slug = build_slug(
             backend_name="libclang",

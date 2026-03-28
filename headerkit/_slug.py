@@ -128,6 +128,7 @@ def _sanitize(component: str) -> str:
 
     - Replace . with -
     - Replace / and \\ with -
+    - Replace : with - (Windows drive letters)
     - Replace spaces with -
     - Collapse consecutive - into one
     - Strip leading/trailing -
@@ -136,6 +137,7 @@ def _sanitize(component: str) -> str:
     result = result.replace(".", "-")
     result = result.replace("/", "-")
     result = result.replace("\\", "-")
+    result = result.replace(":", "-")
     result = result.replace(" ", "-")
     result = re.sub(r"-{2,}", "-", result)
     result = result.strip("-")
