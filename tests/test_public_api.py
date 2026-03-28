@@ -137,6 +137,52 @@ def test_cache_functions_match_direct_import():
     assert headerkit.save_hash is cache.save_hash
 
 
+def test_generate_exported():
+    """generate function should be importable from headerkit and match _generate module."""
+    import headerkit
+    from headerkit._generate import generate
+
+    assert headerkit.generate is generate
+
+
+def test_generate_all_exported():
+    """generate_all function should be importable from headerkit and match _generate module."""
+    import headerkit
+    from headerkit._generate import generate_all
+
+    assert headerkit.generate_all is generate_all
+
+
+def test_json_to_header_exported():
+    """json_to_header function should be importable from headerkit and match _ir_json module."""
+    import headerkit
+    from headerkit._ir_json import json_to_header
+
+    assert headerkit.json_to_header is json_to_header
+
+
+def test_generate_result_exported():
+    """GenerateResult class should be importable from headerkit and match _generate module."""
+    import headerkit
+    from headerkit._generate import GenerateResult
+
+    assert headerkit.GenerateResult is GenerateResult
+
+
+def test_generate_symbols_in_all():
+    """Generate and IR JSON symbols should be listed in headerkit.__all__."""
+    import headerkit
+
+    expected_symbols = {
+        "generate",
+        "generate_all",
+        "json_to_header",
+        "GenerateResult",
+    }
+    all_set = set(headerkit.__all__)
+    assert expected_symbols <= all_set, f"Missing from headerkit.__all__: {expected_symbols - all_set}"
+
+
 def test_is_up_to_date_batch_not_in_all():
     """is_up_to_date_batch is intentionally NOT exported in __all__."""
     import headerkit

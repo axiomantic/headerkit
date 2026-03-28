@@ -1,5 +1,7 @@
 """headerkit - C/C++ header parsing toolkit."""
 
+from headerkit._generate import GenerateResult, generate, generate_all
+from headerkit._ir_json import json_to_header
 from headerkit.backends import get_backend, is_backend_available, list_backends
 from headerkit.cache import compute_hash, default_namespace, is_up_to_date, save_hash
 from headerkit.ir import (
@@ -77,4 +79,10 @@ __all__ = [
     "default_namespace",
     "is_up_to_date",
     "save_hash",
+    # Generate API
+    "generate",
+    "generate_all",
+    "GenerateResult",
+    # IR JSON API
+    "json_to_header",
 ]
