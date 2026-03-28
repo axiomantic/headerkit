@@ -205,6 +205,99 @@ class TestGenerateOutputPath:
         assert out_file.read_text(encoding="utf-8") == result
 
 
+class TestGenerateOutputCacheFallback:
+    """Test that generate() falls back to output cache when backend is unavailable."""
+
+    def test_falls_back_to_output_cache(
+        self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """generate() uses output cache when backend raises ValueError."""
+        import shutil
+
+        mock_header = Header(
+            str(header_file),
+            [Function("add", CType("int"), [Parameter("a", CType("int")), Parameter("b", CType("int"))])],
+        )
+        mock_backend = MagicMock()
+        mock_backend.parse.return_value = mock_header
+        mock_backend.name = "libclang"
+
+        monkeypatch.setattr("headerkit._generate.get_backend", lambda _name: mock_backend)
+
+        cache_path = project_dir / ".hkcache"
+
+        # First call: populate cache (both IR and output)
+        output1 = generate(
+            header_path=header_file,
+            writer_name="json",
+            backend_name="libclang",
+            cache_dir=cache_path,
+        )
+
+        # Delete IR cache but keep output cache -- simulates a committed
+        # .hkcache/ that only ships output entries (no IR).
+        ir_dir = cache_path / "ir"
+        assert ir_dir.exists()
+        shutil.rmtree(ir_dir)
+        assert not ir_dir.exists()
+        # Output cache must still be present
+        assert (cache_path / "output").exists()
+
+        # Now make get_backend raise ValueError (simulating missing libclang)
+        def raise_no_backend(name: str) -> None:
+            raise ValueError(f"Unknown backend: {name!r}. Available: (none)")
+
+        monkeypatch.setattr("headerkit._generate.get_backend", raise_no_backend)
+
+        # Second call: IR cache misses, backend unavailable -- should
+        # fall back to output cache instead of raising.
+        output2 = generate(
+            header_path=header_file,
+            writer_name="json",
+            backend_name="libclang",
+            cache_dir=cache_path,
+        )
+
+        assert output1 == output2
+
+    def test_raises_when_no_cache_and_no_backend(
+        self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """generate() raises ValueError when backend unavailable AND no cache."""
+
+        def raise_no_backend(name: str) -> None:
+            raise ValueError(f"Unknown backend: {name!r}")
+
+        monkeypatch.setattr("headerkit._generate.get_backend", raise_no_backend)
+
+        with pytest.raises(ValueError, match="Unknown backend"):
+            generate(
+                header_path=header_file,
+                writer_name="json",
+                backend_name="libclang",
+                cache_dir=project_dir / ".hkcache",
+            )
+
+    def test_raises_when_cache_disabled_and_no_backend(
+        self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """generate() raises when no_cache=True and backend unavailable."""
+
+        def raise_no_backend(name: str) -> None:
+            raise ValueError(f"Unknown backend: {name!r}")
+
+        monkeypatch.setattr("headerkit._generate.get_backend", raise_no_backend)
+
+        with pytest.raises(ValueError, match="Unknown backend"):
+            generate(
+                header_path=header_file,
+                writer_name="json",
+                backend_name="libclang",
+                cache_dir=project_dir / ".hkcache",
+                no_cache=True,
+            )
+
+
 class TestGenerateFileNotFound:
     """Test error handling for missing header files."""
 
