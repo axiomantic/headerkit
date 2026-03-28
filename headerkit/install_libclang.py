@@ -32,6 +32,14 @@ import tempfile
 logger = logging.getLogger("headerkit.install")
 
 
+def _log_or_print(msg: str, *, quiet: bool) -> None:
+    """Route *msg* to :func:`logger.info` when quiet, else :func:`print`."""
+    if quiet:
+        logger.info(msg)
+    else:
+        print(msg)
+
+
 def _run(cmd: list[str], check: bool = True, *, quiet: bool = False) -> subprocess.CompletedProcess[str]:
     """Run a command, printing it first for visibility.
 
@@ -55,14 +63,14 @@ def install_linux(*, quiet: bool = False) -> bool:
     """Install libclang on Linux using the available package manager."""
     # Try dnf first (RHEL/Fedora/AlmaLinux/manylinux_2_28)
     if _is_command_available("dnf"):
-        print("Detected dnf package manager (RHEL/Fedora/AlmaLinux)")
+        _log_or_print("Detected dnf package manager (RHEL/Fedora/AlmaLinux)", quiet=quiet)
         result = _run(["dnf", "install", "-y", "clang-devel"], check=False, quiet=quiet)
         if result.returncode == 0:
             return True
 
     # Try apt-get (Debian/Ubuntu)
     if _is_command_available("apt-get"):
-        print("Detected apt-get package manager (Debian/Ubuntu)")
+        _log_or_print("Detected apt-get package manager (Debian/Ubuntu)", quiet=quiet)
         _run(["apt-get", "update", "-qq"], check=False, quiet=quiet)
         result = _run(["apt-get", "install", "-y", "libclang-dev"], check=False, quiet=quiet)
         if result.returncode == 0:
@@ -70,22 +78,22 @@ def install_linux(*, quiet: bool = False) -> bool:
 
     # Try apk (Alpine)
     if _is_command_available("apk"):
-        print("Detected apk package manager (Alpine)")
+        _log_or_print("Detected apk package manager (Alpine)", quiet=quiet)
         result = _run(["apk", "add", "clang-dev"], check=False, quiet=quiet)
         if result.returncode == 0:
             return True
 
-    print("ERROR: No supported package manager found (tried dnf, apt-get, apk)")
+    _log_or_print("ERROR: No supported package manager found (tried dnf, apt-get, apk)", quiet=quiet)
     return False
 
 
 def install_macos(*, quiet: bool = False) -> bool:
     """Install libclang on macOS using Homebrew."""
     if not _is_command_available("brew"):
-        print("ERROR: Homebrew not found. Install it from https://brew.sh/")
+        _log_or_print("ERROR: Homebrew not found. Install it from https://brew.sh/", quiet=quiet)
         return False
 
-    print("Installing LLVM via Homebrew...")
+    _log_or_print("Installing LLVM via Homebrew...", quiet=quiet)
     result = _run(["brew", "install", "llvm"], check=False, quiet=quiet)
     return result.returncode == 0
 
@@ -107,8 +115,8 @@ def install_windows(llvm_version: str, *, quiet: bool = False) -> bool:
 def _install_windows_arm64(llvm_version: str, *, quiet: bool = False) -> bool:
     """Download and install native ARM64 LLVM on Windows."""
     url = f"https://github.com/llvm/llvm-project/releases/download/llvmorg-{llvm_version}/LLVM-{llvm_version}-woa64.exe"
-    print(f"Detected ARM64 Windows, downloading native LLVM {llvm_version}...")
-    print(f"URL: {url}")
+    _log_or_print(f"Detected ARM64 Windows, downloading native LLVM {llvm_version}...", quiet=quiet)
+    _log_or_print(f"URL: {url}", quiet=quiet)
 
     installer_path = os.path.join(tempfile.gettempdir(), "llvm-installer.exe")
 
@@ -119,11 +127,11 @@ def _install_windows_arm64(llvm_version: str, *, quiet: bool = False) -> bool:
         quiet=quiet,
     )
     if result.returncode != 0:
-        print("ERROR: Failed to download LLVM installer")
+        _log_or_print("ERROR: Failed to download LLVM installer", quiet=quiet)
         return False
 
     # Silent install
-    print("Installing LLVM silently...")
+    _log_or_print("Installing LLVM silently...", quiet=quiet)
     result = _run(
         ["powershell", "-Command", f"Start-Process '{installer_path}' -ArgumentList '/S' -Wait"],
         check=False,
@@ -135,10 +143,10 @@ def _install_windows_arm64(llvm_version: str, *, quiet: bool = False) -> bool:
         os.remove(installer_path)
 
     if result.returncode != 0:
-        print("ERROR: LLVM installer failed")
+        _log_or_print("ERROR: LLVM installer failed", quiet=quiet)
         return False
 
-    print(f"LLVM {llvm_version} ARM64 installed successfully.")
+    _log_or_print(f"LLVM {llvm_version} ARM64 installed successfully.", quiet=quiet)
     return True
 
 
@@ -152,10 +160,10 @@ def _install_windows_x64(llvm_version: str, *, quiet: bool = False) -> bool:
     and similar failures at load time.
     """
     if not _is_command_available("choco"):
-        print("ERROR: Chocolatey not found. Install it from https://chocolatey.org/")
+        _log_or_print("ERROR: Chocolatey not found. Install it from https://chocolatey.org/", quiet=quiet)
         return False
 
-    print(f"Detected x64 Windows, installing LLVM {llvm_version} via Chocolatey...")
+    _log_or_print(f"Detected x64 Windows, installing LLVM {llvm_version} via Chocolatey...", quiet=quiet)
     result = _run(
         ["choco", "install", "llvm", f"--version={llvm_version}", "-y"],
         check=False,
@@ -202,36 +210,30 @@ def auto_install() -> bool:
 
     :returns: True if libclang is available after this call, False otherwise.
     """
-    # Redirect stdout to devnull so that print() calls inside the
-    # platform-specific installers (and _run / verify_libclang) do not
-    # leak output to callers that expect a quiet API.  The quiet parameter
-    # additionally suppresses subprocess stdout/stderr which
-    # redirect_stdout cannot intercept.
+    if verify_libclang(quiet=True):
+        return True
+
+    logger.info("libclang not found; attempting automatic installation")
+    logger.info("Platform: %s (%s)", sys.platform, platform.machine())
+
     ok: bool
-    with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull):
-        if verify_libclang(quiet=True):
-            return True
+    if sys.platform == "linux":
+        ok = install_linux(quiet=True)
+    elif sys.platform == "darwin":
+        ok = install_macos(quiet=True)
+    elif sys.platform == "win32":
+        ok = install_windows(DEFAULT_LLVM_VERSION, quiet=True)
+    else:
+        logger.warning("Unsupported platform for auto-install: %s", sys.platform)
+        return False
 
-        logger.info("libclang not found; attempting automatic installation")
-        logger.info("Platform: %s (%s)", sys.platform, platform.machine())
+    if not ok:
+        logger.warning("libclang installation failed")
+        return False
 
-        if sys.platform == "linux":
-            ok = install_linux(quiet=True)
-        elif sys.platform == "darwin":
-            ok = install_macos(quiet=True)
-        elif sys.platform == "win32":
-            ok = install_windows(DEFAULT_LLVM_VERSION, quiet=True)
-        else:
-            logger.warning("Unsupported platform for auto-install: %s", sys.platform)
-            return False
-
-        if not ok:
-            logger.warning("libclang installation failed")
-            return False
-
-        if not verify_libclang(quiet=True):
-            logger.warning("libclang installed but could not be loaded")
-            return False
+    if not verify_libclang(quiet=True):
+        logger.warning("libclang installed but could not be loaded")
+        return False
 
     logger.info("libclang auto-installed successfully")
     return True
