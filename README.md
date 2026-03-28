@@ -16,8 +16,6 @@
 - An **LLM prompt writer** -- produce token-optimized header summaries for LLM context windows
 - An **API diff reporter** -- detect breaking changes between header versions
 - A **PEP 517 build backend** -- integrate binding generation into `pip install` and `python -m build`
-- A **two-layer cache system** -- parse once with libclang, rebuild anywhere without it
-- A **plugin system** -- register third-party backends and writers via entry points
 
 Zero runtime dependencies. Pure Python. Supports LLVM 18--21.
 
