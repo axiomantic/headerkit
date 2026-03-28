@@ -327,6 +327,26 @@ def main() -> int:
 
         return cache_save_main(sys.argv[2:])
 
+    if len(sys.argv) > 1 and sys.argv[1] == "cache":
+        from headerkit._cache_cli import (
+            cache_clear_main,
+            cache_rebuild_index_main,
+            cache_status_main,
+        )
+
+        sub_argv = sys.argv[2:]
+        if sub_argv and sub_argv[0] == "status":
+            return cache_status_main(sub_argv)
+        if sub_argv and sub_argv[0] == "clear":
+            return cache_clear_main(sub_argv)
+        if sub_argv and sub_argv[0] == "rebuild-index":
+            return cache_rebuild_index_main(sub_argv)
+        print(
+            "headerkit cache: unknown subcommand. Available: status, clear, rebuild-index",
+            file=sys.stderr,
+        )
+        return 1
+
     parser = _build_parser()
     args = parser.parse_args()
 
