@@ -102,6 +102,7 @@ def generate(
     no_ir_cache: bool = False,
     no_output_cache: bool = False,
     project_prefixes: tuple[str, ...] | None = None,
+    _result_meta: dict[str, object] | None = None,
 ) -> str:
     """Parse a C/C++ header and generate output using a single writer.
 
@@ -170,6 +171,8 @@ def generate(
     )
 
     header: Header | None = None
+    ir_from_cache = False
+    output_from_cache = False
 
     # ---- Step 6: Cache hit -> json_to_header; Cache miss -> backend.parse() ----
     use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
@@ -181,6 +184,8 @@ def generate(
             existing_slug = lookup_slug(ir_index, ir_cache_key)
             if existing_slug is not None:
                 header = read_ir_entry(cache_dir=resolved_cache_dir, slug=existing_slug)
+                if header is not None:
+                    ir_from_cache = True
 
     if header is None:
         # Cache miss: parse with backend
@@ -195,7 +200,7 @@ def generate(
         header = backend.parse(
             parse_code,
             str(header_path),
-            include_dirs or [],
+            [],
             all_args,
             project_prefixes=project_prefixes,
         )
@@ -247,6 +252,8 @@ def generate(
                     slug=existing_out_slug,
                     output_extension=output_ext,
                 )
+                if output is not None:
+                    output_from_cache = True
 
     if output is None:
         output = writer_inst.write(header)
@@ -275,6 +282,9 @@ def generate(
         Path(output_path).write_text(output, encoding="utf-8")
 
     # ---- Step 10: Return result ----
+    if _result_meta is not None:
+        _result_meta["from_cache"] = ir_from_cache or output_from_cache
+
     return output
 
 
@@ -328,6 +338,7 @@ def generate_all(
             stem = Path(header_path).stem
             opath = Path(output_dir) / f"{stem}{ext}"
 
+        meta: dict[str, object] = {}
         output = generate(
             header_path=header_path,
             writer_name=wname,
@@ -341,6 +352,7 @@ def generate_all(
             no_cache=no_cache,
             no_ir_cache=no_ir_cache,
             no_output_cache=no_output_cache,
+            _result_meta=meta,
         )
 
         results.append(
@@ -348,8 +360,7 @@ def generate_all(
                 writer_name=wname,
                 output=output,
                 output_path=Path(opath) if opath else None,
-                from_cache=False,  # Simplified; actual cache-hit tracking
-                # would need to be threaded through generate()
+                from_cache=bool(meta.get("from_cache", False)),
             )
         )
 
