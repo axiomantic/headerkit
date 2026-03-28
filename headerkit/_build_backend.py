@@ -23,6 +23,13 @@ logger = logging.getLogger("headerkit.build")
 _INNER_BACKEND_MODULE = "hatchling.build"
 
 
+def _config_bool(config_settings: dict[str, Any] | None, key: str) -> bool:
+    """Check if a config_settings key is truthy."""
+    if not config_settings:
+        return False
+    return str(config_settings.get(key, "")).lower() in ("true", "1")
+
+
 def _get_inner_backend(config_settings: dict[str, Any] | None = None) -> Any:
     """Import and return the inner build backend module.
 
@@ -75,9 +82,9 @@ def _run_generation(config_settings: dict[str, Any] | None = None) -> None:
     global_include_dirs: list[str] = config.get("include_dirs", [])
     global_defines: list[str] = config.get("defines", [])
 
-    no_cache = bool(config_settings and config_settings.get("no-cache", "").lower() in ("true", "1"))
-    no_ir_cache = bool(config_settings and config_settings.get("no-ir-cache", "").lower() in ("true", "1"))
-    no_output_cache = bool(config_settings and config_settings.get("no-output-cache", "").lower() in ("true", "1"))
+    no_cache = _config_bool(config_settings, "no-cache")
+    no_ir_cache = _config_bool(config_settings, "no-ir-cache")
+    no_output_cache = _config_bool(config_settings, "no-output-cache")
 
     for header_path, entry_config in headers.items():
         entry_defines = global_defines + entry_config.get("defines", [])
