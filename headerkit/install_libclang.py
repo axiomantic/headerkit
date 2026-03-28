@@ -31,10 +31,27 @@ import tempfile
 
 logger = logging.getLogger("headerkit.install")
 
+# When True, _run() suppresses subprocess stdout/stderr so that
+# auto_install() can operate silently.  Set only by auto_install().
+_quiet: bool = False
+
 
 def _run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
-    """Run a command, printing it first for visibility."""
+    """Run a command, printing it first for visibility.
+
+    When the module-level ``_quiet`` flag is set (by :func:`auto_install`),
+    subprocess stdout and stderr are sent to ``os.devnull`` so that
+    external commands (apt-get, brew, choco, etc.) do not leak output.
+    """
     print(f"+ {' '.join(cmd)}", flush=True)
+    if _quiet:
+        return subprocess.run(
+            cmd,
+            check=check,
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     return subprocess.run(cmd, check=check, text=True)
 
 
@@ -187,34 +204,42 @@ def auto_install() -> bool:
 
     :returns: True if libclang is available after this call, False otherwise.
     """
-    if verify_libclang():
-        return True
+    global _quiet  # noqa: PLW0603
 
-    logger.info("libclang not found; attempting automatic installation")
-    logger.info("Platform: %s (%s)", sys.platform, platform.machine())
-
-    ok: bool
     # Redirect stdout to devnull so that print() calls inside the
     # platform-specific installers (and _run / verify_libclang) do not
-    # leak output to callers that expect a quiet API.
+    # leak output to callers that expect a quiet API.  The _quiet flag
+    # additionally suppresses subprocess stdout/stderr which
+    # redirect_stdout cannot intercept.
+    ok: bool
     with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull):
-        if sys.platform == "linux":
-            ok = install_linux()
-        elif sys.platform == "darwin":
-            ok = install_macos()
-        elif sys.platform == "win32":
-            ok = install_windows(DEFAULT_LLVM_VERSION)
-        else:
-            logger.warning("Unsupported platform for auto-install: %s", sys.platform)
-            return False
+        _quiet = True
+        try:
+            if verify_libclang():
+                return True
 
-        if not ok:
-            logger.warning("libclang installation failed")
-            return False
+            logger.info("libclang not found; attempting automatic installation")
+            logger.info("Platform: %s (%s)", sys.platform, platform.machine())
 
-        if not verify_libclang():
-            logger.warning("libclang installed but could not be loaded")
-            return False
+            if sys.platform == "linux":
+                ok = install_linux()
+            elif sys.platform == "darwin":
+                ok = install_macos()
+            elif sys.platform == "win32":
+                ok = install_windows(DEFAULT_LLVM_VERSION)
+            else:
+                logger.warning("Unsupported platform for auto-install: %s", sys.platform)
+                return False
+
+            if not ok:
+                logger.warning("libclang installation failed")
+                return False
+
+            if not verify_libclang():
+                logger.warning("libclang installed but could not be loaded")
+                return False
+        finally:
+            _quiet = False
 
     logger.info("libclang auto-installed successfully")
     return True
