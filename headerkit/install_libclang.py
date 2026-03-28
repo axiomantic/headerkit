@@ -39,7 +39,10 @@ def _run(cmd: list[str], check: bool = True, *, quiet: bool = False) -> subproce
     ``DEVNULL`` so that external commands (apt-get, brew, choco, etc.)
     do not leak output.
     """
-    print(f"+ {' '.join(cmd)}", flush=True)
+    if quiet:
+        logger.info("+ %s", " ".join(cmd))
+    else:
+        print(f"+ {' '.join(cmd)}", flush=True)
     if quiet:
         return subprocess.run(
             cmd,
