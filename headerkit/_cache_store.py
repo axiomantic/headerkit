@@ -227,7 +227,7 @@ def write_output_entry(
         "cache_key": cache_key,
         "ir_cache_key": ir_cache_key,
         "writer_name": writer_name,
-        "writer_options": {k: str(v) for k, v in writer_options.items()},
+        "writer_options": {k: json.dumps(v, sort_keys=True, separators=(",", ":")) for k, v in writer_options.items()},
         "writer_cache_version": writer_cache_version,
         "created": now,
         "headerkit_version": importlib.metadata.version("headerkit"),

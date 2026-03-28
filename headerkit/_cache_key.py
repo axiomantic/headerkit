@@ -10,6 +10,7 @@ writer_cache_version).
 from __future__ import annotations
 
 import hashlib
+import json
 import platform as platform_mod
 import sys
 from dataclasses import dataclass
@@ -156,7 +157,8 @@ def compute_output_cache_key(
 
     if writer_options:
         for key in sorted(writer_options.keys()):
-            hasher.update(f"writer-opt:{key}={writer_options[key]}\0".encode())
+            canonical = json.dumps(writer_options[key], sort_keys=True, separators=(",", ":"))
+            hasher.update(f"writer-opt:{key}={canonical}\0".encode())
 
     if writer_cache_version is not None:
         hasher.update(f"writer-version:{writer_cache_version}\0".encode())
