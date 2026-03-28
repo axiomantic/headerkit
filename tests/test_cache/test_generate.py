@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -205,6 +206,15 @@ class TestGenerateOutputPath:
         assert out_file.read_text(encoding="utf-8") == result
 
 
+def _make_backend_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch get_backend to raise ValueError, simulating missing libclang."""
+
+    def raise_no_backend(name: str) -> None:
+        raise ValueError(f"Unknown backend: {name!r}. Available: (none)")
+
+    monkeypatch.setattr("headerkit._generate.get_backend", raise_no_backend)
+
+
 class TestGenerateOutputCacheFallback:
     """Test that generate() falls back to output cache when backend is unavailable."""
 
@@ -212,8 +222,6 @@ class TestGenerateOutputCacheFallback:
         self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """generate() uses output cache when backend raises ValueError."""
-        import shutil
-
         mock_header = Header(
             str(header_file),
             [Function("add", CType("int"), [Parameter("a", CType("int")), Parameter("b", CType("int"))])],
@@ -244,10 +252,7 @@ class TestGenerateOutputCacheFallback:
         assert (cache_path / "output").exists()
 
         # Now make get_backend raise ValueError (simulating missing libclang)
-        def raise_no_backend(name: str) -> None:
-            raise ValueError(f"Unknown backend: {name!r}. Available: (none)")
-
-        monkeypatch.setattr("headerkit._generate.get_backend", raise_no_backend)
+        _make_backend_unavailable(monkeypatch)
 
         # Second call: IR cache misses, backend unavailable -- should
         # fall back to output cache instead of raising.
@@ -264,11 +269,7 @@ class TestGenerateOutputCacheFallback:
         self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """generate() raises ValueError when backend unavailable AND no cache."""
-
-        def raise_no_backend(name: str) -> None:
-            raise ValueError(f"Unknown backend: {name!r}")
-
-        monkeypatch.setattr("headerkit._generate.get_backend", raise_no_backend)
+        _make_backend_unavailable(monkeypatch)
 
         with pytest.raises(ValueError, match="Unknown backend"):
             generate(
@@ -282,11 +283,7 @@ class TestGenerateOutputCacheFallback:
         self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """generate() raises when no_cache=True and backend unavailable."""
-
-        def raise_no_backend(name: str) -> None:
-            raise ValueError(f"Unknown backend: {name!r}")
-
-        monkeypatch.setattr("headerkit._generate.get_backend", raise_no_backend)
+        _make_backend_unavailable(monkeypatch)
 
         with pytest.raises(ValueError, match="Unknown backend"):
             generate(
