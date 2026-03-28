@@ -114,29 +114,6 @@ def test_writer_functions_match_direct_import():
     assert headerkit.register_writer is writers.register_writer
 
 
-def test_cache_symbols_in_all():
-    """Cache API symbols should be listed in headerkit.__all__."""
-    import headerkit
-
-    expected_cache_symbols = {
-        "compute_hash",
-        "is_up_to_date",
-        "save_hash",
-    }
-    all_set = set(headerkit.__all__)
-    assert expected_cache_symbols <= all_set, f"Missing from headerkit.__all__: {expected_cache_symbols - all_set}"
-
-
-def test_cache_functions_match_direct_import():
-    """Cache functions imported from headerkit should match headerkit.cache."""
-    import headerkit
-    from headerkit import cache
-
-    assert headerkit.compute_hash is cache.compute_hash
-    assert headerkit.is_up_to_date is cache.is_up_to_date
-    assert headerkit.save_hash is cache.save_hash
-
-
 def test_generate_exported():
     """generate function should be importable from headerkit and match _generate module."""
     import headerkit

@@ -3,7 +3,6 @@
 from headerkit._generate import GenerateResult, generate, generate_all
 from headerkit._ir_json import json_to_header
 from headerkit.backends import get_backend, is_backend_available, list_backends
-from headerkit.cache import compute_hash, default_namespace, is_up_to_date, save_hash
 from headerkit.ir import (
     Array,
     Constant,
@@ -74,11 +73,6 @@ __all__ = [
     "is_writer_available",
     "list_writers",
     "register_writer",
-    # Cache API
-    "compute_hash",
-    "default_namespace",
-    "is_up_to_date",
-    "save_hash",
     # Generate API
     "generate",
     "generate_all",
