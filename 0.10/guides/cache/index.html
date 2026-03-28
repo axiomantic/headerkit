@@ -1875,6 +1875,10 @@ can build without libclang:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>git<span class="w"> </span>add<span class="w"> </span>.hkcache/
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;cache: update headerkit cache&quot;</span>
 </code></pre></div>
+<p>When libclang is unavailable and the IR cache misses, <code>generate()</code> will check
+the output cache before raising an error. If a cached output exists for the
+requested writer and inputs, it is returned directly. This makes <code>pip install</code>
+from committed <code>.hkcache/</code> work without libclang.</p>
 <p>A typical workflow:</p>
 <ol>
 <li>Developer with libclang runs <code>headerkit</code> to generate bindings.</li>
