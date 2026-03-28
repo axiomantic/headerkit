@@ -43,15 +43,8 @@ def _run(cmd: list[str], check: bool = True, *, quiet: bool = False) -> subproce
         logger.info("+ %s", " ".join(cmd))
     else:
         print(f"+ {' '.join(cmd)}", flush=True)
-    if quiet:
-        return subprocess.run(
-            cmd,
-            check=check,
-            text=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    return subprocess.run(cmd, check=check, text=True)
+    devnull = subprocess.DEVNULL if quiet else None
+    return subprocess.run(cmd, check=check, text=True, stdout=devnull, stderr=devnull)
 
 
 def _is_command_available(name: str) -> bool:
