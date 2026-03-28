@@ -527,10 +527,11 @@ class TestDockerHelpers:
         assert "-v" in cmd
         v_indices = [i for i, x in enumerate(cmd) if x == "-v"]
         volume_args = [cmd[i + 1] for i in v_indices]
-        project_str = str(Path("/home/user/project"))
-        assert f"{project_str}:{project_str}:rw" in volume_args
-        hk_str = str(Path("/home/user/headerkit"))
-        assert f"{hk_str}:/headerkit-src:ro" in volume_args
+        # Host side uses native str(), container side uses POSIX
+        project_host = str(Path("/home/user/project"))
+        assert f"{project_host}:/home/user/project:rw" in volume_args
+        hk_host = str(Path("/home/user/headerkit"))
+        assert f"{hk_host}:/headerkit-src:ro" in volume_args
 
         # Verify bash -c script contains pip install before headerkit command
         bash_idx = cmd.index("bash")
@@ -596,8 +597,9 @@ class TestDockerHelpers:
         # Verify volume mount as list item
         v_indices = [i for i, x in enumerate(cmd) if x == "-v"]
         volume_args = [cmd[i + 1] for i in v_indices]
-        inc_str = str(Path("/usr/local/include/libfoo"))
-        assert f"{inc_str}:{inc_str}:ro" in volume_args
+        # Host side uses native str(), container side uses POSIX
+        inc_host = str(Path("/usr/local/include/libfoo"))
+        assert f"{inc_host}:/usr/local/include/libfoo:ro" in volume_args
 
         # Verify -I in bash script
         bash_idx = cmd.index("bash")
@@ -618,7 +620,7 @@ class TestDockerHelpers:
             machine="x86_64",
             py_impl="cpython312",
         )
-        malicious_path = '/tmp/evil"; rm -rf /'
+        malicious_path = '/tmp/evil"; rm -rf ~'
         cmd = build_docker_command(
             target=target,
             project_root=Path("/home/user/project"),
@@ -634,7 +636,8 @@ class TestDockerHelpers:
         script = cmd[bash_idx + 2]
         # All user-controlled values should be shell-quoted via shlex.quote(),
         # which wraps them in single quotes to neutralize special characters.
-        assert shlex.quote(malicious_path) in script
+        # Path goes through Path.as_posix() then shlex.quote()
+        assert shlex.quote(Path(malicious_path).as_posix()) in script
         # Defines should be quoted
         assert shlex.quote('FOO=bar"; echo pwned') in script
         # Backend args should be quoted
@@ -642,7 +645,8 @@ class TestDockerHelpers:
         # Writer options should be quoted
         assert shlex.quote('cffi:key=val"; cat /etc/passwd') in script
         # Cache dir should be quoted
-        assert shlex.quote(str(Path("/home/user/project/.hkcache"))) in script
+        # Bash script paths are always POSIX (runs inside Linux container)
+        assert shlex.quote("/home/user/project/.hkcache") in script
 
 
 class TestPopulateFunction:

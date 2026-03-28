@@ -465,8 +465,11 @@ def build_docker_command(
     :param writer_options: Per-writer options.
     :returns: Command list suitable for subprocess.run().
     """
-    project_root_str = str(project_root)
-    cache_dir_str = str(cache_dir)
+    # Use POSIX paths for the container side of volume mounts and for
+    # all paths inside the bash -c script (which runs on Linux).
+    # The host side uses native str() so Docker Desktop can resolve it.
+    project_posix = project_root.as_posix()
+    cache_posix = cache_dir.as_posix()
     python_path = target.python_path
 
     cmd = [
@@ -476,7 +479,7 @@ def build_docker_command(
         "--platform",
         target.docker_platform,
         "-v",
-        f"{project_root_str}:{project_root_str}:rw",
+        f"{project_root!s}:{project_posix}:rw",
     ]
 
     # Headerkit source mount
@@ -491,7 +494,8 @@ def build_docker_command(
             try:
                 inc_path.relative_to(project_root)
             except ValueError:
-                cmd.extend(["-v", f"{inc_path}:{inc_path}:ro"])
+                inc_posix = inc_path.as_posix()
+                cmd.extend(["-v", f"{inc_path!s}:{inc_posix}:ro"])
 
     cmd.append(target.docker_image)
 
@@ -512,12 +516,12 @@ def build_docker_command(
     # Build headerkit command
     hk_cmd_parts = [python_path, "-m", "headerkit"]
     for hp in header_paths:
-        hk_cmd_parts.append(shlex.quote(hp))
+        hk_cmd_parts.append(shlex.quote(Path(hp).as_posix()))
     for w in writers:
         hk_cmd_parts.extend(["-w", w])
     if include_dirs:
         for inc_dir in include_dirs:
-            hk_cmd_parts.extend(["-I", shlex.quote(str(Path(inc_dir)))])
+            hk_cmd_parts.extend(["-I", shlex.quote(Path(inc_dir).as_posix())])
     if defines:
         for d in defines:
             hk_cmd_parts.extend(["-D", shlex.quote(d)])
@@ -529,7 +533,7 @@ def build_docker_command(
             for key, value in opts.items():
                 hk_cmd_parts.extend(["--writer-opt", shlex.quote(f"{w_name}:{key}={value}")])
     hk_cmd_parts.extend(["--backend", backend_name])
-    hk_cmd_parts.extend(["--cache-dir", shlex.quote(cache_dir_str)])
+    hk_cmd_parts.extend(["--cache-dir", shlex.quote(cache_posix)])
     script_parts.append(" ".join(hk_cmd_parts))
 
     script = " && ".join(script_parts)
