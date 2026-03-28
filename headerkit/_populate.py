@@ -38,6 +38,19 @@ PLATFORM_MAP: dict[str, tuple[str, str]] = {
 DEFAULT_PYTHON_VERSIONS: list[str] = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
 
+def _parse_version(version: str) -> tuple[str, str]:
+    """Split and validate a MAJOR.MINOR version string.
+
+    :param version: Version string like "3.12".
+    :returns: (major, minor) tuple, e.g. ("3", "12").
+    :raises ValueError: If version is not in MAJOR.MINOR format.
+    """
+    parts = version.split(".")
+    if len(parts) != 2:
+        raise ValueError(f"Expected MAJOR.MINOR version, got: {version!r}")
+    return parts[0], parts[1]
+
+
 def python_path_for_version(version: str) -> str:
     """Return the manylinux Python interpreter path for a version string.
 
@@ -45,10 +58,7 @@ def python_path_for_version(version: str) -> str:
     :returns: Path like "/opt/python/cp312-cp312/bin/python".
     :raises ValueError: If version is not in MAJOR.MINOR format.
     """
-    parts = version.split(".")
-    if len(parts) != 2:
-        raise ValueError(f"Expected MAJOR.MINOR version, got: {version!r}")
-    major, minor = parts
+    major, minor = _parse_version(version)
     tag = f"cp{major}{minor}"
     return f"/opt/python/{tag}-{tag}/bin/python"
 
@@ -60,10 +70,7 @@ def py_impl_for_version(version: str) -> str:
     :returns: String like "cpython312".
     :raises ValueError: If version is not in MAJOR.MINOR format.
     """
-    parts = version.split(".")
-    if len(parts) != 2:
-        raise ValueError(f"Expected MAJOR.MINOR version, got: {version!r}")
-    major, minor = parts
+    major, minor = _parse_version(version)
     return f"cpython{major}{minor}"
 
 
@@ -249,6 +256,29 @@ def _parse_cibw_selectors(selector_str: str) -> list[str]:
     return selector_str.split()
 
 
+def _is_cibw_target_active(
+    version: str,
+    cibw_platform: str,
+    build_selectors: list[str],
+    skip_selectors: list[str],
+) -> bool:
+    """Check if a (version, cibw_platform) combination is active.
+
+    :param version: Python version string like "3.12".
+    :param cibw_platform: cibuildwheel platform tag (e.g. "manylinux_x86_64").
+    :param build_selectors: Build selector patterns from cibuildwheel config.
+    :param skip_selectors: Skip selector patterns from cibuildwheel config.
+    :returns: True if the combination matches a build selector and is not skipped.
+    """
+    major, minor = version.split(".")
+    full_tag = f"cp{major}{minor}-{cibw_platform}"
+    matched_build = any(fnmatch.fnmatch(full_tag, sel) for sel in build_selectors if not sel.startswith("pp"))
+    if not matched_build:
+        return False
+    matched_skip = any(fnmatch.fnmatch(full_tag, sel) for sel in skip_selectors)
+    return not matched_skip
+
+
 def parse_cibuildwheel_config(
     pyproject_path: Path,
 ) -> tuple[list[str], list[str], list[str]]:
@@ -327,17 +357,9 @@ def parse_cibuildwheel_config(
     # Only warn about a platform if at least one (version, cibw_platform)
     # combination matches a build selector AND is not skipped.
     for cibw_plat in _CIBW_NON_DOCKER_PLATFORMS:
-        plat_in_matrix = False
-        for ver in python_versions:
-            major, minor = ver.split(".")
-            full_tag = f"cp{major}{minor}-{cibw_plat}"
-            matched_build = any(fnmatch.fnmatch(full_tag, sel) for sel in build_selectors if not sel.startswith("pp"))
-            if not matched_build:
-                continue
-            matched_skip = any(fnmatch.fnmatch(full_tag, sel) for sel in skip_selectors)
-            if not matched_skip:
-                plat_in_matrix = True
-                break
+        plat_in_matrix = any(
+            _is_cibw_target_active(ver, cibw_plat, build_selectors, skip_selectors) for ver in python_versions
+        )
 
         if not plat_in_matrix:
             continue
@@ -351,24 +373,11 @@ def parse_cibuildwheel_config(
     # least one (version, cibw_tag) combination matches a build selector
     # AND is not excluded by a skip selector.
     for docker_plat, cibw_tags in docker_to_cibw.items():
-        plat_has_match = False
-        for cibw_plat in cibw_tags:
-            for ver in python_versions:
-                major, minor = ver.split(".")
-                full_tag = f"cp{major}{minor}-{cibw_plat}"
-                # Must match at least one build selector
-                matched_build = any(
-                    fnmatch.fnmatch(full_tag, sel) for sel in build_selectors if not sel.startswith("pp")
-                )
-                if not matched_build:
-                    continue
-                # Must not be excluded by a skip selector
-                matched_skip = any(fnmatch.fnmatch(full_tag, sel) for sel in skip_selectors)
-                if not matched_skip:
-                    plat_has_match = True
-                    break
-            if plat_has_match:
-                break
+        plat_has_match = any(
+            _is_cibw_target_active(ver, cibw_plat, build_selectors, skip_selectors)
+            for cibw_plat in cibw_tags
+            for ver in python_versions
+        )
 
         if plat_has_match:
             docker_platforms.add(docker_plat)

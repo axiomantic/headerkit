@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from headerkit._cli import parse_writer_options
 from headerkit._slug import rebuild_index, save_index
 
 if TYPE_CHECKING:
@@ -301,32 +302,14 @@ def cache_populate_main(argv: list[str]) -> int:
 
     # Parse writer options into dict, aggregating duplicate keys into lists
     # to match the main CLI's _parse_writer_specs() behavior.
-    writer_options: dict[str, dict[str, object]] | None = None
-    if args.writer_opts_raw:
-        writer_options_lists: dict[str, dict[str, list[str]]] = {}
-        for item in args.writer_opts_raw:
-            writer_name, sep, rest = item.partition(":")
-            if not sep:
-                print(
-                    f"headerkit cache populate: malformed --writer-opt: {item!r}; use WRITER:KEY=VALUE format",
-                    file=sys.stderr,
-                )
-                return 1
-
-            key, sep, value = rest.partition("=")
-            if not sep:
-                print(
-                    f"headerkit cache populate: malformed --writer-opt: {item!r}; expected WRITER:KEY=VALUE",
-                    file=sys.stderr,
-                )
-                return 1
-
-            writer_options_lists.setdefault(writer_name, {}).setdefault(key, []).append(value)
-
-        writer_options = {
-            w_name: {k: v[0] if len(v) == 1 else v for k, v in opts.items()}
-            for w_name, opts in writer_options_lists.items()
-        }
+    try:
+        writer_options = parse_writer_options(
+            args.writer_opts_raw,
+            command_name="headerkit cache populate",
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     from headerkit._populate import populate
 

@@ -21,6 +21,39 @@ from headerkit.backends import _load_backend_plugins
 from headerkit.writers import _load_writer_plugins
 
 
+def parse_writer_options(
+    raw_opts: list[str],
+    command_name: str = "headerkit",
+) -> dict[str, dict[str, object]] | None:
+    """Parse ``--writer-opt WRITER:KEY=VALUE`` arguments into a nested dict.
+
+    Aggregates duplicate keys into lists and collapses single-element lists
+    to plain strings.
+
+    :param raw_opts: Raw ``--writer-opt`` values from argparse.
+    :param command_name: Program name for error messages.
+    :returns: Nested dict ``{writer: {key: value_or_list}}``, or ``None``
+        when *raw_opts* is empty.
+    :raises ValueError: On malformed input (missing ``:`` scope or ``=``).
+    """
+    if not raw_opts:
+        return None
+
+    options_lists: dict[str, dict[str, list[str]]] = {}
+    for item in raw_opts:
+        writer_name, sep, rest = item.partition(":")
+        if not sep:
+            raise ValueError(f"{command_name}: malformed --writer-opt: {item!r}; use WRITER:KEY=VALUE format")
+
+        key, sep, value = rest.partition("=")
+        if not sep:
+            raise ValueError(f"{command_name}: malformed --writer-opt: {item!r}; expected WRITER:KEY=VALUE")
+
+        options_lists.setdefault(writer_name, {}).setdefault(key, []).append(value)
+
+    return {w_name: {k: v[0] if len(v) == 1 else v for k, v in opts.items()} for w_name, opts in options_lists.items()}
+
+
 def _env_bool(name: str, *, default: bool = False) -> bool:
     """Read an environment variable as a boolean.
 
