@@ -129,12 +129,11 @@ class TestLoadConfig:
         assert cfg.writer_options["cffi"].options == {"exclude_patterns": ["^__", "^_internal"]}
 
     def test_load_config_invalid_toml(self, tmp_path: Path) -> None:
-        """Exits with code 1 on malformed TOML."""
+        """Raises ValueError on malformed TOML."""
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text("this is not valid toml ===\n")
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ValueError, match="config parse error"):
             load_config(config_file)
-        assert exc_info.value.code == 1
 
     def test_load_config_from_pyproject(self, tmp_path: Path) -> None:
         """Loads [tool.headerkit] section from pyproject.toml."""
@@ -155,43 +154,33 @@ class TestLoadConfig:
         assert cfg.include_dirs == []
 
     def test_load_config_backend_wrong_type(self, tmp_path: Path) -> None:
-        """Exits with code 1 when backend is not a string."""
+        """Raises ValueError when backend is not a string."""
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text("backend = 42\n")
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ValueError, match="backend must be str"):
             load_config(config_file)
-        assert exc_info.value.code == 1
 
     def test_load_config_writers_wrong_type(self, tmp_path: Path) -> None:
-        """Exits with code 1 when writers is not a list of strings."""
+        """Raises ValueError when writers is not a list of strings."""
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text('writers = "cffi"\n')
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ValueError, match="writers must be list"):
             load_config(config_file)
-        assert exc_info.value.code == 1
 
     def test_load_config_writers_with_path_syntax(self, tmp_path: Path) -> None:
-        """Exits with code 1 when writers contain :path syntax."""
+        """Raises ValueError when writers contain :path syntax."""
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text('writers = ["cffi:output.h"]\n')
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ValueError, match="no :path syntax"):
             load_config(config_file)
-        assert exc_info.value.code == 1
 
-    def test_load_config_no_tomllib(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Exits with code 1 with install hint when tomllib is unavailable."""
+    def test_load_config_no_tomllib(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Raises ValueError with install hint when tomllib is unavailable."""
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text('backend = "libclang"\n')
         monkeypatch.setattr(config_module, "tomllib", None)
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ValueError, match="pip install tomli"):
             load_config(config_file)
-        assert exc_info.value.code == 1
-        captured = capsys.readouterr()
-        assert "tomli" in captured.err or "pip install" in captured.err, (
-            f"Expected install hint in stderr, got: {captured.err!r}"
-        )
 
 
 class TestMergeConfig:
@@ -374,9 +363,8 @@ class TestCacheConfig:
         assert cfg.cache_dir is None
 
     def test_load_cache_section_wrong_type(self, tmp_path: Path) -> None:
-        """Exits with code 1 when cache_dir is not a string."""
+        """Raises ValueError when cache_dir is not a string."""
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text("[cache]\ncache_dir = 42\n")
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ValueError, match="cache.cache_dir must be str"):
             load_config(config_file)
-        assert exc_info.value.code == 1

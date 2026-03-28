@@ -340,16 +340,20 @@ def main() -> int:
     # Load config
     config: HeaderkitConfig | None = None
     if not no_config:
-        if config_path_raw is not None:
-            explicit_config_path = Path(config_path_raw)
-            if not explicit_config_path.exists():
-                print(f"headerkit: config file not found: {config_path_raw}", file=sys.stderr)
-                return 1
-            config = load_config(explicit_config_path)
-        else:
-            discovered_config_path = find_config_file()
-            if discovered_config_path is not None:
-                config = load_config(discovered_config_path)
+        try:
+            if config_path_raw is not None:
+                explicit_config_path = Path(config_path_raw)
+                if not explicit_config_path.exists():
+                    print(f"headerkit: config file not found: {config_path_raw}", file=sys.stderr)
+                    return 1
+                config = load_config(explicit_config_path)
+            else:
+                discovered_config_path = find_config_file()
+                if discovered_config_path is not None:
+                    config = load_config(discovered_config_path)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
 
     # Merge config into args (CLI wins)
     args = merge_config(config, args)

@@ -59,20 +59,20 @@ def parse_extra_args(
             found_includes.add(str(Path(inc).resolve()))
 
     if extra_args:
-        i = 0
-        while i < len(extra_args):
-            arg = extra_args[i]
+        args_iter = iter(extra_args)
+        for arg in args_iter:
             if arg.startswith("-D"):
                 found_defines.add(arg[2:])
+            elif arg == "-I":
+                try:
+                    path = next(args_iter)
+                    found_includes.add(str(Path(path).resolve()))
+                except StopIteration:
+                    pass
             elif arg.startswith("-I"):
-                if len(arg) > 2:
-                    found_includes.add(str(Path(arg[2:]).resolve()))
-                elif i + 1 < len(extra_args):
-                    i += 1
-                    found_includes.add(str(Path(extra_args[i]).resolve()))
+                found_includes.add(str(Path(arg[2:]).resolve()))
             else:
                 found_other.add(arg)
-            i += 1
 
     return ParsedArgs(
         defines=sorted(found_defines),

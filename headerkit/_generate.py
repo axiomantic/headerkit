@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from headerkit._cache_key import (
+    ParsedArgs,
     compute_ir_cache_key,
     compute_output_cache_key,
     parse_extra_args,
@@ -103,6 +104,156 @@ def _writer_output_ext(writer: Any, writer_name: str) -> str:
     return _WRITER_EXTENSIONS.get(writer_name, ".txt")
 
 
+def _get_ir(
+    *,
+    backend_name: str,
+    header_path: Path,
+    project_root: Path,
+    parsed_args: ParsedArgs,
+    code: str | None,
+    resolved_cache_dir: Path | None,
+    use_ir_cache: bool,
+    project_prefixes: tuple[str, ...] | None,
+) -> tuple[Header, str, str, bool]:
+    """Resolve IR from cache or by parsing with the backend.
+
+    :returns: (header, ir_cache_key, ir_slug, ir_from_cache)
+    """
+    ir_cache_key = compute_ir_cache_key(
+        backend_name=backend_name,
+        header_path=header_path,
+        project_root=project_root,
+        parsed_args=parsed_args,
+        code=code,
+    )
+
+    ir_slug = build_slug(
+        backend_name=backend_name,
+        header_path=str(header_path),
+        defines=parsed_args.defines,
+        includes=parsed_args.includes,
+        other_args=parsed_args.other_args,
+    )
+
+    header: Header | None = None
+    ir_from_cache = False
+
+    if use_ir_cache:
+        assert resolved_cache_dir is not None
+        ir_index_path = resolved_cache_dir / "ir" / "index.json"
+        if ir_index_path.exists():
+            ir_index = load_index(ir_index_path)
+            existing_slug = lookup_slug(ir_index, ir_cache_key)
+            if existing_slug is not None:
+                header = read_ir_entry(cache_dir=resolved_cache_dir, slug=existing_slug)
+                if header is not None:
+                    ir_from_cache = True
+
+    if header is None:
+        backend = get_backend(backend_name)
+        parse_code = code if code is not None else header_path.read_text(encoding="utf-8")
+        all_args: list[str] = []
+        for d in parsed_args.defines:
+            all_args.append(f"-D{d}")
+        for inc in parsed_args.includes:
+            all_args.append(f"-I{inc}")
+        all_args.extend(parsed_args.other_args)
+        header = backend.parse(
+            parse_code,
+            str(header_path),
+            [],
+            all_args,
+            project_prefixes=project_prefixes,
+        )
+
+        if use_ir_cache:
+            assert resolved_cache_dir is not None
+            try:
+                write_ir_entry(
+                    cache_dir=resolved_cache_dir,
+                    slug=ir_slug,
+                    cache_key=ir_cache_key,
+                    header=header,
+                    backend_name=backend_name,
+                    header_path=str(header_path),
+                    defines=parsed_args.defines,
+                    includes=parsed_args.includes,
+                    other_args=parsed_args.other_args,
+                )
+            except OSError as exc:
+                logger.warning("Failed to write IR cache entry: %s", exc)
+
+    return header, ir_cache_key, ir_slug, ir_from_cache
+
+
+def _get_output(
+    *,
+    header: Header,
+    writer_name: str,
+    writer_options: dict[str, object],
+    ir_cache_key: str,
+    ir_slug: str,
+    resolved_cache_dir: Path | None,
+    use_output_cache: bool,
+) -> tuple[str, bool]:
+    """Resolve output from cache or by running the writer.
+
+    :returns: (output, output_from_cache)
+    """
+    writer_inst = get_writer(writer_name, **writer_options)
+    should_cache = _should_cache_output(writer_inst)
+    effective_output_cache = use_output_cache and should_cache
+
+    output_cache_key = compute_output_cache_key(
+        ir_cache_key=ir_cache_key,
+        writer_name=writer_name,
+        writer_options=writer_options or None,
+        writer_cache_version=_writer_cache_version(writer_inst),
+    )
+    output_ext = _writer_output_ext(writer_inst, writer_name)
+
+    output: str | None = None
+    output_from_cache = False
+
+    if effective_output_cache:
+        assert resolved_cache_dir is not None
+        writer_index_path = resolved_cache_dir / "output" / writer_name / "index.json"
+        if writer_index_path.exists():
+            writer_index = load_index(writer_index_path)
+            existing_out_slug = lookup_slug(writer_index, output_cache_key)
+            if existing_out_slug is not None:
+                output = read_output_entry(
+                    cache_dir=resolved_cache_dir,
+                    writer_name=writer_name,
+                    slug=existing_out_slug,
+                    output_extension=output_ext,
+                )
+                if output is not None:
+                    output_from_cache = True
+
+    if output is None:
+        output = writer_inst.write(header)
+
+        if effective_output_cache:
+            assert resolved_cache_dir is not None
+            try:
+                write_output_entry(
+                    cache_dir=resolved_cache_dir,
+                    writer_name=writer_name,
+                    slug=ir_slug,
+                    cache_key=output_cache_key,
+                    ir_cache_key=ir_cache_key,
+                    output=output,
+                    writer_options=writer_options or {},
+                    writer_cache_version=_writer_cache_version(writer_inst),
+                    output_extension=output_ext,
+                )
+            except OSError as exc:
+                logger.warning("Failed to write output cache entry: %s", exc)
+
+    return output, output_from_cache
+
+
 def generate(
     header_path: str | Path,
     writer_name: str | None = None,
@@ -145,7 +296,6 @@ def generate(
     :returns: Generated output string.
     :raises FileNotFoundError: If header_path does not exist and code is not provided.
     """
-    # ---- Step 1: Resolve cache_dir ----
     header_path = Path(header_path)
     if code is None and not header_path.exists():
         raise FileNotFoundError(f"Header file not found: {header_path}")
@@ -162,143 +312,36 @@ def generate(
         else:
             resolved_cache_dir = find_cache_dir(header_path.parent)
 
-    # ---- Step 2: Read header file content (for cache key) ----
-    # (content is read lazily by compute_ir_cache_key)
-
-    # ---- Step 3: Parse extra_args into ParsedArgs ----
     parsed_args = parse_extra_args(extra_args, include_dirs, defines)
-
-    # ---- Step 4: Compute IR cache key ----
     project_root = _find_project_root(header_path.parent)
-    ir_cache_key = compute_ir_cache_key(
+    use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
+    use_output_cache = not no_cache and not no_output_cache and resolved_cache_dir is not None
+
+    header, ir_cache_key, ir_slug, ir_from_cache = _get_ir(
         backend_name=backend_name,
         header_path=header_path,
         project_root=project_root,
         parsed_args=parsed_args,
         code=code,
+        resolved_cache_dir=resolved_cache_dir,
+        use_ir_cache=use_ir_cache,
+        project_prefixes=project_prefixes,
     )
 
-    # ---- Step 5: Build IR slug, check IR cache ----
-    ir_slug = build_slug(
-        backend_name=backend_name,
-        header_path=str(header_path),
-        defines=parsed_args.defines,
-        includes=parsed_args.includes,
-        other_args=parsed_args.other_args,
-    )
-
-    header: Header | None = None
-    ir_from_cache = False
-    output_from_cache = False
-
-    # ---- Step 6: Cache hit -> json_to_header; Cache miss -> backend.parse() ----
-    use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
-    if use_ir_cache:
-        assert resolved_cache_dir is not None
-        ir_index_path = resolved_cache_dir / "ir" / "index.json"
-        if ir_index_path.exists():
-            ir_index = load_index(ir_index_path)
-            existing_slug = lookup_slug(ir_index, ir_cache_key)
-            if existing_slug is not None:
-                header = read_ir_entry(cache_dir=resolved_cache_dir, slug=existing_slug)
-                if header is not None:
-                    ir_from_cache = True
-
-    if header is None:
-        # Cache miss: parse with backend
-        backend = get_backend(backend_name)
-        parse_code = code if code is not None else header_path.read_text(encoding="utf-8")
-        all_args: list[str] = []
-        for d in parsed_args.defines:
-            all_args.append(f"-D{d}")
-        for inc in parsed_args.includes:
-            all_args.append(f"-I{inc}")
-        all_args.extend(parsed_args.other_args)
-        header = backend.parse(
-            parse_code,
-            str(header_path),
-            [],
-            all_args,
-            project_prefixes=project_prefixes,
-        )
-
-        # Write IR to cache
-        if use_ir_cache:
-            assert resolved_cache_dir is not None
-            try:
-                write_ir_entry(
-                    cache_dir=resolved_cache_dir,
-                    slug=ir_slug,
-                    cache_key=ir_cache_key,
-                    header=header,
-                    backend_name=backend_name,
-                    header_path=str(header_path),
-                    defines=parsed_args.defines,
-                    includes=parsed_args.includes,
-                    other_args=parsed_args.other_args,
-                )
-            except OSError as exc:
-                logger.warning("Failed to write IR cache entry: %s", exc)
-
-    # ---- Step 7: Check cache_output attr, compute output cache key ----
-    writer_inst = get_writer(writer_name, **writer_options)
-    should_cache = _should_cache_output(writer_inst)
-    use_output_cache = not no_cache and not no_output_cache and should_cache and resolved_cache_dir is not None
-
-    output_cache_key = compute_output_cache_key(
-        ir_cache_key=ir_cache_key,
+    output, output_from_cache = _get_output(
+        header=header,
         writer_name=writer_name,
-        writer_options=writer_options or None,
-        writer_cache_version=_writer_cache_version(writer_inst),
+        writer_options=writer_options,
+        ir_cache_key=ir_cache_key,
+        ir_slug=ir_slug,
+        resolved_cache_dir=resolved_cache_dir,
+        use_output_cache=use_output_cache,
     )
-    output_ext = _writer_output_ext(writer_inst, writer_name)
 
-    output: str | None = None
-
-    # ---- Step 8: Output cache hit -> read cached; miss -> writer.write() ----
-    if use_output_cache:
-        assert resolved_cache_dir is not None
-        writer_index_path = resolved_cache_dir / "output" / writer_name / "index.json"
-        if writer_index_path.exists():
-            writer_index = load_index(writer_index_path)
-            existing_out_slug = lookup_slug(writer_index, output_cache_key)
-            if existing_out_slug is not None:
-                output = read_output_entry(
-                    cache_dir=resolved_cache_dir,
-                    writer_name=writer_name,
-                    slug=existing_out_slug,
-                    output_extension=output_ext,
-                )
-                if output is not None:
-                    output_from_cache = True
-
-    if output is None:
-        output = writer_inst.write(header)
-
-        # Write output to cache
-        if use_output_cache:
-            assert resolved_cache_dir is not None
-            try:
-                write_output_entry(
-                    cache_dir=resolved_cache_dir,
-                    writer_name=writer_name,
-                    slug=ir_slug,
-                    cache_key=output_cache_key,
-                    ir_cache_key=ir_cache_key,
-                    output=output,
-                    writer_options=writer_options or {},
-                    writer_cache_version=_writer_cache_version(writer_inst),
-                    output_extension=output_ext,
-                )
-            except OSError as exc:
-                logger.warning("Failed to write output cache entry: %s", exc)
-
-    # ---- Step 9: Optionally write output to output_path ----
     if output_path is not None:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(output, encoding="utf-8")
 
-    # ---- Step 10: Return result ----
     if _result_meta is not None:
         _result_meta["from_cache"] = ir_from_cache or output_from_cache
 
