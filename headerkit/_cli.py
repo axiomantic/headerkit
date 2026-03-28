@@ -367,8 +367,7 @@ def main() -> int:
     resolved_no_output_cache: bool = args.no_output_cache or _env_bool("HEADERKIT_NO_OUTPUT_CACHE")
     resolved_cache_dir: str | None = args.cache_dir
     if not resolved_no_cache and config is not None:
-        if not resolved_no_cache:
-            resolved_no_cache = config.no_cache
+        resolved_no_cache = config.no_cache
         if not resolved_no_ir_cache:
             resolved_no_ir_cache = config.no_ir_cache
         if not resolved_no_output_cache:

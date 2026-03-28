@@ -236,24 +236,17 @@ A typical workflow:
 
 ### CI validation
 
-Verify that committed cache entries are fresh:
+To verify the committed cache is up-to-date in CI:
 
-```yaml
-# .github/workflows/check-cache.yml
-name: Validate headerkit cache
-on: [push, pull_request]
+```bash
+# Generate with current sources
+headerkit generate mylib.h --writer cffi --output-path bindings.py
 
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install headerkit
-      - run: headerkit cache status --cache-dir .hkcache
+# Check for uncommitted changes
+git diff --exit-code .hkcache/ bindings.py
 ```
+
+If the diff is non-empty, the cache is stale and needs to be regenerated.
 
 ## Writer opt-out
 
