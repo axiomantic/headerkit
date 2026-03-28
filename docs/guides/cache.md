@@ -227,6 +227,11 @@ git add .hkcache/
 git commit -m "cache: update headerkit cache"
 ```
 
+When libclang is unavailable and the IR cache misses, `generate()` will check
+the output cache before raising an error. If a cached output exists for the
+requested writer and inputs, it is returned directly. This makes `pip install`
+from committed `.hkcache/` work without libclang.
+
 A typical workflow:
 
 1. Developer with libclang runs `headerkit` to generate bindings.
