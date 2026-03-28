@@ -9,9 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Two-layer content-addressable cache store (`.hkcache/` directory)
+- `generate()` and `generate_all()` public API for cache-aware header generation
+- `json_to_header()` JSON IR deserializer (inverse of `header_to_json()`)
+- `GenerateResult` dataclass for multi-writer generation results
+- PEP 517 build backend (`headerkit._build_backend`) for consumer projects
+- CLI flags: `--no-cache`, `--no-ir-cache`, `--no-output-cache`, `--cache-dir`
+- Environment variables: `HEADERKIT_NO_CACHE`, `HEADERKIT_NO_IR_CACHE`, `HEADERKIT_NO_OUTPUT_CACHE`
+- Cache subcommands: `headerkit cache status`, `headerkit cache clear`, `headerkit cache rebuild-index`
+- `[tool.headerkit.cache]` configuration section in pyproject.toml
+- Writer `cache_output` attribute for opt-out of output caching (diff, prompt writers)
 - Environment-namespaced cache sidecars via `namespace` parameter on `compute_hash()`, `save_hash()`, `is_up_to_date()`, and `is_up_to_date_batch()`
 - `default_namespace()` function returning `{impl}-{major}{minor}-{platform}-{machine}` (e.g. `cpython-312-darwin-arm64`)
 - Namespaced sidecar files use `{name}.{namespace}.hkcache` pattern, isolating caches per environment
+
+### Changed
+
+- CLI `main()` now delegates to `generate()` for cache-integrated pipeline
 
 ## [0.9.0] - 2026-03-24
 
