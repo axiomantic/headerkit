@@ -17,6 +17,64 @@ Generates:
 
 Zero runtime dependencies. Pure Python. Supports LLVM 18--21.
 
+### Quick examples
+
+**Generate ctypes bindings:**
+```bash
+headerkit mylib.h -w ctypes:bindings.py
+```
+
+**Generate CFFI definitions:**
+```bash
+headerkit mylib.h -w cffi:_cffi_defs.py
+```
+
+**Generate Cython declarations:**
+```bash
+headerkit mylib.h -w cython:mylib.pxd
+```
+
+**Generate LuaJIT FFI bindings:**
+```bash
+headerkit mylib.h -w lua:mylib_ffi.lua
+```
+
+**Export JSON IR:**
+```bash
+headerkit mylib.h -w json:mylib.json
+```
+
+**Diff two header versions:**
+```python
+from headerkit.backends import get_backend
+from headerkit.writers.diff import DiffWriter
+
+backend = get_backend("libclang")
+old = backend.parse('#include "mylib_v1.h"', "v1.h")
+new = backend.parse('#include "mylib_v2.h"', "v2.h")
+print(DiffWriter(baseline=old, format="markdown").write(new))
+```
+
+**Generate LLM prompt summary:**
+```bash
+headerkit mylib.h -w prompt
+```
+
+**Use as PEP 517 build backend:**
+```toml
+# In your project's pyproject.toml:
+[build-system]
+requires = ["headerkit", "hatchling"]
+build-backend = "headerkit._build_backend"
+```
+
+**Use the Python API:**
+```python
+from headerkit import generate
+
+output = generate("mylib.h", "cffi")
+```
+
 ```mermaid
 graph LR
     A[C/C++ headers] --> B[backend]
