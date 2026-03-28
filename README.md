@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/headerkit)](https://pypi.org/project/headerkit/)
 [![License](https://img.shields.io/github/license/axiomantic/headerkit)](https://github.com/axiomantic/headerkit/blob/main/LICENSE)
 
-**headerkit** parses C/C++ headers with libclang and generates Python bindings, Cython declarations, LuaJIT FFI bindings, and more. It is:
+**headerkit** is a CLI tool and Python library that parses C/C++ headers with libclang and generates Python bindings, Cython declarations, LuaJIT FFI bindings, and more. It is:
 
 - A **CFFI binding generator** -- produce `ffi.cdef()` declarations from C headers
 - A **ctypes binding generator** -- produce complete `ctypes` struct/function modules
