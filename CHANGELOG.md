@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `generate()` now falls back to the output cache when the backend (libclang) is unavailable, enabling the documented libclang-free build workflow
+
 ## [0.10.0] - 2026-03-28
 
 ### Added

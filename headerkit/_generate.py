@@ -200,36 +200,32 @@ def _get_output(
 
     :returns: (output, output_from_cache)
     """
-    writer_inst = get_writer(writer_name, **writer_options)
-    should_cache = _should_cache_output(writer_inst)
-    effective_output_cache = use_output_cache and should_cache
-
+    writer_inst: Any = None
     output: str | None = None
     output_from_cache = False
+    output_cache_key = ""
+    output_ext = ""
 
-    if effective_output_cache:
-        output_cache_key = compute_output_cache_key(
+    if use_output_cache:
+        assert resolved_cache_dir is not None
+        writer_inst, output_cache_key, output_ext = _compute_output_cache_info(
             ir_cache_key=ir_cache_key,
             writer_name=writer_name,
-            writer_options=writer_options or None,
-            writer_cache_version=_writer_cache_version(writer_inst),
+            writer_options=writer_options,
         )
-        output_ext = _writer_output_ext(writer_inst, writer_name)
+        output = _read_cached_output(
+            cache_dir=resolved_cache_dir,
+            writer_name=writer_name,
+            output_cache_key=output_cache_key,
+            output_ext=output_ext,
+        )
+        if output is not None:
+            output_from_cache = True
 
-        assert resolved_cache_dir is not None
-        writer_index_path = resolved_cache_dir / "output" / writer_name / "index.json"
-        if writer_index_path.exists():
-            writer_index = load_index(writer_index_path)
-            existing_out_slug = lookup_slug(writer_index, output_cache_key)
-            if existing_out_slug is not None:
-                output = read_output_entry(
-                    cache_dir=resolved_cache_dir,
-                    writer_name=writer_name,
-                    slug=existing_out_slug,
-                    output_extension=output_ext,
-                )
-                if output is not None:
-                    output_from_cache = True
+    if writer_inst is None:
+        writer_inst = get_writer(writer_name, **writer_options)
+
+    effective_output_cache = use_output_cache and _should_cache_output(writer_inst)
 
     if output is None:
         output = writer_inst.write(header)
@@ -252,6 +248,100 @@ def _get_output(
                 logger.warning("Failed to write output cache entry: %s", exc)
 
     return output, output_from_cache
+
+
+def _compute_output_cache_info(
+    *,
+    ir_cache_key: str,
+    writer_name: str,
+    writer_options: dict[str, object],
+) -> tuple[Any, str, str]:
+    """Instantiate the writer and derive its output cache key and extension.
+
+    Pure computation with no I/O -- separated from cache lookup so callers
+    that only need the key (e.g. ``_try_output_cache_fallback``) are not
+    forced to accept unused return values.
+
+    :returns: (writer_inst, output_cache_key, output_ext)
+    """
+    writer_inst = get_writer(writer_name, **writer_options)
+    output_cache_key = compute_output_cache_key(
+        ir_cache_key=ir_cache_key,
+        writer_name=writer_name,
+        writer_options=writer_options,
+        writer_cache_version=_writer_cache_version(writer_inst),
+    )
+    output_ext = _writer_output_ext(writer_inst, writer_name)
+    return writer_inst, output_cache_key, output_ext
+
+
+def _read_cached_output(
+    *,
+    cache_dir: Path,
+    writer_name: str,
+    output_cache_key: str,
+    output_ext: str,
+) -> str | None:
+    """Read a cached output entry from the index, if present.
+
+    :returns: The cached output string, or ``None`` on miss.
+    """
+    writer_index_path = cache_dir / "output" / writer_name / "index.json"
+    if writer_index_path.exists():
+        writer_index = load_index(writer_index_path)
+        existing_out_slug = lookup_slug(writer_index, output_cache_key)
+        if existing_out_slug is not None:
+            return read_output_entry(
+                cache_dir=cache_dir,
+                writer_name=writer_name,
+                slug=existing_out_slug,
+                output_extension=output_ext,
+            )
+    return None
+
+
+def _write_output_file(output_path: str | Path, output: str) -> None:
+    """Write generated output to *output_path*, creating parents as needed."""
+    p = Path(output_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(output, encoding="utf-8")
+
+
+def _try_output_cache_fallback(
+    *,
+    cache_dir: Path,
+    backend_name: str,
+    header_path: Path,
+    parsed_args: ParsedArgs,
+    project_root: Path,
+    writer_name: str,
+    writer_options: dict[str, object],
+    code: str | None,
+) -> str | None:
+    """Try to serve from the output cache without needing a backend.
+
+    Computes cache keys (which don't require the backend) and checks the
+    output index. Returns the cached output string if found, or None.
+    """
+    ir_cache_key = compute_ir_cache_key(
+        backend_name=backend_name,
+        header_path=header_path,
+        project_root=project_root,
+        parsed_args=parsed_args,
+        code=code,
+    )
+
+    _writer_inst, output_cache_key, output_ext = _compute_output_cache_info(
+        ir_cache_key=ir_cache_key,
+        writer_name=writer_name,
+        writer_options=writer_options,
+    )
+    return _read_cached_output(
+        cache_dir=cache_dir,
+        writer_name=writer_name,
+        output_cache_key=output_cache_key,
+        output_ext=output_ext,
+    )
 
 
 def generate(
@@ -317,16 +407,38 @@ def generate(
     use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
     use_output_cache = not no_cache and not no_output_cache and resolved_cache_dir is not None
 
-    header, ir_cache_key, ir_slug, ir_from_cache = _get_ir(
-        backend_name=backend_name,
-        header_path=header_path,
-        project_root=project_root,
-        parsed_args=parsed_args,
-        code=code,
-        resolved_cache_dir=resolved_cache_dir,
-        use_ir_cache=use_ir_cache,
-        project_prefixes=project_prefixes,
-    )
+    try:
+        header, ir_cache_key, ir_slug, ir_from_cache = _get_ir(
+            backend_name=backend_name,
+            header_path=header_path,
+            project_root=project_root,
+            parsed_args=parsed_args,
+            code=code,
+            resolved_cache_dir=resolved_cache_dir,
+            use_ir_cache=use_ir_cache,
+            project_prefixes=project_prefixes,
+        )
+    except ValueError:
+        # Backend unavailable -- try output cache before giving up
+        if use_output_cache:
+            assert resolved_cache_dir is not None  # guaranteed by use_output_cache
+            cached_output = _try_output_cache_fallback(
+                cache_dir=resolved_cache_dir,
+                backend_name=backend_name,
+                header_path=header_path,
+                parsed_args=parsed_args,
+                project_root=project_root,
+                writer_name=writer_name,
+                writer_options=writer_options,
+                code=code,
+            )
+            if cached_output is not None:
+                if output_path is not None:
+                    _write_output_file(output_path, cached_output)
+                if _result_meta is not None:
+                    _result_meta["from_cache"] = True
+                return cached_output
+        raise
 
     output, output_from_cache = _get_output(
         header=header,
@@ -339,8 +451,7 @@ def generate(
     )
 
     if output_path is not None:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(output_path).write_text(output, encoding="utf-8")
+        _write_output_file(output_path, output)
 
     if _result_meta is not None:
         _result_meta["from_cache"] = ir_from_cache or output_from_cache
