@@ -108,10 +108,10 @@ def _is_auto_install_allowed(
                     pyproject,
                 )
                 return config_val
-        except (FileNotFoundError, KeyError, ValueError, RuntimeError):
-            logger.warning("Could not read auto_install_libclang config from %s", pyproject)
-        except _TOML_DECODE_ERROR:
-            logger.warning("Malformed TOML in %s; ignoring headerkit config", pyproject)
+        except (FileNotFoundError, KeyError, ValueError, RuntimeError) as exc:
+            logger.warning("Could not read auto_install_libclang config from %s: %s", pyproject, exc)
+        except _TOML_DECODE_ERROR as exc:
+            logger.warning("Malformed TOML in %s; ignoring headerkit config: %s", pyproject, exc)
 
     # Layer 4: default (opt-in, so False)
     logger.debug("Auto-install disabled by default (opt-in)")
@@ -485,8 +485,8 @@ def generate(
     use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
     use_output_cache = not no_cache and not no_output_cache and resolved_cache_dir is not None
 
-    try:
-        header, ir_cache_key, ir_slug, ir_from_cache = _get_ir(
+    def _resolve_ir() -> tuple[Header, str, str, bool]:
+        return _get_ir(
             backend_name=backend_name,
             header_path=header_path,
             project_root=project_root,
@@ -496,6 +496,9 @@ def generate(
             use_ir_cache=use_ir_cache,
             project_prefixes=project_prefixes,
         )
+
+    try:
+        header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
     except ValueError:
         # Backend unavailable -- try output cache before giving up
         if use_output_cache:
@@ -524,16 +527,7 @@ def generate(
             and auto_install()
         ):
             logger.info("libclang auto-installed; retrying backend")
-            header, ir_cache_key, ir_slug, ir_from_cache = _get_ir(
-                backend_name=backend_name,
-                header_path=header_path,
-                project_root=project_root,
-                parsed_args=parsed_args,
-                code=code,
-                resolved_cache_dir=resolved_cache_dir,
-                use_ir_cache=use_ir_cache,
-                project_prefixes=project_prefixes,
-            )
+            header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
         else:
             raise
 
