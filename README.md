@@ -10,7 +10,7 @@
 
 Generates:
 
-- **Bindings**: ctypes modules, Cython `.pxd` files, and `ffi.cdef()` for CFFI/LuaJIT.
+- **Bindings**: ctypes modules, CFFI definitions, Cython `.pxd` files, and LuaJIT FFI.
 - **Data**: JSON Intermediate Representation (IR) and API diffs.
 - **LLMs**: Token-optimized header summaries for prompt windows.
 - **Builds**: PEP 517 backend for standard Python packaging.
