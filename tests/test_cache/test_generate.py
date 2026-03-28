@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -48,13 +49,21 @@ class TestGenerateIRCacheMiss:
             cache_dir=project_dir / ".hkcache",
         )
 
-        assert result  # non-empty output
+        # Verify JSON output contains expected function declaration
+        parsed = json.loads(result)
+        assert len(parsed["declarations"]) == 1
+        decl = parsed["declarations"][0]
+        assert decl["kind"] == "function"
+        assert decl["name"] == "add"
+        assert len(decl["parameters"]) == 2
+        assert decl["parameters"][0]["name"] == "a"
+        assert decl["parameters"][1]["name"] == "b"
+
         # IR cache should now exist
         ir_dir = project_dir / ".hkcache" / "ir"
         assert ir_dir.exists()
-        # At least one entry should exist
         entries = [d for d in ir_dir.iterdir() if d.is_dir()]
-        assert len(entries) >= 1
+        assert len(entries) == 1
 
 
 class TestGenerateIRCacheHit:
@@ -90,7 +99,11 @@ class TestGenerateIRCacheHit:
             cache_dir=project_dir / ".hkcache",
         )
 
-        assert result2  # non-empty
+        # Verify cached result matches expected output
+        parsed = json.loads(result2)
+        assert len(parsed["declarations"]) == 1
+        assert parsed["declarations"][0]["name"] == "add"
+        assert len(parsed["declarations"][0]["parameters"]) == 1
         mock_backend.parse.assert_not_called()  # should not parse again
 
 
@@ -115,9 +128,7 @@ class TestGenerateNoCache:
 
         # Cache dir should not have any IR entries
         ir_dir = project_dir / ".hkcache" / "ir"
-        if ir_dir.exists():
-            entries = [d for d in ir_dir.iterdir() if d.is_dir()]
-            assert len(entries) == 0
+        assert not ir_dir.exists() or not any(d.is_dir() for d in ir_dir.iterdir())
 
 
 class TestGenerateAll:
@@ -138,9 +149,11 @@ class TestGenerateAll:
             cache_dir=project_dir / ".hkcache",
         )
 
-        assert len(results) >= 1
-        assert all(isinstance(r, GenerateResult) for r in results)
-        assert all(r.output for r in results)
+        assert len(results) == 1
+        assert isinstance(results[0], GenerateResult)
+        assert results[0].writer_name == "json"
+        parsed = json.loads(results[0].output)
+        assert parsed["declarations"][0]["name"] == "f"
 
     def test_parses_only_once(self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         mock_header = Header(str(header_file), [Function("f", CType("void"))])
@@ -182,9 +195,11 @@ class TestGenerateOutputPath:
             output_path=out_file,
         )
 
-        # Returns the output string
-        assert result
+        # Returns the output string with expected content
         assert isinstance(result, str)
+        parsed = json.loads(result)
+        assert parsed["declarations"][0]["name"] == "f"
+        assert parsed["declarations"][0]["kind"] == "function"
         # AND writes the file
         assert out_file.exists()
         assert out_file.read_text(encoding="utf-8") == result

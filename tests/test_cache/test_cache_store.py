@@ -94,11 +94,13 @@ class TestWriteReadIrEntry:
         metadata_path = cache_dir / "ir" / "libclang.test" / "metadata.json"
         assert metadata_path.exists()
         meta = json.loads(metadata_path.read_text())
+        from headerkit._cache_key import _IR_SCHEMA_VERSION
+
         assert meta["cache_key"] == "abc123"
         assert meta["backend_name"] == "libclang"
-        assert "ir_schema_version" in meta
-        assert "headerkit_version" in meta
-        assert "created" in meta
+        assert meta["ir_schema_version"] == _IR_SCHEMA_VERSION
+        assert isinstance(meta["headerkit_version"], str)
+        assert isinstance(meta["created"], str)
 
     def test_corrupt_ir_returns_none(self, tmp_path: Path) -> None:
         cache_dir = tmp_path / ".hkcache"

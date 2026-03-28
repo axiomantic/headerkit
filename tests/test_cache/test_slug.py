@@ -67,9 +67,6 @@ class TestBuildSlugBasic:
             other_args=[],
         )
         assert slug == "libclang.simple"
-        assert ".d." not in slug
-        assert ".i." not in slug
-        assert ".args." not in slug
 
 
 class TestSlugSanitization:
@@ -104,7 +101,7 @@ class TestSlugSanitization:
             includes=[],
             other_args=[],
         )
-        assert slug.startswith("libclang.")
+        assert slug == "libclang.test"
 
     def test_header_stem_lowercased(self) -> None:
         slug = build_slug(
@@ -124,7 +121,7 @@ class TestSlugSanitization:
             includes=[],
             other_args=[],
         )
-        assert "FOO_BAR" in slug
+        assert slug == "libclang.t.d.FOO_BAR"
 
     def test_consecutive_dashes_collapsed(self) -> None:
         slug = build_slug(
@@ -134,9 +131,7 @@ class TestSlugSanitization:
             includes=[],
             other_args=[],
         )
-        # After sanitization: a-b-c (dots->dash, consecutive collapsed)
-        assert "a-b-c" in slug
-        assert "--" not in slug
+        assert slug == "libclang.a-b-c"
 
     def test_leading_trailing_dashes_stripped(self) -> None:
         slug = build_slug(
@@ -166,13 +161,7 @@ class TestSlugLengthLimit:
             includes=[],
             other_args=[],
         )
-        assert len(slug) <= 116
-        # Should have hashed defines group (8 hex chars)
-        assert ".d." in slug
-        parts = slug.split(".")
-        d_idx = parts.index("d")
-        hash_part = parts[d_idx + 1]
-        assert len(hash_part) == 8
+        assert slug == "libclang.x.d.fd9d42ea"
 
     def test_within_limit_not_hashed(self) -> None:
         slug = build_slug(
