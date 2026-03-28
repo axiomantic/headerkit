@@ -19,9 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache subcommands: `headerkit cache status`, `headerkit cache clear`, `headerkit cache rebuild-index`
 - `[tool.headerkit.cache]` configuration section in pyproject.toml
 - Writer `cache_output` attribute for opt-out of output caching (diff, prompt writers)
-- Environment-namespaced cache sidecars via `namespace` parameter on `compute_hash()`, `save_hash()`, `is_up_to_date()`, and `is_up_to_date_batch()`
-- `default_namespace()` function returning `{impl}-{major}{minor}-{platform}-{machine}` (e.g. `cpython-312-darwin-arm64`)
-- Namespaced sidecar files use `{name}.{namespace}.hkcache` pattern, isolating caches per environment
 
 ### Changed
 
@@ -31,19 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Hash-based cache staleness detection for generated output files
-- `compute_hash()`, `save_hash()`, and `is_up_to_date()` public API functions in `headerkit.cache`
-- `is_up_to_date_batch()` for checking multiple outputs at once
-- `cache-check` CLI subcommand (exit 0 = up-to-date, exit 1 = stale)
-- `cache-save` CLI subcommand for saving hash metadata
 - Embedded TOML hash comments for cffi, ctypes, cython, and lua writers
 - Sidecar `.hkcache` files for json, prompt, and diff writers
 - `hash_comment_format()` method on CffiWriter, CtypesWriter, CythonWriter, and LuaWriter
 - Python 3.10 support with `tomli` fallback for TOML parsing
-
-### Fixed
-
-- `is_up_to_date_batch()` now skips items missing `output_path` with a warning instead of silently creating empty-string key collisions
 
 ## [0.8.4] - 2026-03-11
 

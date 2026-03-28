@@ -51,7 +51,7 @@ def _load_headerkit_config(pyproject_path: Path | None = None) -> dict[str, Any]
         tool: dict[str, Any] = data.get("tool", {})
         headerkit_cfg: dict[str, Any] = tool.get("headerkit", {})
         return headerkit_cfg
-    except Exception as exc:
+    except (OSError, tomllib.TOMLDecodeError) as exc:
         logger.warning("Failed to read pyproject.toml: %s", exc)
         return {}
 

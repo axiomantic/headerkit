@@ -43,6 +43,23 @@ from headerkit.writers import get_writer
 
 logger = logging.getLogger("headerkit.cache")
 
+
+def _find_project_root(start: Path) -> Path:
+    """Find project root by walking up from *start* looking for ``.git``.
+
+    Falls back to *start* itself if no ``.git`` marker is found before
+    reaching the filesystem root or the user's home directory.
+    """
+    current = start.resolve()
+    home = Path.home().resolve()
+    while True:
+        if (current / ".git").exists():
+            return current
+        if current == current.parent or current == home:
+            return start
+        current = current.parent
+
+
 _WRITER_EXTENSIONS: dict[str, str] = {
     "cffi": ".py",
     "ctypes": ".py",
@@ -152,7 +169,7 @@ def generate(
     parsed_args = parse_extra_args(extra_args, include_dirs, defines)
 
     # ---- Step 4: Compute IR cache key ----
-    project_root = resolved_cache_dir.parent if resolved_cache_dir else header_path.parent
+    project_root = _find_project_root(header_path.parent)
     ir_cache_key = compute_ir_cache_key(
         backend_name=backend_name,
         header_path=header_path,
