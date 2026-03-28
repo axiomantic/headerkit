@@ -204,18 +204,18 @@ def _get_output(
     should_cache = _should_cache_output(writer_inst)
     effective_output_cache = use_output_cache and should_cache
 
-    output_cache_key = compute_output_cache_key(
-        ir_cache_key=ir_cache_key,
-        writer_name=writer_name,
-        writer_options=writer_options or None,
-        writer_cache_version=_writer_cache_version(writer_inst),
-    )
-    output_ext = _writer_output_ext(writer_inst, writer_name)
-
     output: str | None = None
     output_from_cache = False
 
     if effective_output_cache:
+        output_cache_key = compute_output_cache_key(
+            ir_cache_key=ir_cache_key,
+            writer_name=writer_name,
+            writer_options=writer_options or None,
+            writer_cache_version=_writer_cache_version(writer_inst),
+        )
+        output_ext = _writer_output_ext(writer_inst, writer_name)
+
         assert resolved_cache_dir is not None
         writer_index_path = resolved_cache_dir / "output" / writer_name / "index.json"
         if writer_index_path.exists():

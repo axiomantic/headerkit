@@ -307,11 +307,11 @@ def main() -> int:
 
         sub_argv = sys.argv[2:]
         if sub_argv and sub_argv[0] == "status":
-            return cache_status_main(sub_argv)
+            return cache_status_main(sub_argv[1:])
         if sub_argv and sub_argv[0] == "clear":
-            return cache_clear_main(sub_argv)
+            return cache_clear_main(sub_argv[1:])
         if sub_argv and sub_argv[0] == "rebuild-index":
-            return cache_rebuild_index_main(sub_argv)
+            return cache_rebuild_index_main(sub_argv[1:])
         print(
             "headerkit cache: unknown subcommand. Available: status, clear, rebuild-index",
             file=sys.stderr,

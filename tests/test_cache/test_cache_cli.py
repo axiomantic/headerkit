@@ -24,7 +24,7 @@ class TestCliDispatch:
                 from headerkit._cli import main
 
                 main()
-            mock_status.assert_called_once_with(["status", "--cache-dir", "/tmp/cache"])
+            mock_status.assert_called_once_with(["--cache-dir", "/tmp/cache"])
 
     def test_cache_clear_dispatches(self) -> None:
         """'headerkit cache clear' dispatches to cache_clear_main."""
@@ -37,7 +37,7 @@ class TestCliDispatch:
                 from headerkit._cli import main
 
                 main()
-            mock_clear.assert_called_once_with(["clear", "--cache-dir", "/tmp/cache"])
+            mock_clear.assert_called_once_with(["--cache-dir", "/tmp/cache"])
 
     def test_cache_rebuild_index_dispatches(self) -> None:
         """'headerkit cache rebuild-index' dispatches to cache_rebuild_index_main."""
@@ -50,7 +50,7 @@ class TestCliDispatch:
                 from headerkit._cli import main
 
                 main()
-            mock_rebuild.assert_called_once_with(["rebuild-index", "--cache-dir", "/tmp/cache"])
+            mock_rebuild.assert_called_once_with(["--cache-dir", "/tmp/cache"])
 
 
 class TestCacheStatusSubcommand:
