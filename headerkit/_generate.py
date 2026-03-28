@@ -208,11 +208,16 @@ def _get_output(
 
     if use_output_cache:
         assert resolved_cache_dir is not None
-        output, writer_inst, output_cache_key, output_ext = _lookup_output_cache(
-            cache_dir=resolved_cache_dir,
+        writer_inst, output_cache_key, output_ext = _compute_output_cache_info(
             ir_cache_key=ir_cache_key,
             writer_name=writer_name,
             writer_options=writer_options,
+        )
+        output = _read_cached_output(
+            cache_dir=resolved_cache_dir,
+            writer_name=writer_name,
+            output_cache_key=output_cache_key,
+            output_ext=output_ext,
         )
         if output is not None:
             output_from_cache = True
@@ -245,19 +250,19 @@ def _get_output(
     return output, output_from_cache
 
 
-def _lookup_output_cache(
+def _compute_output_cache_info(
     *,
-    cache_dir: Path,
     ir_cache_key: str,
     writer_name: str,
     writer_options: dict[str, object],
-) -> tuple[str | None, Any, str, str]:
-    """Look up a cached output entry.
+) -> tuple[Any, str, str]:
+    """Instantiate the writer and derive its output cache key and extension.
 
-    Computes the output cache key, checks the index, and reads the entry
-    if found. Shared by ``_get_output`` and ``_try_output_cache_fallback``.
+    Pure computation with no I/O -- separated from cache lookup so callers
+    that only need the key (e.g. ``_try_output_cache_fallback``) are not
+    forced to accept unused return values.
 
-    :returns: (output_or_none, writer_inst, output_cache_key, output_ext)
+    :returns: (writer_inst, output_cache_key, output_ext)
     """
     writer_inst = get_writer(writer_name, **writer_options)
     output_cache_key = compute_output_cache_key(
@@ -267,22 +272,32 @@ def _lookup_output_cache(
         writer_cache_version=_writer_cache_version(writer_inst),
     )
     output_ext = _writer_output_ext(writer_inst, writer_name)
+    return writer_inst, output_cache_key, output_ext
 
+
+def _read_cached_output(
+    *,
+    cache_dir: Path,
+    writer_name: str,
+    output_cache_key: str,
+    output_ext: str,
+) -> str | None:
+    """Read a cached output entry from the index, if present.
+
+    :returns: The cached output string, or ``None`` on miss.
+    """
     writer_index_path = cache_dir / "output" / writer_name / "index.json"
     if writer_index_path.exists():
         writer_index = load_index(writer_index_path)
         existing_out_slug = lookup_slug(writer_index, output_cache_key)
         if existing_out_slug is not None:
-            output = read_output_entry(
+            return read_output_entry(
                 cache_dir=cache_dir,
                 writer_name=writer_name,
                 slug=existing_out_slug,
                 output_extension=output_ext,
             )
-            if output is not None:
-                return output, writer_inst, output_cache_key, output_ext
-
-    return None, writer_inst, output_cache_key, output_ext
+    return None
 
 
 def _write_output_file(output_path: str | Path, output: str) -> None:
@@ -316,13 +331,17 @@ def _try_output_cache_fallback(
         code=code,
     )
 
-    output, _writer_inst, _key, _ext = _lookup_output_cache(
-        cache_dir=cache_dir,
+    _writer_inst, output_cache_key, output_ext = _compute_output_cache_info(
         ir_cache_key=ir_cache_key,
         writer_name=writer_name,
         writer_options=writer_options,
     )
-    return output
+    return _read_cached_output(
+        cache_dir=cache_dir,
+        writer_name=writer_name,
+        output_cache_key=output_cache_key,
+        output_ext=output_ext,
+    )
 
 
 def generate(
