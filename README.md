@@ -220,6 +220,22 @@ Or load plugins explicitly from the config file:
 plugins = ["mypkg.headerkit_plugin"]
 ```
 
+## Cache system
+
+headerkit includes a two-layer cache that stores parsed IR and generated output in `.hkcache/`. This enables libclang-free builds by committing the cache to your repository.
+
+```python
+from headerkit import generate
+
+# First run: parses with libclang, caches result
+output = generate("mylib.h", "cffi")
+
+# Second run: loads from cache, no libclang needed
+output = generate("mylib.h", "cffi")
+```
+
+See the [Cache Strategy Guide](docs/guides/cache.md) for details on cache layout, bypass flags, configuration, and CI integration.
+
 ## Python API
 
 ```python
