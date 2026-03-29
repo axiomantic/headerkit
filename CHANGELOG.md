@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-03-29
+
+### Fixed
+
+- Corrected changelog: added missing release sections for v0.10.1, v0.11.0, and v0.12.0 that were previously lumped into [Unreleased]
+
 ## [0.12.1] - 2026-03-28
 
 ### Fixed
@@ -361,7 +367,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/axiomantic/headerkit/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/axiomantic/headerkit/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/axiomantic/headerkit/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/axiomantic/headerkit/compare/v0.10.1...v0.11.0
