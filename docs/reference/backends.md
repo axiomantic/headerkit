@@ -42,15 +42,6 @@ full protocol definition including `parse()`, `name`, `supports_macros`, and
     options:
       show_source: false
 
-::: headerkit.backends.reload_backends
-    options:
-      show_source: false
-
-!!! note "When to call"
-    Call `reload_backends()` after `auto_install()` within the same Python
-    process to pick up the newly installed backend. It is not needed between
-    separate process invocations.
-
 ::: headerkit.backends.get_backend_info
     options:
       show_source: false
