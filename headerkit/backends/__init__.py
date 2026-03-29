@@ -43,7 +43,6 @@ __all__ = [
     "is_backend_available",
     "list_backends",
     "register_backend",
-    "reload_backends",
 ]
 
 
@@ -185,47 +184,8 @@ def get_default_backend() -> str:
     return _DEFAULT_BACKEND
 
 
-def reload_backends() -> None:
-    """Clear cached backend state and re-discover available backends.
-
-    Call after dynamically installing a backend (e.g. via
-    :func:`~headerkit.install_libclang.auto_install`) so that
-    :func:`get_backend` can find the newly available backend.
-    """
-    import sys
-
-    global _BACKENDS_LOADED, _DEFAULT_BACKEND  # pylint: disable=global-statement
-
-    _BACKEND_REGISTRY.clear()
-    _DEFAULT_BACKEND = None
-    _BACKENDS_LOADED = False
-    # Reset the vendored cindex Config so library search re-runs.
-    # The cindex module persists across reloads of headerkit.backends.libclang,
-    # so its class-level Config state (loaded, library_file, library_path) and
-    # the module-level conf singleton's cached lib property must be cleared.
-    from headerkit._clang import _cached_cindex
-
-    if _cached_cindex is not None:
-        # The CachedProperty descriptor for ``conf.lib`` replaces itself on
-        # the instance with the loaded CDLL.  Delete the cached instance
-        # attribute FIRST (check ``__dict__`` to avoid triggering the
-        # descriptor's ``__get__`` which would re-load the library and set
-        # ``Config.loaded = True``).
-        _cindex_conf = _cached_cindex.conf
-        if "lib" in _cindex_conf.__dict__:
-            del _cindex_conf.__dict__["lib"]
-        # Now reset Config class state so the next access re-searches.
-        _cindex_config = _cached_cindex.Config
-        _cindex_config.loaded = False
-        _cindex_config.library_file = None
-        _cindex_config.library_path = None
-    # Force fresh import of backend modules so registration re-runs
-    sys.modules.pop("headerkit.backends.libclang", None)
-    _ensure_backends_loaded()
-
-
 def _ensure_backends_loaded() -> None:
-    """Lazily load backend modules to populate the registry.
+    """Lazily import backend modules so they register themselves.
 
     NOTE: Managed circular import pattern.
     This module and headerkit.backends.libclang have a circular dependency:
@@ -234,9 +194,10 @@ def _ensure_backends_loaded() -> None:
     - _ensure_backends_loaded() in this module imports libclang lazily
     This is intentional. Do not restructure without understanding the full cycle.
 
-    With vendored cindex bindings, the import always succeeds. The failure
-    mode is that libclang's shared library is not found during configuration,
-    in which case the backend simply does not register itself.
+    The libclang backend always registers its class at import time
+    regardless of whether the shared library is currently loadable.
+    The "is the library available?" check happens at first use (in
+    ``LibclangBackend.parse()``), not here.
     """
     global _BACKENDS_LOADED  # pylint: disable=global-statement
 
@@ -245,41 +206,14 @@ def _ensure_backends_loaded() -> None:
 
     _BACKENDS_LOADED = True
 
-    # Import triggers module-level registration if libclang is available
+    # Import triggers module-level registration (always succeeds with
+    # vendored cindex bindings; the backend class registers unconditionally).
     try:
         import headerkit.backends.libclang  # noqa: F401 (side effect import)
     except ImportError:
         import logging
 
         logging.getLogger(__name__).debug("Could not import libclang backend", exc_info=True)
-
-    if not _BACKEND_REGISTRY:
-        import sys as _sys
-
-        from headerkit._clang._version import detect_llvm_version
-
-        version = detect_llvm_version()
-
-        if _sys.platform == "win32":
-            install_advice = (
-                "Download from https://github.com/llvm/llvm-project/releases or run: winget install LLVM.LLVM"
-            )
-        elif _sys.platform == "darwin":
-            install_advice = "brew install llvm"
-        else:
-            install_advice = (
-                f"apt install libclang-{version}-dev (Ubuntu) or dnf install clang-devel (Fedora)"
-                if version
-                else "apt install libclang-dev (Ubuntu) or dnf install clang-devel (Fedora)"
-            )
-
-        if version:
-            hint = f"libclang {version} detected but shared library not found.\nInstall: {install_advice}"
-        else:
-            hint = f"No LLVM/clang installation found.\nInstall: {install_advice}"
-        import warnings
-
-        warnings.warn(f"No parser backends available. {hint}", stacklevel=2)
 
 
 def _load_backend_plugins() -> None:

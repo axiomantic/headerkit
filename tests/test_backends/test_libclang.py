@@ -13,7 +13,6 @@ import pytest
 from dirty_equals import AnyThing
 
 import headerkit.backends.libclang as mod
-from headerkit.backends import reload_backends
 from headerkit.backends.libclang import (
     LibclangBackend,
     _configure_libclang,
@@ -1199,12 +1198,9 @@ class TestWindowsAddDllDirectory:
     def test_add_dll_directory_called_on_windows(self):
         """os.add_dll_directory is invoked before loading on Windows."""
 
-        saved_configured = mod._libclang_configured
         saved_cindex = mod._cindex
 
         try:
-            mod._libclang_configured = False
-
             mock_cindex = type("MockCindex", (), {})()
             mock_config_cls = type(
                 "Config",
@@ -1244,10 +1240,11 @@ class TestWindowsAddDllDirectory:
             candidate_path = "C:/LLVM/bin/libclang.dll"
             expected_dir = os.path.dirname(candidate_path)
 
-            # Patch _get_cindex to return our mock
+            # Patch _get_cindex to return our mock and _reset_cindex_config to no-op
             with (
                 patch.object(mod, "_cindex", None),
                 patch("headerkit.backends.libclang._get_cindex", return_value=mock_cindex),
+                patch("headerkit.backends.libclang._reset_cindex_config"),
                 patch("headerkit.backends.libclang.sys.platform", "win32"),
                 patch(
                     "headerkit.backends.libclang._get_libclang_search_paths",
@@ -1260,23 +1257,16 @@ class TestWindowsAddDllDirectory:
                 _configure_libclang()
                 mock_add_dll.assert_called_once_with(expected_dir)
         finally:
-            mod._libclang_configured = saved_configured
             mod._cindex = saved_cindex
 
 
-class TestReloadBackendsCindexReset:
-    """Tests that reload_backends() resets vendored cindex Config state."""
+class TestResetCindexConfig:
+    """Tests that _reset_cindex_config() resets vendored cindex Config state."""
 
-    def test_reload_resets_cindex_config(self):
-        """reload_backends() resets cindex Config.loaded and library_file.
-
-        Uses a ``side_effect`` on ``_ensure_backends_loaded`` to capture
-        Config state at the exact moment between the reset and re-discovery
-        (on CI where libclang is installed, re-discovery would set them back).
-        """
-        from unittest.mock import patch
-
+    def test_reset_clears_cindex_config(self):
+        """_reset_cindex_config() resets cindex Config.loaded and library_file."""
         from headerkit._clang import _cached_cindex
+        from headerkit.backends.libclang import _reset_cindex_config
 
         if _cached_cindex is None:
             pytest.skip("cindex not loaded")
@@ -1284,24 +1274,14 @@ class TestReloadBackendsCindexReset:
         orig_loaded = _cached_cindex.Config.loaded
         orig_library_file = _cached_cindex.Config.library_file
 
-        captured: dict[str, object] = {}
-
-        def capture_state() -> None:
-            captured["loaded"] = _cached_cindex.Config.loaded
-            captured["library_file"] = _cached_cindex.Config.library_file
-
         try:
             _cached_cindex.Config.loaded = True
             _cached_cindex.Config.library_file = "/fake/libclang.so"
 
-            with patch(
-                "headerkit.backends._ensure_backends_loaded",
-                side_effect=capture_state,
-            ):
-                reload_backends()
+            _reset_cindex_config()
 
-            assert captured["loaded"] is False
-            assert captured["library_file"] is None
+            assert _cached_cindex.Config.loaded is False
+            assert _cached_cindex.Config.library_file is None
         finally:
             _cached_cindex.Config.loaded = orig_loaded
             _cached_cindex.Config.library_file = orig_library_file

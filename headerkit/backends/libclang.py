@@ -9,8 +9,9 @@ Requirements
 * headerkit includes vendored clang Python bindings that are version-matched
   automatically to the system LLVM version
 
-If system libclang is not available, the backend will not register itself
-and ``get_backend("libclang")`` will raise a ``ValueError``.
+The backend class is always registered.  If system libclang is not
+available, the error surfaces when the backend is actually used (e.g.
+when ``parse()`` is called), not at import time.
 
 Advantages
 ----------
@@ -214,8 +215,33 @@ def _get_libclang_search_paths() -> list[str]:
     return paths
 
 
-# Module-level flag to track if we've already attempted configuration
-_libclang_configured: bool = False
+def _reset_cindex_config() -> None:
+    """Reset vendored cindex Config state so library search re-runs.
+
+    The vendored cindex caches library state in several places:
+    - ``Config.loaded`` -- marks library as loaded
+    - ``Config.library_file`` / ``Config.library_path`` -- cached location
+    - ``conf.lib`` -- CachedProperty holding the CDLL handle
+
+    This function clears all of them so a subsequent
+    ``_configure_libclang()`` call searches from scratch.  This is needed
+    after ``auto_install()`` puts libclang on disk -- without the reset,
+    the vendored cindex would still think no library is available.
+
+    DO NOT modify vendored code; this works around it externally.
+    """
+    from headerkit._clang import _cached_cindex
+
+    if _cached_cindex is None:
+        return
+
+    _cindex_conf = _cached_cindex.conf
+    if "lib" in _cindex_conf.__dict__:
+        del _cindex_conf.__dict__["lib"]
+
+    _cached_cindex.Config.loaded = False
+    _cached_cindex.Config.library_file = None
+    _cached_cindex.Config.library_path = None
 
 
 def _configure_libclang() -> bool:
@@ -235,10 +261,30 @@ def _configure_libclang() -> bool:
     Functions present in the bindings but absent from the loaded library are
     silently skipped; they raise AttributeError only if actually called.
 
+    This function does NOT cache its result.  Each call re-checks whether
+    the library is loadable (resetting vendored cindex state first if the
+    library was not already loaded).  This allows ``auto_install()`` to
+    put libclang on disk and have the next call naturally find it.
+
     :returns: True if libclang is available and configured, False otherwise.
     """
-    global _libclang_configured, _cindex, CursorKind, TypeKind
+    global _cindex, CursorKind, TypeKind
 
+    _cindex = _get_cindex()
+
+    # If the library is already loaded, just return True -- the library
+    # will not disappear during the process lifetime.
+    if _cindex.Config.loaded:
+        CursorKind = _cindex.CursorKind
+        TypeKind = _cindex.TypeKind
+        return True
+
+    # Reset any stale cindex state from a previous failed attempt so that
+    # set_library_file() and get_cindex_library() can be called again.
+    _reset_cindex_config()
+
+    # Re-fetch cindex after reset (module reference is stable, but refresh
+    # to be safe).
     _cindex = _get_cindex()
 
     # Disable the strict compatibility check before the library is loaded.
@@ -247,21 +293,10 @@ def _configure_libclang() -> bool:
     # v19 libclang) can introduce functions that exist in the bindings but not
     # in the library.  With the check disabled, those functions are silently
     # skipped during registration and only raise if actually called.
-    if not _cindex.Config.loaded:
-        _cindex.Config.set_compatibility_check(False)
+    _cindex.Config.set_compatibility_check(False)
 
     CursorKind = _cindex.CursorKind
     TypeKind = _cindex.TypeKind
-
-    if _libclang_configured:
-        # Already configured, just check if it works
-        try:
-            _cindex.Config().get_cindex_library()
-            return True
-        except _cindex.LibclangError:
-            return False
-
-    _libclang_configured = True
 
     # First, try default loading (respects environment variables)
     try:
@@ -2066,6 +2101,11 @@ class LibclangBackend:
                 project_prefixes=("/opt/homebrew/include/sodium",)  # Whitelist sodium/*
             )
         """
+        # Ensure libclang is configured before parsing.  This is a no-op
+        # after the first successful load (short-circuits on Config.loaded).
+        if not _configure_libclang():
+            raise RuntimeError("libclang shared library not found. Install LLVM/clang or run: pip install libclang")
+
         args: list[str] = []
 
         # Detect C++ mode from extra_args
@@ -2149,7 +2189,9 @@ class LibclangBackend:
         return header
 
 
-# Only register this backend if system libclang is available
-# If not available, the backend simply won't be registered
-if is_system_libclang_available():
-    register_backend("libclang", LibclangBackend)
+# Always register the backend class.  The class is Python code and always
+# importable; the "is the library loadable?" check happens at first use
+# (inside parse() via _configure_libclang()), not at import time.  This
+# means get_backend("libclang") always returns a LibclangBackend instance,
+# and failures surface when the backend is actually used.
+register_backend("libclang", LibclangBackend)
