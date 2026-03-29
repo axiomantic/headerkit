@@ -131,10 +131,12 @@ def _add_versioned_so_paths(paths: list[str], base_dir: str) -> None:
 
     Searches for ``libclang.so.*`` and ``libclang-*.so`` (sorted newest-first),
     then appends the unversioned ``libclang.so`` as a fallback.
+
+    Uses ``/`` explicitly since these are always Linux paths.
     """
     for pattern in ("libclang.so.*", "libclang-*.so"):
-        paths.extend(sorted(glob.glob(os.path.join(base_dir, pattern)), reverse=True))
-    paths.append(os.path.join(base_dir, "libclang.so"))
+        paths.extend(sorted(glob.glob(f"{base_dir}/{pattern}"), reverse=True))
+    paths.append(f"{base_dir}/libclang.so")
 
 
 def _get_libclang_search_paths() -> list[str]:
