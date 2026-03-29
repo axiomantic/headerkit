@@ -2,6 +2,7 @@
 
 from headerkit._generate import GenerateResult, generate, generate_all
 from headerkit._ir_json import json_to_header
+from headerkit._populate import PopulateResult, PopulateTarget, populate
 from headerkit.backends import get_backend, is_backend_available, list_backends, reload_backends
 from headerkit.install_libclang import auto_install
 from headerkit.ir import (
@@ -81,6 +82,10 @@ __all__ = [
     "GenerateResult",
     # IR JSON API
     "json_to_header",
+    # Populate API
+    "populate",
+    "PopulateResult",
+    "PopulateTarget",
     # Install API
     "auto_install",
 ]

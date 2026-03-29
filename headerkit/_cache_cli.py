@@ -1,8 +1,8 @@
 """CLI subcommands for cache operations.
 
-Provides ``cache status``, ``cache clear``, and ``cache rebuild-index``
-subcommands, dispatched from the main CLI via early dispatch (before
-argparse construction).
+Provides ``cache status``, ``cache clear``, ``cache rebuild-index``, and
+``cache populate`` subcommands, dispatched from the main CLI via early
+dispatch (before argparse construction).
 """
 
 from __future__ import annotations
@@ -11,8 +11,13 @@ import argparse
 import shutil
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from headerkit._cli import parse_writer_options
 from headerkit._slug import rebuild_index, save_index
+
+if TYPE_CHECKING:
+    from headerkit._populate import PopulateResult
 
 
 def _count_entry_dirs(parent: Path) -> int:
@@ -171,3 +176,225 @@ def cache_rebuild_index_main(argv: list[str]) -> int:
                 print(f"Rebuilt index: {index_path} ({len(index['entries'])} entries)")
 
     return 0
+
+
+def cache_populate_main(argv: list[str]) -> int:
+    """Entry point for ``headerkit cache populate``."""
+    parser = argparse.ArgumentParser(
+        prog="headerkit cache populate",
+        description="Generate cache entries for target platforms using Docker.",
+    )
+    parser.add_argument(
+        "input_files",
+        nargs="+",
+        metavar="FILE",
+        help="Header file path(s)",
+    )
+    parser.add_argument(
+        "-w",
+        "--writer",
+        dest="writers",
+        action="append",
+        default=[],
+        metavar="WRITER",
+        help="Writer(s) to generate output for (default: json)",
+    )
+    parser.add_argument(
+        "--platform",
+        dest="platforms",
+        action="append",
+        default=[],
+        metavar="PLATFORM",
+        help="Docker platform (e.g., linux/amd64)",
+    )
+    parser.add_argument(
+        "--python",
+        dest="python_versions",
+        action="append",
+        default=[],
+        metavar="VERSION",
+        help="Python version to target (e.g., 3.12)",
+    )
+    parser.add_argument(
+        "--cibuildwheel",
+        dest="cibuildwheel",
+        action="store_true",
+        default=False,
+        help="Auto-detect targets from pyproject.toml cibuildwheel config",
+    )
+    parser.add_argument(
+        "--docker-image",
+        dest="docker_image",
+        default=None,
+        metavar="IMAGE",
+        help="Docker image override for all platforms",
+    )
+    parser.add_argument(
+        "--headerkit-version",
+        dest="headerkit_version",
+        default=None,
+        metavar="VERSION",
+        help=("Install this headerkit version in container instead of mounting source"),
+    )
+    parser.add_argument(
+        "--cache-dir",
+        dest="cache_dir",
+        default=None,
+        metavar="DIR",
+        help="Cache directory path (default: .hkcache/)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=False,
+        help="Show planned operations without executing",
+    )
+    parser.add_argument(
+        "--timeout",
+        dest="timeout",
+        type=int,
+        default=300,
+        metavar="SECONDS",
+        help="Timeout per container in seconds (default: 300)",
+    )
+    parser.add_argument(
+        "-I",
+        "--include-dir",
+        dest="include_dirs",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="Include directory",
+    )
+    parser.add_argument(
+        "-D",
+        dest="defines",
+        action="append",
+        default=[],
+        metavar="DEFINE",
+        help="Preprocessor define",
+    )
+    parser.add_argument(
+        "--backend-arg",
+        dest="backend_args",
+        action="append",
+        default=[],
+        metavar="ARG",
+        help="Extra backend argument",
+    )
+    parser.add_argument(
+        "--writer-opt",
+        dest="writer_opts_raw",
+        action="append",
+        default=[],
+        metavar="WRITER:KEY=VALUE",
+        help="Writer option",
+    )
+    parser.add_argument(
+        "--backend",
+        dest="backend",
+        default="libclang",
+        metavar="NAME",
+        help="Backend name (default: libclang)",
+    )
+    args = parser.parse_args(argv)
+
+    # Parse writer options into dict, aggregating duplicate keys into lists
+    # to match the main CLI's _parse_writer_specs() behavior.
+    try:
+        writer_options = parse_writer_options(
+            args.writer_opts_raw,
+            command_name="headerkit cache populate",
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    # Load populate config so config-file values serve as defaults that
+    # CLI flags override.
+    from headerkit._config import _find_project_root
+    from headerkit._populate import _empty_populate_config, load_populate_config, populate
+
+    cfg = _empty_populate_config()
+    if args.input_files:
+        first_header = Path(args.input_files[0])
+        if first_header.exists():
+            proj_root = _find_project_root(first_header.parent)
+            pyproject = proj_root / "pyproject.toml"
+            if pyproject.exists():
+                cfg = load_populate_config(pyproject)
+
+    # Apply config defaults where CLI flags were not provided
+    cli_platforms: list[str] = args.platforms
+    if not cli_platforms and not args.cibuildwheel and cfg.platforms:
+        cli_platforms = cfg.platforms
+    cli_python_versions: list[str] = args.python_versions
+    if not cli_python_versions and cfg.python_versions:
+        cli_python_versions = cfg.python_versions
+    cli_timeout: int = args.timeout
+    if args.timeout == 300 and cfg.timeout is not None:
+        cli_timeout = cfg.timeout
+
+    try:
+        result: PopulateResult = populate(
+            header_paths=args.input_files,
+            writers=args.writers or None,
+            platforms=cli_platforms or None,
+            python_versions=cli_python_versions or None,
+            from_cibuildwheel=args.cibuildwheel,
+            docker_image=args.docker_image,
+            headerkit_version=args.headerkit_version,
+            include_dirs=args.include_dirs or None,
+            defines=args.defines or None,
+            backend_args=args.backend_args or None,
+            backend_name=args.backend,
+            writer_options=writer_options,
+            cache_dir=args.cache_dir,
+            dry_run=args.dry_run,
+            timeout=cli_timeout,
+        )
+    except (ValueError, RuntimeError, FileNotFoundError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    # Print warnings
+    for w in result.warnings:
+        print(f"WARNING: {w}", file=sys.stderr)
+
+    if args.dry_run:
+        _print_dry_run(result)
+        return 0
+
+    _print_results(result)
+    return 1 if result.failed > 0 else 0
+
+
+def _print_dry_run(result: PopulateResult) -> None:
+    """Print dry-run output showing planned targets."""
+    print("\nPlanned cache population (dry run):\n")
+    for i, target in enumerate(result.planned, 1):
+        print(f"  Target {i}: {target.docker_platform} + {target.py_impl}")
+        print(f"    Image: {target.docker_image}")
+        print(f"    Python: {target.python_path}")
+        print(f"    Cache key fields: platform={target.sys_platform}, arch={target.machine}, python={target.py_impl}")
+        print()
+
+    total = len(result.planned)
+    print(f"Total: {total} targets")
+    print("\nDry run complete. Run without --dry-run to populate.")
+
+
+def _print_results(result: PopulateResult) -> None:
+    """Print execution results."""
+    print("\nCache population complete.")
+    print(f"  Succeeded: {result.succeeded}")
+    print(f"  Failed: {result.failed}")
+    print(f"  Skipped: {result.skipped_count}")
+    print(f"  Total: {result.total}")
+
+    if result.failed > 0:
+        print("\nFailures:")
+        for entry in result.entries:
+            if not entry.success and not entry.skipped:
+                print(f"  {entry.target.docker_platform} + {entry.target.py_impl} [{entry.writer_name}]: {entry.error}")
