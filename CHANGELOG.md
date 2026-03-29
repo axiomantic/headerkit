@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-03-28
+
+### Fixed
+
+- Auto-install now triggers correctly when libclang library is not found (was broken in 0.12.3 due to exception type mismatch between `RuntimeError` from `parse()` and the `ValueError` catch in `generate()`)
+
+### Changed
+
+- `generate()` uses explicit `is_backend_available()` check instead of exception catching to detect missing libclang and trigger the output-cache fallback / auto-install flow
+- `is_backend_available("libclang")` now performs a real library load test via `is_system_libclang_available()` instead of only checking whether the backend class is registered
+
+### Added
+
+- `LibclangUnavailableError` exception for clear error reporting when libclang cannot be found after all recovery attempts (auto-install, cache fallback)
+
 ## [0.12.3] - 2026-03-29
 
 ### Changed
@@ -379,7 +394,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.12.3...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.12.4...HEAD
+[0.12.4]: https://github.com/axiomantic/headerkit/compare/v0.12.3...v0.12.4
 [0.12.3]: https://github.com/axiomantic/headerkit/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/axiomantic/headerkit/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/axiomantic/headerkit/compare/v0.12.0...v0.12.1
