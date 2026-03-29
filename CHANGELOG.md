@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `headerkit cache populate` CLI subcommand for generating cache entries across multiple target platforms using Docker containers
+- `populate()` Python API with `PopulateResult` and `PopulateTarget` data types
+- cibuildwheel config parsing (`--cibuildwheel`) for automatic target detection
+- Per-platform Docker image configuration via `[tool.headerkit.cache.populate.images]`
+- Dry-run mode (`--dry-run`) for previewing planned cache population targets
 - Opt-in auto-install of libclang when `generate()` needs to parse but the backend is unavailable, with layered configuration (highest precedence first):
   1. `generate(auto_install_libclang=True)` kwarg
   2. `HEADERKIT_AUTO_INSTALL_LIBCLANG=1` environment variable
@@ -25,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `generate()` now falls back to the output cache when the backend (libclang) is unavailable, enabling the documented libclang-free build workflow
+- `parse_cibuildwheel_config()` no longer emits spurious macOS/Windows warnings when those platforms are not in the build matrix (e.g., `build = "cp312-manylinux*"`)
 - `_find_project_root()` no longer uses `Path.resolve()`, which on Windows can expand 8.3 short names and cause the `.git` marker walk to escape the intended project boundary, potentially triggering unwanted auto-install
 - CI test matrix reduced to full Python range on Ubuntu only, with latest Python on macOS and Windows
 

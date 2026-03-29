@@ -21,6 +21,39 @@ from headerkit.backends import _load_backend_plugins
 from headerkit.writers import _load_writer_plugins
 
 
+def parse_writer_options(
+    raw_opts: list[str],
+    command_name: str = "headerkit",
+) -> dict[str, dict[str, object]] | None:
+    """Parse ``--writer-opt WRITER:KEY=VALUE`` arguments into a nested dict.
+
+    Aggregates duplicate keys into lists and collapses single-element lists
+    to plain strings.
+
+    :param raw_opts: Raw ``--writer-opt`` values from argparse.
+    :param command_name: Program name for error messages.
+    :returns: Nested dict ``{writer: {key: value_or_list}}``, or ``None``
+        when *raw_opts* is empty.
+    :raises ValueError: On malformed input (missing ``:`` scope or ``=``).
+    """
+    if not raw_opts:
+        return None
+
+    options_lists: dict[str, dict[str, list[str]]] = {}
+    for item in raw_opts:
+        writer_name, sep, rest = item.partition(":")
+        if not sep:
+            raise ValueError(f"{command_name}: malformed --writer-opt: {item!r}; use WRITER:KEY=VALUE format")
+
+        key, sep, value = rest.partition("=")
+        if not sep:
+            raise ValueError(f"{command_name}: malformed --writer-opt: {item!r}; expected WRITER:KEY=VALUE")
+
+        options_lists.setdefault(writer_name, {}).setdefault(key, []).append(value)
+
+    return {w_name: {k: v[0] if len(v) == 1 else v for k, v in opts.items()} for w_name, opts in options_lists.items()}
+
+
 def _env_bool(name: str, *, default: bool = False) -> bool:
     """Read an environment variable as a boolean.
 
@@ -40,7 +73,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="headerkit",
         description="Parse C/C++ header files and emit output via configurable writers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Subcommands:\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index)",
+        epilog="Subcommands:\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index, populate)",
     )
     parser.add_argument(
         "input_files",
@@ -174,28 +207,22 @@ def _parse_writer_specs(
     spec_by_name: dict[str, WriterSpec] = {}
 
     for item in raw_writers:
-        colon_pos = item.find(":")
-        if colon_pos == -1:
-            name = item
+        name, sep, output_path_str = item.partition(":")
+        if not sep:
             output_path = None
         else:
-            name = item[:colon_pos]
-            output_path = item[colon_pos + 1 :]
+            output_path = output_path_str
         spec = WriterSpec(name=name, output_path=output_path)
         specs.append(spec)
         spec_by_name[name] = spec
 
     for item in raw_opts:
-        colon_pos = item.find(":")
-        if colon_pos == -1:
+        writer_name, sep, rest = item.partition(":")
+        if not sep:
             raise ValueError(f"unscoped --writer-opt: {item!r}; use WRITER:KEY=VALUE format")
-        writer_name = item[:colon_pos]
-        rest = item[colon_pos + 1 :]
-        eq_pos = rest.find("=")
-        if eq_pos == -1:
+        key, sep, value = rest.partition("=")
+        if not sep:
             raise ValueError(f"malformed --writer-opt: {item!r}; expected WRITER:KEY=VALUE")
-        key = rest[:eq_pos]
-        value = rest[eq_pos + 1 :]
         if writer_name not in spec_by_name:
             print(
                 f"headerkit: warning: --writer-opt for unknown writer {writer_name!r}; ignoring",
@@ -301,6 +328,7 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "cache":
         from headerkit._cache_cli import (
             cache_clear_main,
+            cache_populate_main,
             cache_rebuild_index_main,
             cache_status_main,
         )
@@ -312,8 +340,10 @@ def main() -> int:
             return cache_clear_main(sub_argv[1:])
         if sub_argv and sub_argv[0] == "rebuild-index":
             return cache_rebuild_index_main(sub_argv[1:])
+        if sub_argv and sub_argv[0] == "populate":
+            return cache_populate_main(sub_argv[1:])
         print(
-            "headerkit cache: unknown subcommand. Available: status, clear, rebuild-index",
+            "headerkit cache: unknown subcommand. Available: status, clear, rebuild-index, populate",
             file=sys.stderr,
         )
         return 1
