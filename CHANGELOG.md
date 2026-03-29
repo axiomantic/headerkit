@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Backend registry caching bug: after `auto_install()` installs libclang at runtime, `get_backend("libclang")` now correctly discovers the newly available backend instead of returning the stale "no backends available" result
 - `generate()` now falls back to the output cache when the backend (libclang) is unavailable, enabling the documented libclang-free build workflow
 - `_find_project_root()` no longer uses `Path.resolve()`, which on Windows can expand 8.3 short names and cause the `.git` marker walk to escape the intended project boundary, potentially triggering unwanted auto-install
 - CI test matrix reduced to full Python range on Ubuntu only, with latest Python on macOS and Windows
