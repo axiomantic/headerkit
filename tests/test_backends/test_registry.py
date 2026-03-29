@@ -266,11 +266,11 @@ class TestBackendRegistry:
                 sys.modules.pop("headerkit.backends.libclang", None)
 
     def test_reload_backends_allows_new_backend_after_install(self):
-        """After reload_backends(), a newly registered backend is discoverable.
+        """After clearing and re-registering, a new backend is discoverable.
 
         This is the core auto-install scenario: the backend was unavailable,
-        auto_install() runs, then reload_backends() + register_backend()
-        makes the backend available to get_backend().
+        then the loaded flag is reset, the registry is cleared, and
+        register_backend() makes the backend available to get_backend().
         """
         import headerkit.backends as b
 

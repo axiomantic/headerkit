@@ -534,6 +534,7 @@ class TestAutoInstall:
         mock_install_linux.assert_not_called()
         mock_install_macos.assert_not_called()
         mock_install_windows.assert_not_called()
+        mock_pip.assert_not_called()
 
     @patch("headerkit.install_libclang.verify_libclang", side_effect=[False, True])
     @patch("headerkit.install_libclang._try_pip_install_libclang", return_value=True)

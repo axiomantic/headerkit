@@ -162,9 +162,9 @@ def _configure_windows_dll_path(llvm_bin: str, *, quiet: bool = False) -> None:
     make a DLL discoverable by :mod:`ctypes`.  We also prepend to ``PATH``
     for older code paths and subprocesses.
     """
-    current_path = os.environ.get("PATH", "")
-    if llvm_bin.lower() not in current_path.lower():
-        os.environ["PATH"] = llvm_bin + os.pathsep + current_path
+    path_entries = [os.path.normcase(os.path.normpath(p)) for p in os.environ.get("PATH", "").split(os.pathsep)]
+    if os.path.normcase(os.path.normpath(llvm_bin)) not in path_entries:
+        os.environ["PATH"] = llvm_bin + os.pathsep + os.environ.get("PATH", "")
         _log_or_print(f"Added {llvm_bin} to PATH", quiet=quiet)
 
     if hasattr(os, "add_dll_directory"):
