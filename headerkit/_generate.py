@@ -505,7 +505,7 @@ def generate(
                     _result_meta["from_cache"] = True
                 return cached_output
 
-        # Cache miss -- auto-install if allowed.
+        # Output cache miss -- auto-install if allowed.
         # After auto_install() puts libclang on disk, _resolve_ir() will
         # call get_backend() which returns LibclangBackend (always registered),
         # and its parse() calls _configure_libclang() which re-searches
