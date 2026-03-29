@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-03-29
+
+### Changed
+
+- Removed `reload_backends()` from the public API. The libclang backend class is now always registered, and `_configure_libclang()` re-searches on every call (short-circuiting only when the library is already loaded). After `auto_install()` puts libclang on disk, the next `get_backend().parse()` call naturally finds it without any manual reload step.
+
+### Fixed
+
+- Linux: libclang search now includes versioned .so names (`libclang.so.18`, `libclang-18.so`) in RHEL/Fedora `/usr/lib64` and generic `/usr/lib` paths, not just the unversioned `libclang.so` from clang-devel
+- Cross-platform: libclang search now checks the `clang/native/` directory from the PyPI `libclang` package (`pip install libclang`) as a fallback on all platforms
+- Windows: `_configure_libclang()` now calls `os.add_dll_directory()` for the candidate DLL's directory before loading, so dependent DLLs (e.g. zlib, ncurses) can be found
+
 ## [0.12.2] - 2026-03-29
 
 ### Fixed
@@ -367,7 +379,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.12.3...HEAD
+[0.12.3]: https://github.com/axiomantic/headerkit/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/axiomantic/headerkit/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/axiomantic/headerkit/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/axiomantic/headerkit/compare/v0.11.0...v0.12.0

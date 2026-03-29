@@ -40,7 +40,7 @@ from headerkit._cache_store import (
 )
 from headerkit._config import _TOML_DECODE_ERROR, _find_project_root, _parse_toml
 from headerkit._slug import build_slug, load_index, lookup_slug
-from headerkit.backends import get_backend, reload_backends
+from headerkit.backends import get_backend
 from headerkit.install_libclang import auto_install
 from headerkit.ir import Header
 from headerkit.writers import get_writer
@@ -504,14 +504,17 @@ def generate(
                     _result_meta["from_cache"] = True
                 return cached_output
 
-        # Output cache miss -- attempt auto-install for libclang backend
+        # Output cache miss -- attempt auto-install for libclang backend.
+        # After auto_install() puts libclang on disk, _resolve_ir() will
+        # call get_backend() which returns LibclangBackend (always registered),
+        # and its parse() calls _configure_libclang() which re-searches
+        # for the library without caching failure.  No reload needed.
         if (
             backend_name == "libclang"
             and _is_auto_install_allowed(project_root, auto_install_libclang)
             and auto_install()
         ):
             logger.info("libclang auto-installed; retrying backend")
-            reload_backends()
             header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
         else:
             raise
