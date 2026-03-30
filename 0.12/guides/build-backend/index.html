@@ -2192,7 +2192,7 @@ inner backend:</p>
 <p>When a header's cache entry is missing and libclang is not installed:</p>
 <ul>
 <li><strong>Wheel builds</strong> (<code>build_wheel</code>, <code>build_editable</code>): the build fails
-  with an <code>ImportError</code> or backend-specific error. Install libclang and
+  with a <a class="autorefs autorefs-internal" title="            LibclangUnavailableError" href="../../reference/backends/#headerkit.backends.LibclangUnavailableError"><code>LibclangUnavailableError</code></a>. Install libclang and
   re-run <code>headerkit</code> to populate the cache, then commit <code>.hkcache/</code>.</li>
 <li><strong>Sdist builds</strong> (<code>build_sdist</code>): generation failures are logged as
   warnings and the build continues. This allows sdist creation on
