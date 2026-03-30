@@ -40,7 +40,7 @@ from headerkit._cache_store import (
 )
 from headerkit._config import _TOML_DECODE_ERROR, _find_project_root, _parse_toml
 from headerkit._slug import build_slug, load_index, lookup_slug
-from headerkit.backends import get_backend
+from headerkit.backends import LibclangUnavailableError, get_backend, is_backend_available
 from headerkit.install_libclang import auto_install
 from headerkit.ir import Header
 from headerkit.writers import get_writer
@@ -481,10 +481,11 @@ def generate(
             project_prefixes=project_prefixes,
         )
 
-    try:
-        header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
-    except ValueError:
-        # Backend unavailable -- try output cache before giving up
+    # For libclang, check availability before parsing to enable the
+    # output-cache fallback and auto-install flow.  Other backends skip
+    # this check and let parse errors propagate naturally.
+    if backend_name == "libclang" and not is_backend_available(backend_name):
+        # Library not loadable -- try output cache first (cheaper than install)
         if use_output_cache:
             assert resolved_cache_dir is not None  # guaranteed by use_output_cache
             cached_output = _try_output_cache_fallback(
@@ -504,20 +505,22 @@ def generate(
                     _result_meta["from_cache"] = True
                 return cached_output
 
-        # Output cache miss -- attempt auto-install for libclang backend.
+        # Output cache miss -- auto-install if allowed.
         # After auto_install() puts libclang on disk, _resolve_ir() will
         # call get_backend() which returns LibclangBackend (always registered),
         # and its parse() calls _configure_libclang() which re-searches
         # for the library without caching failure.  No reload needed.
-        if (
-            backend_name == "libclang"
-            and _is_auto_install_allowed(project_root, auto_install_libclang)
-            and auto_install()
-        ):
-            logger.info("libclang auto-installed; retrying backend")
-            header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
-        else:
-            raise
+        if _is_auto_install_allowed(project_root, auto_install_libclang):
+            auto_install()
+
+        # Still not available? Raise clear error.
+        if not is_backend_available(backend_name):
+            raise LibclangUnavailableError(
+                "libclang shared library not found after auto-install attempt. "
+                "Install libclang manually or use a pre-populated cache."
+            )
+
+    header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
 
     output, output_from_cache = _get_output(
         header=header,

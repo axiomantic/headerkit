@@ -26,9 +26,12 @@ Example
         print(name)
 """
 
-from headerkit.ir import (
-    ParserBackend,
-)
+from headerkit.ir import ParserBackend
+
+
+class LibclangUnavailableError(RuntimeError):
+    """Raised when libclang shared library cannot be found or loaded."""
+
 
 # Registry of available backends
 # Backends are registered lazily to avoid import errors if dependencies are missing
@@ -37,6 +40,7 @@ _DEFAULT_BACKEND: str | None = None
 _BACKENDS_LOADED: bool = False  # Track if we've tried to load all backends
 
 __all__ = [
+    "LibclangUnavailableError",
     "get_backend",
     "get_backend_info",
     "get_default_backend",
@@ -84,11 +88,26 @@ def list_backends() -> list[str]:
 def is_backend_available(name: str) -> bool:
     """Check if a backend is available for use.
 
+    For backends that require external libraries (e.g. libclang), this
+    performs a real load test -- not just a registry lookup.  The result
+    is **not** cached on failure so that a subsequent ``auto_install()``
+    can make the library appear.
+
     :param name: Backend name to check.
-    :returns: True if the backend is registered and can be instantiated.
+    :returns: True if the backend is registered **and** its underlying
+        library is loadable.
     """
     _ensure_backends_loaded()
-    return name in _BACKEND_REGISTRY
+    if name not in _BACKEND_REGISTRY:
+        return False
+
+    if name == "libclang":
+        from headerkit.backends.libclang import is_system_libclang_available
+
+        return is_system_libclang_available()
+
+    # Non-libclang backends: registration implies availability.
+    return True
 
 
 def get_backend_info() -> list[dict[str, str | bool]]:

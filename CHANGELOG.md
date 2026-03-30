@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `LibclangUnavailableError` exception for clear error reporting when libclang cannot be found after all recovery attempts (auto-install, cache fallback)
 - Deploy dev docs on every push to main (docs fixes go live immediately)
 - CI warning when a PR is missing a version bump or changelog entry
 
 ### Fixed
 
+- Auto-install now triggers correctly when libclang library is not found (was broken in 0.12.3 due to exception type mismatch between `RuntimeError` from `parse()` and the `ValueError` catch in `generate()`)
 - Fix incorrect CLI command in install-libclang reference (`headerkit-install-libclang` -> `headerkit install-libclang`)
 - Fix wrong default writer comment in generate reference (default is cffi, not json)
 - Fix references to non-existent `Writer` base class in cache guide examples
@@ -25,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `generate()` uses explicit `is_backend_available()` check instead of exception catching to detect missing libclang and trigger the output-cache fallback / auto-install flow
+- `is_backend_available("libclang")` now performs a real library load test via `is_system_libclang_available()` instead of only checking whether the backend class is registered
 - CI and install-libclang workflows now skip on docs-only changes via `paths-ignore`
 
 ## [0.12.3] - 2026-03-29
