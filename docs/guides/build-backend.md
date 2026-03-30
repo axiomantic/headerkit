@@ -189,7 +189,7 @@ build-backend = "headerkit.build_backend"
 When a header's cache entry is missing and libclang is not installed:
 
 - **Wheel builds** (`build_wheel`, `build_editable`): the build fails
-  with an `ImportError` or backend-specific error. Install libclang and
+  with a [`LibclangUnavailableError`][headerkit.backends.LibclangUnavailableError]. Install libclang and
   re-run `headerkit` to populate the cache, then commit `.hkcache/`.
 - **Sdist builds** (`build_sdist`): generation failures are logged as
   warnings and the build continues. This allows sdist creation on

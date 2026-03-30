@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.5] - 2026-03-29
+
+### Fixed
+
+- Document `LibclangUnavailableError` in backends reference page
+- Update `is_backend_available()` description in architecture guide to reflect real load test behavior
+- Update build backend guide to reference `LibclangUnavailableError` instead of generic error
+
 ## [0.12.4] - 2026-03-29
 
 ### Added

@@ -20,6 +20,12 @@ See [`ParserBackend`][headerkit.ir.ParserBackend] on the IR Types page for the
 full protocol definition including `parse()`, `name`, `supports_macros`, and
 `supports_cpp`.
 
+## Exceptions
+
+::: headerkit.backends.LibclangUnavailableError
+    options:
+      show_source: false
+
 ## Registry Functions
 
 ::: headerkit.backends.get_backend

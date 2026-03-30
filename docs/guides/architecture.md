@@ -82,7 +82,7 @@ Registry functions:
 |----------|-------------|
 | `get_backend(name=None)` | Get a backend instance (default if `name` is `None`) |
 | `list_backends()` | List all registered backend names |
-| `is_backend_available(name)` | Check if a backend is registered |
+| `is_backend_available(name)` | Check if a backend is usable (real load test for libclang) |
 | `register_backend(name, cls)` | Register a new backend |
 
 See [Writing Custom Backends](custom-backends.md) for a complete guide.
