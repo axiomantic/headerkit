@@ -154,6 +154,13 @@ class TestTripleFromPlatformTag:
         result = _triple_from_platform_tag("freebsd-14.1-release-amd64")
         assert result == "x86_64-unknown-freebsd"
 
+    def test_win32(self) -> None:
+        assert _triple_from_platform_tag("win32") == "i686-pc-windows-msvc"
+
+    def test_universal2_returns_none(self) -> None:
+        """universal2 is ambiguous (fat binary), not a real arch."""
+        assert _triple_from_platform_tag("macosx-10.9-universal2") is None
+
     def test_single_component_returns_none(self) -> None:
         assert _triple_from_platform_tag("linux") is None
 

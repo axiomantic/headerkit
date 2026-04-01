@@ -145,6 +145,10 @@ def _triple_from_platform_tag(plat_tag: str) -> str | None:
     :param plat_tag: Platform tag string.
     :returns: Normalized LLVM triple, or None if unparseable.
     """
+    # Handle "win32" as a special case (no hyphen-separated arch)
+    if plat_tag.lower() == "win32":
+        return "i686-pc-windows-msvc"
+
     parts = plat_tag.split("-")
     if len(parts) < 2:
         return None
@@ -152,6 +156,13 @@ def _triple_from_platform_tag(plat_tag: str) -> str | None:
     os_name = parts[0].lower()
     # Architecture is always the last component
     raw_arch = parts[-1].lower()
+
+    # "universal2" is a macOS fat binary tag, not a real architecture.
+    # Return None so detection falls through to pointer-width-based
+    # methods that pick the correct single architecture.
+    if raw_arch == "universal2":
+        return None
+
     arch = _ARCH_ALIASES.get(raw_arch, raw_arch)
 
     suffix = _PLAT_TAG_OS.get(os_name)
