@@ -180,12 +180,7 @@ def short_target(triple: str) -> str:
     parts = triple.split("-")
     arch = parts[0]
     os_part = parts[2]
-    if os_part.startswith("darwin"):
-        os_part = "darwin"
-    elif os_part.startswith("windows"):
-        os_part = "windows"
-    elif os_part.startswith("linux"):
-        os_part = "linux"
-    elif os_part.startswith("freebsd"):
-        os_part = "freebsd"
+    # Strip version suffixes (e.g., darwin25.3.0 -> darwin,
+    # freebsd14.1 -> freebsd) for readable slugs.
+    os_part = os_part.rstrip("0123456789.").rstrip("-") or os_part
     return f"{arch}-{os_part}"
