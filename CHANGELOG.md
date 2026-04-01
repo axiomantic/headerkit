@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.13.0] - 2026-03-31
+## [0.13.0] - 2026-04-01
 
 ### Added
 
@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `HEADERKIT_TARGET` environment variable for target triple configuration
 - `[tool.headerkit] target` config key in pyproject.toml
 - Target triple included in cache directory slugs for readability
+- `normalize_triple()` inserts `unknown` vendor for 3-component triples (e.g., `x86_64-linux-gnu` -> `x86_64-unknown-linux-gnu`)
 
 ### Changed
 
@@ -27,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** Removed `py_impl_for_version()` from `_populate` module
 - Python version removed from IR cache key (IR represents parsed C declarations, not Python-specific output)
 - `-target` flag automatically passed to libclang for correct cross-platform parsing
+- Bump `bigfoot` test dependency minimum to 0.19
+
+### Fixed
+
+- Add positional-only parameter markers to vendored clang binding stubs (v18-v21) to fix stubtest failures
 
 ## [0.12.5] - 2026-03-29
 
