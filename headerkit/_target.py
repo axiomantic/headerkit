@@ -94,6 +94,12 @@ def normalize_triple(triple: str) -> str:
     # Normalize arch
     parts[0] = _ARCH_ALIASES.get(parts[0], parts[0])
 
+    # Insert 'unknown' vendor for 3-component triples where the vendor
+    # appears to be missing (e.g., x86_64-linux-gnu -> x86_64-unknown-linux-gnu).
+    _KNOWN_VENDORS = {"pc", "apple", "unknown", "none", "ibm", "scei"}
+    if len(parts) == 3 and parts[1] not in _KNOWN_VENDORS:
+        parts.insert(1, "unknown")
+
     return "-".join(parts)
 
 
