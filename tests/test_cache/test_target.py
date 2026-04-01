@@ -173,8 +173,7 @@ class TestDetectProcessTripleCrossCompile:
 
     def test_python_host_platform(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """_PYTHON_HOST_PLATFORM is respected via sysconfig.get_platform()."""
-        monkeypatch.setenv("_PYTHON_HOST_PLATFORM", "linux-aarch64")
-        # sysconfig.get_platform() checks _PYTHON_HOST_PLATFORM
+        monkeypatch.setattr("headerkit._target.sysconfig.get_platform", lambda: "linux-aarch64")
         result = detect_process_triple()
         assert "aarch64" in result
         assert "linux" in result
