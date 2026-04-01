@@ -1660,7 +1660,7 @@ On cache hit, no libclang installation is required.</p>
 
 
 <a href="#headerkit._generate.generate" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate</span><span class="p">(</span><span class="n">header_path</span><span class="p">,</span> <span class="n">writer_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cache_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">_result_meta</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate</span><span class="p">(</span><span class="n">header_path</span><span class="p">,</span> <span class="n">writer_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cache_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">_result_meta</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1926,6 +1926,24 @@ config, then defaults to False.</p>
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>target</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Target triple for cross-compilation (e.g.,
+<code>"aarch64-apple-darwin"</code>). When <code>None</code>, auto-detects the host
+triple.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2010,7 +2028,7 @@ config, then defaults to False.</p>
 
 
 <a href="#headerkit._generate.generate_all" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate_all</span><span class="p">(</span><span class="n">header_path</span><span class="p">,</span> <span class="n">writers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cache_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate_all</span><span class="p">(</span><span class="n">header_path</span><span class="p">,</span> <span class="n">writers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cache_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2250,6 +2268,23 @@ writer (or loads from output cache).</p>
               <div class="doc-md-description">
                 <p>Explicitly enable (True) or disable (False)
 automatic libclang installation. Passed through to <code>generate()</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>target</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Target triple for cross-compilation. Passed through
+to <code>generate()</code>.</p>
               </div>
             </td>
             <td>
