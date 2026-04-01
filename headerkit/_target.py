@@ -38,6 +38,9 @@ _ARCH_ALIASES: dict[str, str] = {
 _ARCH_64_TO_32: dict[str, str] = {
     "x86_64": "i686",
     "aarch64": "armv7l",
+    "ppc64le": "ppc",
+    "s390x": "s390",
+    "riscv64": "riscv32",
 }
 
 # Platform to triple suffix mapping
@@ -97,7 +100,7 @@ def _parse_archflags() -> str | None:
         return None
 
     # Extract all -arch values
-    arches = re.findall(r"-arch\s+(\S+)", archflags)
+    arches = re.findall(r"-arch\s+['\"]?(\S+?)['\"]?(?:\s|$)", archflags)
     if len(arches) == 1:
         arch: str = arches[0].lower()
         return _ARCH_ALIASES.get(arch, arch)
