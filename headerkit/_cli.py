@@ -16,7 +16,7 @@ from headerkit._config import (
     load_config,
     merge_config,
 )
-from headerkit._generate import generate
+from headerkit._generate import batch_generate, generate
 from headerkit._resolve import resolve_output_path
 from headerkit.backends import _load_backend_plugins
 from headerkit.writers import _load_writer_plugins
@@ -484,9 +484,11 @@ def main() -> int:
     specs = _merge_config_writer_opts(config, specs)
 
     # Resolve input files: CLI positional args win, else fall back to config
+    use_config_headers = False
     if not input_files:
         if config is not None and config.headers:
             input_files = list(config.headers)
+            use_config_headers = True
         else:
             print(
                 "headerkit: no input files provided (pass header paths or configure "
@@ -495,7 +497,81 @@ def main() -> int:
             )
             return 1
 
-    # Validate input files exist
+    # Build merged output_templates: config output < CLI -o specs
+    merged_output_templates: dict[str, str] = {}
+    if config is not None:
+        merged_output_templates.update(config.output)
+    merged_output_templates.update(output_templates)
+
+    # Determine whether to use batch_generate() or direct generate()
+    # Use direct generate() only for: single explicit file, single writer, no output template
+    writer_names = [s.name for s in specs]
+    has_any_output_template = bool(merged_output_templates) or any(s.output_template is not None for s in specs)
+    has_globs = any(any(ch in f for ch in ("*", "?", "[")) for f in input_files)
+    use_batch = len(input_files) > 1 or has_globs or use_config_headers or has_any_output_template
+
+    if use_batch:
+        # Batch generation path
+        extra_args_list = _parse_defines(defines) + backend_args
+
+        # Build writer_options dict from specs
+        batch_writer_options: dict[str, dict[str, object]] = {}
+        for spec in specs:
+            if spec.options:
+                wopts: dict[str, object] = {}
+                for key, values in spec.options.items():
+                    wopts[key] = values[0] if len(values) == 1 else values
+                batch_writer_options[spec.name] = wopts
+
+        # Also merge spec-level output_templates into merged_output_templates
+        for spec in specs:
+            if spec.output_template is not None and spec.name not in merged_output_templates:
+                merged_output_templates[spec.name] = spec.output_template
+
+        # Build header_overrides from config
+        batch_header_overrides: dict[str, dict[str, object]] | None = None
+        if config is not None and config.header_overrides:
+            batch_header_overrides = config.header_overrides
+
+        exclude_pats: list[str] = list(getattr(args, "exclude_patterns", None) or [])
+
+        try:
+            batch_result = batch_generate(
+                patterns=input_files,
+                exclude_patterns=exclude_pats or None,
+                writers=writer_names,
+                backend_name=backend_name,
+                include_dirs=include_dirs or None,
+                defines=defines or None,
+                extra_args=extra_args_list or None,
+                writer_options=batch_writer_options or None,
+                output_templates=merged_output_templates or None,
+                store_dir=resolved_store_dir,
+                no_cache=resolved_no_cache,
+                no_ir_cache=resolved_no_ir_cache,
+                no_output_cache=resolved_no_output_cache,
+                auto_install_libclang=None,
+                target=args.target,
+                header_overrides=batch_header_overrides,
+            )
+        except (ValueError, TypeError, RuntimeError, FileNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+        # Print summary to stderr
+        print(
+            f"headerkit: processed {batch_result.headers_processed} headers, {len(batch_result.results)} outputs",
+            file=sys.stderr,
+        )
+        for r in batch_result.results:
+            if r.output_path is not None:
+                cached_tag = " (cached)" if r.from_cache else ""
+                print(f"  {r.writer_name}: {r.output_path}{cached_tag}", file=sys.stderr)
+
+        return 0
+
+    # Single-file direct generation path (preserves stdout behavior)
+    # Validate input file exists
     for f in input_files:
         if not Path(f).exists():
             print(f"Error: input file not found: {f}", file=sys.stderr)
