@@ -27,6 +27,9 @@ import sys
 import sysconfig
 from pathlib import Path
 
+# Known OS names for short_target() disambiguation.
+_OS_NAMES = frozenset({"linux", "darwin", "windows", "freebsd", "openbsd", "netbsd"})
+
 # Windows sysconfig.get_platform() arch suffix to canonical arch.
 _WINDOWS_ARCH: dict[str, str] = {
     "amd64": "x86_64",
@@ -239,7 +242,6 @@ def short_target(triple: str) -> str:
     # 4+ components: arch-vendor-os[-env], OS is parts[2]
     # 3 components: could be arch-vendor-os OR arch-os-env
     # Detect by checking if parts[1] looks like an OS name.
-    _OS_NAMES = {"linux", "darwin", "windows", "freebsd", "openbsd", "netbsd", "win32"}
     if len(parts) >= 4:
         os_part = parts[2]
     elif len(parts) == 3:
