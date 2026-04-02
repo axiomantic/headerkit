@@ -162,6 +162,16 @@ def _writer_output_ext(writer: Any, writer_name: str) -> str:
     return _WRITER_EXTENSIONS.get(writer_name, ".txt")
 
 
+def _writer_default_output_pattern(writer: Any, writer_name: str) -> str:
+    """Get the default output path template for a writer."""
+    pattern: str | None = getattr(writer, "default_output_pattern", None)
+    if pattern is not None:
+        return pattern
+    # Fallback for plugin writers that don't declare the attribute
+    ext = _WRITER_EXTENSIONS.get(writer_name, ".txt")
+    return "{dir}/{stem}" + ext
+
+
 def _get_ir(
     *,
     backend_name: str,

@@ -17,6 +17,7 @@ from headerkit._config import (
     merge_config,
 )
 from headerkit._generate import generate
+from headerkit._resolve import resolve_output_path
 from headerkit.backends import _load_backend_plugins
 from headerkit.writers import _load_writer_plugins
 
@@ -77,9 +78,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "input_files",
-        nargs="+",
-        metavar="FILE",
-        help="C header file paths",
+        nargs="*",
+        metavar="HEADER_OR_GLOB",
+        help="Header file paths or glob patterns (e.g., 'include/**/*.h')",
     )
     parser.add_argument(
         "--backend",
@@ -115,8 +116,23 @@ def _build_parser() -> argparse.ArgumentParser:
         "--writer",
         dest="writers",
         action="append",
-        metavar="WRITER[:PATH]",
-        help="Writer spec",
+        metavar="WRITER",
+        help="Writer to use (repeatable)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        dest="output_specs",
+        action="append",
+        metavar="WRITER:TEMPLATE",
+        help="Output path template for a writer (e.g., cffi:{dir}/{stem}_cffi.py)",
+    )
+    parser.add_argument(
+        "--exclude",
+        dest="exclude_patterns",
+        action="append",
+        metavar="PATTERN",
+        help="Exclude headers matching glob pattern (repeatable)",
     )
     parser.add_argument(
         "--writer-opt",
@@ -201,7 +217,7 @@ class WriterSpec:
     """Parsed writer specification from -w and --writer-opt flags."""
 
     name: str
-    output_path: str | None  # None means stdout
+    output_template: str | None  # None means use config/default
     options: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -219,14 +235,9 @@ def _parse_writer_specs(
     spec_by_name: dict[str, WriterSpec] = {}
 
     for item in raw_writers:
-        name, sep, output_path_str = item.partition(":")
-        if not sep:
-            output_path = None
-        else:
-            output_path = output_path_str
-        spec = WriterSpec(name=name, output_path=output_path)
+        spec = WriterSpec(name=item, output_template=None)
         specs.append(spec)
-        spec_by_name[name] = spec
+        spec_by_name[item] = spec
 
     for item in raw_opts:
         writer_name, sep, rest = item.partition(":")
@@ -244,6 +255,17 @@ def _parse_writer_specs(
         spec_by_name[writer_name].options.setdefault(key, []).append(value)
 
     return specs
+
+
+def _parse_output_specs(raw_specs: list[str]) -> dict[str, str]:
+    """Parse -o WRITER:TEMPLATE arguments into a writer->template dict."""
+    result: dict[str, str] = {}
+    for item in raw_specs:
+        writer_name, sep, template = item.partition(":")
+        if not sep or not template:
+            raise ValueError(f"headerkit: malformed --output: {item!r}; use WRITER:TEMPLATE format")
+        result[writer_name] = template
+    return result
 
 
 def _parse_defines(defines: list[str]) -> list[str]:
@@ -286,11 +308,13 @@ def _build_umbrella(input_files: list[str]) -> tuple[str, str, tuple[str, ...]]:
 
 
 def _write_output(spec: WriterSpec, content: str) -> None:
-    """Write output to stdout or file per spec.output_path."""
-    if spec.output_path is None:
+    """Write output to stdout or file per spec.output_template."""
+    if spec.output_template is None:
         print(content, end="")
     else:
-        Path(spec.output_path).write_text(content, encoding="utf-8")
+        p = Path(spec.output_template)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
 
 
 def _load_explicit_plugins(plugins: list[str]) -> None:
@@ -434,10 +458,21 @@ def main() -> int:
         print(f"headerkit: {exc}", file=sys.stderr)
         return 1
     if not specs:
-        specs = [WriterSpec(name="default", output_path=None, options={})]
+        specs = [WriterSpec(name="default", output_template=None, options={})]
+
+    # Parse --output specs and apply to writer specs
+    output_specs_raw: list[str] = getattr(args, "output_specs", None) or []
+    try:
+        output_templates = _parse_output_specs(output_specs_raw)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    for spec in specs:
+        if spec.name in output_templates:
+            spec.output_template = output_templates[spec.name]
 
     # Validate at most one writer sends to stdout
-    stdout_count = sum(1 for s in specs if s.output_path is None)
+    stdout_count = sum(1 for s in specs if s.output_template is None)
     if stdout_count > 1:
         print(
             "Error: at most one writer may omit an output path (send to stdout)",
@@ -448,6 +483,18 @@ def main() -> int:
     # Merge config writer options into specs
     specs = _merge_config_writer_opts(config, specs)
 
+    # Resolve input files: CLI positional args win, else fall back to config
+    if not input_files:
+        if config is not None and config.headers:
+            input_files = list(config.headers)
+        else:
+            print(
+                "headerkit: no input files provided (pass header paths or configure "
+                "[[tool.headerkit.headers]] in pyproject.toml)",
+                file=sys.stderr,
+            )
+            return 1
+
     # Validate input files exist
     for f in input_files:
         if not Path(f).exists():
@@ -456,6 +503,17 @@ def main() -> int:
 
     # Build umbrella
     code, filename, project_prefixes = _build_umbrella(input_files)
+
+    # Resolve output templates for single-header case
+    if len(input_files) == 1:
+        header_path = Path(input_files[0]).resolve()
+        project_root = header_path.parent
+        for spec in specs:
+            if spec.output_template is not None and any(
+                v in spec.output_template for v in ("{stem}", "{name}", "{dir}")
+            ):
+                resolved_path = resolve_output_path(spec.output_template, header_path, project_root)
+                spec.output_template = str(resolved_path)
 
     # Generate outputs via cache-aware pipeline
     extra_args = _parse_defines(defines) + backend_args
