@@ -27,17 +27,6 @@ import sys
 import sysconfig
 from pathlib import Path
 
-# Arch aliases: normalize user-provided triples to canonical names.
-# Only applied to user input (--target, env var, config), not to
-# auto-detected values which are already canonical.
-_ARCH_ALIASES: dict[str, str] = {
-    "arm64": "aarch64",
-    "amd64": "x86_64",
-    "i386": "i686",
-    "i586": "i686",
-    "i686": "i686",
-}
-
 # Windows sysconfig.get_platform() arch suffix to canonical arch.
 _WINDOWS_ARCH: dict[str, str] = {
     "amd64": "x86_64",
@@ -128,8 +117,6 @@ def normalize_triple(triple: str) -> str:
     are already canonical and do not pass through this function.
 
     - Lowercases all components.
-    - Normalizes architecture aliases (``arm64`` -> ``aarch64``,
-      ``AMD64`` -> ``x86_64``).
     - Inserts ``unknown`` vendor for 3-component triples missing the
       vendor (e.g., ``x86_64-linux-gnu`` -> ``x86_64-unknown-linux-gnu``).
 
@@ -143,9 +130,6 @@ def normalize_triple(triple: str) -> str:
             f"Invalid target triple {triple!r}: expected at least 3 "
             f"hyphen-separated components (arch-vendor-os or arch-os-env)"
         )
-
-    # Normalize arch
-    parts[0] = _ARCH_ALIASES.get(parts[0], parts[0])
 
     # Insert 'unknown' vendor for 3-component triples where the vendor
     # appears to be missing (e.g., x86_64-linux-gnu -> x86_64-unknown-linux-gnu).

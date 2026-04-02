@@ -181,11 +181,10 @@ class TestNormalizeTriple:
     def test_lowercases(self) -> None:
         assert normalize_triple("X86_64-PC-LINUX-GNU") == "x86_64-pc-linux-gnu"
 
-    def test_normalizes_arm64_to_aarch64(self) -> None:
-        assert normalize_triple("arm64-apple-darwin") == "aarch64-apple-darwin"
-
-    def test_normalizes_amd64_to_x86_64(self) -> None:
-        assert normalize_triple("AMD64-pc-windows-msvc") == "x86_64-pc-windows-msvc"
+    def test_preserves_arch_as_given(self) -> None:
+        """User must provide canonical arch names; no aliases."""
+        assert normalize_triple("arm64-apple-darwin") == "arm64-apple-darwin"
+        assert normalize_triple("aarch64-apple-darwin") == "aarch64-apple-darwin"
 
     def test_inserts_unknown_vendor(self) -> None:
         assert normalize_triple("x86_64-linux-gnu") == "x86_64-unknown-linux-gnu"
@@ -227,13 +226,13 @@ class TestResolveTarget:
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_kwarg_normalized(self) -> None:
-        """User-provided triples are normalized."""
-        result = resolve_target(target="arm64-apple-darwin")
-        assert result == "aarch64-apple-darwin"
+    def test_kwarg_lowercased(self) -> None:
+        """User-provided triples are lowercased."""
+        result = resolve_target(target="X86_64-PC-LINUX-GNU")
+        assert result == "x86_64-pc-linux-gnu"
 
-    def test_env_var_normalized(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("HEADERKIT_TARGET", "AMD64-pc-linux-gnu")
+    def test_env_var_lowercased(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HEADERKIT_TARGET", "X86_64-PC-LINUX-GNU")
         result = resolve_target()
         assert result == "x86_64-pc-linux-gnu"
 

@@ -178,9 +178,11 @@ auto-detection works without special hooks or configuration.
 `detect_process_triple()` are already canonical and bypass normalization.
 
 - Lowercases all components
-- Normalizes arch aliases: `arm64` -> `aarch64`, `AMD64` -> `x86_64`
 - Inserts `unknown` vendor for 3-component triples missing it:
   `x86_64-linux-gnu` -> `x86_64-unknown-linux-gnu`
+
+Architecture names are used as-is -- users must provide canonical names
+(e.g., `aarch64`, not `arm64`).
 
 ### What flows where
 
