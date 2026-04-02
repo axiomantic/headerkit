@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-02
+
+### Added
+
+- `detect_process_triple()` replaces `detect_host_triple()` with
+  process-aware detection using `HOST_GNU_TYPE` (POSIX) or
+  `sysconfig.get_platform()` (Windows)
+- musl libc detection: correctly produces `linux-musl` triples on
+  Alpine and other musl-based systems (via `os.confstr` sniff for
+  pre-3.13 Python where `HOST_GNU_TYPE` may report `gnu` on musl)
+
+### Changed
+
+- **Breaking:** `detect_host_triple()` removed; use `detect_process_triple()`
+- Simplified target detection: one signal per platform instead of
+  5-step fallback chain. `HOST_GNU_TYPE` on POSIX, `get_platform()`
+  on Windows. For cross-compilation, set `--target` explicitly.
+
 ## [0.13.0] - 2026-04-01
 
 ### Added

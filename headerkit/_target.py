@@ -1,84 +1,127 @@
 """Target triple detection and resolution for headerkit.
 
-Provides functions to detect the host platform's LLVM target triple,
+Provides functions to detect the current process's target triple,
 normalize user-provided triples, and resolve the effective target
 using the standard headerkit config precedence.
+
+Auto-detection uses the most direct signal per platform:
+
+- **POSIX** (Linux, macOS, BSDs):
+  ``sysconfig.get_config_var('HOST_GNU_TYPE')`` -- the ``--host``
+  value from autoconf, baked into the Python build at compile time.
+- **Windows**: Parses ``sysconfig.get_platform()``
+  (e.g., ``win-amd64``, ``win32``).
+
+On pre-3.13 Linux, a musl libc sniff corrects ``linux-gnu`` to
+``linux-musl`` when the running Python is linked against musl.
+
+For cross-compilation, set ``--target``, ``HEADERKIT_TARGET``, or
+``[tool.headerkit] target`` explicitly.
 """
 
 from __future__ import annotations
 
 import os
 import platform as platform_mod
-import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
-# Arch aliases: normalize to LLVM canonical names
-_ARCH_ALIASES: dict[str, str] = {
-    "arm64": "aarch64",
+# Known OS names for short_target() disambiguation.
+_OS_NAMES = frozenset({"linux", "darwin", "windows", "freebsd", "openbsd", "netbsd"})
+
+# Windows sysconfig.get_platform() arch suffix to canonical arch.
+_WINDOWS_ARCH: dict[str, str] = {
     "amd64": "x86_64",
-    "i386": "i686",
-    "i586": "i686",
-    "i686": "i686",
-}
-
-# Platform to triple suffix mapping
-_PLATFORM_SUFFIXES: dict[str, str] = {
-    "darwin": "apple-darwin",
-    "linux": "unknown-linux-gnu",
-    "win32": "pc-windows-msvc",
-    "freebsd": "unknown-freebsd",
-    "openbsd": "unknown-openbsd",
-    "netbsd": "unknown-netbsd",
+    "arm64": "aarch64",
+    "x86": "i686",
 }
 
 
-def detect_host_triple() -> str:
-    """Detect the host platform's LLVM target triple.
+def _is_musl_linux() -> bool:
+    """Detect if the running Python process is linked against musl libc.
 
-    Strategy:
-    1. Try ``cc -dumpmachine`` (respects user's configured compiler).
-    2. Fall back to constructing from ``sys.platform`` and
-       ``platform.machine()``.
+    Uses ``os.confstr('CS_GNU_LIBC_VERSION')`` which returns a version
+    string on glibc (e.g., ``'glibc 2.35'``) and raises ``ValueError``
+    or ``OSError`` on non-glibc systems. This is process-aware: it
+    checks what THIS interpreter links against, not what libraries are
+    installed on the system.
 
-    :returns: Normalized LLVM target triple string.
+    :returns: True if on Linux and not linked against glibc (i.e., musl).
     """
+    if sys.platform != "linux":
+        return False
     try:
-        result = subprocess.run(
-            ["cc", "-dumpmachine"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            raw = result.stdout.strip()
-            if raw:
-                return normalize_triple(raw)
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
-
-    return _construct_triple_from_python()
+        os.confstr("CS_GNU_LIBC_VERSION")
+        return False  # glibc responds
+    except (ValueError, OSError):
+        return True  # not glibc, on Linux = musl
+    except AttributeError:
+        return False  # os.confstr not available
 
 
-def _construct_triple_from_python() -> str:
-    """Build a best-effort LLVM triple from Python platform info.
+def detect_process_triple() -> str:
+    """Detect the target triple for the current Python process.
 
-    :returns: Triple like ``x86_64-unknown-linux-gnu``.
+    Uses the most direct available signal:
+
+    - **POSIX**: ``HOST_GNU_TYPE`` from sysconfig -- the ``--host``
+      value set by autoconf when this Python was built. This is
+      inherently process-aware (a 32-bit Python build has a 32-bit
+      ``HOST_GNU_TYPE``). On pre-3.13 Linux where ``HOST_GNU_TYPE``
+      may incorrectly report ``gnu`` on musl systems, a runtime libc
+      sniff corrects it.
+    - **Windows**: ``sysconfig.get_platform()`` -- returns ``win-amd64``,
+      ``win32``, or ``win-arm64``.
+
+    For cross-compilation, use ``--target``, ``HEADERKIT_TARGET``,
+    or ``[tool.headerkit] target`` instead of relying on auto-detection.
+
+    :returns: Target triple string (e.g., ``aarch64-apple-darwin``,
+        ``x86_64-pc-linux-gnu``, ``x86_64-pc-windows-msvc``).
     """
-    arch = platform_mod.machine().lower()
-    arch = _ARCH_ALIASES.get(arch, arch)
+    # POSIX: HOST_GNU_TYPE is the triple this Python was built for.
+    # Set by autoconf's AC_CANONICAL_HOST at Python build time.
+    # Includes vendor, OS, and libc flavor (on 3.13+).
+    host_gnu: str | None = sysconfig.get_config_var("HOST_GNU_TYPE")
+    if host_gnu:
+        triple = host_gnu.strip().lower()
+        # Pre-3.13 CPython may report linux-gnu on musl systems
+        # (CPython issue #87278, fixed in 3.13 via #95855).
+        # Correct using a runtime libc sniff.
+        if "linux-gnu" in triple and _is_musl_linux():
+            triple = triple.replace("linux-gnu", "linux-musl", 1)
+        return triple
 
-    suffix = _PLATFORM_SUFFIXES.get(sys.platform, f"unknown-{sys.platform}")
-    return f"{arch}-{suffix}"
+    # Windows: HOST_GNU_TYPE is not available (no autoconf).
+    # Parse sysconfig.get_platform() which returns win-amd64, win32, etc.
+    plat = sysconfig.get_platform().lower()
+    if plat == "win32":
+        return "i686-pc-windows-msvc"
+    if plat.startswith("win"):
+        parts = plat.split("-")
+        if len(parts) >= 2:
+            raw_arch = parts[-1]
+            arch = _WINDOWS_ARCH.get(raw_arch, raw_arch)
+            return f"{arch}-pc-windows-msvc"
+
+    # Fallback: construct best-effort triple from Python platform info.
+    # This path should rarely execute -- it covers non-autoconf POSIX
+    # builds and any unrecognized Windows platform tags.
+    arch = platform_mod.machine().lower()
+    return f"{arch}-unknown-{sys.platform}"
 
 
 def normalize_triple(triple: str) -> str:
-    """Normalize a target triple to canonical LLVM form.
+    """Normalize a user-provided target triple to canonical form.
+
+    Applied only to user input (``--target``, ``HEADERKIT_TARGET``,
+    config file). Auto-detected triples from :func:`detect_process_triple`
+    are already canonical and do not pass through this function.
 
     - Lowercases all components.
-    - Normalizes architecture aliases (arm64 -> aarch64, AMD64 -> x86_64).
-    - Inserts ``unknown`` vendor for 3-component triples missing the vendor
-      (e.g., ``x86_64-linux-gnu`` -> ``x86_64-unknown-linux-gnu``).
+    - Inserts ``unknown`` vendor for 3-component triples missing the
+      vendor (e.g., ``x86_64-linux-gnu`` -> ``x86_64-unknown-linux-gnu``).
 
     :param triple: Raw triple string.
     :returns: Normalized triple.
@@ -90,9 +133,6 @@ def normalize_triple(triple: str) -> str:
             f"Invalid target triple {triple!r}: expected at least 3 "
             f"hyphen-separated components (arch-vendor-os or arch-os-env)"
         )
-
-    # Normalize arch
-    parts[0] = _ARCH_ALIASES.get(parts[0], parts[0])
 
     # Insert 'unknown' vendor for 3-component triples where the vendor
     # appears to be missing (e.g., x86_64-linux-gnu -> x86_64-unknown-linux-gnu).
@@ -111,14 +151,18 @@ def resolve_target(
     """Resolve the effective target triple with config precedence.
 
     Precedence (highest to lowest):
-    1. *target* kwarg
+
+    1. *target* kwarg (explicit API parameter)
     2. ``HEADERKIT_TARGET`` environment variable
     3. ``[tool.headerkit] target`` in pyproject.toml
-    4. :func:`detect_host_triple`
+    4. :func:`detect_process_triple` (auto-detect)
+
+    User-provided triples (sources 1-3) are normalized via
+    :func:`normalize_triple`. Auto-detected triples are used as-is.
 
     :param target: Explicit target triple (highest precedence).
     :param project_root: Project root for config file lookup.
-    :returns: Resolved and normalized target triple.
+    :returns: Resolved target triple.
     """
     # 1. Explicit kwarg
     if target is not None:
@@ -136,7 +180,7 @@ def resolve_target(
             return normalize_triple(config_target)
 
     # 4. Auto-detect
-    return detect_host_triple()
+    return detect_process_triple()
 
 
 def _read_target_from_config(project_root: Path) -> str | None:
@@ -171,6 +215,13 @@ def _read_target_from_config(project_root: Path) -> str | None:
 def short_target(triple: str) -> str:
     """Extract arch and OS for human-readable slug components.
 
+    Handles both 3-component (``aarch64-apple-darwin``) and
+    4-component (``x86_64-pc-linux-gnu``) triples by identifying
+    the OS component positionally: in a 4+ component triple it is
+    ``parts[2]``; in a 3-component triple it is ``parts[1]`` if
+    it looks like an OS, otherwise ``parts[2]`` (not reachable for
+    well-formed triples).
+
     Examples::
 
         >>> short_target("x86_64-pc-linux-gnu")
@@ -179,13 +230,30 @@ def short_target(triple: str) -> str:
         'aarch64-darwin'
         >>> short_target("x86_64-pc-windows-msvc")
         'x86_64-windows'
+        >>> short_target("x86_64-linux-gnu")
+        'x86_64-linux'
 
-    :param triple: Normalized target triple.
+    :param triple: Target triple.
     :returns: Short ``arch-os`` string.
     """
     parts = triple.split("-")
     arch = parts[0]
-    os_part = parts[2]
+
+    # 4+ components: arch-vendor-os[-env], OS is parts[2]
+    # 3 components: could be arch-vendor-os OR arch-os-env
+    # Detect by checking if parts[1] looks like an OS name.
+    if len(parts) >= 4:
+        os_part = parts[2]
+    elif len(parts) == 3:
+        # Check if parts[1] starts with a known OS (handles darwin25.3.0 etc.)
+        p1_base = parts[1].rstrip("0123456789.").rstrip("-") or parts[1]
+        if p1_base in _OS_NAMES:
+            os_part = parts[1]
+        else:
+            os_part = parts[2]
+    else:
+        os_part = parts[-1]
+
     # Strip version suffixes (e.g., darwin25.3.0 -> darwin,
     # freebsd14.1 -> freebsd) for readable slugs.
     os_part = os_part.rstrip("0123456789.").rstrip("-") or os_part
