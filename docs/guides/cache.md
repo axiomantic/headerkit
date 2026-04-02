@@ -273,11 +273,13 @@ produces different IR on Linux vs macOS. Python version is not part of the
 IR cache key because C preprocessing is Python-version-independent.
 
 headerkit auto-detects the target triple from the running Python process
-via `detect_process_triple()`, which respects cross-compilation signals
-such as the `_PYTHON_HOST_PLATFORM` environment variable. You can also
-set the target explicitly using `--target TRIPLE` (CLI flag), the `target`
-key in `[tool.headerkit]` config, or the `HEADERKIT_TARGET` environment
-variable. This allows cross-compilation without Docker.
+via `detect_process_triple()`, which uses `HOST_GNU_TYPE` on POSIX
+(the triple baked into the Python build) or `sysconfig.get_platform()`
+on Windows. On musl-based Linux systems, a runtime libc sniff ensures
+the triple correctly says `linux-musl` instead of `linux-gnu`. You can
+also set the target explicitly using `--target TRIPLE` (CLI flag), the
+`target` key in `[tool.headerkit]` config, or the `HEADERKIT_TARGET`
+environment variable. This allows cross-compilation without Docker.
 
 Projects using cibuildwheel or building for multiple platforms need cache
 entries for every target. The `cache populate` command solves this by running

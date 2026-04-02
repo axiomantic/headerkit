@@ -138,9 +138,10 @@ When pip or build invokes `build_wheel()` or `build_sdist()`:
 
 ## Cross-compilation
 
-By default, headerkit auto-detects the target architecture from the build
-environment. It respects `_PYTHON_HOST_PLATFORM`, `ARCHFLAGS`, and other
-cross-compilation signals set by tools like cibuildwheel.
+By default, headerkit auto-detects the target from the Python build
+itself (`HOST_GNU_TYPE` on POSIX, `sysconfig.get_platform()` on Windows).
+This is inherently correct for native builds and cibuildwheel (which uses
+emulation or per-arch Python downloads).
 
 For explicit cross-compilation, set `target` in `[tool.headerkit]`:
 
@@ -157,9 +158,9 @@ Or set the `HEADERKIT_TARGET` environment variable in CI:
 HEADERKIT_TARGET=aarch64-unknown-linux-gnu pip install .
 ```
 
-When using cibuildwheel, auto-detection usually works without any extra
-configuration. cibuildwheel sets `_PYTHON_HOST_PLATFORM` for each target
-architecture, and headerkit picks it up automatically.
+When using cibuildwheel, auto-detection works without extra configuration.
+cibuildwheel runs each arch's build with the matching Python interpreter,
+so `HOST_GNU_TYPE` already reflects the correct target.
 
 ## Configuration reference
 

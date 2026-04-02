@@ -7,11 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from headerkit._target import (
-    _construct_triple_from_python,
-    _correct_arch_for_pointer_width,
-    _parse_archflags,
-    _parse_vscmd_tgt_arch,
-    _triple_from_platform_tag,
+    _is_musl_linux,
     detect_process_triple,
     normalize_triple,
     resolve_target,
@@ -31,163 +27,152 @@ class TestDetectProcessTriple:
         result = detect_process_triple()
         assert len(result.split("-")) >= 3
 
-
-class TestConstructTripleFromPython:
-    """Tests for _construct_triple_from_python()."""
-
-    def test_returns_string(self) -> None:
-        result = _construct_triple_from_python()
-        assert isinstance(result, str)
-        parts = result.split("-")
-        assert len(parts) >= 3
-
-    def test_32bit_python_gets_32bit_arch(self) -> None:
-        """32-bit Python should produce a 32-bit arch even on 64-bit host."""
-        with (
-            patch("headerkit._target.platform_mod.machine", return_value="x86_64"),
-            patch("headerkit._target._process_pointer_bits", return_value=32),
-            patch("headerkit._target.sys") as mock_sys,
+    def test_host_gnu_type_used_on_posix(self) -> None:
+        """HOST_GNU_TYPE is the primary signal on POSIX."""
+        with patch(
+            "headerkit._target.sysconfig.get_config_var",
+            return_value="x86_64-pc-linux-gnu",
         ):
-            mock_sys.platform = "win32"
-            result = _construct_triple_from_python()
-            assert result.startswith("i686-")
+            result = detect_process_triple()
+            assert result == "x86_64-pc-linux-gnu"
 
-    def test_64bit_python_keeps_64bit_arch(self) -> None:
+    def test_host_gnu_type_lowercased(self) -> None:
+        with patch(
+            "headerkit._target.sysconfig.get_config_var",
+            return_value="X86_64-PC-LINUX-GNU",
+        ):
+            result = detect_process_triple()
+            assert result == "x86_64-pc-linux-gnu"
+
+    def test_host_gnu_type_darwin(self) -> None:
+        with patch(
+            "headerkit._target.sysconfig.get_config_var",
+            return_value="aarch64-apple-darwin",
+        ):
+            result = detect_process_triple()
+            assert result == "aarch64-apple-darwin"
+
+    def test_host_gnu_type_freebsd_with_version(self) -> None:
+        with patch(
+            "headerkit._target.sysconfig.get_config_var",
+            return_value="x86_64-unknown-freebsd14.0",
+        ):
+            result = detect_process_triple()
+            assert result == "x86_64-unknown-freebsd14.0"
+
+    def test_windows_win_amd64(self) -> None:
         with (
+            patch("headerkit._target.sysconfig.get_config_var", return_value=None),
+            patch("headerkit._target.sysconfig.get_platform", return_value="win-amd64"),
+        ):
+            result = detect_process_triple()
+            assert result == "x86_64-pc-windows-msvc"
+
+    def test_windows_win32(self) -> None:
+        with (
+            patch("headerkit._target.sysconfig.get_config_var", return_value=None),
+            patch("headerkit._target.sysconfig.get_platform", return_value="win32"),
+        ):
+            result = detect_process_triple()
+            assert result == "i686-pc-windows-msvc"
+
+    def test_windows_win_arm64(self) -> None:
+        with (
+            patch("headerkit._target.sysconfig.get_config_var", return_value=None),
+            patch("headerkit._target.sysconfig.get_platform", return_value="win-arm64"),
+        ):
+            result = detect_process_triple()
+            assert result == "aarch64-pc-windows-msvc"
+
+    def test_fallback_when_no_host_gnu_type_and_not_windows(self) -> None:
+        """Falls back to platform.machine() when HOST_GNU_TYPE is None."""
+        with (
+            patch("headerkit._target.sysconfig.get_config_var", return_value=None),
+            patch("headerkit._target.sysconfig.get_platform", return_value="unknown"),
             patch("headerkit._target.platform_mod.machine", return_value="x86_64"),
-            patch("headerkit._target._process_pointer_bits", return_value=64),
             patch("headerkit._target.sys") as mock_sys,
         ):
             mock_sys.platform = "linux"
-            result = _construct_triple_from_python()
-            assert result.startswith("x86_64-")
+            result = detect_process_triple()
+            assert result == "x86_64-unknown-linux"
 
 
-class TestCorrectArchForPointerWidth:
-    """Tests for _correct_arch_for_pointer_width()."""
+class TestMuslDetection:
+    """Tests for _is_musl_linux() and musl correction in detect_process_triple."""
 
-    def test_32bit_downgrades_x86_64(self) -> None:
-        with patch("headerkit._target._process_pointer_bits", return_value=32):
-            assert _correct_arch_for_pointer_width("x86_64") == "i686"
+    def test_glibc_returns_false(self) -> None:
+        """glibc responds to CS_GNU_LIBC_VERSION, so _is_musl_linux is False."""
+        with (
+            patch("headerkit._target.sys") as mock_sys,
+            patch("headerkit._target.os.confstr", return_value="glibc 2.35"),
+        ):
+            mock_sys.platform = "linux"
+            assert _is_musl_linux() is False
 
-    def test_32bit_downgrades_aarch64(self) -> None:
-        with patch("headerkit._target._process_pointer_bits", return_value=32):
-            assert _correct_arch_for_pointer_width("aarch64") == "armv7"
+    def test_musl_returns_true(self) -> None:
+        """musl raises ValueError for CS_GNU_LIBC_VERSION."""
+        with (
+            patch("headerkit._target.sys") as mock_sys,
+            patch("headerkit._target.os.confstr", side_effect=ValueError),
+        ):
+            mock_sys.platform = "linux"
+            assert _is_musl_linux() is True
 
-    def test_64bit_keeps_x86_64(self) -> None:
-        with patch("headerkit._target._process_pointer_bits", return_value=64):
-            assert _correct_arch_for_pointer_width("x86_64") == "x86_64"
+    def test_musl_oserror_returns_true(self) -> None:
+        """Some musl builds raise OSError instead of ValueError."""
+        with (
+            patch("headerkit._target.sys") as mock_sys,
+            patch("headerkit._target.os.confstr", side_effect=OSError),
+        ):
+            mock_sys.platform = "linux"
+            assert _is_musl_linux() is True
 
-    def test_32bit_keeps_i686(self) -> None:
-        """Already 32-bit arch is not downgraded further."""
-        with patch("headerkit._target._process_pointer_bits", return_value=32):
-            assert _correct_arch_for_pointer_width("i686") == "i686"
+    def test_non_linux_returns_false(self) -> None:
+        with patch("headerkit._target.sys") as mock_sys:
+            mock_sys.platform = "darwin"
+            assert _is_musl_linux() is False
 
+    def test_no_confstr_returns_false(self) -> None:
+        """If os.confstr is not available, assume not musl."""
+        with (
+            patch("headerkit._target.sys") as mock_sys,
+            patch("headerkit._target.os.confstr", side_effect=AttributeError),
+        ):
+            mock_sys.platform = "linux"
+            assert _is_musl_linux() is False
 
-class TestParseArchflags:
-    """Tests for _parse_archflags()."""
+    def test_detect_corrects_gnu_to_musl(self) -> None:
+        """detect_process_triple corrects linux-gnu to linux-musl on musl systems."""
+        with (
+            patch(
+                "headerkit._target.sysconfig.get_config_var",
+                return_value="x86_64-pc-linux-gnu",
+            ),
+            patch("headerkit._target._is_musl_linux", return_value=True),
+        ):
+            result = detect_process_triple()
+            assert result == "x86_64-pc-linux-musl"
 
-    def test_single_arch(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("ARCHFLAGS", "-arch arm64")
-        assert _parse_archflags() == "aarch64"
+    def test_detect_keeps_gnu_on_glibc(self) -> None:
+        """detect_process_triple keeps linux-gnu on glibc systems."""
+        with (
+            patch(
+                "headerkit._target.sysconfig.get_config_var",
+                return_value="x86_64-pc-linux-gnu",
+            ),
+            patch("headerkit._target._is_musl_linux", return_value=False),
+        ):
+            result = detect_process_triple()
+            assert result == "x86_64-pc-linux-gnu"
 
-    def test_single_x86(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("ARCHFLAGS", "-arch x86_64")
-        assert _parse_archflags() == "x86_64"
-
-    def test_universal2_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Multiple arches (universal2) returns None (ambiguous)."""
-        monkeypatch.setenv("ARCHFLAGS", "-arch x86_64 -arch arm64")
-        assert _parse_archflags() is None
-
-    def test_not_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("ARCHFLAGS", raising=False)
-        assert _parse_archflags() is None
-
-    def test_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("ARCHFLAGS", "")
-        assert _parse_archflags() is None
-
-
-class TestParseVscmdTgtArch:
-    """Tests for _parse_vscmd_tgt_arch()."""
-
-    def test_x64(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("VSCMD_ARG_TGT_ARCH", "x64")
-        assert _parse_vscmd_tgt_arch() == "x86_64"
-
-    def test_x86(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("VSCMD_ARG_TGT_ARCH", "x86")
-        assert _parse_vscmd_tgt_arch() == "i686"
-
-    def test_arm64(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("VSCMD_ARG_TGT_ARCH", "arm64")
-        assert _parse_vscmd_tgt_arch() == "aarch64"
-
-    def test_not_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("VSCMD_ARG_TGT_ARCH", raising=False)
-        assert _parse_vscmd_tgt_arch() is None
-
-
-class TestTripleFromPlatformTag:
-    """Tests for _triple_from_platform_tag()."""
-
-    def test_linux_x86_64(self) -> None:
-        assert _triple_from_platform_tag("linux-x86_64") == "x86_64-unknown-linux-gnu"
-
-    def test_linux_aarch64(self) -> None:
-        assert _triple_from_platform_tag("linux-aarch64") == "aarch64-unknown-linux-gnu"
-
-    def test_macosx_arm64(self) -> None:
-        assert _triple_from_platform_tag("macosx-14.0-arm64") == "aarch64-apple-darwin"
-
-    def test_macosx_x86_64(self) -> None:
-        assert _triple_from_platform_tag("macosx-10.15-x86_64") == "x86_64-apple-darwin"
-
-    def test_win_amd64(self) -> None:
-        assert _triple_from_platform_tag("win-amd64") == "x86_64-pc-windows-msvc"
-
-    def test_win_arm64(self) -> None:
-        assert _triple_from_platform_tag("win-arm64") == "aarch64-pc-windows-msvc"
-
-    def test_freebsd(self) -> None:
-        result = _triple_from_platform_tag("freebsd-14.1-release-amd64")
-        assert result == "x86_64-unknown-freebsd"
-
-    def test_win32(self) -> None:
-        assert _triple_from_platform_tag("win32") == "i686-pc-windows-msvc"
-
-    def test_universal2_returns_none(self) -> None:
-        """universal2 is ambiguous (fat binary), not a real arch."""
-        assert _triple_from_platform_tag("macosx-10.9-universal2") is None
-
-    def test_single_component_returns_none(self) -> None:
-        assert _triple_from_platform_tag("linux") is None
-
-    def test_unknown_os_returns_none(self) -> None:
-        assert _triple_from_platform_tag("haiku-x86_64") is None
-
-
-class TestDetectProcessTripleCrossCompile:
-    """Tests that detect_process_triple respects cross-compilation signals."""
-
-    def test_python_host_platform(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """_PYTHON_HOST_PLATFORM is respected via sysconfig.get_platform()."""
-        monkeypatch.setattr("headerkit._target.sysconfig.get_platform", lambda: "linux-aarch64")
-        result = detect_process_triple()
-        assert "aarch64" in result
-        assert "linux" in result
-
-    def test_archflags_macos(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """ARCHFLAGS is used when sysconfig doesn't indicate cross-compile."""
-        # Patch sysconfig to return something that won't parse (force fallthrough)
-        monkeypatch.setattr("headerkit._target.sysconfig.get_platform", lambda: "unknown-platform")
-        monkeypatch.setenv("ARCHFLAGS", "-arch arm64")
-        monkeypatch.setattr("headerkit._target.sys.platform", "darwin")
-        monkeypatch.delenv("VSCMD_ARG_TGT_ARCH", raising=False)
-        result = detect_process_triple()
-        assert result.startswith("aarch64-")
-        assert "darwin" in result
+    def test_detect_already_musl_not_double_corrected(self) -> None:
+        """If HOST_GNU_TYPE already says musl (3.13+), don't double-correct."""
+        with patch(
+            "headerkit._target.sysconfig.get_config_var",
+            return_value="x86_64-pc-linux-musl",
+        ):
+            result = detect_process_triple()
+            assert result == "x86_64-pc-linux-musl"
 
 
 class TestNormalizeTriple:
@@ -242,6 +227,16 @@ class TestResolveTarget:
         assert isinstance(result, str)
         assert len(result) > 0
 
+    def test_kwarg_normalized(self) -> None:
+        """User-provided triples are normalized."""
+        result = resolve_target(target="arm64-apple-darwin")
+        assert result == "aarch64-apple-darwin"
+
+    def test_env_var_normalized(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HEADERKIT_TARGET", "AMD64-pc-linux-gnu")
+        result = resolve_target()
+        assert result == "x86_64-pc-linux-gnu"
+
 
 class TestShortTarget:
     """Tests for short_target()."""
@@ -263,3 +258,9 @@ class TestShortTarget:
 
     def test_darwin_versioned(self) -> None:
         assert short_target("aarch64-apple-darwin25.3.0") == "aarch64-darwin"
+
+    def test_musl(self) -> None:
+        assert short_target("x86_64-pc-linux-musl") == "x86_64-linux"
+
+    def test_freebsd_versioned(self) -> None:
+        assert short_target("x86_64-unknown-freebsd14.0") == "x86_64-freebsd"

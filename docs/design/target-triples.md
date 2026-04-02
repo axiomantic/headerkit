@@ -127,81 +127,55 @@ headerkit resolves the target triple via config precedence:
 3. **`[tool.headerkit] target`** in pyproject.toml
 4. **Auto-detection** via `detect_process_triple()`
 
-The auto-detection algorithm (5 steps, in order):
+The auto-detection uses one signal per platform:
 
-1. **`sysconfig.get_platform()`** -- respects `_PYTHON_HOST_PLATFORM` and
-   crossenv monkeypatching. Converts the platform tag (e.g., `linux-aarch64`,
-   `macosx-14.0-arm64`, `win-amd64`) to an LLVM triple. Returns `None` for
-   `universal2` (ambiguous fat binary tag; see [universal2 note](#universal2)).
-2. **`ARCHFLAGS` environment variable** (macOS) -- extracts a single `-arch`
-   value. Returns `None` for universal2 or multiple architectures.
-3. **`VSCMD_ARG_TGT_ARCH` environment variable** (Windows Visual Studio) --
-   maps `x64`/`x86`/`arm64`/`arm` to LLVM architecture names.
-4. **`cc -dumpmachine`** with pointer-width correction via
-   `struct.calcsize("P")`.
-5. **Construct from `sys.platform` + `platform.machine()`** with pointer-width
-   correction.
+- **POSIX** (Linux, macOS, BSDs): `sysconfig.get_config_var('HOST_GNU_TYPE')`
+  -- the `--host` value from autoconf, baked into the Python build at compile
+  time. This is inherently process-aware: a 32-bit Python build has a 32-bit
+  `HOST_GNU_TYPE`, so no pointer-width correction is needed.
+- **Windows**: `sysconfig.get_platform()` -- returns `win-amd64`, `win32`, or
+  `win-arm64`. Mapped to LLVM-style triples (e.g., `x86_64-pc-windows-msvc`).
 
-Each step either returns a definitive triple or falls through to the next.
-Step 1 covers the vast majority of cases (native builds, cibuildwheel,
-crossenv). Steps 2-3 handle platform-specific cross-compilation signals.
-Steps 4-5 are fallbacks for environments where `sysconfig.get_platform()`
-does not reflect the actual target.
+For cross-compilation, set `--target`, `HEADERKIT_TARGET`, or
+`[tool.headerkit] target` explicitly rather than relying on auto-detection.
 
-### Cross-compilation signals
+### Why HOST_GNU_TYPE?
 
-Python has no standardized mechanism for communicating the cross-compilation
-target to build-time code. Instead, several de facto signals have emerged:
+`HOST_GNU_TYPE` is the most direct signal for "what target was this Python
+built for." Unlike `sysconfig.get_platform()` (which returns a lossy platform
+tag like `linux-x86_64` with no libc flavor) or `cc -dumpmachine` (which
+reports the compiler's default target, not the process), `HOST_GNU_TYPE` is
+the actual triple from autoconf and includes vendor, OS, and libc flavor
+(e.g., `x86_64-pc-linux-gnu` vs `x86_64-pc-linux-musl` on Python 3.13+).
 
-**`_PYTHON_HOST_PLATFORM`**: Set by CPython's own cross-build infrastructure,
-[crossenv](https://github.com/benfogle/crossenv), and cibuildwheel. When set,
-it overrides the return value of `sysconfig.get_platform()`. This is the most
-widely supported signal because `sysconfig.get_platform()` is already part of
-the standard library and build backends already call it.
+### musl libc detection {#musl}
 
-**`ARCHFLAGS`**: Set by macOS build tools (Xcode, setuptools on macOS) and
-cibuildwheel. Format: `-arch <name>` (e.g., `-arch arm64`). Can contain
-multiple `-arch` flags for universal builds; headerkit ignores multi-arch
-values since it produces text output, not binary.
+On Linux, the libc flavor (glibc vs musl) matters for C preprocessing:
+different system headers, potentially different struct layouts. `HOST_GNU_TYPE`
+correctly reports `linux-musl` on Python 3.13+ (fixed in CPython issue #95855).
+On pre-3.13 Python, `HOST_GNU_TYPE` may report `linux-gnu` even when the
+interpreter is linked against musl (CPython issue #87278).
 
-**`VSCMD_ARG_TGT_ARCH`**: Set by the Visual Studio Developer Command Prompt
-and `vcvarsall.bat`. Values: `x86`, `x64`, `arm`, `arm64`. Communicates
-which toolchain variant was selected.
-
-**`struct.calcsize("P")`**: Not an environment variable, but a runtime signal.
-Returns the pointer width of the running Python process (4 bytes for 32-bit,
-8 bytes for 64-bit). This detects 32-bit Python on a 64-bit host, where
-`platform.machine()` would incorrectly report the host's 64-bit architecture.
-
-`sysconfig.get_platform()` is the primary signal because it integrates
-`_PYTHON_HOST_PLATFORM` and crossenv's monkeypatching, making it the closest
-thing to a standard cross-compilation signal in Python. headerkit checks it
-first and only falls through to the other signals when it yields an ambiguous
-or unparseable result.
-
-### universal2 {#universal2}
-
-`universal2` is a macOS platform tag representing a fat binary that contains
-both `x86_64` and `arm64` slices. Since headerkit produces text output (Python
-bindings), not binary code, `universal2` is not a meaningful target. When
-`sysconfig.get_platform()` returns a tag ending in `universal2`, detection
-returns `None` for that step and falls through to the native architecture
-detection methods (ARCHFLAGS, cc -dumpmachine, or platform.machine()), which
-resolve to a single concrete architecture.
+headerkit corrects this with a runtime libc sniff using
+`os.confstr('CS_GNU_LIBC_VERSION')`. On glibc, this returns a version string
+(e.g., `'glibc 2.35'`). On musl, it raises `ValueError` or `OSError`. This
+is process-aware: it checks what THIS interpreter links against, not what
+libraries are installed on the system.
 
 ### cibuildwheel integration
 
 [cibuildwheel](https://cibuildwheel.readthedocs.io/) invokes PEP 517 build
-backends once per architecture per wheel. For each invocation, it sets
-`_PYTHON_HOST_PLATFORM` and/or `ARCHFLAGS` to communicate the target
-architecture. This means headerkit's auto-detection "just works" in
-cibuildwheel environments without special hooks or configuration. A project
-that builds wheels for `x86_64` and `aarch64` on the same CI runner will
-get correct, architecture-specific bindings for each wheel.
+backends once per architecture per wheel. On Linux, it uses QEMU emulation,
+so the running Python IS the target architecture and `HOST_GNU_TYPE` is
+correct. On macOS, it downloads the matching Python for each arch. On
+Windows, it uses native builds per arch. In all cases, headerkit's
+auto-detection works without special hooks or configuration.
 
-### Normalization
+### Normalization (user input only)
 
-`normalize_triple()` canonicalizes user-provided triples:
+`normalize_triple()` canonicalizes user-provided triples (`--target`,
+`HEADERKIT_TARGET`, config file). Auto-detected triples from
+`detect_process_triple()` are already canonical and bypass normalization.
 
 - Lowercases all components
 - Normalizes arch aliases: `arm64` -> `aarch64`, `AMD64` -> `x86_64`
@@ -266,12 +240,11 @@ via `-I` flags or `include_dirs` for target-specific headers.
 
 [PEP 720](https://peps.python.org/pep-0720/) documents the challenges of
 cross-compiling Python packages. The Python packaging ecosystem lacks
-standardized cross-compilation infrastructure. While PEP 720 identifies
-the problems, no standardized solution has emerged yet. headerkit works
-with the existing de facto signals (`_PYTHON_HOST_PLATFORM`, `ARCHFLAGS`,
-`VSCMD_ARG_TGT_ARCH`, `sysconfig.get_platform()`) rather than waiting for
-a formal standard. If a future PEP standardizes a cross-compilation
-signaling mechanism, headerkit can adopt it as an additional detection step.
+standardized cross-compilation infrastructure. headerkit uses
+`HOST_GNU_TYPE` (which is already baked into every autoconf-built Python)
+for native detection and relies on explicit `--target` for
+cross-compilation. If a future PEP standardizes a cross-compilation
+signaling mechanism, headerkit can adopt it.
 
 ### No formal triple standard
 
