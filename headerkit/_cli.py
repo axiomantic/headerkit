@@ -17,7 +17,6 @@ from headerkit._config import (
     merge_config,
 )
 from headerkit._generate import batch_generate, generate
-from headerkit._resolve import resolve_output_path
 from headerkit.backends import _load_backend_plugins
 from headerkit.writers import _load_writer_plugins
 
@@ -508,7 +507,10 @@ def main() -> int:
     writer_names = [s.name for s in specs]
     has_any_output_template = bool(merged_output_templates) or any(s.output_template is not None for s in specs)
     has_globs = any(any(ch in f for ch in ("*", "?", "[")) for f in input_files)
-    use_batch = len(input_files) > 1 or has_globs or use_config_headers or has_any_output_template
+    has_header_overrides = config is not None and bool(config.header_overrides)
+    use_batch = (
+        len(input_files) > 1 or has_globs or use_config_headers or has_any_output_template or has_header_overrides
+    )
 
     if use_batch:
         # Batch generation path
@@ -522,11 +524,6 @@ def main() -> int:
                 for key, values in spec.options.items():
                     wopts[key] = values[0] if len(values) == 1 else values
                 batch_writer_options[spec.name] = wopts
-
-        # Also merge spec-level output_templates into merged_output_templates
-        for spec in specs:
-            if spec.output_template is not None and spec.name not in merged_output_templates:
-                merged_output_templates[spec.name] = spec.output_template
 
         # Build header_overrides from config
         batch_header_overrides: dict[str, dict[str, object]] | None = None
@@ -554,7 +551,7 @@ def main() -> int:
                 target=args.target,
                 header_overrides=batch_header_overrides,
             )
-        except (ValueError, TypeError, RuntimeError, FileNotFoundError) as exc:
+        except (ValueError, RuntimeError, FileNotFoundError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
@@ -579,17 +576,6 @@ def main() -> int:
 
     # Build umbrella
     code, filename, project_prefixes = _build_umbrella(input_files)
-
-    # Resolve output templates for single-header case
-    if len(input_files) == 1:
-        header_path = Path(input_files[0]).resolve()
-        project_root = header_path.parent
-        for spec in specs:
-            if spec.output_template is not None and any(
-                v in spec.output_template for v in ("{stem}", "{name}", "{dir}")
-            ):
-                resolved_path = resolve_output_path(spec.output_template, header_path, project_root)
-                spec.output_template = str(resolved_path)
 
     # Generate outputs via cache-aware pipeline
     extra_args = _parse_defines(defines) + backend_args
@@ -621,7 +607,7 @@ def main() -> int:
                 project_prefixes=project_prefixes or None,
                 target=args.target,
             )
-        except (ValueError, TypeError, RuntimeError, FileNotFoundError) as exc:
+        except (ValueError, RuntimeError, FileNotFoundError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
         _write_output(spec, content)

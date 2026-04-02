@@ -664,6 +664,82 @@ def generate_all(
     return results
 
 
+@dataclass
+class _MergedOverrides:
+    """Per-header overrides merged from all matching patterns."""
+
+    defines: list[str] | None
+    include_dirs: list[str] | None
+    backend: str | None
+    target: str | None
+    extra_args: list[str] | None
+    writer_options: dict[str, dict[str, object]]
+    output_templates: dict[str, str]
+
+
+def _merge_pattern_overrides(
+    header_path: Path,
+    pattern_mapping: dict[Path, list[str]],
+    header_overrides: dict[str, dict[str, object]],
+    *,
+    defaults_defines: list[str] | None,
+    defaults_include_dirs: list[str] | None,
+    defaults_backend: str | None,
+    defaults_target: str | None,
+    defaults_extra_args: list[str] | None,
+) -> _MergedOverrides:
+    """Merge per-pattern overrides for a single header path.
+
+    Combines overrides from all patterns that matched *header_path*,
+    applying them on top of the provided defaults.
+    """
+    merged: dict[str, object] = {}
+    matching_patterns = pattern_mapping.get(header_path, [])
+    for pat in matching_patterns:
+        if pat in header_overrides:
+            merged.update(header_overrides[pat])
+
+    # Extract override fields
+    override_defines = merged.get("defines")
+    effective_defines = list(override_defines) if isinstance(override_defines, list) else defaults_defines
+    override_include_dirs = merged.get("include_dirs")
+    effective_include_dirs = (
+        list(override_include_dirs) if isinstance(override_include_dirs, list) else defaults_include_dirs
+    )
+    override_backend = merged.get("backend")
+    effective_backend = str(override_backend) if isinstance(override_backend, str) else defaults_backend
+    override_target = merged.get("target")
+    effective_target = str(override_target) if isinstance(override_target, str) else defaults_target
+    override_extra_args = merged.get("extra_args")
+    effective_extra_args = list(override_extra_args) if isinstance(override_extra_args, list) else defaults_extra_args
+
+    # Extract per-pattern writer_options overrides
+    override_writer_options: dict[str, dict[str, object]] = {}
+    raw_wo = merged.get("writer_options")
+    if isinstance(raw_wo, dict):
+        for wname, wopts in raw_wo.items():
+            if isinstance(wopts, dict):
+                override_writer_options[str(wname)] = dict(wopts)
+
+    # Extract per-pattern output overrides
+    pattern_output_templates: dict[str, str] = {}
+    raw_output = merged.get("output")
+    if isinstance(raw_output, dict):
+        for wname, tmpl in raw_output.items():
+            if isinstance(tmpl, str):
+                pattern_output_templates[str(wname)] = tmpl
+
+    return _MergedOverrides(
+        defines=effective_defines,
+        include_dirs=effective_include_dirs,
+        backend=effective_backend,
+        target=effective_target,
+        extra_args=effective_extra_args,
+        writer_options=override_writer_options,
+        output_templates=pattern_output_templates,
+    )
+
+
 def batch_generate(
     *,
     patterns: list[str],
@@ -731,20 +807,16 @@ def batch_generate(
     all_resolved_outputs: dict[tuple[Path, str], Path] = {}
 
     for header_path in sorted_paths:
-        # Merge per-pattern overrides for this header
-        merged_overrides: dict[str, object] = {}
-        matching_patterns = pattern_mapping.get(header_path, [])
-        for pat in matching_patterns:
-            if pat in header_overrides:
-                merged_overrides.update(header_overrides[pat])
-
-        # Extract per-pattern output overrides (nested "output" dict)
-        pattern_output_templates: dict[str, str] = {}
-        raw_output = merged_overrides.get("output")
-        if isinstance(raw_output, dict):
-            for wname, tmpl in raw_output.items():
-                if isinstance(tmpl, str):
-                    pattern_output_templates[str(wname)] = tmpl
+        overrides = _merge_pattern_overrides(
+            header_path,
+            pattern_mapping,
+            header_overrides,
+            defaults_defines=defines,
+            defaults_include_dirs=include_dirs,
+            defaults_backend=backend_name,
+            defaults_target=target,
+            defaults_extra_args=extra_args,
+        )
 
         for writer_name in writers:
             # Output template precedence:
@@ -753,7 +825,7 @@ def batch_generate(
             # 3. writer default via _writer_default_output_pattern()
             template: str | None = output_templates.get(writer_name)
             if template is None:
-                template = pattern_output_templates.get(writer_name)
+                template = overrides.output_templates.get(writer_name)
             if template is None:
                 writer_inst = get_writer(writer_name)
                 template = _writer_default_output_pattern(writer_inst, writer_name)
@@ -769,50 +841,22 @@ def batch_generate(
     headers_processed = 0
 
     for header_path in sorted_paths:
-        # Merge per-pattern overrides for this header
-        merged_overrides = {}
-        matching_patterns = pattern_mapping.get(header_path, [])
-        for pat in matching_patterns:
-            if pat in header_overrides:
-                merged_overrides.update(header_overrides[pat])
-
-        # Extract override fields
-        override_defines = merged_overrides.get("defines")
-        effective_defines = list(override_defines) if isinstance(override_defines, list) else (defines or None)
-        override_include_dirs = merged_overrides.get("include_dirs")
-        effective_include_dirs = (
-            list(override_include_dirs) if isinstance(override_include_dirs, list) else (include_dirs or None)
+        overrides = _merge_pattern_overrides(
+            header_path,
+            pattern_mapping,
+            header_overrides,
+            defaults_defines=defines,
+            defaults_include_dirs=include_dirs,
+            defaults_backend=backend_name,
+            defaults_target=target,
+            defaults_extra_args=extra_args,
         )
-        override_backend = merged_overrides.get("backend")
-        effective_backend = str(override_backend) if isinstance(override_backend, str) else backend_name
-        override_target = merged_overrides.get("target")
-        effective_target = str(override_target) if isinstance(override_target, str) else target
-        override_extra_args = merged_overrides.get("extra_args")
-        effective_extra_args = (
-            list(override_extra_args) if isinstance(override_extra_args, list) else (extra_args or None)
-        )
-
-        # Extract per-pattern writer_options overrides
-        override_writer_options: dict[str, dict[str, object]] = {}
-        raw_wo = merged_overrides.get("writer_options")
-        if isinstance(raw_wo, dict):
-            for wname, wopts in raw_wo.items():
-                if isinstance(wopts, dict):
-                    override_writer_options[str(wname)] = dict(wopts)
-
-        # Extract per-pattern output overrides
-        pattern_output_templates = {}
-        raw_output = merged_overrides.get("output")
-        if isinstance(raw_output, dict):
-            for wname, tmpl in raw_output.items():
-                if isinstance(tmpl, str):
-                    pattern_output_templates[str(wname)] = tmpl
 
         for writer_name in writers:
             # Merge writer options: global < per-pattern override
             effective_wopts: dict[str, object] = dict(writer_options.get(writer_name, {}))
-            if writer_name in override_writer_options:
-                effective_wopts.update(override_writer_options[writer_name])
+            if writer_name in overrides.writer_options:
+                effective_wopts.update(overrides.writer_options[writer_name])
 
             # Resolve output path (same precedence as collision check)
             output_path = all_resolved_outputs[(header_path, writer_name)]
@@ -822,10 +866,10 @@ def batch_generate(
                 header_path=header_path,
                 writer_name=writer_name,
                 code=None,
-                backend_name=effective_backend,
-                include_dirs=([str(d) for d in effective_include_dirs] if effective_include_dirs is not None else None),
-                defines=([str(d) for d in effective_defines] if effective_defines is not None else None),
-                extra_args=([str(a) for a in effective_extra_args] if effective_extra_args is not None else None),
+                backend_name=overrides.backend,
+                include_dirs=([str(d) for d in overrides.include_dirs] if overrides.include_dirs is not None else None),
+                defines=([str(d) for d in overrides.defines] if overrides.defines is not None else None),
+                extra_args=([str(a) for a in overrides.extra_args] if overrides.extra_args is not None else None),
                 writer_options=effective_wopts or None,
                 output_path=output_path,
                 store_dir=store_dir,
@@ -834,7 +878,7 @@ def batch_generate(
                 no_output_cache=no_output_cache,
                 project_prefixes=(str(header_path.parent),),
                 auto_install_libclang=auto_install_libclang,
-                target=effective_target,
+                target=overrides.target,
                 _result_meta=meta,
             )
 

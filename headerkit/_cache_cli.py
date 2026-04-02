@@ -36,12 +36,12 @@ def cache_status_main(argv: list[str]) -> int:
     parser.add_argument(
         "--store-dir",
         dest="store_dir",
-        required=True,
+        default=None,
         metavar="DIR",
-        help="Cache directory path",
+        help="Cache directory path (default: .headerkit/)",
     )
     args = parser.parse_args(argv)
-    store_dir = Path(args.store_dir)
+    store_dir = Path(args.store_dir) if args.store_dir is not None else Path(".headerkit")
 
     if not store_dir.is_dir():
         print(
@@ -81,9 +81,9 @@ def cache_clear_main(argv: list[str]) -> int:
     parser.add_argument(
         "--store-dir",
         dest="store_dir",
-        required=True,
+        default=None,
         metavar="DIR",
-        help="Cache directory path",
+        help="Cache directory path (default: .headerkit/)",
     )
     parser.add_argument(
         "--ir",
@@ -100,7 +100,7 @@ def cache_clear_main(argv: list[str]) -> int:
         help="Clear only output cache entries",
     )
     args = parser.parse_args(argv)
-    store_dir = Path(args.store_dir)
+    store_dir = Path(args.store_dir) if args.store_dir is not None else Path(".headerkit")
 
     if not store_dir.is_dir():
         print(
@@ -143,12 +143,12 @@ def cache_rebuild_index_main(argv: list[str]) -> int:
     parser.add_argument(
         "--store-dir",
         dest="store_dir",
-        required=True,
+        default=None,
         metavar="DIR",
-        help="Cache directory path",
+        help="Cache directory path (default: .headerkit/)",
     )
     args = parser.parse_args(argv)
-    store_dir = Path(args.store_dir)
+    store_dir = Path(args.store_dir) if args.store_dir is not None else Path(".headerkit")
 
     if not store_dir.is_dir():
         print(
