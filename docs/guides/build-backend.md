@@ -93,8 +93,8 @@ include_dirs = ["/usr/local/include"]
 [tool.headerkit.headers."include/mylib_utils.h"]
 defines = ["VERSION=2", "UTILS_ONLY"]
 
-[tool.headerkit.cache]
-cache_dir = ".headerkit"
+[tool.headerkit]
+store_dir = ".headerkit"
 ```
 
 ### Cross-compilation example
@@ -192,7 +192,7 @@ so `HOST_GNU_TYPE` already reflects the correct target.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `cache_dir` | string | `".headerkit"` | Directory for cache storage |
+| `store_dir` | string | `".headerkit"` | Directory for cache storage |
 | `no_cache` | bool | `false` | Disable all caching |
 | `no_ir_cache` | bool | `false` | Disable IR cache only |
 | `no_output_cache` | bool | `false` | Disable output cache only |
@@ -327,7 +327,7 @@ If bindings are outdated after modifying a header:
 
 ```bash
 # Clear the cache and regenerate
-headerkit cache clear --cache-dir .headerkit
+headerkit cache clear --store-dir .headerkit
 headerkit include/mylib.h -w cffi:bindings/mylib_cffi.py
 git add .headerkit/
 git commit -m "cache: regenerate after header changes"

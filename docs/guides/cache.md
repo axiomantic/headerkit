@@ -122,8 +122,8 @@ headerkit include/mylib.h -w cffi:bindings/mylib_cffi.py
 # Multiple writers in one pass
 headerkit include/mylib.h -w cffi:bindings/cffi.py -w ctypes:bindings/ctypes.py
 
-# Custom cache directory
-headerkit include/mylib.h -w cffi --cache-dir /tmp/hkcache
+# Custom store directory
+headerkit include/mylib.h -w cffi --store-dir /tmp/headerkit-store
 ```
 
 ### PEP 517 build backend
@@ -187,19 +187,19 @@ headerkit provides subcommands for inspecting and managing the cache.
 
 ```bash
 # Show cache statistics
-headerkit cache status --cache-dir .headerkit
+headerkit cache status --store-dir .headerkit
 
 # Clear all cache entries
-headerkit cache clear --cache-dir .headerkit
+headerkit cache clear --store-dir .headerkit
 
 # Clear only IR entries (keeps output cache)
-headerkit cache clear --cache-dir .headerkit --ir
+headerkit cache clear --store-dir .headerkit --ir
 
 # Clear only output entries (keeps IR cache)
-headerkit cache clear --cache-dir .headerkit --output
+headerkit cache clear --store-dir .headerkit --output
 
 # Rebuild index.json files from metadata
-headerkit cache rebuild-index --cache-dir .headerkit
+headerkit cache rebuild-index --store-dir .headerkit
 ```
 
 `rebuild-index` is useful after manually editing or moving cache entries. It
@@ -207,13 +207,14 @@ scans all `metadata.json` files and regenerates the `index.json` mappings.
 
 ## Configuration
 
-Cache settings live in the `[cache]` section of `.headerkit.toml` or
-`[tool.headerkit.cache]` in `pyproject.toml`.
+The store directory can be configured at the top level of `[tool.headerkit]`
+(or `.headerkit.toml`). Cache bypass settings live in the `[cache]` section.
 
 ```toml
 # .headerkit.toml
+store_dir = ".headerkit"
+
 [cache]
-cache_dir = ".headerkit"
 no_cache = false
 no_ir_cache = false
 no_output_cache = false
@@ -221,8 +222,10 @@ no_output_cache = false
 
 ```toml
 # pyproject.toml
+[tool.headerkit]
+store_dir = ".headerkit"
+
 [tool.headerkit.cache]
-cache_dir = ".headerkit"
 no_cache = false
 no_ir_cache = false
 no_output_cache = false
@@ -374,6 +377,66 @@ per-platform via the config file.
 - **macOS and Windows**: Cannot be emulated via Docker. Run
   `headerkit cache populate` natively on those platforms, or use CI jobs
   to generate platform-specific entries.
+
+## Glob-based header selection
+
+Instead of listing each header file explicitly, you can use glob patterns
+to select headers:
+
+```bash
+# Process all .h files under include/
+headerkit 'include/**/*.h' -w cffi -o cffi:{dir}/{stem}_cffi.py
+
+# Exclude internal headers
+headerkit 'include/**/*.h' --exclude 'include/internal/**' -w cffi
+```
+
+Quote glob patterns to prevent shell expansion. headerkit expands them
+relative to the project root.
+
+### Output path templates
+
+Use `-o WRITER:TEMPLATE` to control where generated files are written.
+Templates support these variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{stem}` | Filename without extension | `mylib` |
+| `{name}` | Filename with extension | `mylib.h` |
+| `{dir}` | Relative directory from project root | `include/net` |
+
+```bash
+# Each header gets its own output file
+headerkit 'include/**/*.h' -w cffi -o cffi:{dir}/{stem}_cffi.py
+
+# Multiple writers with different templates
+headerkit 'include/**/*.h' \
+    -w cffi -o cffi:{dir}/{stem}_cffi.py \
+    -w json -o json:{dir}/{stem}.json
+```
+
+### Configuration file
+
+Configure header selection and output templates in `pyproject.toml`:
+
+```toml
+[tool.headerkit]
+exclude = ["include/internal/**"]
+
+[[tool.headerkit.headers]]
+pattern = "include/**/*.h"
+
+[[tool.headerkit.headers]]
+pattern = "vendor/special.h"
+defines = ["VENDOR_MODE"]
+
+[tool.headerkit.output]
+cffi = "{dir}/{stem}_cffi.py"
+json = "{dir}/{stem}.json"
+```
+
+Per-pattern overrides (like `defines` above) apply only to headers
+matching that specific pattern.
 
 ## Writer opt-out
 
