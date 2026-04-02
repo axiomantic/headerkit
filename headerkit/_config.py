@@ -78,8 +78,8 @@ class HeaderkitConfig:
     backend_args: list[str] = field(default_factory=list)
     plugins: list[str] = field(default_factory=list)
     writer_options: dict[str, WriterConfig] = field(default_factory=dict)
-    # Cache settings from [cache] / [tool.headerkit.cache] section
-    cache_dir: str | None = None
+    # Store directory for cache data
+    store_dir: str | None = None
     no_cache: bool = False
     no_ir_cache: bool = False
     no_output_cache: bool = False
@@ -187,6 +187,13 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
             raise ValueError(f"headerkit: config error in {source}: target must be str, got {type(val).__name__}")
         config.target = val
 
+    # store_dir: optional string (top-level, not inside [cache])
+    if "store_dir" in data:
+        val = data["store_dir"]
+        if not isinstance(val, str):
+            raise ValueError(f"headerkit: config error in {source}: store_dir must be str, got {type(val).__name__}")
+        config.store_dir = val
+
     # cache settings: [cache] section
     if "cache" in data:
         cache_val = data["cache"]
@@ -195,13 +202,6 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
                 f"headerkit: config error in {source}: cache must be a table, got {type(cache_val).__name__}"
             )
         cache_table: dict[str, object] = cast(dict[str, object], cache_val)
-        if "cache_dir" in cache_table:
-            cd = cache_table["cache_dir"]
-            if not isinstance(cd, str):
-                raise ValueError(
-                    f"headerkit: config error in {source}: cache.cache_dir must be str, got {type(cd).__name__}"
-                )
-            config.cache_dir = cd
         if "no_cache" in cache_table:
             val = cache_table["no_cache"]
             if not isinstance(val, bool):

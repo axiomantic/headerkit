@@ -1,7 +1,7 @@
 # Cache Strategy Guide
 
 headerkit includes a two-layer cache that stores parsed IR and generated
-output in `.hkcache/`. This enables libclang-free builds by committing the
+output in `.headerkit/`. This enables libclang-free builds by committing the
 cache to your repository.
 
 ## Overview
@@ -34,7 +34,7 @@ The cache uses content-addressed storage with human-readable directory names.
 ## Directory layout
 
 ```
-.hkcache/
+.headerkit/
   ir/
     index.json                          # slug -> cache_key mapping
     libclang.mylib.x86_64-linux/        # one dir per unique parse (includes target)
@@ -147,7 +147,7 @@ defines = ["VERSION=2"]
 include_dirs = ["/usr/local/include"]
 ```
 
-With a committed `.hkcache/`, the build works without libclang. The build
+With a committed `.headerkit/`, the build works without libclang. The build
 backend reads from the cache and only falls back to libclang on cache miss.
 
 ## Cache bypass
@@ -187,19 +187,19 @@ headerkit provides subcommands for inspecting and managing the cache.
 
 ```bash
 # Show cache statistics
-headerkit cache status --cache-dir .hkcache
+headerkit cache status --cache-dir .headerkit
 
 # Clear all cache entries
-headerkit cache clear --cache-dir .hkcache
+headerkit cache clear --cache-dir .headerkit
 
 # Clear only IR entries (keeps output cache)
-headerkit cache clear --cache-dir .hkcache --ir
+headerkit cache clear --cache-dir .headerkit --ir
 
 # Clear only output entries (keeps IR cache)
-headerkit cache clear --cache-dir .hkcache --output
+headerkit cache clear --cache-dir .headerkit --output
 
 # Rebuild index.json files from metadata
-headerkit cache rebuild-index --cache-dir .hkcache
+headerkit cache rebuild-index --cache-dir .headerkit
 ```
 
 `rebuild-index` is useful after manually editing or moving cache entries. It
@@ -213,7 +213,7 @@ Cache settings live in the `[cache]` section of `.headerkit.toml` or
 ```toml
 # .headerkit.toml
 [cache]
-cache_dir = ".hkcache"
+cache_dir = ".headerkit"
 no_cache = false
 no_ir_cache = false
 no_output_cache = false
@@ -222,7 +222,7 @@ no_output_cache = false
 ```toml
 # pyproject.toml
 [tool.headerkit.cache]
-cache_dir = ".hkcache"
+cache_dir = ".headerkit"
 no_cache = false
 no_ir_cache = false
 no_output_cache = false
@@ -230,24 +230,24 @@ no_output_cache = false
 
 ## Committing the cache
 
-Commit `.hkcache/` to your repository so that downstream consumers and CI
+Commit `.headerkit/` to your repository so that downstream consumers and CI
 can build without libclang:
 
 ```bash
-git add .hkcache/
+git add .headerkit/
 git commit -m "cache: update headerkit cache"
 ```
 
 When libclang is unavailable and the IR cache misses, `generate()` will check
 the output cache before raising an error. If a cached output exists for the
 requested writer and inputs, it is returned directly. This makes `pip install`
-from committed `.hkcache/` work without libclang.
+from committed `.headerkit/` work without libclang.
 
 A typical workflow:
 
 1. Developer with libclang runs `headerkit` to generate bindings.
-2. Cache entries are written to `.hkcache/`.
-3. Developer commits `.hkcache/` alongside the generated output.
+2. Cache entries are written to `.headerkit/`.
+3. Developer commits `.headerkit/` alongside the generated output.
 4. CI and downstream `pip install` use the cache, no libclang required.
 
 ### CI validation
@@ -259,7 +259,7 @@ To verify the committed cache is up-to-date in CI:
 headerkit generate mylib.h --writer cffi --output-path bindings.py
 
 # Check for uncommitted changes
-git diff --exit-code .hkcache/ bindings.py
+git diff --exit-code .headerkit/ bindings.py
 ```
 
 If the diff is non-empty, the cache is stale and needs to be regenerated.

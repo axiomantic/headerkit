@@ -161,11 +161,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Disable output cache only",
     )
     parser.add_argument(
-        "--cache-dir",
-        dest="cache_dir",
+        "--store-dir",
+        dest="store_dir",
         metavar="DIR",
         default=None,
-        help="Cache directory (default: .hkcache/ in project root)",
+        help="Store directory (default: .headerkit/ in project root)",
     )
     parser.add_argument(
         "--target",
@@ -411,15 +411,15 @@ def main() -> int:
     resolved_no_cache: bool = args.no_cache or _env_bool("HEADERKIT_NO_CACHE")
     resolved_no_ir_cache: bool = args.no_ir_cache or _env_bool("HEADERKIT_NO_IR_CACHE")
     resolved_no_output_cache: bool = args.no_output_cache or _env_bool("HEADERKIT_NO_OUTPUT_CACHE")
-    resolved_cache_dir: str | None = args.cache_dir
+    resolved_store_dir: str | None = args.store_dir
     if not resolved_no_cache and config is not None:
         resolved_no_cache = config.no_cache
         if not resolved_no_ir_cache:
             resolved_no_ir_cache = config.no_ir_cache
         if not resolved_no_output_cache:
             resolved_no_output_cache = config.no_output_cache
-        if resolved_cache_dir is None:
-            resolved_cache_dir = config.cache_dir
+        if resolved_store_dir is None:
+            resolved_store_dir = config.store_dir
 
     # Load plugins (F3/F7: no --plugins flag; config.plugins loaded here)
     _load_backend_plugins()
@@ -480,7 +480,7 @@ def main() -> int:
                 include_dirs=include_dirs or None,
                 extra_args=extra_args or None,
                 writer_options=writer_kwargs or None,
-                cache_dir=resolved_cache_dir,
+                store_dir=resolved_store_dir,
                 no_cache=resolved_no_cache,
                 no_ir_cache=resolved_no_ir_cache,
                 no_output_cache=resolved_no_output_cache,

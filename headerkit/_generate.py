@@ -419,7 +419,7 @@ def generate(
     extra_args: list[str] | None = None,
     writer_options: dict[str, object] | None = None,
     output_path: str | Path | None = None,
-    cache_dir: str | Path | None = None,
+    store_dir: str | Path | None = None,
     no_cache: bool = False,
     no_ir_cache: bool = False,
     no_output_cache: bool = False,
@@ -444,7 +444,7 @@ def generate(
     :param extra_args: Additional backend args.
     :param writer_options: Writer constructor kwargs.
     :param output_path: If provided, write output to this file.
-    :param cache_dir: Cache directory (default: .hkcache/ in project root).
+    :param store_dir: Store directory (default: .headerkit/ in project root).
     :param no_cache: Disable all caching.
     :param no_ir_cache: Disable IR cache only.
     :param no_output_cache: Disable output cache only.
@@ -469,8 +469,8 @@ def generate(
 
     resolved_cache_dir: Path | None = None
     if not no_cache:
-        if cache_dir is not None:
-            resolved_cache_dir = Path(cache_dir)
+        if store_dir is not None:
+            resolved_cache_dir = Path(store_dir)
             resolved_cache_dir.mkdir(parents=True, exist_ok=True)
         else:
             resolved_cache_dir = find_cache_dir(header_path.parent)
@@ -568,7 +568,7 @@ def generate_all(
     writer_options: dict[str, dict[str, object]] | None = None,
     output_dir: str | Path | None = None,
     output_paths: dict[str, str | Path] | None = None,
-    cache_dir: str | Path | None = None,
+    store_dir: str | Path | None = None,
     no_cache: bool = False,
     no_ir_cache: bool = False,
     no_output_cache: bool = False,
@@ -589,7 +589,7 @@ def generate_all(
     :param writer_options: Per-writer kwargs, keyed by writer name.
     :param output_dir: Base directory for output files (auto-named).
     :param output_paths: Explicit output paths per writer name.
-    :param cache_dir: Cache directory (default: .hkcache/ in project root).
+    :param store_dir: Store directory (default: .headerkit/ in project root).
     :param no_cache: Disable all caching.
     :param no_ir_cache: Disable IR cache only.
     :param no_output_cache: Disable output cache only.
@@ -623,7 +623,7 @@ def generate_all(
             extra_args=extra_args,
             writer_options=wopts,
             output_path=opath,
-            cache_dir=cache_dir,
+            store_dir=store_dir,
             no_cache=no_cache,
             no_ir_cache=no_ir_cache,
             no_output_cache=no_output_cache,
