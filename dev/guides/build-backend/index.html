@@ -522,6 +522,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../design/target-triples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target Triples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../cache/" class="md-nav__link">
         
   
@@ -701,6 +729,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Full consumer pyproject.toml example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cross-compilation-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-compilation example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -708,6 +753,17 @@
     <span class="md-ellipsis">
       
         How it works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-compilation
       
     </span>
   </a>
@@ -1718,6 +1774,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Full consumer pyproject.toml example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cross-compilation-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-compilation example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1725,6 +1798,17 @@
     <span class="md-ellipsis">
       
         How it works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-compilation
       
     </span>
   </a>
@@ -2009,6 +2093,26 @@ generated from cache:</p>
 <a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="k">[tool.headerkit.cache]</span>
 <a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="n">cache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;.hkcache&quot;</span>
 </code></pre></div>
+<h3 id="cross-compilation-example">Cross-compilation example<a class="headerlink" href="#cross-compilation-example" title="Permanent link">&para;</a></h3>
+<p>To target a specific architecture explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[build-system]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;headerkit.build_backend&quot;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[project]</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mylib-bindings&quot;</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.10&quot;</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="k">[tool.headerkit]</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;aarch64-unknown-linux-gnu&quot;</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/mylib.h&quot;</span><span class="k">]</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;VERSION=2&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;/usr/local/include&quot;</span><span class="p">]</span>
+</code></pre></div>
 <h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
 <p>When pip or build invokes <code>build_wheel()</code> or <code>build_sdist()</code>:</p>
 <ol>
@@ -2023,6 +2127,23 @@ generated from cache:</p>
    runs its normal <code>build_wheel()</code> or <code>build_sdist()</code>, packaging the
    generated files into the distribution.</li>
 </ol>
+<h2 id="cross-compilation">Cross-compilation<a class="headerlink" href="#cross-compilation" title="Permanent link">&para;</a></h2>
+<p>By default, headerkit auto-detects the target from the Python build
+itself (<code>HOST_GNU_TYPE</code> on POSIX, <code>sysconfig.get_platform()</code> on Windows).
+This is inherently correct for native builds and cibuildwheel (which uses
+emulation or per-arch Python downloads).</p>
+<p>For explicit cross-compilation, set <code>target</code> in <code>[tool.headerkit]</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[tool.headerkit]</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">]</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;aarch64-unknown-linux-gnu&quot;</span>
+</code></pre></div>
+<p>Or set the <code>HEADERKIT_TARGET</code> environment variable in CI:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">HEADERKIT_TARGET</span><span class="o">=</span>aarch64-unknown-linux-gnu<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>.
+</code></pre></div>
+<p>When using cibuildwheel, auto-detection works without extra configuration.
+cibuildwheel runs each arch's build with the matching Python interpreter,
+so <code>HOST_GNU_TYPE</code> already reflects the correct target.</p>
 <h2 id="configuration-reference">Configuration reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h2>
 <h3 id="build-system-table">Build system table<a class="headerlink" href="#build-system-table" title="Permanent link">&para;</a></h3>
 <table>
@@ -2077,6 +2198,12 @@ generated from cache:</p>
 <td>list of strings</td>
 <td><code>[]</code></td>
 <td>Global preprocessor defines applied to all headers</td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td>string</td>
+<td>auto-detect</td>
+<td>LLVM target triple for cross-compilation (e.g., <code>aarch64-unknown-linux-gnu</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -2168,11 +2295,15 @@ generated from cache:</p>
 <td><code>no-output-cache</code></td>
 <td>Set to <code>"true"</code> to disable output cache for this build</td>
 </tr>
+<tr>
+<td><code>target</code></td>
+<td>Override target triple for this build (e.g., <code>aarch64-unknown-linux-gnu</code>)</td>
+</tr>
 </tbody>
 </table>
 <p>Example:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pip<span class="w"> </span>install<span class="w"> </span>.<span class="w"> </span>--config-settings<span class="o">=</span><span class="s2">&quot;no-cache=true&quot;</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pip<span class="w"> </span>install<span class="w"> </span>.<span class="w"> </span>--config-settings<span class="o">=</span><span class="s2">&quot;inner-backend=flit_core.buildapi&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pip<span class="w"> </span>install<span class="w"> </span>.<span class="w"> </span>--config-settings<span class="o">=</span><span class="s2">&quot;no-cache=true&quot;</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pip<span class="w"> </span>install<span class="w"> </span>.<span class="w"> </span>--config-settings<span class="o">=</span><span class="s2">&quot;inner-backend=flit_core.buildapi&quot;</span>
 </code></pre></div>
 <h3 id="overriding-the-inner-backend">Overriding the inner backend<a class="headerlink" href="#overriding-the-inner-backend" title="Permanent link">&para;</a></h3>
 <p>By default headerkit delegates to <code>hatchling.build</code>. To use a different
@@ -2181,12 +2312,12 @@ inner backend:</p>
 <li>Add the inner backend to <code>requires</code> in <code>[build-system]</code>.</li>
 <li>Pass <code>inner-backend</code> via config_settings:</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>python<span class="w"> </span>-m<span class="w"> </span>build<span class="w"> </span>-C<span class="w"> </span>inner-backend<span class="o">=</span>flit_core.buildapi
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>python<span class="w"> </span>-m<span class="w"> </span>build<span class="w"> </span>-C<span class="w"> </span>inner-backend<span class="o">=</span>flit_core.buildapi
 </code></pre></div>
 <p>Or set it permanently by adding both to your build requires:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[build-system]</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;flit_core&quot;</span><span class="p">]</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;headerkit.build_backend&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[build-system]</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;flit_core&quot;</span><span class="p">]</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;headerkit.build_backend&quot;</span>
 </code></pre></div>
 <h2 id="cache-miss-behavior">Cache miss behavior<a class="headerlink" href="#cache-miss-behavior" title="Permanent link">&para;</a></h2>
 <p>When a header's cache entry is missing and libclang is not installed:</p>
@@ -2200,34 +2331,34 @@ inner backend:</p>
   or a populated cache.</li>
 </ul>
 <p>To fix a cache miss:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Install libclang</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>headerkit<span class="w"> </span>install-libclang
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Re-generate and populate cache</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>headerkit<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi:bindings/mylib_cffi.py
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Commit updated cache</span>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>git<span class="w"> </span>add<span class="w"> </span>.hkcache/
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;cache: update headerkit cache&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Install libclang</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>headerkit<span class="w"> </span>install-libclang
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Re-generate and populate cache</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>headerkit<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi:bindings/mylib_cffi.py
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Commit updated cache</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>git<span class="w"> </span>add<span class="w"> </span>.hkcache/
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;cache: update headerkit cache&quot;</span>
 </code></pre></div>
 <h2 id="multiple-headers">Multiple headers<a class="headerlink" href="#multiple-headers" title="Permanent link">&para;</a></h2>
 <p>Configure multiple headers with per-header defines and include dirs:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[tool.headerkit]</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;ctypes&quot;</span><span class="p">]</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;SHARED_DEFINE&quot;</span><span class="p">]</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;include/common&quot;</span><span class="p">]</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/core.h&quot;</span><span class="k">]</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;CORE_API&quot;</span><span class="p">]</span>
-<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;include/core&quot;</span><span class="p">]</span>
-<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
-<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/utils.h&quot;</span><span class="k">]</span>
-<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;UTILS_API&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;DEBUG&quot;</span><span class="p">]</span>
-<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;include/utils&quot;</span><span class="p">]</span>
-<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>
-<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/platform.h&quot;</span><span class="k">]</span>
-<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="c1"># Uses only global defines and include_dirs</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[tool.headerkit]</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;ctypes&quot;</span><span class="p">]</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;SHARED_DEFINE&quot;</span><span class="p">]</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;include/common&quot;</span><span class="p">]</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/core.h&quot;</span><span class="k">]</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;CORE_API&quot;</span><span class="p">]</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;include/core&quot;</span><span class="p">]</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/utils.h&quot;</span><span class="k">]</span>
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;UTILS_API&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;DEBUG&quot;</span><span class="p">]</span>
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;include/utils&quot;</span><span class="p">]</span>
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
+<a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/platform.h&quot;</span><span class="k">]</span>
+<a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="c1"># Uses only global defines and include_dirs</span>
 </code></pre></div>
 <p>Each header's defines and include dirs are merged with the global values.
 In this example, <code>include/core.h</code> is parsed with defines
@@ -2237,12 +2368,12 @@ In this example, <code>include/core.h</code> is parsed with defines
 <p>When your project targets multiple platforms via cibuildwheel, the cache
 needs entries for each target. The <code>cache populate</code> command generates these
 using Docker:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Auto-detect platforms from cibuildwheel config</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>headerkit<span class="w"> </span>cache<span class="w"> </span>populate<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>--cibuildwheel
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Or specify platforms explicitly</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>headerkit<span class="w"> </span>cache<span class="w"> </span>populate<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span>--platform<span class="w"> </span>linux/amd64<span class="w"> </span>--platform<span class="w"> </span>linux/arm64
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Auto-detect platforms from cibuildwheel config</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>headerkit<span class="w"> </span>cache<span class="w"> </span>populate<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>--cibuildwheel
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Or specify platforms explicitly</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>headerkit<span class="w"> </span>cache<span class="w"> </span>populate<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span>--platform<span class="w"> </span>linux/amd64<span class="w"> </span>--platform<span class="w"> </span>linux/arm64
 </code></pre></div>
 <p>The recommended workflow:</p>
 <ol>
@@ -2259,39 +2390,39 @@ for Docker setup, configuration, and limitations.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="stale-cache">Stale cache<a class="headerlink" href="#stale-cache" title="Permanent link">&para;</a></h3>
 <p>If bindings are outdated after modifying a header:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Clear the cache and regenerate</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>headerkit<span class="w"> </span>cache<span class="w"> </span>clear<span class="w"> </span>--cache-dir<span class="w"> </span>.hkcache
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>headerkit<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi:bindings/mylib_cffi.py
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>git<span class="w"> </span>add<span class="w"> </span>.hkcache/
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;cache: regenerate after header changes&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Clear the cache and regenerate</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>headerkit<span class="w"> </span>cache<span class="w"> </span>clear<span class="w"> </span>--cache-dir<span class="w"> </span>.hkcache
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>headerkit<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi:bindings/mylib_cffi.py
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>git<span class="w"> </span>add<span class="w"> </span>.hkcache/
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;cache: regenerate after header changes&quot;</span>
 </code></pre></div>
 <p>The cache key includes header content, defines, and include dirs. If any
 of these change, the old entry becomes a miss and a new entry is created.
 Old entries remain until explicitly cleared.</p>
 <h3 id="libclang-not-found">libclang not found<a class="headerlink" href="#libclang-not-found" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>ImportError: libclang not found
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ImportError: libclang not found
 </code></pre></div>
 <p>Install libclang with <code>headerkit install-libclang</code> or see the
 <a href="../installation/">installation guide</a> for platform-specific instructions.</p>
 <h3 id="wrong-inner-backend">Wrong inner backend<a class="headerlink" href="#wrong-inner-backend" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>ModuleNotFoundError: No module named &#39;hatchling&#39;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>ModuleNotFoundError: No module named &#39;hatchling&#39;
 </code></pre></div>
 <p>Add the inner backend to <code>requires</code> in <code>[build-system]</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[build-system]</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[build-system]</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
 </code></pre></div>
 <h3 id="build-fails-but-cache-exists">Build fails but cache exists<a class="headerlink" href="#build-fails-but-cache-exists" title="Permanent link">&para;</a></h3>
 <p>Verify the cache is committed and present in the build environment:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ls<span class="w"> </span>.hkcache/ir/
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>ls<span class="w"> </span>.hkcache/output/
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>ls<span class="w"> </span>.hkcache/ir/
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>ls<span class="w"> </span>.hkcache/output/
 </code></pre></div>
 <p>If files are missing, the <code>.hkcache/</code> directory may not be included in
 the sdist. Check your inner backend's include/exclude configuration to
 ensure <code>.hkcache/</code> is packaged.</p>
 <h3 id="ci-validation">CI validation<a class="headerlink" href="#ci-validation" title="Permanent link">&para;</a></h3>
 <p>Verify the committed cache matches current sources:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>headerkit<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi:bindings/mylib_cffi.py
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>git<span class="w"> </span>diff<span class="w"> </span>--exit-code<span class="w"> </span>.hkcache/<span class="w"> </span>bindings/
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>headerkit<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi:bindings/mylib_cffi.py
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>git<span class="w"> </span>diff<span class="w"> </span>--exit-code<span class="w"> </span>.hkcache/<span class="w"> </span>bindings/
 </code></pre></div>
 <p>A non-empty diff means the cache is stale and must be regenerated.</p>
 
