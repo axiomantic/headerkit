@@ -77,8 +77,9 @@ architecture. A 32-bit Python running on 64-bit Windows reports `AMD64`, not
 
 `struct.calcsize("P")` returns the size of a C `void*` pointer in the current
 Python process. This is 4 bytes on 32-bit and 8 bytes on 64-bit, regardless
-of the host OS bitness. It is the most reliable way to detect the process's
-pointer width in Python.
+of the host OS bitness. headerkit does not need this because `HOST_GNU_TYPE`
+is already process-aware (see [detection algorithm](#headerkits-detection-algorithm)),
+but it is documented here as background on why naive approaches fail.
 
 ```python
 import struct

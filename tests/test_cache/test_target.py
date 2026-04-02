@@ -263,3 +263,11 @@ class TestShortTarget:
 
     def test_freebsd_versioned(self) -> None:
         assert short_target("x86_64-unknown-freebsd14.0") == "x86_64-freebsd"
+
+    def test_three_component_no_vendor(self) -> None:
+        """3-component triple like x86_64-linux-gnu (no vendor)."""
+        assert short_target("x86_64-linux-gnu") == "x86_64-linux"
+
+    def test_three_component_darwin(self) -> None:
+        """3-component triple like aarch64-apple-darwin."""
+        assert short_target("aarch64-apple-darwin") == "aarch64-darwin"

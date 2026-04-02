@@ -212,6 +212,13 @@ def _read_target_from_config(project_root: Path) -> str | None:
 def short_target(triple: str) -> str:
     """Extract arch and OS for human-readable slug components.
 
+    Handles both 3-component (``aarch64-apple-darwin``) and
+    4-component (``x86_64-pc-linux-gnu``) triples by identifying
+    the OS component positionally: in a 4+ component triple it is
+    ``parts[2]``; in a 3-component triple it is ``parts[1]`` if
+    it looks like an OS, otherwise ``parts[2]`` (not reachable for
+    well-formed triples).
+
     Examples::
 
         >>> short_target("x86_64-pc-linux-gnu")
@@ -220,13 +227,31 @@ def short_target(triple: str) -> str:
         'aarch64-darwin'
         >>> short_target("x86_64-pc-windows-msvc")
         'x86_64-windows'
+        >>> short_target("x86_64-linux-gnu")
+        'x86_64-linux'
 
     :param triple: Target triple.
     :returns: Short ``arch-os`` string.
     """
     parts = triple.split("-")
     arch = parts[0]
-    os_part = parts[2] if len(parts) > 2 else parts[-1]
+
+    # 4+ components: arch-vendor-os[-env], OS is parts[2]
+    # 3 components: could be arch-vendor-os OR arch-os-env
+    # Detect by checking if parts[1] looks like an OS name.
+    _OS_NAMES = {"linux", "darwin", "windows", "freebsd", "openbsd", "netbsd", "win32"}
+    if len(parts) >= 4:
+        os_part = parts[2]
+    elif len(parts) == 3:
+        # Check if parts[1] starts with a known OS (handles darwin25.3.0 etc.)
+        p1_base = parts[1].rstrip("0123456789.").rstrip("-") or parts[1]
+        if p1_base in _OS_NAMES:
+            os_part = parts[1]
+        else:
+            os_part = parts[2]
+    else:
+        os_part = parts[-1]
+
     # Strip version suffixes (e.g., darwin25.3.0 -> darwin,
     # freebsd14.1 -> freebsd) for readable slugs.
     os_part = os_part.rstrip("0123456789.").rstrip("-") or os_part
