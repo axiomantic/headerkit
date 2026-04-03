@@ -180,6 +180,7 @@ so `HOST_GNU_TYPE` already reflects the correct target.
 | `include_dirs` | list of strings | `[]` | Global include directories applied to all headers |
 | `defines` | list of strings | `[]` | Global preprocessor defines applied to all headers |
 | `target` | string | auto-detect | LLVM target triple for cross-compilation (e.g., `aarch64-unknown-linux-gnu`) |
+| `store_dir` | string | `".headerkit"` | Directory for cache storage |
 
 ### `[tool.headerkit.headers."path/to/header.h"]` keys
 
@@ -192,7 +193,6 @@ so `HOST_GNU_TYPE` already reflects the correct target.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `store_dir` | string | `".headerkit"` | Directory for cache storage |
 | `no_cache` | bool | `false` | Disable all caching |
 | `no_ir_cache` | bool | `false` | Disable IR cache only |
 | `no_output_cache` | bool | `false` | Disable output cache only |

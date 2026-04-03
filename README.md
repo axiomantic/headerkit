@@ -288,7 +288,7 @@ output = generate("mylib.h", "cffi")
 
 ```bash
 # CLI: generate with caching (on by default)
-headerkit mylib.h -w cffi:bindings.py --cache-dir .headerkit
+headerkit mylib.h -w cffi:bindings.py --store-dir .headerkit
 ```
 
 headerkit also ships a PEP 517 build backend. Consumer projects declare it in `pyproject.toml` and get bindings generated automatically during `pip install` or `python -m build`, with no libclang required when the cache is committed:
