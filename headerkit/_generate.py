@@ -803,11 +803,17 @@ def batch_generate(
         project_root=project_root,
     )
 
-    # Pre-resolve all output paths to check for collisions
-    all_resolved_outputs: dict[tuple[Path, str], Path] = {}
+    # Fetch writer instances and their default output patterns once (constant per writer)
+    writer_default_patterns: dict[str, str] = {}
+    for wn in writers:
+        if wn not in output_templates:
+            wi = get_writer(wn)
+            writer_default_patterns[wn] = _writer_default_output_pattern(wi, wn)
 
+    # Compute per-header overrides once (reused for collision check and generation)
+    header_overrides_cache: dict[Path, _MergedOverrides] = {}
     for header_path in sorted_paths:
-        overrides = _merge_pattern_overrides(
+        header_overrides_cache[header_path] = _merge_pattern_overrides(
             header_path,
             pattern_mapping,
             header_overrides,
@@ -818,6 +824,12 @@ def batch_generate(
             defaults_extra_args=extra_args,
         )
 
+    # Pre-resolve all output paths to check for collisions
+    all_resolved_outputs: dict[tuple[Path, str], Path] = {}
+
+    for header_path in sorted_paths:
+        overrides = header_overrides_cache[header_path]
+
         for writer_name in writers:
             # Output template precedence:
             # 1. output_templates arg (CLI -o)
@@ -827,8 +839,7 @@ def batch_generate(
             if template is None:
                 template = overrides.output_templates.get(writer_name)
             if template is None:
-                writer_inst = get_writer(writer_name)
-                template = _writer_default_output_pattern(writer_inst, writer_name)
+                template = writer_default_patterns[writer_name]
 
             resolved = resolve_output_path(template, header_path, project_root)
             all_resolved_outputs[(header_path, writer_name)] = project_root / resolved
@@ -841,16 +852,7 @@ def batch_generate(
     headers_processed = 0
 
     for header_path in sorted_paths:
-        overrides = _merge_pattern_overrides(
-            header_path,
-            pattern_mapping,
-            header_overrides,
-            defaults_defines=defines,
-            defaults_include_dirs=include_dirs,
-            defaults_backend=backend_name,
-            defaults_target=target,
-            defaults_extra_args=extra_args,
-        )
+        overrides = header_overrides_cache[header_path]
 
         for writer_name in writers:
             # Merge writer options: global < per-pattern override

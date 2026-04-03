@@ -113,6 +113,16 @@ class TestResolveHeaders:
         assert paths == [tmp_path / "src" / "mylib.h"]
         assert mapping[tmp_path / "src" / "mylib.h"] == ["src/mylib.h"]
 
+    def test_resolve_literal_outside_project_root_raises(self, tmp_path: Path) -> None:
+        """A literal path escaping project_root raises ValueError."""
+        _make_tree(tmp_path, ["foo.h"])
+        with pytest.raises(ValueError, match="outside project root"):
+            resolve_headers(
+                patterns=["../../etc/passwd"],
+                exclude_patterns=[],
+                project_root=tmp_path,
+            )
+
     def test_resolve_pattern_mapping_all_patterns(self, tmp_path: Path) -> None:
         """The mapping dict maps each path to ALL matching patterns, not just the last."""
         _make_tree(tmp_path, ["include/foo.h"])

@@ -29,7 +29,12 @@ def resolve_headers(
         if any(ch in pattern for ch in ("*", "?", "[")):
             hits = list(project_root.glob(pattern))
         else:
-            hits = [project_root / pattern]
+            literal = project_root / pattern
+            try:
+                literal.resolve().relative_to(project_root.resolve())
+            except ValueError:
+                raise ValueError(f"Header path {pattern} is outside project root {project_root}") from None
+            hits = [literal]
 
         for path in hits:
             matched.add(path)
