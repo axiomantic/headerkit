@@ -157,6 +157,8 @@ def _merge_layer(
             dst_entry_dir.unlink()
         elif dst_entry_dir.is_dir():
             shutil.rmtree(dst_entry_dir)
+        elif dst_entry_dir.exists():
+            dst_entry_dir.unlink()
 
         # Copy entry directory
         try:
