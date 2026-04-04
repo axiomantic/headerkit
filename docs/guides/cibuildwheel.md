@@ -50,11 +50,11 @@ headerkit falls back to the default `.headerkit/` directory in the
 project root.
 
 !!! note
-    The `${VAR}` syntax raises an error if the variable is unset. To
-    make the config work on all platforms, set `HEADERKIT_STORE_DIR` in
-    your cibuildwheel Linux environment **and** in your CI workflow's
-    macOS/Windows steps (pointing at the default `.headerkit/` path),
-    or use a conditional config approach as shown in the workflow below.
+    The `${VAR}` syntax raises an error if the variable is unset. The
+    example workflow below sets `HEADERKIT_STORE_DIR=.headerkit` as a
+    job-level default so macOS and Windows builds use the standard path.
+    cibuildwheel's Linux `environment` config overrides this inside the
+    container to point at the volume mount.
 
 ### Alternative: per-platform config
 
@@ -93,6 +93,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      HEADERKIT_STORE_DIR: .headerkit
     steps:
       - uses: actions/checkout@v4
 
@@ -106,16 +108,14 @@ jobs:
       - name: Collect headerkit store (Linux)
         if: runner.os == 'Linux'
         run: |
-          mkdir -p .headerkit-collected
-          cp -r /tmp/headerkit-store/* .headerkit-collected/ 2>/dev/null || true
+          mkdir -p .headerkit
+          [ -d /tmp/headerkit-store ] && cp -rp /tmp/headerkit-store/. .headerkit/
 
       - name: Upload store
         uses: actions/upload-artifact@v4
         with:
           name: headerkit-store-${{ matrix.os }}
-          path: |
-            .headerkit/
-            .headerkit-collected/
+          path: .headerkit/
 
   update-store:
     needs: build
@@ -147,7 +147,8 @@ jobs:
 1. **Build job** runs cibuildwheel on each platform in parallel.
 2. On **Linux**, the Docker volume mount persists store entries to
    `/tmp/headerkit-store` on the runner host. The "Collect" step copies
-   these into `.headerkit-collected/` alongside any `.headerkit/` entries.
+   these into `.headerkit/` so they are uploaded alongside any entries
+   that were already present.
 3. On **macOS and Windows**, the build happens directly on the host, so
    `.headerkit/` is populated in place with no extra steps.
 4. Each platform uploads its store entries as artifacts.
