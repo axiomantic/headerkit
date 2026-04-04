@@ -497,6 +497,22 @@ class TestMatchDefinesHelper:
         result = _match_defines(source, [r"AAA_\w+", r"CCC_\w+"])
         assert result == ["AAA_ONE", "CCC_THREE"]
 
+    def test_match_defines_indented(self):
+        """Indented #define lines are matched."""
+        from headerkit._generate import _match_defines
+
+        source = "  #define FOO 1\n\t#define BAR 2\n"
+        result = _match_defines(source, [r"FOO", r"BAR"])
+        assert result == ["FOO", "BAR"]
+
+    def test_match_defines_space_after_hash(self):
+        """Space between # and define is handled."""
+        from headerkit._generate import _match_defines
+
+        source = "# define FOO 1\n#  define BAR 2\n"
+        result = _match_defines(source, [r"FOO", r"BAR"])
+        assert result == ["FOO", "BAR"]
+
 
 class TestExtraCdef:
     """Tests for the extra_cdef option on CffiWriter."""

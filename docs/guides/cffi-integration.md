@@ -18,7 +18,8 @@ system.
 backend = "libclang"
 writers = ["cffi"]
 
-[tool.headerkit.headers."include/nng.h"]
+[[tool.headerkit.headers]]
+pattern = "include/nng.h"
 include_dirs = ["${NNG_INCLUDE_DIR}"]
 ```
 
@@ -137,7 +138,8 @@ build-backend = "headerkit.build_backend"
 backend = "libclang"
 writers = ["cffi"]
 
-[tool.headerkit.headers."include/nng/nng.h"]
+[[tool.headerkit.headers]]
+pattern = "include/nng/nng.h"
 include_dirs = ["${NNG_INCLUDE_DIR}"]
 
 [tool.headerkit.writer.cffi]

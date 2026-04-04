@@ -277,7 +277,7 @@ def _match_defines(source: str, patterns: list[str]) -> list[str]:
     deduplicated, stable-order list of matching names.
     """
     compiled = [re.compile(p) for p in patterns]
-    define_re = re.compile(r"^#define\s+(\w+)", re.MULTILINE)
+    define_re = re.compile(r"^\s*#\s*define\s+(\w+)", re.MULTILINE)
     seen: set[str] = set()
     result: list[str] = []
     for m in define_re.finditer(source):
