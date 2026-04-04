@@ -340,22 +340,9 @@ print(writer.write(header))
 
 Full documentation, guides, and API reference: [axiomantic.github.io/headerkit](https://axiomantic.github.io/headerkit/)
 
-## GitHub Action
+## CI Store Population
 
-headerkit includes a GitHub Action for populating the cache in CI.
-Add it to a workflow that triggers on header changes:
-
-```yaml
-- uses: axiomantic/headerkit@v0
-  with:
-    args: "include/mylib.h -w cffi --platform linux/amd64 --platform linux/arm64"
-    commit: "true"
-```
-
-This installs headerkit, runs `cache populate` with the specified
-arguments, and optionally commits the updated `.headerkit/` directory.
-
-See the [GitHub Action Guide](https://axiomantic.github.io/headerkit/guides/github-action/) for full usage, cibuildwheel integration, and multi-platform examples.
+headerkit's build backend populates `.headerkit/` during wheel builds. To keep the store updated across platforms in CI, see the [CI Store Population guide](https://axiomantic.github.io/headerkit/guides/github-action/).
 
 ## Development
 

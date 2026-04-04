@@ -1,158 +1,159 @@
-# GitHub Action
+# CI Store Population
 
-headerkit ships a composite GitHub Action that populates the
-`.headerkit/` cache in CI. Use it to keep cache entries up to date
-whenever headers change, so downstream builds never need libclang.
-
-## What it does
-
-The action runs three steps:
-
-1. Sets up Python (via `actions/setup-python`).
-2. Installs headerkit from PyPI.
-3. Runs `headerkit cache populate` with the arguments you provide.
-
-Optionally, it commits the updated `.headerkit/` directory back to the
-branch.
-
-## Inputs
-
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `headerkit-version` | no | latest | Pin a specific headerkit version (e.g., `0.15.0`) |
-| `python-version` | no | `3.12` | Python version for the runner |
-| `args` | no | `""` | Arguments passed to `headerkit cache populate` |
-| `commit` | no | `false` | Commit populated cache files after generation |
-
-## Basic usage
-
-```yaml
-name: Populate headerkit cache
-on:
-  push:
-    paths:
-      - "include/**/*.h"
-
-jobs:
-  populate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: axiomantic/headerkit@v0
-        with:
-          args: "include/mylib.h -w cffi --platform linux/amd64"
-          commit: "true"
-```
-
-This installs the latest headerkit, runs `cache populate` for the
-specified header and platform, and commits the result.
-
-## Pin a headerkit version
-
-Lock the version to avoid surprises from new releases:
-
-```yaml
-- uses: axiomantic/headerkit@v0
-  with:
-    headerkit-version: "0.15.0"
-    args: "include/mylib.h -w cffi --cibuildwheel"
-```
-
-## Usage with cibuildwheel
-
-If your project uses cibuildwheel, pass `--cibuildwheel` to auto-detect
-target platforms and Python versions from `[tool.cibuildwheel]` in
-`pyproject.toml`:
-
-```yaml
-- uses: axiomantic/headerkit@v0
-  with:
-    args: "--cibuildwheel"
-    commit: "true"
-```
-
-This reads the `build` and `skip` selectors to determine which CPython
-versions and Linux platforms to target.
-
-## Usage with multiple platforms
-
-Generate cache entries for specific platforms using `--platform`:
-
-```yaml
-- uses: axiomantic/headerkit@v0
-  with:
-    args: >-
-      include/mylib.h -w cffi
-      --platform linux/amd64
-      --platform linux/arm64
-    commit: "true"
-```
-
-For macOS and Windows targets, run the action on the matching runner
-OS instead of relying on Docker emulation:
-
-```yaml
-jobs:
-  populate-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: axiomantic/headerkit@v0
-        with:
-          args: "include/mylib.h -w cffi --platform linux/amd64 --platform linux/arm64"
-          commit: "true"
-
-  populate-macos:
-    runs-on: macos-latest
-    needs: populate-linux
-    steps:
-      - uses: actions/checkout@v4
-      - uses: axiomantic/headerkit@v0
-        with:
-          args: "include/mylib.h -w cffi"
-          commit: "true"
-```
-
-Note that when `commit: "true"` is used across multiple jobs, each job
-must pull the latest commit from the previous job to avoid conflicts.
-Use `needs:` to sequence them.
+headerkit's PEP 517 build backend populates `.headerkit/` during wheel
+builds. To keep the store up to date across platforms, use a CI workflow
+that builds wheels in a matrix, collects artifacts, and opens a PR if
+anything changed. No custom action needed -- just standard GitHub Actions
+building blocks.
 
 ## How it works
 
-The action is a [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action)
-defined in `action.yml` at the repository root. It:
+The `.headerkit/` directory contains IR (parsed headers) and output
+(generated bindings) so that downstream builds work without libclang
+installed. This directory should be committed to your repository; it is
+not ephemeral cache.
 
-1. Calls `actions/setup-python` with the requested Python version.
-2. Installs headerkit via pip. If `headerkit-version` is set, it pins
-   that exact version; otherwise it installs the latest release.
-3. Runs `headerkit cache populate` with your `args` value. The args
-   are passed through to the command as-is, so any flag that
-   `cache populate` accepts works here.
-4. If `commit` is `"true"`, it configures a bot git identity, stages
-   `.headerkit/`, and commits if there are changes. If the cache is
-   already up to date, the commit step is a no-op.
+The CI pattern has two jobs:
 
-All input values are passed via environment variables (not shell
-interpolation) to prevent injection attacks.
+1. **build** -- runs in a matrix across platforms, builds wheels, and
+   uploads the `.headerkit/` directory as an artifact.
+2. **update-store** -- downloads all artifacts into a single `.headerkit/`
+   directory and opens a PR if anything changed.
 
-## Triggering on header changes
-
-Use `paths` filters to run the action only when headers change:
+## Example workflow
 
 ```yaml
+name: Update headerkit store
 on:
   push:
+    branches: [main]
     paths:
       - "include/**/*.h"
-      - "vendor/**/*.h"
+      - "pyproject.toml"
+  schedule:
+    - cron: "0 6 * * 1"  # weekly on Monday
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        run: pip install build && python -m build --wheel
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: headerkit-store-${{ matrix.os }}
+          path: .headerkit/
+
+  update-store:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: headerkit-store-*
+          path: .headerkit/
+          merge-multiple: true
+
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore: update headerkit store"
+          title: "chore: update headerkit store"
+          branch: headerkit/update-store
+          body: |
+            Automated update of `.headerkit/` store from CI matrix build.
+          labels: automated
 ```
 
-This avoids unnecessary cache populate runs on unrelated commits.
+## Using cibuildwheel
+
+If your project uses cibuildwheel, replace the build step:
+
+```yaml
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheels
+        run: pip install cibuildwheel && cibuildwheel --output-dir dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: headerkit-store-${{ matrix.os }}
+          path: .headerkit/
+```
+
+The build backend populates `.headerkit/` as a side effect of each wheel
+build, so cibuildwheel produces store entries for every platform in the
+matrix automatically.
+
+## Configuration options
+
+### Customizing platforms
+
+Add or remove entries from `matrix.os` to match your target platforms:
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+```
+
+### Configuring the PR
+
+The `peter-evans/create-pull-request` action accepts many options for
+customizing the resulting pull request:
+
+```yaml
+- uses: peter-evans/create-pull-request@v8
+  with:
+    commit-message: "chore: update headerkit store"
+    title: "chore: update headerkit store"
+    branch: headerkit/update-store
+    labels: automated, dependencies
+    reviewers: your-username
+    draft: false
+```
+
+See the [create-pull-request documentation](https://github.com/peter-evans/create-pull-request)
+for the full list of inputs.
+
+### Running on schedule vs on push
+
+The example workflow triggers both on push (when headers change) and on a
+weekly schedule. Adjust to fit your project:
+
+- **On push with path filters** -- reacts to header changes immediately.
+- **On schedule** -- catches changes from dependency updates or toolchain
+  upgrades that affect generated output.
+- **Manual dispatch** -- add `workflow_dispatch:` to the `on:` block
+  to allow manual runs from the Actions tab.
 
 ## See also
 
 - [Cache Strategy Guide](cache.md) for cache layout, bypass flags, and
   multi-platform population details.
 - [Build Backend Guide](build-backend.md) for using headerkit as a
-  PEP 517 build backend with committed cache.
+  PEP 517 build backend with committed store.
