@@ -565,7 +565,7 @@ class CffiWriter:
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping cache metadata in C-style comments."""
-        return "// {line}"
+        return "/* {line} */"
 
 
 # Uses bottom-of-module self-registration. Unlike backends (which import
