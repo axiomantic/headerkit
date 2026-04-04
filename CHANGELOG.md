@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-04-04
+
 ### Changed
 
 - CFFI writer default output extension changed from `.py` to `.cdef.txt` (output is C declarations, not Python)
+- CFFI writer `hash_comment_format` now uses C89-compatible `/* */` comments instead of `#`
 
 ## [0.18.0] - 2026-04-04
 
@@ -523,7 +526,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/axiomantic/headerkit/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/axiomantic/headerkit/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/axiomantic/headerkit/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/axiomantic/headerkit/compare/v0.16.0...v0.16.1
