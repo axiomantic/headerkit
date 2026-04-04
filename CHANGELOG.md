@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-04-04
+
 ### Added
 
 - Environment variable expansion in config: `${VAR}` syntax in string values, with error on unset variables
@@ -495,7 +497,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/axiomantic/headerkit/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/axiomantic/headerkit/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/axiomantic/headerkit/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/axiomantic/headerkit/compare/v0.13.0...v0.14.0
