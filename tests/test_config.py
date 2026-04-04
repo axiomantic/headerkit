@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ import headerkit._config as config_module
 from headerkit._config import (
     HeaderkitConfig,
     WriterConfig,
+    _expand_env_vars,
     find_config_file,
     load_config,
     merge_config,
@@ -509,3 +511,63 @@ class TestHeadersConfig:
         cfg = load_config(pyproject)
         assert cfg.store_dir == "/custom/store"
         assert cfg.no_cache is True
+
+
+# =============================================================================
+# TestEnvVarExpansion
+# =============================================================================
+
+
+class TestEnvVarExpansion:
+    """Tests for _expand_env_vars() and env var expansion in load_config()."""
+
+    def test_expand_string_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A string containing ${VAR} is expanded from the environment."""
+        monkeypatch.setenv("HK_TEST_DIR", "/opt/custom")
+        result = _expand_env_vars("${HK_TEST_DIR}/include")
+        assert result == "/opt/custom/include"
+
+    def test_expand_in_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Each element in a list is recursively expanded."""
+        monkeypatch.setenv("HK_LIB", "/usr/lib")
+        result = _expand_env_vars(["${HK_LIB}/foo", "plain", "${HK_LIB}/bar"])
+        assert result == ["/usr/lib/foo", "plain", "/usr/lib/bar"]
+
+    def test_expand_in_nested_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Dict values are recursively expanded; keys are left unchanged."""
+        monkeypatch.setenv("HK_ROOT", "/project")
+        result = _expand_env_vars({"path": "${HK_ROOT}/src", "nested": {"inner": "${HK_ROOT}/lib"}})
+        assert result == {"path": "/project/src", "nested": {"inner": "/project/lib"}}
+
+    def test_unset_var_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Referencing an unset env var raises ValueError with the var name."""
+        monkeypatch.delenv("HK_NONEXISTENT_VAR_12345", raising=False)
+        with pytest.raises(ValueError, match="HK_NONEXISTENT_VAR_12345"):
+            _expand_env_vars("${HK_NONEXISTENT_VAR_12345}")
+
+    def test_no_expansion_without_syntax(self) -> None:
+        """Plain strings without ${} pass through unchanged."""
+        assert _expand_env_vars("just a plain string") == "just a plain string"
+        assert _expand_env_vars("/usr/include") == "/usr/include"
+        assert _expand_env_vars(42) == 42
+        assert _expand_env_vars(True) is True
+
+    def test_multiple_vars_in_string(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A string with two ${VAR} references expands both."""
+        monkeypatch.setenv("HK_PREFIX", "/opt")
+        monkeypatch.setenv("HK_SUFFIX", "include")
+        result = _expand_env_vars("${HK_PREFIX}/local/${HK_SUFFIX}")
+        assert result == "/opt/local/include"
+
+    def test_expand_in_include_dirs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """End-to-end: include_dirs with ${VAR} are expanded by load_config()."""
+        monkeypatch.setenv("NNG_INCLUDE_DIR", "/opt/nng/include")
+        config_file = tmp_path / ".headerkit.toml"
+        config_file.write_text(
+            textwrap.dedent("""\
+                backend = "libclang"
+                include_dirs = ["${NNG_INCLUDE_DIR}"]
+            """)
+        )
+        cfg = load_config(config_file)
+        assert cfg.include_dirs == ["/opt/nng/include"]

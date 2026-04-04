@@ -398,3 +398,184 @@ class TestCffiWriter:
 
         writer = CffiWriter()
         assert writer.format_description == "CFFI cdef declarations for ffibuilder.cdef()"
+
+
+class TestDefinePatterns:
+    """Tests for the define_patterns option on CffiWriter."""
+
+    def test_define_patterns_basic(self):
+        """Matched defines are appended as #define NAME ... lines."""
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("nng_alloc", CType("void"), []),
+            ],
+        )
+        writer = CffiWriter(define_patterns=[r"NNG_FLAG_\w+"])
+        writer._matched_defines = ["NNG_FLAG_ALLOC", "NNG_FLAG_NONBLOCK"]
+        result = writer.write(header)
+        assert "#define NNG_FLAG_ALLOC ..." in result
+        assert "#define NNG_FLAG_NONBLOCK ..." in result
+        # The function declaration should still be present
+        assert "void nng_alloc(void);" in result
+
+    def test_define_patterns_empty_matches(self):
+        """When define_patterns is set but no defines match, no #define lines appear."""
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("foo", CType("void"), []),
+            ],
+        )
+        writer = CffiWriter(define_patterns=[r"NONEXISTENT_\w+"])
+        writer._matched_defines = []
+        result = writer.write(header)
+        assert "#define" not in result
+        assert "void foo(void);" in result
+
+    def test_define_patterns_none(self):
+        """Without define_patterns, output is normal (no #define lines)."""
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("bar", CType("int"), [Parameter("x", CType("int"))]),
+            ],
+        )
+        writer = CffiWriter()
+        result = writer.write(header)
+        assert "#define" not in result
+        assert "int bar(int x);" in result
+
+
+class TestMatchDefinesHelper:
+    """Tests for the _match_defines() helper function."""
+
+    def test_match_defines(self):
+        """_match_defines scans source for #define names matching patterns."""
+        from headerkit._generate import _match_defines
+
+        source = textwrap.dedent("""\
+            #define NNG_FLAG_ALLOC 1
+            #define NNG_FLAG_NONBLOCK 2
+            #define NNG_VERSION "1.0"
+            #define OTHER_THING 42
+        """)
+        result = _match_defines(source, [r"NNG_FLAG_\w+"])
+        assert result == ["NNG_FLAG_ALLOC", "NNG_FLAG_NONBLOCK"]
+
+    def test_match_defines_no_matches(self):
+        """Returns empty list when no defines match."""
+        from headerkit._generate import _match_defines
+
+        source = "#define FOO 1\n#define BAR 2\n"
+        result = _match_defines(source, [r"NONEXISTENT_\w+"])
+        assert result == []
+
+    def test_match_defines_deduplicates(self):
+        """Duplicate #define names are deduplicated."""
+        from headerkit._generate import _match_defines
+
+        source = "#define FOO 1\n#define FOO 2\n"
+        result = _match_defines(source, [r"FOO"])
+        assert result == ["FOO"]
+
+    def test_match_defines_multiple_patterns(self):
+        """Multiple patterns are all checked."""
+        from headerkit._generate import _match_defines
+
+        source = textwrap.dedent("""\
+            #define AAA_ONE 1
+            #define BBB_TWO 2
+            #define CCC_THREE 3
+        """)
+        result = _match_defines(source, [r"AAA_\w+", r"CCC_\w+"])
+        assert result == ["AAA_ONE", "CCC_THREE"]
+
+
+class TestExtraCdef:
+    """Tests for the extra_cdef option on CffiWriter."""
+
+    def test_extra_cdef_basic(self):
+        """extra_cdef lines are appended verbatim to the output."""
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("foo", CType("void"), []),
+            ],
+        )
+        writer = CffiWriter(extra_cdef=['extern "Python" void cb(void *);'])
+        result = writer.write(header)
+        assert 'extern "Python" void cb(void *);' in result
+        assert "void foo(void);" in result
+
+    def test_extra_cdef_multiple_lines(self):
+        """Multiple extra_cdef lines are all appended."""
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("foo", CType("void"), []),
+            ],
+        )
+        writer = CffiWriter(
+            extra_cdef=[
+                'extern "Python" void on_data(void *);',
+                'extern "Python" void on_error(int);',
+            ]
+        )
+        result = writer.write(header)
+        assert 'extern "Python" void on_data(void *);' in result
+        assert 'extern "Python" void on_error(int);' in result
+
+    def test_extra_cdef_none(self):
+        """Without extra_cdef, output is unchanged."""
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("foo", CType("void"), []),
+            ],
+        )
+        writer = CffiWriter()
+        result = writer.write(header)
+        assert result == "void foo(void);"
+        assert "extern" not in result
+
+    def test_define_patterns_and_extra_cdef_together(self):
+        """When both are set: main cdef, then defines, then extra_cdef."""
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="test.h",
+            declarations=[
+                Function("foo", CType("void"), []),
+            ],
+        )
+        writer = CffiWriter(
+            define_patterns=[r"FLAG_\w+"],
+            extra_cdef=['extern "Python" void cb(void *);'],
+        )
+        writer._matched_defines = ["FLAG_ONE", "FLAG_TWO"]
+        result = writer.write(header)
+
+        # Verify all parts present
+        assert "void foo(void);" in result
+        assert "#define FLAG_ONE ..." in result
+        assert "#define FLAG_TWO ..." in result
+        assert 'extern "Python" void cb(void *);' in result
+
+        # Verify ordering: main output, then defines, then extra_cdef
+        func_pos = result.index("void foo(void);")
+        define_pos = result.index("#define FLAG_ONE ...")
+        extra_pos = result.index('extern "Python" void cb(void *);')
+        assert func_pos < define_pos < extra_pos
