@@ -44,30 +44,26 @@ environment = { HEADERKIT_STORE_DIR = "/headerkit-store" }
 ```
 
 headerkit's config supports `${VAR}` environment variable expansion in
-string values. When `HEADERKIT_STORE_DIR` is set, the store writes to
-that path. When it is not set (macOS, Windows, local development),
-headerkit falls back to the default `.headerkit/` directory in the
-project root.
-
-!!! note
-    The `${VAR}` syntax raises an error if the variable is unset. The
-    example workflow below sets `HEADERKIT_STORE_DIR=.headerkit` as a
-    job-level default so macOS and Windows builds use the standard path.
-    cibuildwheel's Linux `environment` config overrides this inside the
-    container to point at the volume mount.
+string values. When `store_dir` uses this syntax, the variable **must**
+be set or headerkit will raise an error. The example workflow below sets
+`HEADERKIT_STORE_DIR=.headerkit` as a job-level default for all
+platforms, and cibuildwheel's Linux `environment` config overrides it
+inside the container to point at the volume mount.
 
 ### Alternative: per-platform config
 
 If you prefer not to set `HEADERKIT_STORE_DIR` on every platform, use
-the CLI `--store-dir` flag in cibuildwheel's `before-build` hook instead
-of the config file approach:
+the CLI `--store-dir` flag in cibuildwheel's `before-all` hook instead
+of the config file approach. `before-all` runs once per container
+(rather than once per Python version), which is sufficient since header
+generation is Python-version-independent:
 
 ```toml
 [tool.cibuildwheel.linux]
 container-engine = { name = "docker", create-args = [
     "--volume", "/tmp/headerkit-store:/headerkit-store"
 ]}
-before-build = "pip install headerkit && headerkit --store-dir /headerkit-store {project}/include/*.h -w cffi"
+before-all = "pip install headerkit && headerkit --store-dir /headerkit-store {project}/include/*.h -w cffi"
 ```
 
 ## CI workflow pattern
@@ -101,6 +97,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Prepare store mount
+        if: runner.os == 'Linux'
+        run: mkdir -p /tmp/headerkit-store
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3
