@@ -634,6 +634,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guides/cffi-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CFFI Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guides/cffi/" class="md-nav__link">
         
   
@@ -1680,7 +1708,7 @@ integer constants.</p>
 
 
 <a href="#headerkit.writers.cffi.CffiWriter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CffiWriter</span><span class="p">(</span><span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CffiWriter</span><span class="p">(</span><span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">define_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_cdef</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1691,7 +1719,15 @@ integer constants.</p>
 <h4 id="headerkit.writers.cffi.CffiWriter--options">Options<a class="headerlink" href="#headerkit.writers.cffi.CffiWriter--options" title="Permanent link">&para;</a></h4>
 <p>exclude_patterns : list[str] | None
     Regex patterns. Declarations with names matching any pattern
-    are excluded from output.</p>
+    are excluded from output.
+define_patterns : list[str] | None
+    Regex patterns matched against <code>#define</code> names in the raw header
+    source.  Matching names are appended as <code>#define NAME ...</code> lines
+    (CFFI's "resolve at verify-time" syntax).  The actual matching is
+    performed by the <code>generate()</code> pipeline, which sets
+    <code>_matched_defines</code> before calling <code>write()</code>.
+extra_cdef : list[str] | None
+    Arbitrary cdef lines appended verbatim after all generated output.</p>
 <h4 id="headerkit.writers.cffi.CffiWriter--example">Example<a class="headerlink" href="#headerkit.writers.cffi.CffiWriter--example" title="Permanent link">&para;</a></h4>
 <p>::</p>
 <div class="highlight"><pre><span></span><code>from headerkit.writers import get_writer

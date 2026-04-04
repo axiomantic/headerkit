@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://axiomantic.github.io/headerkit/dev/guides/installation/">
+        <link rel="canonical" href="https://axiomantic.github.io/headerkit/dev/guides/cffi-integration/">
       
       
-        <link rel="prev" href="../..">
+        <link rel="prev" href="../github-action/">
       
       
-        <link rel="next" href="../install-libclang/">
+        <link rel="next" href="../cffi/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Installation - headerkit</title>
+        <title>CFFI Integration - headerkit</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#installation" class="md-skip">
+        <a href="#cffi-build-integration" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Installation
+              CFFI Integration
             
           </span>
         </div>
@@ -292,8 +292,6 @@
       
   
   
-    
-  
   
   
     
@@ -306,11 +304,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -331,7 +331,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -346,37 +346,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Installation
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
         
   
   
@@ -392,70 +365,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install-headerkit" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install headerkit
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#system-dependency-libclang" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System Dependency: libclang
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#development-install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Development Install
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verify-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify Installation
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -528,8 +437,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -540,13 +451,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -567,7 +476,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -722,10 +631,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../cffi-integration/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CFFI Integration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -741,6 +677,131 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variable-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variable expansion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#macro-extraction-with-define_patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Macro extraction with define_patterns
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extra-cdef-lines-with-extra_cdef" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extra cdef lines with extra_cdef
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#full-example-with-cffi_buildtool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full example with cffi_buildtool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Full example with cffi_buildtool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cmakeliststxt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CMakeLists.txt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pyprojecttoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pyproject.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-csrc-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The csrc file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-happens-at-build-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens at build time
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1462,10 +1523,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#install-headerkit" class="md-nav__link">
+  <a href="#environment-variable-expansion" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install headerkit
+        Environment variable expansion
       
     </span>
   </a>
@@ -1473,10 +1534,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#system-dependency-libclang" class="md-nav__link">
+  <a href="#macro-extraction-with-define_patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        System Dependency: libclang
+        Macro extraction with define_patterns
       
     </span>
   </a>
@@ -1484,10 +1545,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#development-install" class="md-nav__link">
+  <a href="#extra-cdef-lines-with-extra_cdef" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Development Install
+        Extra cdef lines with extra_cdef
       
     </span>
   </a>
@@ -1495,10 +1556,71 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#verify-installation" class="md-nav__link">
+  <a href="#full-example-with-cffi_buildtool" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Verify Installation
+        Full example with cffi_buildtool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Full example with cffi_buildtool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cmakeliststxt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CMakeLists.txt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pyprojecttoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pyproject.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-csrc-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The csrc file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-happens-at-build-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens at build time
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI workflow
       
     </span>
   </a>
@@ -1525,70 +1647,144 @@
   
 
 
-<h1 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h1>
-<h2 id="install-headerkit">Install headerkit<a class="headerlink" href="#install-headerkit" title="Permanent link">&para;</a></h2>
-<p>Install from PyPI:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>headerkit
+<h1 id="cffi-build-integration">CFFI Build Integration<a class="headerlink" href="#cffi-build-integration" title="Permanent link">&para;</a></h1>
+<p>headerkit generates <code>.cdef.txt</code> files for CFFI projects. Combined with
+<a href="https://github.com/niccokunzmann/cffi_buildtool">cffi_buildtool</a>'s
+<code>read-sources</code> mode, this eliminates custom build scripts entirely:
+headerkit handles the cdef generation, cffi_buildtool handles the
+compilation, and your build system ties them together.</p>
+<h2 id="environment-variable-expansion">Environment variable expansion<a class="headerlink" href="#environment-variable-expansion" title="Permanent link">&para;</a></h2>
+<p>Config values in <code>[tool.headerkit]</code> support <code>${VAR}</code> syntax for
+referencing environment variables set at build time. This is useful when
+a dependency's include path is determined by CMake or another build
+system.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[tool.headerkit]</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">[[tool.headerkit.headers]]</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;include/nng.h&quot;</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;${NNG_INCLUDE_DIR}&quot;</span><span class="p">]</span>
 </code></pre></div>
-<h2 id="system-dependency-libclang">System Dependency: libclang<a class="headerlink" href="#system-dependency-libclang" title="Permanent link">&para;</a></h2>
-<p>headerkit requires the <strong>libclang</strong> shared library to be installed on your system. This is the C API for LLVM's Clang compiler, used by the built-in <code>LibclangBackend</code> to parse C and C++ headers.</p>
-<div class="admonition tip">
-<p class="admonition-title">Automated installation</p>
-<p>For CI/CD, Docker, or quick setup, use the built-in installer:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>headerkit<span class="w"> </span>install-libclang
+<p>When headerkit loads this config, it replaces <code>${NNG_INCLUDE_DIR}</code> with
+the value of the <code>NNG_INCLUDE_DIR</code> environment variable. If the variable
+is not set, headerkit raises an error immediately rather than silently
+producing wrong output.</p>
+<p>Expansion works in any string value, including lists and nested tables.
+The syntax is strictly <code>${VAR}</code> (not <code>$VAR</code>).</p>
+<h2 id="macro-extraction-with-define_patterns">Macro extraction with define_patterns<a class="headerlink" href="#macro-extraction-with-define_patterns" title="Permanent link">&para;</a></h2>
+<p>libclang cannot capture <code>#define</code> values because the preprocessor
+evaluates them before the AST is built. The <code>define_patterns</code> option
+fills this gap by scanning the raw header text for <code>#define</code> names that
+match one or more regex patterns.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tool.headerkit.writer.cffi]</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">define_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;NNG_FLAG_</span><span class="se">\\</span><span class="s2">w+&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_</span><span class="se">\\</span><span class="s2">w+_VERSION&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_MAXADDRLEN&quot;</span><span class="p">]</span>
 </code></pre></div>
-<p>This detects your platform and runs the appropriate install command. See the <a href="../install-libclang/">Installing libclang</a> guide for details.</p>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Vendored Python bindings</p>
-<p>headerkit includes its own vendored copy of the Clang Python bindings that are automatically version-matched to your system's LLVM installation. You do <strong>not</strong> need to install <code>libclang</code> from PyPI.</p>
-</div>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">macOS</label><label for="__tabbed_1_2">Ubuntu / Debian</label><label for="__tabbed_1_3">Fedora / RHEL</label><label for="__tabbed_1_4">Windows</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p>Install LLVM via Homebrew:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>brew<span class="w"> </span>install<span class="w"> </span>llvm
+<p>Matching names are emitted as:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="cp">#define NNG_FLAG_ALLOC ...</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="cp">#define NNG_FLAG_NONBLOCK ...</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="cp">#define NNG_MAJOR_VERSION ...</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="cp">#define NNG_MAXADDRLEN ...</span>
 </code></pre></div>
-<p>headerkit automatically searches common Homebrew paths (<code>/opt/homebrew/opt/llvm/lib/</code> on Apple Silicon, <code>/usr/local/opt/llvm/lib/</code> on Intel). Xcode Command Line Tools also include libclang.</p>
-</div>
-<div class="tabbed-block">
-<p>Install the libclang development package:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>libclang-dev
+<p>The <code>...</code> is CFFI's "figure it out at compile time" syntax. During
+<code>ffi.verify()</code> or <code>ffi.set_source()</code> compilation, CFFI resolves each
+value from the actual C headers. This gives your Python code access to
+the constants without hardcoding their values.</p>
+<p>Patterns use Python's <code>re.search()</code>, so they match anywhere in the
+<code>#define</code> name. Use anchors for precision: <code>"^NNG_FLAG_\\w+$"</code> matches
+names starting with <code>NNG_FLAG_</code>, while <code>"NNG_FLAG"</code> also matches
+<code>SOME_NNG_FLAG_EXTRA</code>.</p>
+<h2 id="extra-cdef-lines-with-extra_cdef">Extra cdef lines with extra_cdef<a class="headerlink" href="#extra-cdef-lines-with-extra_cdef" title="Permanent link">&para;</a></h2>
+<p>CFFI's <code>extern "Python"</code> syntax lets you define Python callbacks that C
+code can call. Since these declarations do not come from a C header,
+headerkit cannot generate them automatically. The <code>extra_cdef</code> option
+appends literal cdef lines to the generated output.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[tool.headerkit.writer.cffi]</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;extern &quot;Python&quot; void _async_complete(void *);&#39;</span><span class="p">]</span>
 </code></pre></div>
-<p>For a specific LLVM version:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>libclang-18-dev
+<p>Multiple lines are supported:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[tool.headerkit.writer.cffi]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="s1">&#39;extern &quot;Python&quot; void _async_complete(void *);&#39;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="s1">&#39;extern &quot;Python&quot; int _dial_callback(void *, int);&#39;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="p">]</span>
 </code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>sudo<span class="w"> </span>dnf<span class="w"> </span>install<span class="w"> </span>clang-devel
+<p>These lines are appended verbatim after all generated declarations.</p>
+<h2 id="full-example-with-cffi_buildtool">Full example with cffi_buildtool<a class="headerlink" href="#full-example-with-cffi_buildtool" title="Permanent link">&para;</a></h2>
+<p>This example shows a complete integration for a project that wraps
+<a href="https://nng.nanomsg.org/">nng</a> using CMake's FetchContent, headerkit
+for cdef generation, and cffi_buildtool for compilation.</p>
+<h3 id="cmakeliststxt">CMakeLists.txt<a class="headerlink" href="#cmakeliststxt" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">include</span><span class="p">(</span><span class="s">FetchContent</span><span class="p">)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">FetchContent_Declare</span><span class="p">(</span><span class="s">nng</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="s">GIT_REPOSITORY</span><span class="w"> </span><span class="s">https://github.com/nanomsg/nng.git</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="s">GIT_TAG</span><span class="w"> </span><span class="s">v1.9.0</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">FetchContent_MakeAvailable</span><span class="p">(</span><span class="s">nng</span><span class="p">)</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c"># After nng is built, generate CFFI bindings</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="nb">add_custom_command</span><span class="p">(</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="s">OUTPUT</span><span class="w"> </span><span class="o">${</span><span class="nv">CMAKE_CURRENT_SOURCE_DIR</span><span class="o">}</span><span class="s">/nng/_nng.cdef.txt</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="o">${</span><span class="nv">Python_EXECUTABLE</span><span class="o">}</span><span class="w"> </span><span class="s">-m</span><span class="w"> </span><span class="s">headerkit</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">        </span><span class="o">${</span><span class="nv">nng_SOURCE_DIR</span><span class="o">}</span><span class="s">/include/nng/nng.h</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">        </span><span class="s">-w</span><span class="w"> </span><span class="s">cffi</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="s">-o</span><span class="w"> </span><span class="s">cffi:nng/_nng.cdef.txt</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="s">-I</span><span class="w"> </span><span class="o">${</span><span class="nv">nng_SOURCE_DIR</span><span class="o">}</span><span class="s">/include</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">    </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s">nng</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">&quot;Generating CFFI cdef with headerkit&quot;</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="p">)</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="c"># cffi_buildtool compiles the extension module</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="nb">add_custom_command</span><span class="p">(</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">    </span><span class="s">OUTPUT</span><span class="w"> </span><span class="o">${</span><span class="nv">CMAKE_CURRENT_SOURCE_DIR</span><span class="o">}</span><span class="s">/nng/_nng_cffi.c</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="o">${</span><span class="nv">Python_EXECUTABLE</span><span class="o">}</span><span class="w"> </span><span class="s">-m</span><span class="w"> </span><span class="s">cffi_buildtool</span><span class="w"> </span><span class="s">read-sources</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">        </span><span class="s">--cdef</span><span class="w"> </span><span class="s">nng/_nng.cdef.txt</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">        </span><span class="s">--csrc</span><span class="w"> </span><span class="s">nng/_nng.csrc.c</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">        </span><span class="s">--output</span><span class="w"> </span><span class="s">nng/_nng_cffi.c</span>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">        </span><span class="s">--module-name</span><span class="w"> </span><span class="s">nng._nng_cffi</span>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">    </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s">nng/_nng.cdef.txt</span><span class="w"> </span><span class="s">nng/_nng.csrc.c</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">&quot;Building CFFI extension with cffi_buildtool&quot;</span>
+<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="p">)</span>
 </code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Install LLVM from the <a href="https://github.com/llvm/llvm-project/releases">official releases</a> or via winget:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>winget<span class="w"> </span>install<span class="w"> </span>LLVM.LLVM
+<h3 id="pyprojecttoml">pyproject.toml<a class="headerlink" href="#pyprojecttoml" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[build-system]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;headerkit.build_backend&quot;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[tool.headerkit]</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="k">[[tool.headerkit.headers]]</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;include/nng/nng.h&quot;</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;${NNG_INCLUDE_DIR}&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="k">[tool.headerkit.writer.cffi]</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">define_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;NNG_FLAG_</span><span class="se">\\</span><span class="s2">w+&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_</span><span class="se">\\</span><span class="s2">w+_VERSION&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_MAXADDRLEN&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;extern &quot;Python&quot; void _async_complete(void *);&#39;</span><span class="p">]</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="k">[tool.headerkit.output]</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">cffi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nng/_nng.cdef.txt&quot;</span>
 </code></pre></div>
-<p>headerkit searches <code>Program Files\LLVM\bin\</code> and common package manager locations (Scoop, MSYS2).</p>
-<div class="admonition tip">
-<p class="admonition-title">GitHub Actions</p>
-<p>GitHub Actions Windows runners come with LLVM pre-installed, so no additional setup is needed in CI.</p>
-</div>
-</div>
-</div>
-</div>
-<h2 id="development-install">Development Install<a class="headerlink" href="#development-install" title="Permanent link">&para;</a></h2>
-<p>To contribute to headerkit or run its test suite:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/axiomantic/headerkit.git
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">cd</span><span class="w"> </span>headerkit
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s1">&#39;.[dev]&#39;</span>
+<h3 id="the-csrc-file">The csrc file<a class="headerlink" href="#the-csrc-file" title="Permanent link">&para;</a></h3>
+<p>The <code>_nng.csrc.c</code> file is a small hand-written C source that
+cffi_buildtool passes to <code>ffi.set_source()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;nng/nng.h&gt;</span>
 </code></pre></div>
-<h2 id="verify-installation">Verify Installation<a class="headerlink" href="#verify-installation" title="Permanent link">&para;</a></h2>
-<p>Confirm everything is working:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from headerkit import get_backend; b = get_backend(); print(f&#39;Backend: {b.name}&#39;)&quot;</span>
-</code></pre></div>
-<p>Expected output:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Backend: libclang
-</code></pre></div>
-<p>If you see a warning about missing backends, your libclang shared library was not found. Double-check the installation steps for your platform above.</p>
+<h3 id="what-happens-at-build-time">What happens at build time<a class="headerlink" href="#what-happens-at-build-time" title="Permanent link">&para;</a></h3>
+<ol>
+<li>CMake fetches and builds nng, setting <code>NNG_INCLUDE_DIR</code>.</li>
+<li>headerkit parses <code>nng.h</code> with libclang, scanning for <code>#define</code> names
+   matching <code>define_patterns</code>, and writes <code>_nng.cdef.txt</code>.</li>
+<li>cffi_buildtool reads <code>_nng.cdef.txt</code> and <code>_nng.csrc.c</code>, then
+   generates and compiles the CFFI extension module.</li>
+<li>The resulting <code>_nng_cffi</code> module is importable from Python.</li>
+</ol>
+<h2 id="ci-workflow">CI workflow<a class="headerlink" href="#ci-workflow" title="Permanent link">&para;</a></h2>
+<p>For multi-platform projects, the <code>.headerkit/</code> cache directory ensures
+builds work without libclang installed. See the
+<a href="../github-action/">CI Store Population</a> guide for a workflow that keeps
+<code>.headerkit/</code> up to date across Linux, macOS, and Windows.</p>
 
 
 
