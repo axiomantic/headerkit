@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Environment variable expansion in config: `${VAR}` syntax in string values, with error on unset variables
+- `define_patterns` CFFI writer option: regex-based macro extraction from raw header text, emitting `#define NAME ...` for CFFI compile-time resolution
+- `extra_cdef` CFFI writer option: append literal cdef lines (e.g., `extern "Python"` callbacks) to generated output
+- CFFI Build Integration documentation guide
+
 ## [0.15.1] - 2026-04-03
 
 ### Removed

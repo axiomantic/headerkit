@@ -596,3 +596,44 @@ class TestCliConfigFile:
 
         assert result == 0
         assert "dep_func" in capsys.readouterr().out
+
+
+# ===========================================================================
+# generate() API integration tests
+# ===========================================================================
+
+
+class TestGenerateWithDefinePatterns:
+    """Integration test for define_patterns through the generate() pipeline."""
+
+    def test_generate_with_define_patterns(self, tmp_path: Path) -> None:
+        """generate() with define_patterns scans the header and appends matched #defines."""
+        import textwrap
+
+        from headerkit._generate import generate
+
+        header = tmp_path / "test.h"
+        header.write_text(
+            textwrap.dedent("""\
+                #define TEST_FOO 1
+                #define TEST_BAR 2
+                #define OTHER_THING 99
+
+                int some_func(void);
+            """)
+        )
+        (tmp_path / ".git").mkdir()
+
+        output = generate(
+            header_path=header,
+            writer_name="cffi",
+            writer_options={"define_patterns": [r"TEST_\w+"]},
+            no_cache=True,
+        )
+
+        # define_patterns appends CFFI "resolve at verify-time" #define NAME ... lines
+        assert "#define TEST_FOO ..." in output
+        assert "#define TEST_BAR ..." in output
+        # OTHER_THING should NOT appear as a "..." define (it may appear via IR as a resolved constant)
+        assert "#define OTHER_THING ..." not in output
+        assert "some_func" in output
