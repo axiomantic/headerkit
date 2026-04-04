@@ -1454,6 +1454,73 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#store-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store Merge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Store Merge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store_merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_merge()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit._store_merge.store_merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;store_merge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" store_merge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mergeresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MergeResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit._store_merge.MergeResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;MergeResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#json-deserialization" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1662,6 +1729,73 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;GenerateResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#store-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store Merge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Store Merge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store_merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_merge()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit._store_merge.store_merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;store_merge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" store_merge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mergeresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MergeResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit._store_merge.MergeResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;MergeResult
       
     </span>
   </a>
@@ -2496,6 +2630,274 @@ to <code>generate()</code>.</p>
 
     </div>
 
+</div><h2 id="store-merge">Store Merge<a class="headerlink" href="#store-merge" title="Permanent link">&para;</a></h2>
+<h3 id="store_merge"><code>store_merge()</code><a class="headerlink" href="#store_merge" title="Permanent link">&para;</a></h3>
+<p>Merge multiple headerkit store directories into a single target directory.
+Useful for combining platform-specific cache entries collected from CI.</p>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit._store_merge.store_merge" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">store_merge</span>
+
+
+<a href="#headerkit._store_merge.store_merge" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">store_merge</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">sources</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Merge one or more source store directories into a target store.</p>
+<p>For each source, finds all <code>ir/</code> and <code>output/*/</code> layers and:
+- Copies entry subdirectories (slug dirs) into the corresponding
+  target layer, skipping entries whose slug already exists with the
+  same <code>cache_key</code>.
+- Merges <code>index.json</code> by combining <code>entries</code> dicts (later sources
+  win on conflict).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>sources</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span> | <span title="pathlib.Path">Path</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Source store directory paths (e.g., <code>["/tmp/store-linux"]</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>target</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Target store directory path (e.g., <code>".headerkit/"</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            MergeResult
+
+
+  
+      dataclass
+   (headerkit._store_merge.MergeResult)" href="#headerkit._store_merge.MergeResult">MergeResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A :class:<code>MergeResult</code> summarizing what was merged.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code>FileNotFoundError</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If a source directory does not exist.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div><p><strong>Example:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">store_merge</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">store_merge</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;store-linux/&quot;</span><span class="p">,</span> <span class="s2">&quot;store-macos/&quot;</span><span class="p">],</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;.headerkit/&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;New: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">new_entries</span><span class="si">}</span><span class="s2">, Skipped: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">skipped_entries</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="mergeresult"><code>MergeResult</code><a class="headerlink" href="#mergeresult" title="Permanent link">&para;</a></h3>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit._store_merge.MergeResult" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">MergeResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit._store_merge.MergeResult" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">MergeResult</span><span class="p">(</span><span class="n">new_entries</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">skipped_entries</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">overwritten_entries</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">())</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Result of a store merge operation.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>new_entries</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of entry directories copied to the target.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>skipped_entries</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of entries skipped (same slug and cache_key).</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>overwritten_entries</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of entries overwritten (same slug, different cache_key).</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>errors</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>List of error messages for entries that failed to copy.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="list">list</span>()</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
 </div><h2 id="json-deserialization">JSON Deserialization<a class="headerlink" href="#json-deserialization" title="Permanent link">&para;</a></h2>
 <h3 id="json_to_header"><code>json_to_header()</code><a class="headerlink" href="#json_to_header" title="Permanent link">&para;</a></h3>
 <p>Deserialize a JSON string or dict back into a <code>Header</code> IR object.
@@ -2607,12 +3009,12 @@ unknown declaration/type kinds.</p>
     </div>
 
 </div><p><strong>Example:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">json_to_header</span><span class="p">,</span> <span class="n">get_writer</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Round-trip: IR -&gt; JSON -&gt; IR</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">json_writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">&quot;json&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">json_str</span> <span class="o">=</span> <span class="n">json_writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">restored</span> <span class="o">=</span> <span class="n">json_to_header</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">json_to_header</span><span class="p">,</span> <span class="n">get_writer</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Round-trip: IR -&gt; JSON -&gt; IR</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">json_writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">&quot;json&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">json_str</span> <span class="o">=</span> <span class="n">json_writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">restored</span> <span class="o">=</span> <span class="n">json_to_header</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
 </code></pre></div>
 
 
