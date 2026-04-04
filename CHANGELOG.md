@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-04-04
+
 ### Added
 
 - `HEADERKIT_STORE_DIR` environment variable for configuring the store directory, enabling cibuildwheel integration where the store must reside on a host-visible mounted volume. Resolution order: explicit `store_dir` parameter > `HEADERKIT_STORE_DIR` env var > config file `store_dir` > auto-detect from project root.
@@ -517,7 +519,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/axiomantic/headerkit/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/axiomantic/headerkit/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/axiomantic/headerkit/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/axiomantic/headerkit/compare/v0.15.1...v0.16.0
