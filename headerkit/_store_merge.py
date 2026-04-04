@@ -107,23 +107,25 @@ def _merge_layer(
         # Skip non-entry directories (index.json lives at layer root)
         slug = entry_dir.name
 
-        # Check if this slug has an index entry
+        # Check if this slug has an index entry; if not, reconstruct from
+        # metadata.json so we have a single src_entry for the rest of the loop.
         src_entry = src_index["entries"].get(slug)
         if src_entry is None:
-            # Entry dir without index entry; check for metadata.json
             meta_path = entry_dir / "metadata.json"
             if not meta_path.exists():
                 continue
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                src_cache_key = meta.get("cache_key", "")
+                src_entry = IndexEntry(
+                    cache_key=meta.get("cache_key", ""),
+                    created=meta.get("created", ""),
+                )
             except (json.JSONDecodeError, OSError):
                 logger.warning("Skipping entry with corrupt metadata: %s", entry_dir)
                 result.errors.append(f"Corrupt metadata: {entry_dir}")
                 continue
-        else:
-            src_cache_key = src_entry["cache_key"]
 
+        src_cache_key = src_entry["cache_key"]
         dst_entry_dir = dst_layer / slug
 
         # Check if target already has this slug
@@ -143,11 +145,16 @@ def _merge_layer(
                     dst_entry["cache_key"],
                     src_cache_key,
                 )
-                if dst_entry_dir.is_dir():
-                    shutil.rmtree(dst_entry_dir)
-        else:
+
+        if dst_entry is None:
             result.new_entries += 1
             logger.debug("Copying new entry: %s", slug)
+
+        # Remove existing directory if present (may exist on disk even if
+        # not tracked in index, e.g., from a partial merge), preventing
+        # shutil.copytree from raising FileExistsError.
+        if dst_entry_dir.is_dir():
+            shutil.rmtree(dst_entry_dir)
 
         # Copy entry directory
         try:
@@ -157,25 +164,8 @@ def _merge_layer(
             logger.warning("Failed to copy entry %s: %s", slug, exc)
             continue
 
-        # Update destination index with source entry
-        if src_entry is not None:
-            dst_index["entries"][slug] = src_entry
-        else:
-            # Reconstruct entry from metadata
-            dst_index["entries"][slug] = _index_entry_from_metadata(entry_dir)
+        # Update destination index
+        dst_index["entries"][slug] = src_entry
 
     # Save merged index
     save_index(dst_layer / "index.json", dst_index)
-
-
-def _index_entry_from_metadata(entry_dir: Path) -> IndexEntry:
-    """Build an index entry dict from a metadata.json file."""
-    meta_path = entry_dir / "metadata.json"
-    try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        return IndexEntry(
-            cache_key=meta.get("cache_key", ""),
-            created=meta.get("created", ""),
-        )
-    except (json.JSONDecodeError, OSError):
-        return IndexEntry(cache_key="", created="")
