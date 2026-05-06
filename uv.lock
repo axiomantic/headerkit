@@ -188,7 +188,7 @@ wheels = [
 
 [[package]]
 name = "headerkit"
-version = "0.19.0"
+version = "0.19.2"
 source = { editable = "." }
 dependencies = [
     { name = "tomli", marker = "python_full_version < '3.11'" },
@@ -204,7 +204,7 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-timeout" },
-    { name = "python-tripwire" },
+    { name = "pytest-tripwire" },
     { name = "ruff" },
 ]
 docs = [
@@ -221,7 +221,7 @@ test = [
     { name = "dirty-equals" },
     { name = "pytest" },
     { name = "pytest-timeout" },
-    { name = "python-tripwire" },
+    { name = "pytest-tripwire" },
 ]
 
 [package.metadata]
@@ -235,7 +235,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'lint'", specifier = ">=1,<2" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=9,<10" },
     { name = "pytest-timeout", marker = "extra == 'test'", specifier = ">=2,<3" },
-    { name = "python-tripwire", marker = "extra == 'test'", specifier = ">=0.20,<1" },
+    { name = "pytest-tripwire", marker = "extra == 'test'", specifier = ">=0.20,<1" },
     { name = "ruff", marker = "extra == 'lint'", specifier = ">=0.14,<1" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=1.1.0" },
 ]
@@ -781,6 +781,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-tripwire"
+version = "0.21.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/66/47/0b4259bdf9cd9cb2a190d17bf5bd0616a947bad4ccac23bb7d5aedf628e7/pytest_tripwire-0.21.0.tar.gz", hash = "sha256:77fc7042902c8b624053bb7565529e32f38892209bea85df7e0c4d5f807ab60a", size = 513020, upload-time = "2026-05-01T10:10:09.604Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/18/51fb655265fbfbbef0cdf152c62ac9ceb2badee47a1fc19c42df26e87887/pytest_tripwire-0.21.0-py3-none-any.whl", hash = "sha256:b4313529aa4f37fc8f22bb5876328194d32d2ae065729fed44d7d10f51a6f4dd", size = 188294, upload-time = "2026-05-01T10:10:07.539Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -790,19 +803,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
-]
-
-[[package]]
-name = "python-tripwire"
-version = "0.20.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6b/01/9e54e2cbbe047c5785d1af536a70c9d1bd47d25cef173dc1bc3dad1cdc9d/python_tripwire-0.20.1.tar.gz", hash = "sha256:08a781b47e706bde31ce16fb8b1b1d84b921c139744c6549795d169c05f0b05d", size = 511449, upload-time = "2026-04-29T23:25:11.621Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d8/50/45799c4a61300117ed9e5a01a1c95fbbeb5d504b7d716afca3207e6d4220/python_tripwire-0.20.1-py3-none-any.whl", hash = "sha256:9d8c5fd54d136d24c26815f0f53e0200d95bfdfa4bb65d2dcb23aa7414d37d72", size = 187912, upload-time = "2026-04-29T23:25:09.461Z" },
 ]
 
 [[package]]
