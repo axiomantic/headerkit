@@ -1,0 +1,11 @@
+{
+  "backend_name": "libclang",
+  "cache_key": "80d24927200e4dae326bd1db51470515b7de826160f0f33345d4530561e604b6",
+  "created": "2026-03-28T18:13:39.944033+00:00",
+  "defines": [],
+  "header_path": "test.h",
+  "headerkit_version": "0.10.1",
+  "includes": [],
+  "ir_schema_version": "1",
+  "other_args": []
+}

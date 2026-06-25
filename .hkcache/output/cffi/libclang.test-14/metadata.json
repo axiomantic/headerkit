@@ -1,0 +1,11 @@
+{
+  "cache_key": "4aaa47e9d9477b694030127b40a53f650afddfdb93296099500159b72373b780",
+  "created": "2026-03-28T14:52:11.948296+00:00",
+  "headerkit_version": "0.10.0",
+  "ir_cache_key": "57ea82522b4c95e43b2b3f3a526094712f7e33adf019b1990f972eb940b4ba9b",
+  "writer_cache_version": null,
+  "writer_name": "cffi",
+  "writer_options": {
+    "exclude_patterns": "[\"^__\",\"^_internal\"]"
+  }
+}

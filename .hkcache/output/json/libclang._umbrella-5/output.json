@@ -1,0 +1,39 @@
+{
+  "path": "_umbrella.h",
+  "declarations": [
+    {
+      "kind": "function",
+      "name": "alpha",
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      },
+      "parameters": [],
+      "is_variadic": false,
+      "location": {
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-104/test_two_files_json_declaratio0/a.h",
+        "line": 1,
+        "column": 5
+      }
+    },
+    {
+      "kind": "function",
+      "name": "beta",
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      },
+      "parameters": [],
+      "is_variadic": false,
+      "location": {
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-104/test_two_files_json_declaratio0/b.h",
+        "line": 1,
+        "column": 5
+      }
+    }
+  ],
+  "included_headers": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-104/test_two_files_json_declaratio0/a.h",
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-104/test_two_files_json_declaratio0/b.h"
+  ]
+}

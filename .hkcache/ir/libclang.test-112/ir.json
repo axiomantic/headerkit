@@ -1,0 +1,53 @@
+{
+  "declarations": [
+    {
+      "is_variadic": false,
+      "kind": "function",
+      "location": {
+        "column": 5,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-131/test_config_writer_option_appl0/test.h",
+        "line": 1
+      },
+      "name": "pub",
+      "parameters": [],
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      }
+    },
+    {
+      "is_variadic": false,
+      "kind": "function",
+      "location": {
+        "column": 5,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-131/test_config_writer_option_appl0/test.h",
+        "line": 2
+      },
+      "name": "__priv",
+      "parameters": [],
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      }
+    },
+    {
+      "is_variadic": false,
+      "kind": "function",
+      "location": {
+        "column": 5,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-131/test_config_writer_option_appl0/test.h",
+        "line": 3
+      },
+      "name": "_internal",
+      "parameters": [],
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      }
+    }
+  ],
+  "included_headers": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-131/test_config_writer_option_appl0/test.h"
+  ],
+  "path": "test.h"
+}

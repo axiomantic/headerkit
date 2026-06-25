@@ -1,0 +1,14 @@
+{
+  "backend_name": "libclang",
+  "cache_key": "d4a979803ce42d4679fd634e1928e96476f7d40a26299c5fa2b0f03c7c162313",
+  "created": "2026-04-01T18:03:22.409133+00:00",
+  "defines": [],
+  "header_path": "test.h",
+  "headerkit_version": "0.13.0",
+  "includes": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-264/test_config_include_dirs_appli0/include"
+  ],
+  "ir_schema_version": "2",
+  "other_args": [],
+  "target": "aarch64-apple-darwin"
+}

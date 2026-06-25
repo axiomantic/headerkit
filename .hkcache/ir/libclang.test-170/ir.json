@@ -1,0 +1,38 @@
+{
+  "declarations": [
+    {
+      "is_variadic": false,
+      "kind": "function",
+      "location": {
+        "column": 5,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-148/test_function_name_in_lua0/test.h",
+        "line": 1
+      },
+      "name": "compute",
+      "parameters": [
+        {
+          "name": "x",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        },
+        {
+          "name": "y",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        }
+      ],
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      }
+    }
+  ],
+  "included_headers": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-148/test_function_name_in_lua0/test.h"
+  ],
+  "path": "test.h"
+}

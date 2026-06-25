@@ -1,0 +1,27 @@
+{
+  "declarations": [
+    {
+      "kind": "enum",
+      "location": {
+        "column": 6,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-158/test_enum_name_in_json0/test.h",
+        "line": 1
+      },
+      "name": "Status",
+      "values": [
+        {
+          "name": "OK",
+          "value": 0
+        },
+        {
+          "name": "ERR",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "included_headers": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-158/test_enum_name_in_json0/test.h"
+  ],
+  "path": "test.h"
+}

@@ -1,0 +1,13 @@
+{
+  "backend_name": "libclang",
+  "cache_key": "6147762650e2b68ce34187753258bd0e44c0b0ba268e828df2110138e930505e",
+  "created": "2026-03-29T01:23:02.339444+00:00",
+  "defines": [],
+  "header_path": "test.h",
+  "headerkit_version": "0.10.1",
+  "includes": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-158/test_config_include_dirs_appli0/include"
+  ],
+  "ir_schema_version": "1",
+  "other_args": []
+}

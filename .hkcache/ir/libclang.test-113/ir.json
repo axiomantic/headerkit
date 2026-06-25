@@ -1,0 +1,128 @@
+{
+  "declarations": [
+    {
+      "kind": "typedef",
+      "location": {
+        "column": 22,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-133/test_json_to_stdout0/test.h",
+        "line": 1
+      },
+      "name": "uint32_t",
+      "underlying_type": {
+        "kind": "ctype",
+        "name": "unsigned int"
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "x",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        },
+        {
+          "name": "y",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        }
+      ],
+      "kind": "struct",
+      "location": {
+        "column": 8,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-133/test_json_to_stdout0/test.h",
+        "line": 3
+      },
+      "name": "Point"
+    },
+    {
+      "kind": "enum",
+      "location": {
+        "column": 6,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-133/test_json_to_stdout0/test.h",
+        "line": 8
+      },
+      "name": "Color",
+      "values": [
+        {
+          "name": "RED",
+          "value": 0
+        },
+        {
+          "name": "GREEN",
+          "value": 1
+        },
+        {
+          "name": "BLUE",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "is_variadic": false,
+      "kind": "function",
+      "location": {
+        "column": 5,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-133/test_json_to_stdout0/test.h",
+        "line": 14
+      },
+      "name": "add",
+      "parameters": [
+        {
+          "name": "a",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        }
+      ],
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      }
+    },
+    {
+      "is_variadic": false,
+      "kind": "function",
+      "location": {
+        "column": 6,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-133/test_json_to_stdout0/test.h",
+        "line": 15
+      },
+      "name": "greet",
+      "parameters": [
+        {
+          "name": "name",
+          "type": {
+            "kind": "pointer",
+            "pointee": {
+              "kind": "ctype",
+              "name": "char",
+              "qualifiers": [
+                "const"
+              ]
+            }
+          }
+        }
+      ],
+      "return_type": {
+        "kind": "ctype",
+        "name": "void"
+      }
+    }
+  ],
+  "included_headers": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-133/test_json_to_stdout0/test.h"
+  ],
+  "path": "test.h"
+}

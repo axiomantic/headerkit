@@ -1,0 +1,12 @@
+{
+  "backend_name": "libclang",
+  "cache_key": "5ed342177eb05f3e69cbf25f204219fad0c2f4624518e84741fbe1d16b20fd74",
+  "created": "2026-04-01T08:21:34.188273+00:00",
+  "defines": [],
+  "header_path": "test.h",
+  "headerkit_version": "0.13.0",
+  "includes": [],
+  "ir_schema_version": "2",
+  "other_args": [],
+  "target": "aarch64-apple-darwin25.3.0"
+}

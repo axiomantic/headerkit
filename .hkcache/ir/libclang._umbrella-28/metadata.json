@@ -1,0 +1,11 @@
+{
+  "backend_name": "libclang",
+  "cache_key": "7ecf0a4bddf8088d6cf7a8c35ab0fd8eea2f803bf45777be00a28b776e277b7c",
+  "created": "2026-03-29T01:23:02.159838+00:00",
+  "defines": [],
+  "header_path": "_umbrella.h",
+  "headerkit_version": "0.10.1",
+  "includes": [],
+  "ir_schema_version": "1",
+  "other_args": []
+}

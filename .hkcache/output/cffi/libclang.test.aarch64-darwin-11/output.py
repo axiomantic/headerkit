@@ -1,0 +1,1 @@
+int public_func(void);

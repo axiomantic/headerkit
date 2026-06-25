@@ -1,0 +1,33 @@
+{
+  "declarations": [
+    {
+      "fields": [
+        {
+          "name": "width",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        },
+        {
+          "name": "height",
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          }
+        }
+      ],
+      "kind": "struct",
+      "location": {
+        "column": 8,
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-96/test_struct_name_in_json0/test.h",
+        "line": 1
+      },
+      "name": "Rect"
+    }
+  ],
+  "included_headers": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-96/test_struct_name_in_json0/test.h"
+  ],
+  "path": "test.h"
+}

@@ -1,0 +1,1 @@
+int dep_func(void);

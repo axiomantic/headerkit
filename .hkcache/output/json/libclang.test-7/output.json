@@ -1,0 +1,38 @@
+{
+  "path": "test.h",
+  "declarations": [
+    {
+      "kind": "function",
+      "name": "multiply",
+      "return_type": {
+        "kind": "ctype",
+        "name": "int"
+      },
+      "parameters": [
+        {
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          },
+          "name": "a"
+        },
+        {
+          "type": {
+            "kind": "ctype",
+            "name": "int"
+          },
+          "name": "b"
+        }
+      ],
+      "is_variadic": false,
+      "location": {
+        "file": "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-86/test_one_writer_to_file_one_to0/test.h",
+        "line": 1,
+        "column": 5
+      }
+    }
+  ],
+  "included_headers": [
+    "/private/var/folders/wz/7ss831j55d391tl0lnnw9bs40000gn/T/pytest-of-elijahrutschman/pytest-86/test_one_writer_to_file_one_to0/test.h"
+  ]
+}
