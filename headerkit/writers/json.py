@@ -201,6 +201,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["is_defaulted"] = True
         if decl.is_noexcept:
             d["is_noexcept"] = True
+        if decl.is_inline:
+            d["is_inline"] = True
+        if decl.body is not None:
+            d["body"] = decl.body
         if decl.attributes:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:
@@ -243,6 +247,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
         }
         if decl.value is not None:
             d["value"] = decl.value
+        if decl.evaluated_value is not None:
+            d["evaluated_value"] = decl.evaluated_value
+        if decl.raw_expression is not None:
+            d["raw_expression"] = decl.raw_expression
         if decl.is_macro:
             d["is_macro"] = True
         if decl.type is not None:

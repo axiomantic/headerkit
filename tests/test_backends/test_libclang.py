@@ -1049,9 +1049,9 @@ class TestMacroParsing:
         constants = [d for d in header.declarations if isinstance(d, Constant)]
         err_consts = [c for c in constants if c.name == "ERROR_CODE"]
         assert len(err_consts) == 1
-        # Negative macro is a multi-token expression ("-" and "1");
-        # _analyze_expression_tokens returns CType("int") with value=None
-        assert err_consts[0].value is None
+        # Negative macro is safely evaluated to -1
+        assert err_consts[0].value == -1
+        assert err_consts[0].evaluated_value == -1
         assert err_consts[0].type is not None
         assert err_consts[0].type.name == "int"
 

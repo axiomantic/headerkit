@@ -614,6 +614,8 @@ class Function:
     is_deleted: bool = False
     is_defaulted: bool = False
     is_noexcept: bool = False
+    is_inline: bool = False
+    body: str | None = None
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     location: SourceLocation | None = None
@@ -643,18 +645,18 @@ class Typedef:
     --------
     Simple alias::
 
-        size_t = Typedef("size_t", CType("long", ["unsigned"]))
+        uint_alias = Typedef("uint", CType("unsigned int"))
 
-    Struct typedef::
+    Struct alias::
 
-        point_t = Typedef("Point", CType("struct Point"))
+        point_alias = Typedef("Point", CType("struct Point"))
 
-    Function pointer typedef::
+    Function pointer alias::
 
-        callback_t = Typedef("Callback", FunctionPointer(
-            CType("void"),
-            [Parameter("data", Pointer(CType("void")))]
-        ))
+        cb_alias = Typedef(
+            "Callback",
+            Pointer(FunctionPointer(CType("void"), [Parameter("code", CType("int"))]))
+        )
     """
 
     name: str
@@ -669,13 +671,13 @@ class Typedef:
 
 @dataclass
 class Variable:
-    """Global variable declaration.
+    """Global or extern variable declaration.
 
-    Represents a global or extern variable declaration. Does not
-    include local variables (which are not exposed in header files).
+    Represents variable declarations at file scope, including ``extern``
+    variables and file-scope data definitions.
 
-    :param name: The variable name.
-    :param type: The variable's type.
+    :param name: The variable identifier.
+    :param type: The variable's type expression.
     :param location: Source location for error reporting.
 
     Examples
@@ -715,6 +717,8 @@ class Constant:
     :param name: The constant name.
     :param value: The constant's value - an integer, float, or string
         expression. None if the value cannot be determined.
+    :param evaluated_value: The evaluated numeric or string value if evaluable.
+    :param raw_expression: The un-evaluated macro or constant expression string.
     :param type: For typed constants (``const int``), the C type.
         None for macros.
     :param is_macro: True if this is a ``#define`` macro, False for
@@ -729,7 +733,7 @@ class Constant:
 
     Expression macro::
 
-        mask = Constant("MASK", "1 << 4", is_macro=True)
+        mask = Constant("MASK", 16, raw_expression="1 << 4", evaluated_value=16, is_macro=True)
 
     Typed const::
 
@@ -742,6 +746,8 @@ class Constant:
 
     name: str
     value: Union[int, float, str] | None = None  # None if complex/unknown
+    evaluated_value: Union[int, float, str] | None = None
+    raw_expression: str | None = None
     type: CType | None = None
     is_macro: bool = False
     location: SourceLocation | None = None

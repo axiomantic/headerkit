@@ -7,9 +7,10 @@ import textwrap
 
 import pytest
 
+from headerkit._ir_json import json_to_header
 from headerkit.backends import get_backend
 from headerkit.backends.libclang import is_system_libclang_available
-from headerkit.ir import BaseSpecifier, CType, Enum, Function, Reference, Struct
+from headerkit.ir import BaseSpecifier, Constant, CType, Enum, Function, Reference, Struct
 from headerkit.writers.cython import write_pxd
 from headerkit.writers.json import JsonWriter
 
@@ -411,3 +412,42 @@ class TestCppClassSemantics:
         assert all(f.name != "" or f.is_anonymous_transparent for f in s.fields)
         anon_fields = [f for f in s.fields if f.is_anonymous_transparent]
         assert len(anon_fields) == 1
+
+    def test_macro_evaluation_and_inline_function(self) -> None:
+        """Test constant macro arithmetic/bitwise expression evaluation and inline functions."""
+        code = textwrap.dedent("""\
+            #define BITMASK (1 << 3 | 0x02)
+            #define OFFSET (100 + 20 * 2)
+
+            static inline int add(int a, int b) {
+                return a + b;
+            }
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.h")
+
+        consts = {c.name: c for c in h.declarations if isinstance(c, Constant)}
+        assert "BITMASK" in consts
+        bitmask = consts["BITMASK"]
+        assert bitmask.value == 10  # (1 << 3 | 2) == 8 | 2 == 10
+        assert bitmask.evaluated_value == 10
+        assert bitmask.raw_expression == "( 1 << 3 | 0x02 )"
+
+        assert "OFFSET" in consts
+        offset = consts["OFFSET"]
+        assert offset.value == 140
+        assert offset.evaluated_value == 140
+
+        funcs = {f.name: f for f in h.declarations if isinstance(f, Function)}
+        assert "add" in funcs
+        add_fn = funcs["add"]
+        assert add_fn.is_inline is True
+        assert add_fn.body is not None
+        assert "return a + b ;" in add_fn.body
+
+        # Verify full JSON round-trip
+        json_writer = JsonWriter()
+        json_output = json_writer.write(h)
+        reconstructed = json_to_header(json_output)
+        assert reconstructed.declarations == h.declarations
+
