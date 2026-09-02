@@ -344,3 +344,41 @@ def test_cshim_spaceship_operator_and_namespaced_types() -> None:
         #endif
     """)
     assert output == expected
+
+
+def test_cshim_non_namespaced_free_function() -> None:
+    """Test non-namespaced free function and operator overload wrapper generation."""
+    fn = Function(
+        name="operator+",
+        return_type=CType("int"),
+        parameters=[Parameter("a", CType("int")), Parameter("b", CType("int"))],
+    )
+    header = Header(path="ops.h", declarations=[fn])
+    writer = CShimWriter()
+    output = writer.write(header)
+
+    expected = textwrap.dedent("""\
+        // Auto-generated C-ABI shim by HeaderKit
+        #pragma once
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        int add(int a, int b);
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+        #ifdef __cplusplus
+        #include <new>
+        #include "ops.h"
+
+        int add(int a, int b) {
+            return operator+(a, b);
+        }
+
+        #endif
+    """)
+    assert output == expected
