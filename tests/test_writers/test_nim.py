@@ -126,11 +126,11 @@ class TestNimWriter:
                 value*: T
 
 
-            proc getVal*(this: Container): T {.importcpp: "#.getVal(@)", header: "test.hpp".}
+            proc getVal*[T](this: Container[T]): T {.importcpp: "#.getVal(@)", header: "test.hpp".}
 
-            proc setVal*(this: var Container, v: var T) {.importcpp: "#.setVal(@)", header: "test.hpp".}
+            proc setVal*[T](this: var Container[T], v: var T) {.importcpp: "#.setVal(@)", header: "test.hpp".}
 
-            proc constructContainer*(initVal: T = 0): Container {.importcpp: "Container(@)", header: "test.hpp", constructor.}
+            proc constructContainer*[T](initVal: T = 0): Container[T] {.importcpp: "Container<'*0>(@)", header: "test.hpp", constructor.}
         """)
         assert out == expected
 
