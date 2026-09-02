@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from headerkit.backends import is_backend_available
-from headerkit.ir import Function, Header
+from headerkit.ir import Function, Header, Struct
 from headerkit.writers.cffi import header_to_cffi
 from headerkit.writers.ctypes import header_to_ctypes
 from headerkit.writers.cython import write_pxd
@@ -28,6 +28,7 @@ pytestmark = [
         reason="libclang backend not available",
     ),
     pytest.mark.download,
+    pytest.mark.allow("subprocess"),
 ]
 
 
@@ -35,11 +36,12 @@ def _parse_header(
     backend,
     header_path: Path,
     include_dirs: list[str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> Header:
     """Parse a header file, failing the test on parse failure."""
     code = header_path.read_text()
     try:
-        return backend.parse(code, header_path.name, include_dirs=include_dirs)
+        return backend.parse(code, header_path.name, include_dirs=include_dirs, extra_args=extra_args)
     except RuntimeError as exc:
         pytest.fail(f"Parse failed (should not happen on known-good headers): {exc}")
 
@@ -849,3 +851,91 @@ class TestCPython:
         names = {d.name for d in header.declarations}
         assert "Py_Initialize" in names
         assert "Py_Finalize" in names
+
+
+# =============================================================================
+# Dear ImGui (C++)
+# =============================================================================
+
+
+@pytest.mark.timeout(120)
+class TestDearImGui:
+    """Test Dear ImGui C++ header through the full pipeline with C++ class semantics."""
+
+    def test_parse(self, backend, imgui_header):
+        _skip_if_unavailable(imgui_header, "Dear ImGui")
+        header = _parse_header(
+            backend,
+            imgui_header,
+            include_dirs=[str(imgui_header.parent)],
+            extra_args=["-x", "c++", "-std=c++17"],
+        )
+        assert len(header.declarations) >= 50, (
+            f"Expected >=50 declarations from imgui.h, got {len(header.declarations)}"
+        )
+        structs = {d.name: d for d in header.declarations if isinstance(d, Struct)}
+        assert "ImVec2" in structs
+        assert "ImVec4" in structs
+        assert "ImColor" in structs
+
+        # Verify C++ class semantics on ImVec2 / ImColor
+        imvec2 = structs["ImVec2"]
+        assert len(imvec2.constructors) >= 1
+        assert any(c.name == "ImVec2" for c in imvec2.constructors)
+        assert any(f.name == "x" and f.access == "public" for f in imvec2.fields)
+        assert any(f.name == "y" and f.access == "public" for f in imvec2.fields)
+
+        imcolor = structs["ImColor"]
+        assert len(imcolor.constructors) >= 1
+        assert len(imcolor.conversions) >= 1
+        assert any(
+            "ImVec4" in c.name or (hasattr(c.return_type, "name") and "ImVec4" in c.return_type.name)
+            for c in imcolor.conversions
+        )
+
+    def test_json_write(self, backend, imgui_header):
+        _skip_if_unavailable(imgui_header, "Dear ImGui")
+        header = _parse_header(
+            backend,
+            imgui_header,
+            include_dirs=[str(imgui_header.parent)],
+            extra_args=["-x", "c++", "-std=c++17"],
+        )
+        _check_json_write(header, "ImVec2", "ImVec4", "ImColor")
+        json_output = header_to_json(header)
+        parsed = json.loads(json_output)
+        imvec2 = next(d for d in parsed["declarations"] if d.get("name") == "ImVec2")
+        assert "constructors" in imvec2
+        assert len(imvec2["constructors"]) >= 1
+
+    def test_cython_write(self, backend, imgui_header):
+        _skip_if_unavailable(imgui_header, "Dear ImGui")
+        header = _parse_header(
+            backend,
+            imgui_header,
+            include_dirs=[str(imgui_header.parent)],
+            extra_args=["-x", "c++", "-std=c++17"],
+        )
+        _check_cython_write(header, "ImVec2")
+
+    def test_prompt_write(self, backend, imgui_header):
+        _skip_if_unavailable(imgui_header, "Dear ImGui")
+        header = _parse_header(
+            backend,
+            imgui_header,
+            include_dirs=[str(imgui_header.parent)],
+            extra_args=["-x", "c++", "-std=c++17"],
+        )
+        output = PromptWriter(verbosity="compact").write(header)
+        assert isinstance(output, str) and len(output) > 0
+        assert "STRUCT ImVec2" in output
+
+    def test_diff_write(self, backend, imgui_header):
+        _skip_if_unavailable(imgui_header, "Dear ImGui")
+        header = _parse_header(
+            backend,
+            imgui_header,
+            include_dirs=[str(imgui_header.parent)],
+            extra_args=["-x", "c++", "-std=c++17"],
+        )
+        _check_diff_write(header)

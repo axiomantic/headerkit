@@ -230,36 +230,25 @@ def sdl2_headers(backend) -> Path | None:
     return cache
 
 
-# -- CPython ----------------------------------------------------------------
+# -- Dear ImGui (C++) -------------------------------------------------------
 
-CPYTHON_VERSION = "3.13.2"
-CPYTHON_URL = f"https://github.com/python/cpython/archive/refs/tags/v{CPYTHON_VERSION}.tar.gz"
+IMGUI_VERSION = "1.91.8"
+IMGUI_URL = f"https://github.com/ocornut/imgui/archive/refs/tags/v{IMGUI_VERSION}.tar.gz"
 
 
 @pytest.fixture(scope="session")
-def cpython_headers() -> Path | None:
-    """Download CPython header directory."""
-    cache = CACHE_DIR / f"cpython-{CPYTHON_VERSION}"
-    inc_dir = cache / "Include"
-    header = inc_dir / "Python.h"
-    if not header.exists():
+def imgui_header() -> Path | None:
+    """Download Dear ImGui header directory and extract imgui.h and imconfig.h."""
+    cache = CACHE_DIR / f"imgui-{IMGUI_VERSION}"
+    header = cache / "imgui.h"
+    imconfig = cache / "imconfig.h"
+    if not (header.exists() and imconfig.exists()):
         try:
-            inc_dir.mkdir(parents=True, exist_ok=True)
-            req = Request(CPYTHON_URL, headers={"User-Agent": "headerkit-test/1.0"})
-            with urlopen(req, timeout=120) as resp:  # noqa: S310
-                data = resp.read()
-            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
-                prefix = f"cpython-{CPYTHON_VERSION}/Include/"
-                for member in tf.getmembers():
-                    if member.name.startswith(prefix) and member.isfile():
-                        rel = member.name[len(prefix) :]
-                        dest = inc_dir / rel
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        member.name = rel
-                        tf.extract(member, inc_dir)
+            cache.mkdir(parents=True, exist_ok=True)
+            _download_and_extract_tar(IMGUI_URL, cache, ["imgui.h", "imconfig.h"])
         except (TimeoutError, urllib.error.URLError, OSError) as exc:
             import warnings
 
-            warnings.warn(f"Failed to download CPython: {exc}", stacklevel=2)
+            warnings.warn(f"Failed to download Dear ImGui: {exc}", stacklevel=2)
             return None
-    return cache if header.exists() else None
+    return header if header.exists() else None
