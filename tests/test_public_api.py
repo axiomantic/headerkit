@@ -57,6 +57,7 @@ def test_ir_types_match_direct_import():
     assert headerkit.Array is ir.Array
     assert headerkit.Parameter is ir.Parameter
     assert headerkit.FunctionPointer is ir.FunctionPointer
+    assert headerkit.BaseSpecifier is ir.BaseSpecifier
     assert headerkit.Field is ir.Field
     assert headerkit.EnumValue is ir.EnumValue
     assert headerkit.Enum is ir.Enum

@@ -15,6 +15,7 @@ from headerkit.backends import (
 from headerkit.install_libclang import auto_install
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     # Type expressions
     CType,
@@ -56,6 +57,7 @@ __all__ = [
     "FunctionPointer",
     "TypeExpr",
     # Declarations
+    "BaseSpecifier",
     "Field",
     "EnumValue",
     "Enum",

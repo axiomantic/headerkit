@@ -46,6 +46,10 @@ Declaration types represent the top-level constructs found in C/C++ headers.
     options:
       show_source: false
 
+::: headerkit.ir.BaseSpecifier
+    options:
+      show_source: false
+
 ::: headerkit.ir.Struct
     options:
       show_source: false
