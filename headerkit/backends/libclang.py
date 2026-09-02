@@ -1401,6 +1401,14 @@ class ClangASTConverter:
                         notes.append(
                             f"Field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'"
                         )
+                elif child.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
+                    is_anon = False
+                    with contextlib.suppress(Exception):
+                        is_anon = child.is_anonymous()
+                    if is_anon or not child.spelling or "(anonymous" in child.spelling:
+                        field = self._convert_field(child)
+                        if field:
+                            fields.append(field)
                 elif child.kind == CursorKind.VAR_DECL and (is_cppclass or cursor.kind == CursorKind.STRUCT_DECL):
                     # Static member variable
                     field = self._convert_field(child)
@@ -1976,9 +1984,13 @@ class ClangASTConverter:
         if not name and cursor.is_bitfield():
             return None
 
-        if not name or name.startswith("(unnamed"):
+        is_anon = False
+        with contextlib.suppress(Exception):
+            is_anon = bool(cursor.is_anonymous())
+
+        if is_anon or not name or name.startswith("(unnamed") or "(anonymous" in name:
             is_transparent = True
-            name = name or ""
+            name = ""
 
         field_type = self._convert_type(cursor.type)
         if not field_type:
