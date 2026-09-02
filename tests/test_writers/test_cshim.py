@@ -55,6 +55,7 @@ def test_cshim_free_functions() -> None:
 
         #ifdef __cplusplus
         #include <new>
+        #include "test.h"
 
         int math_core_calculate(int a, int b) {
             return math::core::calculate(a, b);
@@ -109,6 +110,7 @@ def test_cshim_class_methods_and_lifecycle() -> None:
 
         #ifdef __cplusplus
         #include <new>
+        #include "test.h"
 
         vehicle_Engine_t* vehicle_Engine_create(int speed) {
             return reinterpret_cast<vehicle_Engine_t*>(new (std::nothrow) vehicle::Engine(speed));
@@ -177,6 +179,7 @@ def test_cshim_static_methods_unnamed_params_and_operators() -> None:
 
         #ifdef __cplusplus
         #include <new>
+        #include "test.h"
 
         Device_t* Device_create(void) {
             return reinterpret_cast<Device_t*>(new (std::nothrow) Device());
@@ -254,6 +257,7 @@ def test_cshim_complex_types_and_all_operators() -> None:
 
         #ifdef __cplusplus
         #include <new>
+        #include "test.h"
 
         char* io_stream_process_buffer(int buf[16], double* ref_val, void (*cb)(int code)) {
             return io::stream::process_buffer(buf, ref_val, cb);
@@ -271,6 +275,70 @@ def test_cshim_complex_types_and_all_operators() -> None:
 
         int Number_band(Number_t* self, int mask) {
             return reinterpret_cast<Number*>(self)->operator&(mask);
+        }
+
+        #endif
+    """)
+    assert output == expected
+
+
+def test_cshim_spaceship_operator_and_namespaced_types() -> None:
+    """Test C++20 spaceship operator <=> sanitization and namespaced parameter/return types."""
+    m_cmp = Function(
+        name="operator<=>",
+        return_type=CType("int"),
+        parameters=[Parameter("other", CType("Point"))],
+    )
+    m_le = Function(
+        name="operator<=",
+        return_type=CType("bool"),
+        parameters=[Parameter("other", CType("Point"))],
+    )
+    cls = Struct(
+        name="Point",
+        namespace="geometry::d2",
+        is_cppclass=True,
+        methods=[m_cmp, m_le],
+    )
+    header = Header(path="geometry.h", declarations=[cls])
+    writer = CShimWriter()
+    output = writer.write(header)
+
+    expected = textwrap.dedent("""\
+        // Auto-generated C-ABI shim by HeaderKit
+        #pragma once
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        /* Opaque Handle Types */
+        typedef struct geometry_d2_Point_s geometry_d2_Point_t;
+
+        void geometry_d2_Point_destroy(geometry_d2_Point_t* self);
+        int geometry_d2_Point_spaceship(geometry_d2_Point_t* self, Point other);
+        bool geometry_d2_Point_le(geometry_d2_Point_t* self, Point other);
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+        #ifdef __cplusplus
+        #include <new>
+        #include "geometry.h"
+
+        void geometry_d2_Point_destroy(geometry_d2_Point_t* self) {
+            if (self) {
+                delete reinterpret_cast<geometry::d2::Point*>(self);
+            }
+        }
+
+        int geometry_d2_Point_spaceship(geometry_d2_Point_t* self, Point other) {
+            return reinterpret_cast<geometry::d2::Point*>(self)->operator<=>(other);
+        }
+
+        bool geometry_d2_Point_le(geometry_d2_Point_t* self, Point other) {
+            return reinterpret_cast<geometry::d2::Point*>(self)->operator<=(other);
         }
 
         #endif
