@@ -9,7 +9,29 @@ import pytest
 
 from headerkit.backends import get_backend
 from headerkit.backends.libclang import is_system_libclang_available
+<<<<<<< HEAD
 from headerkit.ir import BaseSpecifier, CType, Enum, Function, Struct
+||||||| parent of d6f9f68 (feat(types): support Reference types, default parameter values, and noexcept)
+<<<<<<< HEAD
+from headerkit.ir import BaseSpecifier, CType, Enum, Struct
+||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
+from headerkit.ir import BaseSpecifier, CType, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+from headerkit.ir import BaseSpecifier, CType, Enum, Struct
+||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
+from headerkit.ir import BaseSpecifier, CType, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+||||||| parent of e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
+>>>>>>> e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
+>>>>>>> d6f9f68 (feat(types): support Reference types, default parameter values, and noexcept)
 from headerkit.writers.cython import write_pxd
 from headerkit.writers.json import JsonWriter
 
@@ -296,3 +318,52 @@ class TestCppClassSemantics:
         non_template_funcs = [f for f in funcs if not f.template_params]
         assert len(template_funcs) == 1
         assert len(non_template_funcs) == 1
+
+    def test_references_default_params_and_noexcept(self) -> None:
+        """Test parsing lvalue/rvalue references, default arguments, and noexcept specifications."""
+        code = textwrap.dedent("""\
+            class Processor {
+            public:
+                void process(const int& input, int count = 10) noexcept;
+                void moveFrom(int&& source) throw();
+            };
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.hpp", extra_args=["-x", "c++", "-std=c++17"])
+
+        structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
+        proc = structs["Processor"]
+        assert len(proc.methods) == 2
+
+        m_process = next(m for m in proc.methods if m.name == "process")
+        assert m_process.is_noexcept is True
+        assert len(m_process.parameters) == 2
+        # First parameter: const int&
+        p1 = m_process.parameters[0]
+        assert isinstance(p1.type, Reference)
+        assert p1.type.is_rvalue is False
+        assert isinstance(p1.type.target, CType)
+        assert p1.type.target.name == "int"
+        # Second parameter: int count = 10
+        p2 = m_process.parameters[1]
+        assert p2.name == "count"
+        assert p2.default_value == "10"
+
+        # Second method: moveFrom(int&&) throw()
+        m_move = next(m for m in proc.methods if m.name == "moveFrom")
+        assert m_move.is_noexcept is True
+        assert len(m_move.parameters) == 1
+        p_src = m_move.parameters[0]
+        assert isinstance(p_src.type, Reference)
+        assert p_src.type.is_rvalue is True
+
+        # Verify JSON round-trip
+        json_writer = JsonWriter()
+        json_output = json_writer.write(h)
+        data = json.loads(json_output)
+        proc_json = next(d for d in data["declarations"] if d.get("name") == "Processor")
+        assert proc_json["methods"][0]["is_noexcept"] is True
+        assert proc_json["methods"][0]["parameters"][0]["type"]["kind"] == "reference"
+        assert proc_json["methods"][0]["parameters"][1]["default_value"] == "10"
+        assert proc_json["methods"][1]["parameters"][0]["type"]["is_rvalue"] is True
+

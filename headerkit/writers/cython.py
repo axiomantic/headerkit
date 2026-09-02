@@ -39,6 +39,7 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    Reference,
     Struct,
     Typedef,
     TypeExpr,
@@ -227,6 +228,9 @@ class PxdWriter:
 
         elif isinstance(typ, Pointer):
             names.update(self._extract_type_names(typ.pointee))
+
+        elif isinstance(typ, Reference):
+            names.update(self._extract_type_names(typ.target))
 
         elif isinstance(typ, Array):
             names.update(self._extract_type_names(typ.element_type))
@@ -909,11 +913,20 @@ class PxdWriter:
             return self._format_ctype(type_expr)
         if isinstance(type_expr, Pointer):
             return self._format_pointer(type_expr)
+        if isinstance(type_expr, Reference):
+            return self._format_reference(type_expr)
         if isinstance(type_expr, Array):
             return self._format_array(type_expr)
         if isinstance(type_expr, FunctionPointer):
             return self._format_func_ptr(type_expr)
         return "void"
+
+    def _format_reference(self, ref: Reference) -> str:
+        """Format a Reference type."""
+        target = self._format_type(ref.target)
+        quals = f"{' '.join(ref.qualifiers)} " if ref.qualifiers else ""
+        ref_symbol = "&"  # Cython syntax uses & for references
+        return f"{quals}{target}{ref_symbol}"
 
     def _format_ctype(self, ctype: CType) -> str:
         """Format a CType.

@@ -15,6 +15,7 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    Reference,
     SourceLocation,
     Struct,
     Typedef,
@@ -257,6 +258,20 @@ class TestRoundTripDeclarations:
             [Parameter("a", Pointer(CType("T"))), Parameter("b", Pointer(CType("T")))],
             template_params=["T"],
             namespace="std",
+        )
+        h = Header("t.h", [f])
+        assert _round_trip(h) == h
+
+    def test_function_reference_and_default_params(self) -> None:
+        f = Function(
+            "process",
+            CType("void"),
+            [
+                Parameter("in_ref", Reference(CType("int", ["const"]), is_rvalue=False)),
+                Parameter("rval_ref", Reference(CType("int"), is_rvalue=True)),
+                Parameter("flags", CType("int"), default_value="0"),
+            ],
+            is_noexcept=True,
         )
         h = Header("t.h", [f])
         assert _round_trip(h) == h

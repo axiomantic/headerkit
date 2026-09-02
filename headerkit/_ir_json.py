@@ -25,6 +25,7 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    Reference,
     SourceLocation,
     Struct,
     Typedef,
@@ -51,6 +52,14 @@ def _dict_to_pointer(d: dict[str, Any]) -> Pointer:
     )
 
 
+def _dict_to_reference(d: dict[str, Any]) -> Reference:
+    return Reference(
+        target=_dict_to_type(d["target"]),
+        is_rvalue=d.get("is_rvalue", False),
+        qualifiers=d.get("qualifiers", []),
+    )
+
+
 def _dict_to_array(d: dict[str, Any]) -> Array:
     return Array(
         element_type=_dict_to_type(d["element_type"]),
@@ -70,6 +79,7 @@ def _dict_to_function_pointer(d: dict[str, Any]) -> FunctionPointer:
 _TYPE_DESERIALIZERS: dict[str, Callable[[dict[str, Any]], TypeExpr]] = {
     "ctype": _dict_to_ctype,
     "pointer": _dict_to_pointer,
+    "reference": _dict_to_reference,
     "array": _dict_to_array,
     "function_pointer": _dict_to_function_pointer,
 }
@@ -95,6 +105,7 @@ def _dict_to_parameter(d: dict[str, Any]) -> Parameter:
     return Parameter(
         name=d.get("name"),
         type=_dict_to_type(d["type"]),
+        default_value=d.get("default_value"),
     )
 
 
@@ -186,6 +197,7 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         access=d.get("access"),
         is_deleted=d.get("is_deleted", False),
         is_defaulted=d.get("is_defaulted", False),
+        is_noexcept=d.get("is_noexcept", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
     )
 

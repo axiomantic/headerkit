@@ -169,6 +169,27 @@ class Pointer:
 
 
 @dataclass
+class Reference:
+    """C++ reference to another type.
+
+    Represents lvalue references (``T&``) and rvalue references (``T&&``).
+
+    :param target: The type being referenced.
+    :param is_rvalue: True for rvalue reference (``&&``), False for lvalue reference (``&``).
+    :param qualifiers: Qualifiers on the reference.
+    """
+
+    target: TypeExpr
+    is_rvalue: bool = False
+    qualifiers: list[str] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        quals = f"{' '.join(self.qualifiers)} " if self.qualifiers else ""
+        ref = "&&" if self.is_rvalue else "&"
+        return f"{quals}{self.target}{ref}"
+
+
+@dataclass
 class Array:
     """Fixed-size or flexible array type.
 
@@ -216,12 +237,17 @@ class Parameter:
 
     :param name: Parameter name, or None for anonymous parameters.
     :param type: The parameter's type expression.
+    :param default_value: Default argument expression string, or None if none.
 
     Examples
     --------
     Named parameter::
 
         x_param = Parameter("x", CType("int"))  # int x
+
+    With default value::
+
+        count_param = Parameter("count", CType("int"), default_value="0")  # int count = 0
 
     Anonymous parameter::
 
@@ -234,11 +260,13 @@ class Parameter:
 
     name: str | None
     type: TypeExpr
+    default_value: str | None = None
 
     def __str__(self) -> str:
+        default_str = f" = {self.default_value}" if self.default_value is not None else ""
         if self.name:
-            return f"{self.type} {self.name}"
-        return str(self.type)
+            return f"{self.type} {self.name}{default_str}"
+        return f"{self.type}{default_str}"
 
 
 @dataclass
@@ -292,7 +320,7 @@ class FunctionPointer:
 
 
 # Type alias for any type expression
-TypeExpr = Union[CType, Pointer, Array, FunctionPointer]
+TypeExpr = Union[CType, Pointer, Reference, Array, FunctionPointer]
 
 
 # =============================================================================
@@ -581,6 +609,7 @@ class Function:
     access: str | None = None
     is_deleted: bool = False
     is_defaulted: bool = False
+    is_noexcept: bool = False
     location: SourceLocation | None = None
 
     def __str__(self) -> str:
