@@ -371,6 +371,8 @@ class TestCppClassSemantics:
         funcs = {f.name: f for f in h.declarations if isinstance(f, Function)}
         old_fn = funcs["old_fn"]
         assert old_fn.is_deprecated is True
+        assert len(old_fn.attributes) > 0
+        assert any("deprecated" in a.lower() for a in old_fn.attributes)
 
         # Verify JSON round-trip
         json_writer = JsonWriter()
@@ -378,6 +380,7 @@ class TestCppClassSemantics:
         data = json.loads(json_output)
         fn_json = next(d for d in data["declarations"] if d.get("name") == "old_fn")
         assert fn_json["is_deprecated"] is True
+        assert "attributes" in fn_json and len(fn_json["attributes"]) > 0
         buf_json = next(d for d in data["declarations"] if d.get("name") == "AlignedBuffer")
         assert buf_json["alignment"] == 8
         unaligned_json = next(d for d in data["declarations"] if d.get("name") == "UnalignedBuffer")
