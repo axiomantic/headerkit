@@ -2031,10 +2031,13 @@ class ClangASTConverter:
                     # Only create separate typedef if names differ
                     if struct_name and struct_name != name:
                         underlying_type: TypeExpr = CType(name=struct_name)  # Use just the name, not "struct name"
-
+                        attrs, is_deprecated = self._get_attributes(cursor)
                         typedef = Typedef(
                             name=name,
                             underlying_type=underlying_type,
+                            namespace=self._current_namespace,
+                            attributes=attrs,
+                            is_deprecated=is_deprecated,
                             location=self._get_location(cursor),
                         )
                         self.declarations.append(typedef)
@@ -2050,9 +2053,13 @@ class ClangASTConverter:
 
             if canonical_type:
                 # Successfully resolved - use canonical type
+                attrs, is_deprecated = self._get_attributes(cursor)
                 typedef = Typedef(
                     name=name,
                     underlying_type=canonical_type,
+                    namespace=self._current_namespace,
+                    attributes=attrs,
+                    is_deprecated=is_deprecated,
                     location=self._get_location(cursor),
                 )
                 self.declarations.append(typedef)

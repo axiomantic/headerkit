@@ -523,6 +523,8 @@ class TestCppClassSemantics:
             namespace graphics {
                 namespace render {
                     typedef unsigned int ColorId;
+                    typedef struct TagRecord { int x; } RecordAlias;
+                    typedef decltype(nullptr) NullptrAlias;
                     int global_dpi = 96;
 
                     class Shape {
@@ -540,6 +542,10 @@ class TestCppClassSemantics:
         typedefs = {t.name: t for t in h.declarations if isinstance(t, Typedef)}
         assert "ColorId" in typedefs
         assert typedefs["ColorId"].namespace == "graphics::render"
+        assert "RecordAlias" in typedefs
+        assert typedefs["RecordAlias"].namespace == "graphics::render"
+        assert "NullptrAlias" in typedefs
+        assert typedefs["NullptrAlias"].namespace == "graphics::render"
 
         vars_dict = {v.name: v for v in h.declarations if isinstance(v, Variable)}
         assert "global_dpi" in vars_dict
