@@ -5,10 +5,14 @@ from __future__ import annotations
 import textwrap
 
 from headerkit.ir import (
+    Array,
     CType,
     Function,
+    FunctionPointer,
     Header,
     Parameter,
+    Pointer,
+    Reference,
     Struct,
 )
 from headerkit.writers import get_writer
@@ -194,6 +198,79 @@ def test_cshim_static_methods_unnamed_params_and_operators() -> None:
 
         void Device_add_assign(Device_t* self, int delta) {
             reinterpret_cast<Device*>(self)->operator+=(delta);
+        }
+
+        #endif
+    """)
+    assert output == expected
+
+
+def test_cshim_complex_types_and_all_operators() -> None:
+    """Test pointer, reference, array, function pointer types, and operator* / operator& sanitization."""
+    callback_type = FunctionPointer(
+        return_type=CType("void"),
+        parameters=[Parameter(name="code", type=CType("int"))],
+    )
+    fn_complex = Function(
+        name="process_buffer",
+        return_type=Pointer(CType("char")),
+        parameters=[
+            Parameter(name="buf", type=Array(element_type=CType("int"), size=16)),
+            Parameter(name="ref_val", type=Reference(CType("double"))),
+            Parameter(name="cb", type=callback_type),
+        ],
+        namespace="io::stream",
+    )
+    m_mul = Function(name="operator*", return_type=CType("int"), parameters=[Parameter("rhs", CType("int"))])
+    m_band = Function(name="operator&", return_type=CType("int"), parameters=[Parameter("mask", CType("int"))])
+    cls = Struct(
+        name="Number",
+        is_cppclass=True,
+        methods=[m_mul, m_band],
+    )
+    header = Header(path="test.h", declarations=[fn_complex, cls])
+    writer = CShimWriter()
+    output = writer.write(header)
+
+    expected = textwrap.dedent("""\
+        // Auto-generated C-ABI shim by HeaderKit
+        #pragma once
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        /* Opaque Handle Types */
+        typedef struct Number_s Number_t;
+
+        char* io_stream_process_buffer(int buf[16], double* ref_val, void (*cb)(int code));
+        void Number_destroy(Number_t* self);
+        int Number_mul(Number_t* self, int rhs);
+        int Number_band(Number_t* self, int mask);
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+        #ifdef __cplusplus
+        #include <new>
+
+        char* io_stream_process_buffer(int buf[16], double* ref_val, void (*cb)(int code)) {
+            return io::stream::process_buffer(buf, ref_val, cb);
+        }
+
+        void Number_destroy(Number_t* self) {
+            if (self) {
+                delete reinterpret_cast<Number*>(self);
+            }
+        }
+
+        int Number_mul(Number_t* self, int rhs) {
+            return reinterpret_cast<Number*>(self)->operator*(rhs);
+        }
+
+        int Number_band(Number_t* self, int mask) {
+            return reinterpret_cast<Number*>(self)->operator&(mask);
         }
 
         #endif
