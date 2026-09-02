@@ -382,3 +382,78 @@ def test_cshim_non_namespaced_free_function() -> None:
         #endif
     """)
     assert output == expected
+
+
+def test_cshim_destroy_method_collision_and_arrow_star_and_variadics() -> None:
+    """Test destroy method collision disambiguation, operator->* sanitization, and variadics."""
+    cls = Struct(
+        name="Resource",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="destroy",
+                return_type=CType("void"),
+                parameters=[],
+            ),
+            Function(
+                name="operator->*",
+                return_type=CType("int"),
+                parameters=[Parameter("m", CType("int"))],
+            ),
+            Function(
+                name="log",
+                return_type=CType("void"),
+                parameters=[Parameter("fmt", Pointer(CType("char")))],
+                is_variadic=True,
+            ),
+        ],
+    )
+    header = Header(path="resource.h", declarations=[cls])
+    writer = CShimWriter()
+    output = writer.write(header)
+
+    expected = textwrap.dedent("""\
+        // Auto-generated C-ABI shim by HeaderKit
+        #pragma once
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        /* Opaque Handle Types */
+        typedef struct Resource_s Resource_t;
+
+        void Resource_destroy(Resource_t* self);
+        void Resource_method_destroy(Resource_t* self);
+        int Resource_arrow_star(Resource_t* self, int m);
+        void Resource_log(Resource_t* self, char* fmt, ...);
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+        #ifdef __cplusplus
+        #include <new>
+        #include "resource.h"
+
+        void Resource_destroy(Resource_t* self) {
+            if (self) {
+                delete reinterpret_cast<Resource*>(self);
+            }
+        }
+
+        void Resource_method_destroy(Resource_t* self) {
+            reinterpret_cast<Resource*>(self)->destroy();
+        }
+
+        int Resource_arrow_star(Resource_t* self, int m) {
+            return reinterpret_cast<Resource*>(self)->operator->*(m);
+        }
+
+        void Resource_log(Resource_t* self, char* fmt, ...) {
+            reinterpret_cast<Resource*>(self)->log(fmt);
+        }
+
+        #endif
+    """)
+    assert output == expected

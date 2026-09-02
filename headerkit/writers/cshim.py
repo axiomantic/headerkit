@@ -31,6 +31,7 @@ def _sanitize_name(name: str) -> str:
     # Compound & multi-char operators first
     name = name.replace("operator[]", "get_item")
     name = name.replace("operator()", "call")
+    name = name.replace("operator->*", "arrow_star")
     name = name.replace("operator->", "arrow")
     name = name.replace("operator+=", "add_assign")
     name = name.replace("operator-=", "sub_assign")
@@ -93,7 +94,10 @@ def _type_to_c(t: TypeExpr) -> str:
         size_str = str(t.size) if t.size is not None else ""
         return f"{_type_to_c(t.element_type)}[{size_str}]"
     elif isinstance(t, FunctionPointer):
-        params = ", ".join(_type_to_c(p.type) for p in t.parameters) or "void"
+        param_strs = [_type_to_c(p.type) for p in t.parameters]
+        if getattr(t, "is_variadic", False):
+            param_strs.append("...")
+        params = ", ".join(param_strs) if param_strs else "void"
         return f"{_type_to_c(t.return_type)} (*)({params})"
     return str(t)
 
@@ -105,7 +109,10 @@ def _format_param(p: Parameter, param_name: str | None = None) -> str:
         size_str = str(p.type.size) if p.type.size is not None else ""
         return f"{_type_to_c(p.type.element_type)} {name}[{size_str}]"
     elif isinstance(p.type, FunctionPointer):
-        params = ", ".join(_format_param(param) for param in p.type.parameters) or "void"
+        params_list = [_format_param(param) for param in p.type.parameters]
+        if getattr(p.type, "is_variadic", False):
+            params_list.append("...")
+        params = ", ".join(params_list) if params_list else "void"
         return f"{_type_to_c(p.type.return_type)} (*{name})({params})"
     type_str = _type_to_c(p.type)
     return f"{type_str} {name}"
@@ -193,6 +200,8 @@ class CShimWriter:
                         continue
                     m_safe_name = _sanitize_name(method.name)
                     fn_method_name = f"{safe_cls_name}_{m_safe_name}"
+                    if fn_method_name == fn_dtor:
+                        fn_method_name = f"{safe_cls_name}_method_{m_safe_name}"
 
                     ret_type_c = _type_to_c(method.return_type)
                     params_c = []
@@ -201,6 +210,8 @@ class CShimWriter:
                     call_args = [p.name or f"arg{i}" for i, p in enumerate(method.parameters)]
                     for i, p in enumerate(method.parameters):
                         params_c.append(_format_param(p, call_args[i]))
+                    if method.is_variadic:
+                        params_c.append("...")
 
                     proto = f"{ret_type_c} {fn_method_name}({', '.join(params_c) if params_c else 'void'});"
                     lines.append(proto)
@@ -235,6 +246,8 @@ class CShimWriter:
                 ret_c = _type_to_c(decl.return_type)
                 call_args = [p.name or f"arg{i}" for i, p in enumerate(decl.parameters)]
                 params_c = [_format_param(p, call_args[i]) for i, p in enumerate(decl.parameters)]
+                if decl.is_variadic:
+                    params_c.append("...")
 
                 proto = f"{ret_c} {safe_fn_name}({', '.join(params_c) if params_c else 'void'});"
                 lines.append(proto)
