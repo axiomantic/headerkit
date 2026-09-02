@@ -214,3 +214,26 @@ class TestCppClassSemantics:
         assert len(enums[0].values) == 3
         assert enums[0].values[0].name == "RED"
         assert enums[0].values[0].value == 1
+
+    def test_class_template_semantics_and_deleted_method(self) -> None:
+        """Test C++ class semantics in class templates and is_deleted detection."""
+        code = textwrap.dedent("""\
+            template <typename T>
+            class SmartPtr {
+            public:
+                SmartPtr(T* ptr);
+                ~SmartPtr();
+                SmartPtr(const SmartPtr&) = delete;
+                T* get() const;
+            };
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.hpp", extra_args=["-x", "c++", "-std=c++11"])
+        structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
+        assert "SmartPtr" in structs
+        s = structs["SmartPtr"]
+        assert len(s.constructors) >= 1
+        assert s.destructor is not None
+        # Check deleted copy constructor / method
+        deleted_methods = [m for m in s.methods if m.is_deleted] + [c for c in s.constructors if c.is_deleted]
+        assert len(deleted_methods) >= 1
