@@ -352,6 +352,10 @@ class TestCppClassSemantics:
                 int a;
             };
 
+            struct UnalignedBuffer {
+                int a;
+            };
+
             __attribute__((deprecated("Use new_fn instead")))
             void old_fn(void);
         """)
@@ -361,6 +365,8 @@ class TestCppClassSemantics:
         structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
         buf = structs["AlignedBuffer"]
         assert buf.alignment == 8
+        unaligned = structs["UnalignedBuffer"]
+        assert unaligned.alignment is None
 
         funcs = {f.name: f for f in h.declarations if isinstance(f, Function)}
         old_fn = funcs["old_fn"]
@@ -374,6 +380,8 @@ class TestCppClassSemantics:
         assert fn_json["is_deprecated"] is True
         buf_json = next(d for d in data["declarations"] if d.get("name") == "AlignedBuffer")
         assert buf_json["alignment"] == 8
+        unaligned_json = next(d for d in data["declarations"] if d.get("name") == "UnalignedBuffer")
+        assert "alignment" not in unaligned_json or unaligned_json["alignment"] is None
 
     def test_unnamed_bitfields_skipped_and_transparent_anonymous_fields(self) -> None:
         """Test that unnamed bitfield padding is skipped and anonymous structs/unions have is_anonymous_transparent."""
