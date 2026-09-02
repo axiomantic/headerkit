@@ -152,10 +152,33 @@ C_TO_NIM_PRIMITIVES: dict[str, str] = {
 }
 
 
+CPP_OPERATOR_MAP: dict[str, str] = {
+    "operator[]": "`[]`",
+    "operator()": "`()`",
+    "operator+": "`+`",
+    "operator-": "`-`",
+    "operator*": "`*`",
+    "operator/": "`/`",
+    "operator==": "`==`",
+    "operator!=": "`!=`",
+    "operator<": "`<`",
+    "operator<=": "`<=`",
+    "operator>": "`>`",
+    "operator>=": "`>=`",
+    "operator+=": "`+=`",
+    "operator-=": "`-=`",
+    "operator*=": "`*=`",
+    "operator/=": "`/=`",
+    "operator=": "`=`",
+}
+
+
 def _escape_ident(name: str) -> str:
-    """Escape Nim keywords and invalid identifier characters."""
+    """Escape Nim keywords, operators, and invalid identifier characters."""
     if not name:
         return "anon"
+    if name in CPP_OPERATOR_MAP:
+        return CPP_OPERATOR_MAP[name]
     if name in NIM_KEYWORDS:
         return f"`{name}`"
     return name
@@ -201,7 +224,9 @@ class NimWriter:
 
         for decl in header.declarations:
             if isinstance(decl, Struct):
-                types_section.extend(self._write_struct(decl, header_file))
+                t_lines, m_lines = self._write_struct(decl, header_file)
+                types_section.extend(t_lines)
+                procs_section.extend(m_lines)
             elif isinstance(decl, Enum):
                 types_section.extend(self._write_enum(decl, header_file))
             elif isinstance(decl, Typedef):
@@ -243,6 +268,22 @@ class NimWriter:
             elif name.startswith("enum "):
                 name = name[5:]
 
+            # C++ Smart Pointers & Containers mapping
+            if name.startswith("std::shared_ptr<") or name.startswith("shared_ptr<"):
+                inner = name[name.index("<") + 1 : name.rindex(">")].strip()
+                return f"SharedPtr[{self._format_type(CType(inner))}]"
+            elif name.startswith("std::unique_ptr<") or name.startswith("unique_ptr<"):
+                inner = name[name.index("<") + 1 : name.rindex(">")].strip()
+                return f"UniquePtr[{self._format_type(CType(inner))}]"
+            elif name.startswith("std::weak_ptr<") or name.startswith("weak_ptr<"):
+                inner = name[name.index("<") + 1 : name.rindex(">")].strip()
+                return f"WeakPtr[{self._format_type(CType(inner))}]"
+            elif name.startswith("std::vector<") or name.startswith("vector<"):
+                inner = name[name.index("<") + 1 : name.rindex(">")].strip()
+                return f"CppVector[{self._format_type(CType(inner))}]"
+            elif name.startswith("std::string") or name == "string":
+                return "CppString"
+
             if name in C_TO_NIM_PRIMITIVES:
                 return C_TO_NIM_PRIMITIVES[name]
             return _escape_ident(name)
@@ -257,9 +298,10 @@ class NimWriter:
 
         elif isinstance(t, Reference):
             target_type = self._format_type(t.target)
-            if in_param:
-                return f"var {target_type}"
-            return f"ptr {target_type}"
+            if t.is_rvalue:
+                # C++ rvalue reference (move semantics): var or sink in Nim
+                return f"sink {target_type}" if in_param else f"var {target_type}"
+            return f"var {target_type}"
 
         elif isinstance(t, Array):
             elem = self._format_type(t.element_type)
@@ -276,8 +318,8 @@ class NimWriter:
 
         return "pointer"
 
-    def _write_struct(self, s: Struct, header_file: str) -> list[str]:
-        """Render a Struct or class as a Nim type declaration."""
+    def _write_struct(self, s: Struct, header_file: str) -> tuple[list[str], list[str]]:
+        """Render a Struct or class as a Nim type declaration and its methods."""
         name = s.name or "AnonObject"
         t_name = _escape_ident(name)
 
@@ -307,6 +349,7 @@ class NimWriter:
         # Inheritance
         base_str = ""
         if s.bases:
+            # Single primary base in Nim object inheritance
             base_str = f" of {self._format_type(CType(s.bases[0].name))}"
 
         lines = [f"{t_name}* = object{base_str}{pragma_str}"]
@@ -319,17 +362,34 @@ class NimWriter:
                 f_type = self._format_type(f.type)
                 lines.append(f"  {f_name}*: {f_type}")
 
-        # Methods / Constructors attached to struct
+        # Methods / Constructors / Iterators attached to struct
+        methods_lines: list[str] = []
         for m in s.methods:
-            lines.extend(self._write_method(s, m, header_file))
+            methods_lines.extend(self._write_method(s, m, header_file))
 
         for ctor in s.constructors:
-            lines.extend(self._write_constructor(s, ctor, header_file))
+            methods_lines.extend(self._write_constructor(s, ctor, header_file))
 
-        return lines
+        # Iterators helper if begin()/end() are available
+        has_begin = any(m.name == "begin" for m in s.methods)
+        has_end = any(m.name == "end" for m in s.methods)
+        if has_begin and has_end:
+            struct_type = self._format_type(CType(s.name or "Self"))
+            methods_lines.extend(
+                [
+                    "",
+                    f"iterator items*(this: {struct_type}): auto = {{.inline.}}",
+                    "  var it = this.begin()",
+                    "  while it != this.end():",
+                    "    yield it[]",
+                    "    inc it",
+                ]
+            )
+
+        return lines, methods_lines
 
     def _write_method(self, s: Struct, m: Function, header_file: str) -> list[str]:
-        """Render a C++ member method in Nim."""
+        """Render a C++ member method or operator in Nim."""
         m_name = _escape_ident(m.name)
         params: list[str] = []
 
@@ -354,6 +414,14 @@ class NimWriter:
         pragmas: list[str] = []
         if m.is_static:
             cpp_pattern = f"{s.name}::{m.name}(@)"
+        elif m.name == "operator[]":
+            cpp_pattern = "#[@]"
+        elif m.name.startswith("operator"):
+            op_sym = m.name[8:]
+            if len(params) == 2:
+                cpp_pattern = f"(# {op_sym} @)"
+            else:
+                cpp_pattern = f"{op_sym}(#)"
         else:
             cpp_pattern = f"#.{(m.name)}(@)"
         pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')

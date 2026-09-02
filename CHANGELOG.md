@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `nim` writer (`NimWriter`) generating idiomatic Nim bindings with full C (`{.importc.}`) and C++ (`{.importcpp.}`) interop.
 - Added support in `NimWriter` for generic structs/classes (`type Foo[T] = object`), generic procedures (`proc bar[T](x: T)`), constructors, member methods, inheritance, references, default arguments, and identifier escaping.
+- Added C++ operator overloading maps (`operator[]`, `operator==`, etc.), move semantics mapping (`sink T` / `var T`), smart pointers (`SharedPtr[T]`, `UniquePtr[T]`, `WeakPtr[T]`), and container iteration (`iterator items*`).
 - Registered `nim` in `headerkit.writers` registry with default output pattern `{dir}/{stem}.nim`.
 
 ## [0.23.0] - 2026-09-02
