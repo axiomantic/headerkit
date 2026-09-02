@@ -28,7 +28,6 @@ from headerkit.ir import (
 def _sanitize_name(name: str) -> str:
     """Convert C++ symbols (e.g. namespaces, operators, templates) into safe C identifiers."""
     name = name.replace("::", "_")
-    name = re.sub(r"[<>, \t]+", "_", name)
     # Compound & multi-char operators first
     name = name.replace("operator[]", "get_item")
     name = name.replace("operator()", "call")
@@ -45,6 +44,7 @@ def _sanitize_name(name: str) -> str:
     name = name.replace("operator^=", "xor_assign")
     name = name.replace("operator==", "eq")
     name = name.replace("operator!=", "ne")
+    name = name.replace("operator<=>", "spaceship")
     name = name.replace("operator<=", "le")
     name = name.replace("operator>=", "ge")
     name = name.replace("operator<<", "shl")
@@ -67,7 +67,8 @@ def _sanitize_name(name: str) -> str:
     name = name.replace("operator|", "bor")
     name = name.replace("operator^", "bxor")
     name = name.replace("operator=", "assign")
-    # Generic pointer/reference markers in type names
+    # Templates, whitespace, pointer/reference markers in type names
+    name = re.sub(r"[<>, \t]+", "_", name)
     name = name.replace("&", "")
     name = name.replace("*", "Ptr")
     name = re.sub(r"[^a-zA-Z0-9_]", "", name)
@@ -257,6 +258,8 @@ class CShimWriter:
         lines.append("")
         lines.append("#ifdef __cplusplus")
         lines.append("#include <new>")
+        if header.path:
+            lines.append(f'#include "{header.path}"')
         lines.append("")
         lines.extend(cpp_lines)
         lines.append("#endif")
