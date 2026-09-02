@@ -6,7 +6,7 @@ Nim declaration files using ``{.importc.}`` and ``{.importcpp.}`` pragmas.
 Features
 --------
 * C and C++ Interop -- Emits ``{.importc.}`` for C and ``{.importcpp: "...".}`` for C++
-* C++ Classes & Inheritance -- Maps classes/structs with bases, methods, constructors, destructors
+* C++ Classes & Inheritance -- Maps classes/structs with bases, methods, and constructors
 * Function & Type Generics -- Maps templates to Nim generics: ``type Foo[T] = object``, ``proc bar[T](x: T)``
 * References & Pointers -- Maps ``Reference`` to ``var T`` / ``byref`` and ``Pointer`` to ``ptr T``
 * Identifier Escaping & Style -- Handles Nim keywords with accent quotes (e.g. ``\`type\```)
@@ -325,7 +325,7 @@ class NimWriter:
 
         # Generics
         if s.template_params:
-            t_name = f"{t_name}[{', '.join(s.template_params)}]"
+            t_name = f"{t_name}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
 
         pragma_parts: list[str] = []
         is_cpp = s.is_cppclass or bool(s.methods or s.bases or s.constructors or s.destructor)
@@ -427,7 +427,7 @@ class NimWriter:
         pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
 
         # Generic parameters
-        t_params = f"[{', '.join(m.template_params)}]" if m.template_params else ""
+        t_params = f"[{', '.join(_escape_ident(tp) for tp in m.template_params)}]" if m.template_params else ""
 
         decl = f"proc {m_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"
         return ["", decl]
@@ -495,7 +495,7 @@ class NimWriter:
         else:
             pragmas.append("cdecl")
 
-        t_params = f"[{', '.join(f.template_params)}]" if f.template_params else ""
+        t_params = f"[{', '.join(_escape_ident(tp) for tp in f.template_params)}]" if f.template_params else ""
         return [f"proc {f_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"]
 
     def _write_variable(self, v: Variable, header_file: str) -> list[str]:
