@@ -10,53 +10,7 @@ import pytest
 from headerkit._ir_json import json_to_header
 from headerkit.backends import get_backend
 from headerkit.backends.libclang import is_system_libclang_available
-<<<<<<< HEAD
-from headerkit.ir import BaseSpecifier, Constant, CType, Enum, Function, Reference, Struct
-||||||| parent of 3033ce9 (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-from headerkit.ir import BaseSpecifier, CType, Enum, Struct
-||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
-from headerkit.ir import BaseSpecifier, CType, Struct
-=======
-from headerkit.ir import BaseSpecifier, CType, Function, Struct
-||||||| parent of e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
-from headerkit.ir import BaseSpecifier, CType, Function, Struct
-=======
-from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
->>>>>>> e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
-||||||| parent of 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
-from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
-=======
-from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct
->>>>>>> 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
-=======
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-from headerkit.ir import BaseSpecifier, CType, Enum, Struct
-||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
-from headerkit.ir import BaseSpecifier, CType, Struct
-=======
-from headerkit.ir import BaseSpecifier, CType, Function, Struct
-||||||| parent of e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
-from headerkit.ir import BaseSpecifier, CType, Function, Struct
-=======
-from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
->>>>>>> e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
-||||||| parent of 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
-from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
-=======
-from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct
->>>>>>> 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
-||||||| parent of 1f3305b (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
-from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct
-=======
-from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct, Typedef, Variable
->>>>>>> 1f3305b (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
->>>>>>> 3033ce9 (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
+from headerkit.ir import BaseSpecifier, Constant, CType, Enum, Function, Reference, Struct, Typedef, Variable
 from headerkit.writers.cython import write_pxd
 from headerkit.writers.json import JsonWriter
 
@@ -567,4 +521,3 @@ class TestCppClassSemantics:
         json_output = json_writer.write(h)
         reconstructed = json_to_header(json_output)
         assert reconstructed.declarations == h.declarations
-
