@@ -9,14 +9,8 @@ import pytest
 
 from headerkit.backends import get_backend
 from headerkit.backends.libclang import is_system_libclang_available
-<<<<<<< HEAD
-from headerkit.ir import BaseSpecifier, CType, Enum, Struct
-||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
-from headerkit.ir import BaseSpecifier, CType, Struct
-=======
-from headerkit.ir import BaseSpecifier, CType, Function, Struct
+from headerkit.ir import BaseSpecifier, CType, Enum, Function, Struct
 from headerkit.writers.cython import write_pxd
->>>>>>> a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
 from headerkit.writers.json import JsonWriter
 
 libclang = pytest.mark.libclang
