@@ -230,7 +230,7 @@ class CShimWriter:
                     safe_fn_name = _sanitize_name(fn_full_name)
                 else:
                     fn_full_name = decl.name
-                    safe_fn_name = decl.name
+                    safe_fn_name = _sanitize_name(decl.name)
 
                 ret_c = _type_to_c(decl.return_type)
                 call_args = [p.name or f"arg{i}" for i, p in enumerate(decl.parameters)]
