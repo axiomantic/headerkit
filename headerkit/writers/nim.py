@@ -401,10 +401,13 @@ class NimWriter:
             else:
                 struct_type = self._format_type(CType(s.name or "Self"))
                 t_params = ""
+            begin_methods = [m for m in s.methods if m.name == "begin"]
+            has_const_begin = any(m.is_const for m in begin_methods)
+            this_param = f"this: {struct_type}" if has_const_begin else f"this: var {struct_type}"
             methods_lines.extend(
                 [
                     "",
-                    f"iterator items*{t_params}(this: {struct_type}): auto = {{.inline.}}",
+                    f"iterator items*{t_params}({this_param}): auto = {{.inline.}}",
                     "  var it = this.begin()",
                     "  while it != this.end():",
                     "    yield it[]",
@@ -480,7 +483,8 @@ class NimWriter:
         if s.template_params:
             ret_type = f"{_escape_ident(s_name)}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
             t_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
-            cpp_pattern = f"{s_name}<'*0>(@)"
+            t_args = ", ".join(f"'*{i}" for i in range(len(s.template_params)))
+            cpp_pattern = f"{s_name}<{t_args}>(@)"
         else:
             ret_type = self._format_type(CType(s_name))
             t_params = ""
