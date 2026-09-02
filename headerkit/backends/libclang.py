@@ -1971,6 +1971,11 @@ class ClangASTConverter:
         """Convert a field cursor to IR Field."""
         name = cursor.spelling
         is_transparent = False
+
+        # Skip unnamed bitfields (padding-only, e.g., ``int : 4;``)
+        if not name and cursor.is_bitfield():
+            return None
+
         if not name or name.startswith("(unnamed"):
             is_transparent = True
             name = name or ""

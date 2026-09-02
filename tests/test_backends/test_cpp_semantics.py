@@ -374,5 +374,3 @@ class TestCppClassSemantics:
         assert fn_json["is_deprecated"] is True
         buf_json = next(d for d in data["declarations"] if d.get("name") == "AlignedBuffer")
         assert buf_json["alignment"] == 8
->>>>>>> 7ec94bb (feat(c-attributes): support attributes, is_deprecated, alignment, and transparent anonymous fields)
->>>>>>> 87f2ab2 (feat(c-attributes): support attributes, is_deprecated, alignment, and transparent anonymous fields)
