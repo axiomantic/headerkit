@@ -1280,12 +1280,34 @@ class ClangASTConverter:
                 # Extract attribute cursors if kind is attribute (UNEXPOSED_ATTR, etc.)
                 if "ATTR" in child.kind.name:
                     spelling = child.spelling
-                    if spelling:
-                        attrs.append(spelling)
-                    if "deprecated" in child.kind.name.lower() or "deprecated" in spelling.lower():
+                    if "deprecated" in child.kind.name.lower() or (spelling and "deprecated" in spelling.lower()):
                         is_deprecated = True
+                    if spelling and spelling not in attrs:
+                        attrs.append(spelling)
         except Exception:
             pass
+
+        try:
+            tokens = [t.spelling for t in cursor.get_tokens()]
+            tok_str = " ".join(tokens)
+            if "__attribute__" in tok_str or "[[" in tok_str:
+                for m in re.finditer(r"__attribute__\s*\(\s*\(\s*(.*?)\s*\)\s*\)", tok_str):
+                    inner = m.group(1).strip()
+                    for attr in inner.split(","):
+                        attr_clean = attr.strip()
+                        if attr_clean and attr_clean not in attrs:
+                            attrs.append(attr_clean)
+                for m in re.finditer(r"\[\[\s*(.*?)\s*\]\]", tok_str):
+                    inner = m.group(1).strip()
+                    for attr in inner.split(","):
+                        attr_clean = attr.strip()
+                        if attr_clean and attr_clean not in attrs:
+                            attrs.append(attr_clean)
+                if any("deprecated" in a.lower() for a in attrs):
+                    is_deprecated = True
+        except Exception:
+            pass
+
         return attrs, is_deprecated
 
     def _get_alignment(self, cursor: Any) -> int | None:
