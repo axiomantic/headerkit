@@ -814,6 +814,9 @@ class PxdWriter:
         """Write a function declaration."""
         return_type = self._format_type(func.return_type)
         name = self._escape_name(func.name, include_c_name=True)
+        if func.template_params:
+            t_params = ", ".join(func.template_params)
+            name = f"{name}[{t_params}]"
         params = self._format_params(func.parameters, func.is_variadic)
 
         # Calling convention comment (Cython doesn't support calling conventions)

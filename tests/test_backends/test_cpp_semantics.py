@@ -9,7 +9,14 @@ import pytest
 
 from headerkit.backends import get_backend
 from headerkit.backends.libclang import is_system_libclang_available
+<<<<<<< HEAD
 from headerkit.ir import BaseSpecifier, CType, Enum, Struct
+||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
+from headerkit.ir import BaseSpecifier, CType, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+from headerkit.writers.cython import write_pxd
+>>>>>>> a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
 from headerkit.writers.json import JsonWriter
 
 libclang = pytest.mark.libclang
@@ -237,3 +244,46 @@ class TestCppClassSemantics:
         # Check deleted copy constructor / method
         deleted_methods = [m for m in s.methods if m.is_deleted] + [c for c in s.constructors if c.is_deleted]
         assert len(deleted_methods) >= 1
+
+    def test_function_and_method_templates(self) -> None:
+        """Test parsing free function templates and class member method templates."""
+        code = textwrap.dedent("""\
+            template <typename T, typename U>
+            T make_pair_first(T a, U b);
+
+            class Builder {
+            public:
+                template <typename ValType>
+                void setField(ValType val);
+            };
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.hpp", extra_args=["-x", "c++", "-std=c++17"])
+
+        functions = {f.name: f for f in h.declarations if isinstance(f, Function)}
+        assert "make_pair_first" in functions
+        fn = functions["make_pair_first"]
+        assert fn.template_params == ["T", "U"]
+        assert len(fn.parameters) == 2
+
+        structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
+        builder = structs["Builder"]
+        assert len(builder.methods) == 1
+        method = builder.methods[0]
+        assert method.name == "setField"
+        assert method.template_params == ["ValType"]
+
+        # Verify Cython writer outputs template brackets
+        cython_out = write_pxd(h)
+        assert "make_pair_first[T, U]" in cython_out
+        assert "setField[ValType]" in cython_out
+
+        # Verify JSON writer roundtrip preserves template_params
+        json_writer = JsonWriter()
+        json_output = json_writer.write(h)
+        import json
+
+        data = json.loads(json_output)
+        fn_json = next(d for d in data["declarations"] if d.get("name") == "make_pair_first")
+        assert fn_json["template_params"] == ["T", "U"]
+>>>>>>> d743fa3 (feat(templates): support function and method template parameters in IR, backend, and writers)

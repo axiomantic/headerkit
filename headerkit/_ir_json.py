@@ -177,6 +177,7 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         is_variadic=d.get("is_variadic", False),
         calling_convention=d.get("calling_convention"),
         namespace=d.get("namespace"),
+        template_params=d.get("template_params", []),
         is_static=d.get("is_static", False),
         is_const=d.get("is_const", False),
         is_virtual=d.get("is_virtual", False),

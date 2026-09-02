@@ -250,6 +250,17 @@ class TestRoundTripDeclarations:
         h = Header("t.h", [f])
         assert _round_trip(h) == h
 
+    def test_function_template(self) -> None:
+        f = Function(
+            "swap",
+            CType("void"),
+            [Parameter("a", Pointer(CType("T"))), Parameter("b", Pointer(CType("T")))],
+            template_params=["T"],
+            namespace="std",
+        )
+        h = Header("t.h", [f])
+        assert _round_trip(h) == h
+
     def test_typedef(self) -> None:
         td = Typedef("size_t", CType("long", ["unsigned"]))
         h = Header("t.h", [td])
