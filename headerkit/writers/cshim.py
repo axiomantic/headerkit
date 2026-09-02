@@ -2,7 +2,7 @@
 
 This module converts C++ structs, classes, member methods, constructors,
 destructors, and free functions into a C-compatible API with ``extern "C"``
-guards, opaque handles (``typedef struct Foo Foo;``), and exception boundaries.
+guards and opaque handles (``typedef struct Foo Foo;``).
 """
 
 from __future__ import annotations
@@ -196,7 +196,7 @@ class CShimWriter:
 
                 # Methods
                 for method in cls.methods:
-                    if method.access == "private":
+                    if method.access in ("private", "protected"):
                         continue
                     m_safe_name = _sanitize_name(method.name)
                     fn_method_name = f"{safe_cls_name}_{m_safe_name}"

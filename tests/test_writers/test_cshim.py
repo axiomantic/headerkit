@@ -141,6 +141,7 @@ def test_cshim_static_methods_unnamed_params_and_operators() -> None:
     )
     m_static = Function(name="getDefaultId", return_type=CType("int"), parameters=[], is_static=True)
     m_private = Function(name="secretInternal", return_type=CType("void"), parameters=[], access="private")
+    m_protected = Function(name="protectedHelper", return_type=CType("void"), parameters=[], access="protected")
     m_op = Function(
         name="operator+=",
         return_type=CType("void"),
@@ -150,7 +151,7 @@ def test_cshim_static_methods_unnamed_params_and_operators() -> None:
         name="Device",
         is_cppclass=True,
         constructors=[ctor0, ctor1],
-        methods=[m_static, m_private, m_op],
+        methods=[m_static, m_private, m_protected, m_op],
     )
     header = Header(path="test.h", declarations=[cls])
     writer = CShimWriter()
