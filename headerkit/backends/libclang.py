@@ -1325,6 +1325,9 @@ class ClangASTConverter:
                     is_virt = False
                     with contextlib.suppress(Exception):
                         is_virt = bool(child.is_virtual_base())
+                    if not is_virt:
+                        with contextlib.suppress(Exception):
+                            is_virt = any(t.spelling == "virtual" for t in child.get_tokens())
                     bases.append(BaseSpecifier(name=base_name, access=access, is_virtual=is_virt))
                 elif child.kind == CursorKind.FIELD_DECL:
                     field = self._convert_field(child)
@@ -1445,6 +1448,9 @@ class ClangASTConverter:
                 is_virt = False
                 with contextlib.suppress(Exception):
                     is_virt = bool(child.is_virtual_base())
+                if not is_virt:
+                    with contextlib.suppress(Exception):
+                        is_virt = any(t.spelling == "virtual" for t in child.get_tokens())
                 bases.append(BaseSpecifier(name=base_name, access=access, is_virtual=is_virt))
             elif child.kind == CursorKind.TYPEDEF_DECL:
                 # Extract inner typedefs (e.g., typedef Iterator<T, PT> iterator)

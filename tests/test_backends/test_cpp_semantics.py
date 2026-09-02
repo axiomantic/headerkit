@@ -181,7 +181,8 @@ class TestCppClassSemantics:
     def test_notes_fallback_when_unrepresentable_member(self) -> None:
         """Negative test ensuring note is recorded if a member is skipped."""
         code = textwrap.dedent("""\
-            class Complex {
+            template <typename T, int N>
+            class ComplexWithNonTypeParam {
             public:
                 int validField;
             };
@@ -189,5 +190,8 @@ class TestCppClassSemantics:
         backend = get_backend("libclang")
         h = backend.parse(code, "test.hpp", extra_args=["-x", "c++", "-std=c++17"])
         structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
-        assert "Complex" in structs
-        assert len(structs["Complex"].fields) == 1
+        assert "ComplexWithNonTypeParam" in structs
+        complex_struct = structs["ComplexWithNonTypeParam"]
+        assert len(complex_struct.fields) == 1
+        assert len(complex_struct.notes) == 1
+        assert "Template has non-type parameter 'N'" in complex_struct.notes[0]
