@@ -389,6 +389,9 @@ class NimWriter:
         for ctor in s.constructors:
             methods_lines.extend(self._write_constructor(s, ctor, header_file))
 
+        if s.destructor:
+            methods_lines.extend(self._write_destructor(s, s.destructor, header_file))
+
         # Iterators helper if begin()/end() are available
         has_begin = any(m.name == "begin" for m in s.methods)
         has_end = any(m.name == "end" for m in s.methods)
@@ -468,6 +471,18 @@ class NimWriter:
         decl = f"proc {m_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"
         return ["", decl]
 
+    def _write_destructor(self, s: Struct, dtor: Function, header_file: str) -> list[str]:
+        """Render a C++ destructor as a Nim destroy proc."""
+        s_name = s.name or "Object"
+        if s.template_params:
+            struct_type = f"{_escape_ident(s_name)}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            t_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+        else:
+            struct_type = self._format_type(CType(s_name))
+            t_params = ""
+        decl = f'proc destroy*{t_params}(this: var {struct_type}) {{.importcpp: "#.~{s_name}()", header: "{header_file}".}}'
+        return ["", decl]
+
     def _write_constructor(self, s: Struct, ctor: Function, header_file: str) -> list[str]:
         """Render a C++ constructor as a Nim constructProc."""
         s_name = s.name or "Object"
@@ -492,8 +507,7 @@ class NimWriter:
 
         pragma = f'importcpp: "{cpp_pattern}", header: "{header_file}", constructor'
 
-        decl = f"proc {proc_name}*{t_params}({', '.join(params)}): {ret_type} {{.{pragma}.}}"
-        return ["", decl]
+        return ["", f"proc {proc_name}*{t_params}({', '.join(params)}): {ret_type} {{.{pragma}.}}"]
 
     def _write_enum(self, e: Enum, header_file: str) -> list[str]:
         """Render an Enum declaration."""
@@ -515,10 +529,9 @@ class NimWriter:
         return [f"{t_name}* = {underlying}"]
 
     def _write_function(self, f: Function, header_file: str) -> list[str]:
-        """Render a free function or function template."""
+        """Render a function declaration."""
         f_name = _escape_ident(f.name)
         params: list[str] = []
-
         for p in f.parameters:
             p_name = _escape_ident(p.name or "arg")
             p_type = self._format_type(p.type, in_param=True)
@@ -555,9 +568,10 @@ class NimWriter:
 
     def _write_constant(self, c: Constant) -> list[str]:
         """Render a constant."""
+        if c.value is None:
+            return []
         c_name = _escape_ident(c.name)
-        val = c.value if c.value is not None else 0
-        return [f"{c_name}* = {val}"]
+        return [f"{c_name}* = {c.value}"]
 
 
 def write_nim(header: Header, *, header_path: str | None = None) -> str:
