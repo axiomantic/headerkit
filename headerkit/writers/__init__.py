@@ -272,6 +272,7 @@ def _ensure_writers_loaded() -> None:
     import headerkit.writers.diff  # noqa: F401
     import headerkit.writers.json  # noqa: F401
     import headerkit.writers.lua  # noqa: F401
+    import headerkit.writers.nim  # noqa: F401
     import headerkit.writers.prompt  # noqa: F401
 
 

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-09-02
+
+### Added
+
+- Added `nim` writer (`NimWriter`) generating idiomatic Nim bindings with full C (`{.importc.}`) and C++ (`{.importcpp.}`) interop.
+- Added support in `NimWriter` for generic structs/classes (`type Foo[T] = object`), generic procedures (`proc bar[T](x: T)`), constructors, member methods, inheritance, references, default arguments, and identifier escaping.
+- Registered `nim` in `headerkit.writers` registry with default output pattern `{dir}/{stem}.nim`.
+
 ## [0.23.0] - 2026-09-02
 
 ### Added
