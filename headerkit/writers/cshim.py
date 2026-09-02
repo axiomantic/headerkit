@@ -96,10 +96,10 @@ def _type_to_c(t: TypeExpr) -> str:
     return str(t)
 
 
-def _format_param(p: Parameter) -> str:
+def _format_param(p: Parameter, param_name: str | None = None) -> str:
     """Format a single C parameter."""
     type_str = _type_to_c(p.type)
-    name = p.name or "arg"
+    name = param_name or p.name or "arg"
     if isinstance(p.type, Array):
         size_str = str(p.type.size) if p.type.size is not None else ""
         return f"{_type_to_c(p.type.element_type)} {name}[{size_str}]"
@@ -111,20 +111,13 @@ class CShimWriter:
 
     Emits two parts (or combined header/source):
     - ``extern "C"`` C API declarations
-    - C++ implementation wrapping member calls, constructors, destructors,
-      and exception boundaries (``try ... catch``).
+    - C++ implementation wrapping member calls, constructors, and destructors.
     """
 
     default_output_pattern: ClassVar[str] = "{dir}/{stem}_cshim.cpp"
 
-    def __init__(
-        self,
-        *,
-        header_guard: str | None = None,
-        exception_status_code: bool = False,
-    ) -> None:
-        self.header_guard = header_guard
-        self.exception_status_code = exception_status_code
+    def __init__(self) -> None:
+        pass
 
     def write(self, header: Header) -> str:
         """Generate C-ABI shim source code from headerkit IR."""
@@ -162,8 +155,8 @@ class CShimWriter:
                 # Constructors
                 for idx, ctor in enumerate(cls.constructors):
                     fn_name = f"{safe_cls_name}_create" if idx == 0 else f"{safe_cls_name}_create_{idx}"
-                    params_c = [_format_param(p) for p in ctor.parameters]
                     params_call = [p.name or f"arg{i}" for i, p in enumerate(ctor.parameters)]
+                    params_c = [_format_param(p, params_call[i]) for i, p in enumerate(ctor.parameters)]
 
                     # Header prototype
                     proto = f"{safe_cls_name}_t* {fn_name}({', '.join(params_c) if params_c else 'void'});"
@@ -200,10 +193,9 @@ class CShimWriter:
                     params_c = []
                     if not method.is_static:
                         params_c.append(f"{safe_cls_name}_t* self")
-                    for p in method.parameters:
-                        params_c.append(_format_param(p))
-
                     call_args = [p.name or f"arg{i}" for i, p in enumerate(method.parameters)]
+                    for i, p in enumerate(method.parameters):
+                        params_c.append(_format_param(p, call_args[i]))
 
                     proto = f"{ret_type_c} {fn_method_name}({', '.join(params_c) if params_c else 'void'});"
                     lines.append(proto)
@@ -236,8 +228,8 @@ class CShimWriter:
                     safe_fn_name = decl.name
 
                 ret_c = _type_to_c(decl.return_type)
-                params_c = [_format_param(p) for p in decl.parameters]
                 call_args = [p.name or f"arg{i}" for i, p in enumerate(decl.parameters)]
+                params_c = [_format_param(p, call_args[i]) for i, p in enumerate(decl.parameters)]
 
                 proto = f"{ret_c} {safe_fn_name}({', '.join(params_c) if params_c else 'void'});"
                 lines.append(proto)
