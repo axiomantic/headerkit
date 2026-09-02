@@ -393,11 +393,18 @@ class NimWriter:
         has_begin = any(m.name == "begin" for m in s.methods)
         has_end = any(m.name == "end" for m in s.methods)
         if has_begin and has_end:
-            struct_type = self._format_type(CType(s.name or "Self"))
+            if s.template_params:
+                struct_type = (
+                    f"{_escape_ident(s.name or 'Self')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+                )
+                t_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            else:
+                struct_type = self._format_type(CType(s.name or "Self"))
+                t_params = ""
             methods_lines.extend(
                 [
                     "",
-                    f"iterator items*(this: {struct_type}): auto = {{.inline.}}",
+                    f"iterator items*{t_params}(this: {struct_type}): auto = {{.inline.}}",
                     "  var it = this.begin()",
                     "  while it != this.end():",
                     "    yield it[]",
