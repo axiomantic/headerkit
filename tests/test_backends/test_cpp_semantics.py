@@ -420,6 +420,8 @@ class TestCppClassSemantics:
             #define OFFSET (100 + 20 * 2)
             #define FLOAT_SCALE (2.5f * 4.0f)
             #define INT_DIV (7 / 2)
+            #define NEG_MOD (-7 % 3)
+            #define BIT_OPS (~0x0F & (0x30 ^ 0x10) >> 2)
 
             static inline int add(int a, int b) {
                 return a + b;
@@ -427,6 +429,13 @@ class TestCppClassSemantics:
         """)
         backend = get_backend("libclang")
         h = backend.parse(code, "test.h")
+
+        consts = {c.name: c for c in h.declarations if isinstance(c, Constant)}
+        assert "NEG_MOD" in consts
+        assert consts["NEG_MOD"].evaluated_value == -1
+
+        assert "BIT_OPS" in consts
+        assert consts["BIT_OPS"].evaluated_value == 0
 
         consts = {c.name: c for c in h.declarations if isinstance(c, Constant)}
         assert "BITMASK" in consts
