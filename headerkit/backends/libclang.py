@@ -1419,6 +1419,18 @@ class ClangASTConverter:
         """Process a struct/union/class declaration."""
         name = cursor.spelling or None
 
+        # Skip anonymous nested structs/unions inside another struct/union/class
+        try:
+            parent = cursor.semantic_parent
+            if parent and parent.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.CLASS_DECL):
+                is_anon = False
+                with contextlib.suppress(Exception):
+                    is_anon = cursor.is_anonymous()
+                if is_anon or not name or "(anonymous" in name:
+                    return
+        except Exception:
+            pass
+
         # Check if this is a template specialization
         # Method 1: Check specialized_template attribute (reliable when available)
         is_specialization = False
@@ -1738,7 +1750,7 @@ class ClangASTConverter:
         """Process a C++ partial template specialization.
 
         Partial specializations cannot be represented in Cython, but we emit
-        a comment to note their existence so users are aware.
+        a comment/note to note their existence so users are aware.
         """
         display_name = cursor.displayname or cursor.spelling or "unknown"
 
@@ -1755,7 +1767,18 @@ class ClangASTConverter:
             return
         self._seen.add(key)
 
-        # Emit comment declaration
+        # Check if the base template is already in declarations and attach note
+        for d in self.declarations:
+            if isinstance(d, Struct) and d.name == base_name:
+                note = (
+                    f"NOTE: Partial specialization {display_name} exists in C++ "
+                    "but cannot be declared in Cython. Use specific instantiations."
+                )
+                if note not in d.notes:
+                    d.notes.append(note)
+                return
+
+        # Emit comment declaration as fallback
         comment = Constant(
             name=f"/* Partial template specialization: {display_name} */",
             value="",

@@ -557,12 +557,22 @@ class PxdWriter:
 
         if not stub_module:
             if name.startswith("struct "):
-                struct_name = name[7:]
-                if "(unnamed at" not in struct_name and struct_name not in self.known_structs:
+                struct_name = name[7:].removeprefix("struct ")
+                if (
+                    "(unnamed" not in struct_name
+                    and "(anonymous" not in struct_name
+                    and not struct_name.startswith("(")
+                    and struct_name not in self.known_structs
+                ):
                     self.undeclared_structs.add(struct_name)
             elif name.startswith("union "):
-                union_name = name[6:]
-                if "(unnamed at" not in union_name and union_name not in self.known_unions:
+                union_name = name[6:].removeprefix("union ")
+                if (
+                    "(unnamed" not in union_name
+                    and "(anonymous" not in union_name
+                    and not union_name.startswith("(")
+                    and union_name not in self.known_unions
+                ):
                     self.undeclared_unions.add(union_name)
 
         # Strip std:: prefix for C++ types
@@ -660,7 +670,12 @@ class PxdWriter:
     # -----------------------------------------------------------------
 
     def _write_struct(self, struct: Struct) -> list[str]:
-        """Write a struct, union, or cppclass declaration."""
+        """Convert a Struct to Cython struct/union/cppclass definition."""
+        if not struct.name or (
+            not struct.fields and not struct.methods and ("(anonymous" in struct.name or "(unnamed" in struct.name)
+        ):
+            return []
+
         lines: list[str] = []
 
         # Store inner typedefs context for _format_ctype
@@ -712,7 +727,9 @@ class PxdWriter:
 
         for fld in struct.fields:
             # Skip anonymous struct/union fields
-            if isinstance(fld.type, CType) and "(unnamed at" in fld.type.name:
+            if fld.is_anonymous_transparent or not fld.name:
+                continue
+            if isinstance(fld.type, CType) and ("(unnamed" in fld.type.name or "(anonymous" in fld.type.name):
                 continue
 
             # Skip fields using incomplete types as values
