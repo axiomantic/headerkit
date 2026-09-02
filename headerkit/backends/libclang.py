@@ -1573,6 +1573,7 @@ class ClangASTConverter:
 
         attrs, is_deprecated = self._get_attributes(cursor)
         alignment = self._get_alignment(cursor)
+        vtable_entries = [m for m in methods if m.is_virtual or m.is_pure_virtual]
 
         struct = Struct(
             name=name,
@@ -1588,6 +1589,7 @@ class ClangASTConverter:
             constructors=constructors,
             destructor=destructor,
             conversions=conversions,
+            vtable_entries=vtable_entries,
             attributes=attrs,
             is_deprecated=is_deprecated,
             alignment=alignment,
@@ -1710,6 +1712,8 @@ class ClangASTConverter:
                     "Use specific instantiations as needed."
                 )
 
+        vtable_entries = [m for m in methods if m.is_virtual or m.is_pure_virtual]
+
         struct = Struct(
             name=name,
             fields=fields,
@@ -1725,6 +1729,7 @@ class ClangASTConverter:
             constructors=constructors,
             destructor=destructor,
             conversions=conversions,
+            vtable_entries=vtable_entries,
             location=self._get_location(cursor),
         )
         self.declarations.append(struct)
@@ -2063,6 +2068,7 @@ class ClangASTConverter:
         typedef = Typedef(
             name=name,
             underlying_type=standard_underlying_type,
+            namespace=self._current_namespace,
             attributes=attrs,
             is_deprecated=is_deprecated,
             location=self._get_location(cursor),
@@ -2091,6 +2097,7 @@ class ClangASTConverter:
         var = Variable(
             name=name,
             type=var_type,
+            namespace=self._current_namespace,
             attributes=attrs,
             is_deprecated=is_deprecated,
             alignment=alignment,
