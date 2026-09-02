@@ -344,3 +344,35 @@ class TestCppClassSemantics:
         assert proc_json["methods"][0]["parameters"][0]["type"]["kind"] == "reference"
         assert proc_json["methods"][0]["parameters"][1]["default_value"] == "10"
         assert proc_json["methods"][1]["parameters"][0]["type"]["is_rvalue"] is True
+
+    def test_c_attributes_and_deprecated(self) -> None:
+        """Test extraction of deprecation attributes and struct alignment."""
+        code = textwrap.dedent("""\
+            struct __attribute__((aligned(8))) AlignedBuffer {
+                int a;
+            };
+
+            __attribute__((deprecated("Use new_fn instead")))
+            void old_fn(void);
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.h")
+
+        structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
+        buf = structs["AlignedBuffer"]
+        assert buf.alignment == 8
+
+        funcs = {f.name: f for f in h.declarations if isinstance(f, Function)}
+        old_fn = funcs["old_fn"]
+        assert old_fn.is_deprecated is True
+
+        # Verify JSON round-trip
+        json_writer = JsonWriter()
+        json_output = json_writer.write(h)
+        data = json.loads(json_output)
+        fn_json = next(d for d in data["declarations"] if d.get("name") == "old_fn")
+        assert fn_json["is_deprecated"] is True
+        buf_json = next(d for d in data["declarations"] if d.get("name") == "AlignedBuffer")
+        assert buf_json["alignment"] == 8
+>>>>>>> 7ec94bb (feat(c-attributes): support attributes, is_deprecated, alignment, and transparent anonymous fields)
+>>>>>>> 87f2ab2 (feat(c-attributes): support attributes, is_deprecated, alignment, and transparent anonymous fields)

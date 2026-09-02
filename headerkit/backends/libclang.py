@@ -1261,6 +1261,43 @@ class ClangASTConverter:
             pass
         return None
 
+    def _get_attributes(self, cursor: Any) -> tuple[list[str], bool]:
+        """Extract attribute strings and check if deprecated."""
+        attrs: list[str] = []
+        is_deprecated = False
+        try:
+            # Check libclang cursor availability
+            # 1 = AvailabilityKind.DEPRECATED
+            avail = getattr(cursor, "availability", None)
+            val = getattr(avail, "value", avail)
+            if val == 1:
+                is_deprecated = True
+        except Exception:
+            pass
+
+        try:
+            for child in cursor.get_children():
+                # Extract attribute cursors if kind is attribute (UNEXPOSED_ATTR, etc.)
+                if "ATTR" in child.kind.name:
+                    spelling = child.spelling
+                    if spelling:
+                        attrs.append(spelling)
+                    if "deprecated" in child.kind.name.lower() or "deprecated" in spelling.lower():
+                        is_deprecated = True
+        except Exception:
+            pass
+        return attrs, is_deprecated
+
+    def _get_alignment(self, cursor: Any) -> int | None:
+        """Extract explicit byte alignment from a cursor or type if specified."""
+        try:
+            align = cursor.type.get_align()
+            if align > 0:
+                return int(align)
+        except Exception:
+            pass
+        return None
+
     def _process_struct(self, cursor: Any, is_union: bool, is_cppclass: bool = False) -> None:
         """Process a struct/union/class declaration."""
         name = cursor.spelling or None
@@ -1409,6 +1446,9 @@ class ClangASTConverter:
             cpp_name = cursor.displayname
             name = _mangle_specialization_name(cpp_name)
 
+        attrs, is_deprecated = self._get_attributes(cursor)
+        alignment = self._get_alignment(cursor)
+
         struct = Struct(
             name=name,
             fields=fields,
@@ -1423,6 +1463,9 @@ class ClangASTConverter:
             constructors=constructors,
             destructor=destructor,
             conversions=conversions,
+            attributes=attrs,
+            is_deprecated=is_deprecated,
+            alignment=alignment,
             location=self._get_location(cursor),
         )
         self.declarations.append(struct)
@@ -1657,6 +1700,7 @@ class ClangASTConverter:
                 parameters.append(Parameter(name=arg.spelling or None, type=param_type, default_value=default_val))
 
         is_noexcept = self._is_noexcept(cursor)
+        attrs, is_deprecated = self._get_attributes(cursor)
 
         func = Function(
             name=name,
@@ -1666,6 +1710,8 @@ class ClangASTConverter:
             namespace=self._current_namespace,
             template_params=template_params,
             is_noexcept=is_noexcept,
+            attributes=attrs,
+            is_deprecated=is_deprecated,
             location=self._get_location(cursor),
         )
         self.declarations.append(func)
@@ -1745,6 +1791,7 @@ class ClangASTConverter:
 
         is_noexcept = self._is_noexcept(cursor)
         access = self._get_access_specifier(cursor)
+        attrs, is_deprecated = self._get_attributes(cursor)
 
         return Function(
             name=name,
@@ -1761,6 +1808,8 @@ class ClangASTConverter:
             is_deleted=is_deleted,
             is_defaulted=is_defaulted,
             is_noexcept=is_noexcept,
+            attributes=attrs,
+            is_deprecated=is_deprecated,
             location=self._get_location(cursor),
         )
 
@@ -1873,6 +1922,8 @@ class ClangASTConverter:
                 self.declarations.append(typedef)
                 return
 
+        attrs, is_deprecated = self._get_attributes(cursor)
+
         # Standard typedef handling
         standard_underlying_type = self._convert_type(underlying)
         if not standard_underlying_type:
@@ -1881,6 +1932,8 @@ class ClangASTConverter:
         typedef = Typedef(
             name=name,
             underlying_type=standard_underlying_type,
+            attributes=attrs,
+            is_deprecated=is_deprecated,
             location=self._get_location(cursor),
         )
         self.declarations.append(typedef)
@@ -1901,21 +1954,33 @@ class ClangASTConverter:
         if not var_type:
             return
 
-        var = Variable(name=name, type=var_type, location=self._get_location(cursor))
+        attrs, is_deprecated = self._get_attributes(cursor)
+        alignment = self._get_alignment(cursor)
+
+        var = Variable(
+            name=name,
+            type=var_type,
+            attributes=attrs,
+            is_deprecated=is_deprecated,
+            alignment=alignment,
+            location=self._get_location(cursor),
+        )
         self.declarations.append(var)
 
     def _convert_field(self, cursor: Any) -> Field | None:
         """Convert a field cursor to IR Field."""
         name = cursor.spelling
-        if not name:
-            return None
+        is_transparent = False
+        if not name or name.startswith("(unnamed"):
+            is_transparent = True
+            name = name or ""
 
         field_type = self._convert_type(cursor.type)
         if not field_type:
             return None
 
         access = self._get_access_specifier(cursor)
-        return Field(name=name, type=field_type, access=access)
+        return Field(name=name, type=field_type, is_anonymous_transparent=is_transparent, access=access)
 
     def _convert_type(self, clang_type: Any) -> TypeExpr | None:
         """Convert a libclang Type to our IR type expression."""

@@ -104,6 +104,8 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["bit_width"] = f.bit_width
     if f.anonymous_struct is not None:
         d["anonymous_struct"] = _decl_to_dict(f.anonymous_struct)
+    if f.is_anonymous_transparent:
+        d["is_anonymous_transparent"] = True
     if f.access is not None:
         d["access"] = f.access
     if f.is_static:
@@ -147,6 +149,12 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["destructor"] = _decl_to_dict(decl.destructor)
         if decl.conversions:
             d["conversions"] = [_decl_to_dict(c) for c in decl.conversions]
+        if decl.attributes:
+            d["attributes"] = decl.attributes
+        if decl.is_deprecated:
+            d["is_deprecated"] = True
+        if decl.alignment is not None:
+            d["alignment"] = decl.alignment
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
@@ -193,6 +201,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["is_defaulted"] = True
         if decl.is_noexcept:
             d["is_noexcept"] = True
+        if decl.attributes:
+            d["attributes"] = decl.attributes
+        if decl.is_deprecated:
+            d["is_deprecated"] = True
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
@@ -202,6 +214,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             "name": decl.name,
             "underlying_type": _type_to_dict(decl.underlying_type),
         }
+        if decl.attributes:
+            d["attributes"] = decl.attributes
+        if decl.is_deprecated:
+            d["is_deprecated"] = True
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
@@ -211,6 +227,12 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             "name": decl.name,
             "type": _type_to_dict(decl.type),
         }
+        if decl.attributes:
+            d["attributes"] = decl.attributes
+        if decl.is_deprecated:
+            d["is_deprecated"] = True
+        if decl.alignment is not None:
+            d["alignment"] = decl.alignment
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d

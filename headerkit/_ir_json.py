@@ -123,6 +123,7 @@ def _dict_to_field(d: dict[str, Any]) -> Field:
         type=_dict_to_type(d["type"]),
         bit_width=d.get("bit_width"),
         anonymous_struct=(_dict_to_struct(d["anonymous_struct"]) if "anonymous_struct" in d else None),
+        is_anonymous_transparent=d.get("is_anonymous_transparent", False),
         access=d.get("access"),
         is_static=d.get("is_static", False),
     )
@@ -167,6 +168,9 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         constructors=([_dict_to_function(c) for c in d["constructors"]] if "constructors" in d else []),
         destructor=(_dict_to_function(d["destructor"]) if "destructor" in d else None),
         conversions=([_dict_to_function(c) for c in d["conversions"]] if "conversions" in d else []),
+        attributes=d.get("attributes", []),
+        is_deprecated=d.get("is_deprecated", False),
+        alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
     )
 
@@ -198,6 +202,8 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         is_deleted=d.get("is_deleted", False),
         is_defaulted=d.get("is_defaulted", False),
         is_noexcept=d.get("is_noexcept", False),
+        attributes=d.get("attributes", []),
+        is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
     )
 
@@ -206,6 +212,8 @@ def _dict_to_typedef(d: dict[str, Any]) -> Typedef:
     return Typedef(
         name=d["name"],
         underlying_type=_dict_to_type(d["underlying_type"]),
+        attributes=d.get("attributes", []),
+        is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
     )
 
@@ -214,6 +222,9 @@ def _dict_to_variable(d: dict[str, Any]) -> Variable:
     return Variable(
         name=d["name"],
         type=_dict_to_type(d["type"]),
+        attributes=d.get("attributes", []),
+        is_deprecated=d.get("is_deprecated", False),
+        alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
     )
 
