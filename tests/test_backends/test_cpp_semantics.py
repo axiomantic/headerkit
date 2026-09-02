@@ -419,6 +419,7 @@ class TestCppClassSemantics:
             #define BITMASK (1 << 3 | 0x02)
             #define OFFSET (100 + 20 * 2)
             #define FLOAT_SCALE (2.5f * 4.0f)
+            #define INT_DIV (7 / 2)
 
             static inline int add(int a, int b) {
                 return a + b;
@@ -439,6 +440,11 @@ class TestCppClassSemantics:
         assert offset.value == 140
         assert offset.evaluated_value == 140
 
+        assert "INT_DIV" in consts
+        int_div = consts["INT_DIV"]
+        assert int_div.evaluated_value == 3
+        assert isinstance(int_div.evaluated_value, int)
+
         assert "FLOAT_SCALE" in consts
         float_scale = consts["FLOAT_SCALE"]
         assert float_scale.evaluated_value == 10.0
@@ -455,4 +461,3 @@ class TestCppClassSemantics:
         json_output = json_writer.write(h)
         reconstructed = json_to_header(json_output)
         assert reconstructed.declarations == h.declarations
-

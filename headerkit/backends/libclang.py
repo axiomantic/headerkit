@@ -1318,6 +1318,8 @@ class ClangASTConverter:
                     elif isinstance(node.op, ast.Mult):
                         return left * right
                     elif isinstance(node.op, ast.Div):
+                        if isinstance(left, int) and isinstance(right, int):
+                            return int(left / right)  # C-style integer division truncating towards zero
                         return left / right
                     elif isinstance(node.op, ast.FloorDiv):
                         return left // right
