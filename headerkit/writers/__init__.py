@@ -267,6 +267,7 @@ def _ensure_writers_loaded() -> None:
 
     # Import triggers module-level registration
     import headerkit.writers.cffi  # noqa: F401
+    import headerkit.writers.cshim  # noqa: F401
     import headerkit.writers.ctypes  # noqa: F401
     import headerkit.writers.cython  # noqa: F401
     import headerkit.writers.diff  # noqa: F401
