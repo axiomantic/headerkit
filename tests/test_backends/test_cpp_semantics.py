@@ -366,4 +366,3 @@ class TestCppClassSemantics:
         assert proc_json["methods"][0]["parameters"][0]["type"]["kind"] == "reference"
         assert proc_json["methods"][0]["parameters"][1]["default_value"] == "10"
         assert proc_json["methods"][1]["parameters"][0]["type"]["is_rvalue"] is True
-
