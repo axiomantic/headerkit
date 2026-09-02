@@ -123,3 +123,79 @@ def test_cshim_class_methods_and_lifecycle() -> None:
         #endif
     """)
     assert output == expected
+
+
+def test_cshim_static_methods_unnamed_params_and_operators() -> None:
+    """Test generating wrappers for static methods, private filtering, unnamed params, and operators."""
+    ctor0 = Function(name="Device", return_type=CType("void"), parameters=[])
+    ctor1 = Function(
+        name="Device",
+        return_type=CType("void"),
+        parameters=[Parameter(name=None, type=CType("int")), Parameter(name=None, type=CType("double"))],
+    )
+    m_static = Function(name="getDefaultId", return_type=CType("int"), parameters=[], is_static=True)
+    m_private = Function(name="secretInternal", return_type=CType("void"), parameters=[], access="private")
+    m_op = Function(
+        name="operator+=",
+        return_type=CType("void"),
+        parameters=[Parameter(name="delta", type=CType("int"))],
+    )
+    cls = Struct(
+        name="Device",
+        is_cppclass=True,
+        constructors=[ctor0, ctor1],
+        methods=[m_static, m_private, m_op],
+    )
+    header = Header(path="test.h", declarations=[cls])
+    writer = CShimWriter()
+    output = writer.write(header)
+
+    expected = textwrap.dedent("""\
+        // Auto-generated C-ABI shim by HeaderKit
+        #pragma once
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        /* Opaque Handle Types */
+        typedef struct Device_s Device_t;
+
+        Device_t* Device_create(void);
+        Device_t* Device_create_1(int arg0, double arg1);
+        void Device_destroy(Device_t* self);
+        int Device_getDefaultId(void);
+        void Device_add_assign(Device_t* self, int delta);
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+        #ifdef __cplusplus
+        #include <new>
+
+        Device_t* Device_create(void) {
+            return reinterpret_cast<Device_t*>(new (std::nothrow) Device());
+        }
+
+        Device_t* Device_create_1(int arg0, double arg1) {
+            return reinterpret_cast<Device_t*>(new (std::nothrow) Device(arg0, arg1));
+        }
+
+        void Device_destroy(Device_t* self) {
+            if (self) {
+                delete reinterpret_cast<Device*>(self);
+            }
+        }
+
+        int Device_getDefaultId(void) {
+            return Device::getDefaultId();
+        }
+
+        void Device_add_assign(Device_t* self, int delta) {
+            reinterpret_cast<Device*>(self)->operator+=(delta);
+        }
+
+        #endif
+    """)
+    assert output == expected
