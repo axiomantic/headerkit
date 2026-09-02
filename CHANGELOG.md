@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-09-02
+
+### Added
+
+- Extended `Declaration` types (`Struct`, `Function`, `Typedef`, `Variable`) with `attributes` list and `is_deprecated` boolean flag.
+- Added `alignment` attribute to `Struct` and `Variable` IR nodes for explicit data alignment (`__attribute__((aligned(N)))`, `alignas`).
+- Added `is_anonymous_transparent` attribute to `Field` IR node for transparent anonymous struct/union member detection.
+- Updated libclang backend to extract declaration attributes, deprecation status, alignment, and anonymous transparent fields.
+- Updated JSON serializer and deserializer to round-trip attributes, deprecation flags, alignment, and transparent field markers.
+
 ## [0.22.0] - 2026-09-02
 
 ### Added

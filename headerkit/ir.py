@@ -391,6 +391,7 @@ class Field:
     type: TypeExpr
     bit_width: int | None = None
     anonymous_struct: Struct | None = None
+    is_anonymous_transparent: bool = False
     access: str | None = None
     is_static: bool = False
 
@@ -539,6 +540,9 @@ class Struct:
     constructors: list[Function] = field(default_factory=list)
     destructor: Function | None = None
     conversions: list[Function] = field(default_factory=list)
+    attributes: list[str] = field(default_factory=list)
+    is_deprecated: bool = False
+    alignment: int | None = None
     location: SourceLocation | None = None
 
     def __str__(self) -> str:
@@ -610,6 +614,8 @@ class Function:
     is_deleted: bool = False
     is_defaulted: bool = False
     is_noexcept: bool = False
+    attributes: list[str] = field(default_factory=list)
+    is_deprecated: bool = False
     location: SourceLocation | None = None
 
     def __str__(self) -> str:
@@ -653,6 +659,8 @@ class Typedef:
 
     name: str
     underlying_type: TypeExpr
+    attributes: list[str] = field(default_factory=list)
+    is_deprecated: bool = False
     location: SourceLocation | None = None
 
     def __str__(self) -> str:
@@ -687,6 +695,9 @@ class Variable:
 
     name: str
     type: TypeExpr
+    attributes: list[str] = field(default_factory=list)
+    is_deprecated: bool = False
+    alignment: int | None = None
     location: SourceLocation | None = None
 
     def __str__(self) -> str:
