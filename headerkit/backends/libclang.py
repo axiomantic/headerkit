@@ -1088,7 +1088,7 @@ class ClangASTConverter:
                             return
 
         # Determine macro type from tokens
-        macro_type, value = self._analyze_macro_tokens(tokens[1:])
+        macro_type, value, evaluated_value, raw_expr = self._analyze_macro_tokens(tokens[1:])
         if macro_type is None:
             return
 
@@ -1102,21 +1102,26 @@ class ClangASTConverter:
         self.declarations.append(
             Constant(
                 name=name,
-                value=value,
+                value=value if value is not None else evaluated_value,
+                evaluated_value=evaluated_value,
+                raw_expression=raw_expr,
                 type=macro_type,
                 is_macro=True,
                 location=location,
             )
         )
 
-    def _analyze_macro_tokens(self, tokens: list[Any]) -> tuple[CType | None, int | float | str | None]:
-        """Analyze macro value tokens to determine type.
+    def _analyze_macro_tokens(
+        self, tokens: list[Any]
+    ) -> tuple[CType | None, int | float | str | None, int | float | str | None, str | None]:
+        """Analyze macro value tokens to determine type, raw expression, and evaluated value.
 
         Returns:
-            Tuple of (CType, value) or (None, None) if unsupported.
+            Tuple of (CType, value, evaluated_value, raw_expr) or (None, None, None, None) if unsupported.
         """
         if len(tokens) == 1:
-            return self._analyze_single_token(tokens[0].spelling)
+            ctype, val = self._analyze_single_token(tokens[0].spelling)
+            return ctype, val, val, tokens[0].spelling
 
         # Multiple tokens - analyze as expression
         return self._analyze_expression_tokens(tokens)
@@ -1175,20 +1180,23 @@ class ClangASTConverter:
         except ValueError:
             return None, False
 
-    def _analyze_expression_tokens(self, tokens: list[Any]) -> tuple[CType | None, int | float | str | None]:
+    def _analyze_expression_tokens(
+        self, tokens: list[Any]
+    ) -> tuple[CType | None, int | float | str | None, int | float | str | None, str | None]:
         """Analyze a multi-token expression macro.
 
-        For expressions like (A + B), we detect if it looks like an integer
-        or float expression and declare the appropriate type.
+        For expressions like (1 << 4), we detect the type and safely evaluate
+        the expression to a concrete constant value if possible.
         """
         # Collect all token spellings
         spellings = [t.spelling for t in tokens]
+        raw_expr = " ".join(spellings)
 
         # Check for string concatenation or complex string expressions
         has_string = any(s.startswith('"') for s in spellings)
         if has_string:
             # String expression - skip for now (complex to handle)
-            return None, None
+            return None, None, None, None
 
         # Check if expression contains float indicators
         has_float = False
@@ -1215,13 +1223,14 @@ class ClangASTConverter:
             if spelling.isidentifier():
                 continue
             # Unknown token - not a simple expression
-            return None, None
+            return None, None, None, None
 
-        # Expression looks valid - determine type
-        # We don't evaluate, just declare the existence
+        # Expression looks valid - try to safely evaluate
+        eval_val = self._evaluate_expression(raw_expr)
+
         if has_float:
-            return CType("double"), None
-        return CType("int"), None
+            return CType("double"), eval_val, eval_val, raw_expr
+        return CType("int"), eval_val, eval_val, raw_expr
 
     def _get_access_specifier(self, cursor: Any) -> str | None:
         """Map libclang AccessSpecifier enum to string ('public', 'protected', 'private') or None."""
@@ -1248,6 +1257,26 @@ class ClangASTConverter:
             pass
         return False
 
+    def _is_inline_function(self, cursor: Any) -> tuple[bool, str | None]:
+        """Check if a function is declared inline and extract body tokens if available."""
+        is_inline = False
+        body_str: str | None = None
+        with contextlib.suppress(Exception):
+            is_inline = bool(cursor.is_inline_function())
+
+        try:
+            tokens = [t.spelling for t in cursor.get_tokens()]
+            if not is_inline and "inline" in tokens:
+                is_inline = True
+            if "{" in tokens and "}" in tokens:
+                open_idx = tokens.index("{")
+                close_idx = len(tokens) - 1 - tokens[::-1].index("}")
+                body_tokens = tokens[open_idx : close_idx + 1]
+                body_str = " ".join(body_tokens)
+        except Exception:
+            pass
+        return is_inline, body_str
+
     def _get_default_argument(self, arg_cursor: Any) -> str | None:
         """Extract default argument expression from a PARM_DECL cursor."""
         try:
@@ -1260,6 +1289,60 @@ class ClangASTConverter:
         except Exception:
             pass
         return None
+
+    def _evaluate_expression(self, expr_str: str) -> int | float | None:
+        """Safely evaluate a constant arithmetic / bitwise expression."""
+        import ast
+
+        class SafeEvaluator(ast.NodeVisitor):
+            def visit(self, node: ast.AST) -> int | float:
+                if isinstance(node, ast.Constant):
+                    if isinstance(node.value, (int, float)):
+                        return node.value
+                    raise ValueError("Non-numeric constant")
+                elif isinstance(node, ast.UnaryOp):
+                    operand = self.visit(node.operand)
+                    if isinstance(node.op, ast.UAdd):
+                        return +operand
+                    elif isinstance(node.op, ast.USub):
+                        return -operand
+                    elif isinstance(node.op, ast.Invert):
+                        return ~int(operand)
+                elif isinstance(node, ast.BinOp):
+                    left = self.visit(node.left)
+                    right = self.visit(node.right)
+                    if isinstance(node.op, ast.Add):
+                        return left + right
+                    elif isinstance(node.op, ast.Sub):
+                        return left - right
+                    elif isinstance(node.op, ast.Mult):
+                        return left * right
+                    elif isinstance(node.op, ast.Div):
+                        return left / right
+                    elif isinstance(node.op, ast.FloorDiv):
+                        return left // right
+                    elif isinstance(node.op, ast.Mod):
+                        return left % right
+                    elif isinstance(node.op, ast.BitOr):
+                        return int(left) | int(right)
+                    elif isinstance(node.op, ast.BitAnd):
+                        return int(left) & int(right)
+                    elif isinstance(node.op, ast.BitXor):
+                        return int(left) ^ int(right)
+                    elif isinstance(node.op, ast.LShift):
+                        return int(left) << int(right)
+                    elif isinstance(node.op, ast.RShift):
+                        return int(left) >> int(right)
+                raise ValueError("Unsupported AST node")
+
+        try:
+            # Clean C-style suffixes from numeric literals like 1ULL -> 1, 0xFFL -> 0xFF
+            cleaned = re.sub(r"\b(0[xX][0-9a-fA-F]+|[0-9]+)[uUlL]+", r"\1", expr_str)
+            parsed = ast.parse(cleaned, mode="eval")
+            evaluator = SafeEvaluator()
+            return evaluator.visit(parsed.body)
+        except Exception:
+            return None
 
     def _get_attributes(self, cursor: Any) -> tuple[list[str], bool]:
         """Extract attribute strings and check if deprecated."""
@@ -1737,6 +1820,7 @@ class ClangASTConverter:
                 parameters.append(Parameter(name=arg.spelling or None, type=param_type, default_value=default_val))
 
         is_noexcept = self._is_noexcept(cursor)
+        is_inline, body = self._is_inline_function(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
         func = Function(
@@ -1747,6 +1831,8 @@ class ClangASTConverter:
             namespace=self._current_namespace,
             template_params=template_params,
             is_noexcept=is_noexcept,
+            is_inline=is_inline,
+            body=body,
             attributes=attrs,
             is_deprecated=is_deprecated,
             location=self._get_location(cursor),
@@ -1827,6 +1913,7 @@ class ClangASTConverter:
             is_defaulted = bool(cursor.is_default_method())
 
         is_noexcept = self._is_noexcept(cursor)
+        is_inline, body = self._is_inline_function(cursor)
         access = self._get_access_specifier(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
@@ -1845,6 +1932,8 @@ class ClangASTConverter:
             is_deleted=is_deleted,
             is_defaulted=is_defaulted,
             is_noexcept=is_noexcept,
+            is_inline=is_inline,
+            body=body,
             attributes=attrs,
             is_deprecated=is_deprecated,
             location=self._get_location(cursor),

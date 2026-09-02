@@ -202,6 +202,8 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         is_deleted=d.get("is_deleted", False),
         is_defaulted=d.get("is_defaulted", False),
         is_noexcept=d.get("is_noexcept", False),
+        is_inline=d.get("is_inline", False),
+        body=d.get("body"),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
@@ -233,6 +235,8 @@ def _dict_to_constant(d: dict[str, Any]) -> Constant:
     return Constant(
         name=d["name"],
         value=d.get("value"),
+        evaluated_value=d.get("evaluated_value"),
+        raw_expression=d.get("raw_expression"),
         type=_dict_to_ctype(d["type"]) if "type" in d else None,
         is_macro=d.get("is_macro", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,

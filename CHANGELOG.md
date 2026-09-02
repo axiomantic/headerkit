@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-09-02
+
+### Added
+
+- Extended `Constant` IR node with `evaluated_value` (evaluated numeric / string value) and `raw_expression` (un-evaluated expression string).
+- Added constant expression evaluator for safe arithmetic and bitwise macro expressions (e.g. `(1 << 3 | 0x02)`, `100 + 20 * 2`) in `libclang` backend.
+- Extended `Function` IR node with `is_inline` boolean flag and `body` string preserving function definition implementations.
+- Updated JSON serializer and deserializer to round-trip `evaluated_value`, `raw_expression`, `is_inline`, and `body`.
+
 ## [0.24.0] - 2026-09-02
 
 ### Added
