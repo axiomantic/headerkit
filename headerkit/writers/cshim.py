@@ -29,8 +29,6 @@ def _sanitize_name(name: str) -> str:
     """Convert C++ symbols (e.g. namespaces, operators, templates) into safe C identifiers."""
     name = name.replace("::", "_")
     name = re.sub(r"[<>, \t]+", "_", name)
-    name = name.replace("&", "")
-    name = name.replace("*", "Ptr")
     # Compound & multi-char operators first
     name = name.replace("operator[]", "get_item")
     name = name.replace("operator()", "call")
@@ -69,6 +67,9 @@ def _sanitize_name(name: str) -> str:
     name = name.replace("operator|", "bor")
     name = name.replace("operator^", "bxor")
     name = name.replace("operator=", "assign")
+    # Generic pointer/reference markers in type names
+    name = name.replace("&", "")
+    name = name.replace("*", "Ptr")
     name = re.sub(r"[^a-zA-Z0-9_]", "", name)
     return name.strip("_")
 
@@ -98,11 +99,14 @@ def _type_to_c(t: TypeExpr) -> str:
 
 def _format_param(p: Parameter, param_name: str | None = None) -> str:
     """Format a single C parameter."""
-    type_str = _type_to_c(p.type)
     name = param_name or p.name or "arg"
     if isinstance(p.type, Array):
         size_str = str(p.type.size) if p.type.size is not None else ""
         return f"{_type_to_c(p.type.element_type)} {name}[{size_str}]"
+    elif isinstance(p.type, FunctionPointer):
+        params = ", ".join(_format_param(param) for param in p.type.parameters) or "void"
+        return f"{_type_to_c(p.type.return_type)} (*{name})({params})"
+    type_str = _type_to_c(p.type)
     return f"{type_str} {name}"
 
 
