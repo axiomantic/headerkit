@@ -1566,6 +1566,10 @@ class ClangASTConverter:
         """Process an enum declaration."""
         name = cursor.spelling or None
 
+        # Skip forward declarations
+        if not cursor.is_definition():
+            return
+
         # Skip if already processed
         if name:
             key = f"enum:{name}"
