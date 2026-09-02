@@ -539,6 +539,7 @@ class Function:
     :param calling_convention: The calling convention if non-default
         (e.g., ``"stdcall"``, ``"cdecl"``, ``"fastcall"``). None for
         the platform default calling convention.
+    :param template_params: Template parameter names for C++ function templates.
     :param location: Source location for error reporting.
 
     Examples
@@ -587,7 +588,8 @@ class Function:
         if self.is_variadic:
             params = f"{params}, ..." if params else "..."
         cc = f" __{self.calling_convention}__" if self.calling_convention else ""
-        return f"{self.return_type}{cc} {self.name}({params})"
+        t_params = f"<{', '.join(self.template_params)}>" if self.template_params else ""
+        return f"{self.return_type}{cc} {self.name}{t_params}({params})"
 
 
 @dataclass
