@@ -168,6 +168,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         constructors=([_dict_to_function(c) for c in d["constructors"]] if "constructors" in d else []),
         destructor=(_dict_to_function(d["destructor"]) if "destructor" in d else None),
         conversions=([_dict_to_function(c) for c in d["conversions"]] if "conversions" in d else []),
+        vtable_entries=([_dict_to_function(v) for v in d["vtable_entries"]] if "vtable_entries" in d else []),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),
@@ -214,6 +215,7 @@ def _dict_to_typedef(d: dict[str, Any]) -> Typedef:
     return Typedef(
         name=d["name"],
         underlying_type=_dict_to_type(d["underlying_type"]),
+        namespace=d.get("namespace"),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
@@ -224,6 +226,7 @@ def _dict_to_variable(d: dict[str, Any]) -> Variable:
     return Variable(
         name=d["name"],
         type=_dict_to_type(d["type"]),
+        namespace=d.get("namespace"),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),

@@ -10,7 +10,53 @@ import pytest
 from headerkit._ir_json import json_to_header
 from headerkit.backends import get_backend
 from headerkit.backends.libclang import is_system_libclang_available
+<<<<<<< HEAD
 from headerkit.ir import BaseSpecifier, Constant, CType, Enum, Function, Reference, Struct
+||||||| parent of 3033ce9 (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+from headerkit.ir import BaseSpecifier, CType, Enum, Struct
+||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
+from headerkit.ir import BaseSpecifier, CType, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+||||||| parent of e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
+>>>>>>> e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
+||||||| parent of 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
+from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
+=======
+from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct
+>>>>>>> 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+from headerkit.ir import BaseSpecifier, CType, Enum, Struct
+||||||| parent of a56fe7b (feat(templates): support function and method template parameters in IR, backend, and writers)
+from headerkit.ir import BaseSpecifier, CType, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+||||||| parent of e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
+from headerkit.ir import BaseSpecifier, CType, Function, Struct
+=======
+from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
+>>>>>>> e7e6e24 (feat(types): support Reference types, default parameter values, and noexcept)
+||||||| parent of 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
+from headerkit.ir import BaseSpecifier, CType, Function, Reference, Struct
+=======
+from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct
+>>>>>>> 8bd02fd (feat(macro-eval): add constant expression evaluation, raw expression tracking, and inline function extraction)
+||||||| parent of 1f3305b (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
+from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct
+=======
+from headerkit.ir import BaseSpecifier, Constant, CType, Function, Reference, Struct, Typedef, Variable
+>>>>>>> 1f3305b (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
+>>>>>>> 3033ce9 (feat(cpp-semantics): model vtable layout entries and track namespaces across typedefs and variables)
 from headerkit.writers.cython import write_pxd
 from headerkit.writers.json import JsonWriter
 
@@ -470,3 +516,59 @@ class TestCppClassSemantics:
         json_output = json_writer.write(h)
         reconstructed = json_to_header(json_output)
         assert reconstructed.declarations == h.declarations
+
+    def test_cpp_namespaces_and_vtable_entries(self) -> None:
+        """Test C++ namespace tracking and vtable entry collection."""
+        code = textwrap.dedent("""\
+            namespace graphics {
+                namespace render {
+                    typedef unsigned int ColorId;
+                    int global_dpi = 96;
+
+                    class Shape {
+                    public:
+                        virtual void draw() = 0;
+                        virtual int area() const;
+                        void non_virtual_helper();
+                    };
+                }
+            }
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.hpp", extra_args=["-x", "c++", "-std=c++17"])
+
+        typedefs = {t.name: t for t in h.declarations if isinstance(t, Typedef)}
+        assert "ColorId" in typedefs
+        assert typedefs["ColorId"].namespace == "graphics::render"
+
+        vars_dict = {v.name: v for v in h.declarations if isinstance(v, Variable)}
+        assert "global_dpi" in vars_dict
+        assert vars_dict["global_dpi"].namespace == "graphics::render"
+
+        structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
+        assert "Shape" in structs
+        shape = structs["Shape"]
+        assert shape.namespace == "graphics::render"
+        assert shape.is_abstract is True
+        assert len(shape.vtable_entries) == 2
+        vtable_names = [m.name for m in shape.vtable_entries]
+        assert "draw" in vtable_names
+        assert "area" in vtable_names
+        assert "non_virtual_helper" not in vtable_names
+
+        # Verify JSON round-trip
+        json_writer = JsonWriter()
+        json_output = json_writer.write(h)
+        data = json.loads(json_output)
+
+        shape_json = next(d for d in data["declarations"] if d.get("name") == "Shape")
+        assert shape_json["namespace"] == "graphics::render"
+        assert "vtable_entries" in shape_json
+        assert len(shape_json["vtable_entries"]) == 2
+
+        color_json = next(d for d in data["declarations"] if d.get("name") == "ColorId")
+        assert color_json["namespace"] == "graphics::render"
+
+        var_json = next(d for d in data["declarations"] if d.get("name") == "global_dpi")
+        assert var_json["namespace"] == "graphics::render"
+

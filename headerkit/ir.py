@@ -540,6 +540,7 @@ class Struct:
     constructors: list[Function] = field(default_factory=list)
     destructor: Function | None = None
     conversions: list[Function] = field(default_factory=list)
+    vtable_entries: list[Function] = field(default_factory=list)
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     alignment: int | None = None
@@ -661,6 +662,7 @@ class Typedef:
 
     name: str
     underlying_type: TypeExpr
+    namespace: str | None = None
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     location: SourceLocation | None = None
@@ -697,6 +699,7 @@ class Variable:
 
     name: str
     type: TypeExpr
+    namespace: str | None = None
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     alignment: int | None = None

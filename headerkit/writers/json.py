@@ -149,6 +149,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["destructor"] = _decl_to_dict(decl.destructor)
         if decl.conversions:
             d["conversions"] = [_decl_to_dict(c) for c in decl.conversions]
+        if decl.vtable_entries:
+            d["vtable_entries"] = [_decl_to_dict(v) for v in decl.vtable_entries]
         if decl.attributes:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:
@@ -218,6 +220,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             "name": decl.name,
             "underlying_type": _type_to_dict(decl.underlying_type),
         }
+        if decl.namespace:
+            d["namespace"] = decl.namespace
         if decl.attributes:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:
@@ -231,6 +235,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             "name": decl.name,
             "type": _type_to_dict(decl.type),
         }
+        if decl.namespace:
+            d["namespace"] = decl.namespace
         if decl.attributes:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:

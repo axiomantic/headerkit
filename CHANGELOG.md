@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-09-02
+
+### Added
+
+- Extended `Struct` IR node with `vtable_entries: list[Function]` to explicitly model virtual method tables and abstract interfaces.
+- Extended `Typedef` and `Variable` IR nodes with `namespace: str | None` context tracking.
+- Updated `libclang` backend to populate vtable layout / virtual entries on classes/structs, and record namespaces across typedefs and variables.
+- Updated JSON serializer and deserializer to round-trip `vtable_entries` on structs, and `namespace` on `Typedef` and `Variable`.
+
 ## [0.25.0] - 2026-09-02
 
 ### Added
