@@ -280,4 +280,19 @@ class TestCppClassSemantics:
         data = json.loads(json_output)
         fn_json = next(d for d in data["declarations"] if d.get("name") == "make_pair_first")
         assert fn_json["template_params"] == ["T", "U"]
->>>>>>> d743fa3 (feat(templates): support function and method template parameters in IR, backend, and writers)
+
+    def test_function_template_coexists_with_non_template(self) -> None:
+        """Test that function templates and non-template functions with the same name coexist."""
+        code = textwrap.dedent("""\
+            int process(int val);
+            template <typename T>
+            T process(T val);
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.hpp", extra_args=["-x", "c++", "-std=c++11"])
+        funcs = [d for d in h.declarations if isinstance(d, Function) and d.name == "process"]
+        assert len(funcs) == 2
+        template_funcs = [f for f in funcs if f.template_params]
+        non_template_funcs = [f for f in funcs if not f.template_params]
+        assert len(template_funcs) == 1
+        assert len(non_template_funcs) == 1

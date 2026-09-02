@@ -1593,8 +1593,10 @@ class ClangASTConverter:
         if not name:
             return
 
-        # Skip if already processed
-        key = f"function:{name}"
+        # Skip if already processed (distinguish function templates from standard functions and overloads)
+        is_template = cursor.kind == CursorKind.FUNCTION_TEMPLATE
+        prefix = "template_function" if is_template else "function"
+        key = f"{prefix}:{self._current_namespace or ''}:{name}:{cursor.type.spelling}"
         if key in self._seen:
             return
         self._seen.add(key)
