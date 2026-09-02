@@ -34,6 +34,7 @@ def test_type_aliases_are_unions():
         Function,
         FunctionPointer,
         Pointer,
+        Reference,
         Struct,
         Typedef,
         Variable,
@@ -41,7 +42,7 @@ def test_type_aliases_are_unions():
 
     # These are Union types, so get_args should return their members
     type_expr_members = set(typing.get_args(headerkit.TypeExpr))
-    assert type_expr_members == {CType, Pointer, Array, FunctionPointer}
+    assert type_expr_members == {CType, Pointer, Reference, Array, FunctionPointer}
 
     decl_members = set(typing.get_args(headerkit.Declaration))
     assert decl_members == {Enum, Struct, Function, Typedef, Variable, Constant}
@@ -54,6 +55,7 @@ def test_ir_types_match_direct_import():
 
     assert headerkit.CType is ir.CType
     assert headerkit.Pointer is ir.Pointer
+    assert headerkit.Reference is ir.Reference
     assert headerkit.Array is ir.Array
     assert headerkit.Parameter is ir.Parameter
     assert headerkit.FunctionPointer is ir.FunctionPointer

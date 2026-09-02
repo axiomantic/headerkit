@@ -32,6 +32,7 @@ from headerkit.ir import (
     # Protocol
     ParserBackend,
     Pointer,
+    Reference,
     SourceLocation,
     Struct,
     Typedef,
@@ -52,6 +53,7 @@ __all__ = [
     # Types
     "CType",
     "Pointer",
+    "Reference",
     "Array",
     "Parameter",
     "FunctionPointer",

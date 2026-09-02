@@ -65,6 +65,7 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    Reference,
     SourceLocation,
     Struct,
     Typedef,
@@ -1234,6 +1235,32 @@ class ClangASTConverter:
             pass
         return None
 
+    def _is_noexcept(self, cursor: Any) -> bool:
+        """Check if a function or method is declared noexcept or throw()."""
+        try:
+            # Check cursor exception specification kind
+            # BASIC_NOEXCEPT = 4, COMPUTED_NOEXCEPT = 5, NOTHROW = 9, DYNAMIC_NONE = 1
+            exc_kind = cursor.exception_specification_kind
+            val = getattr(exc_kind, "value", exc_kind)
+            if val in (1, 4, 5, 9):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _get_default_argument(self, arg_cursor: Any) -> str | None:
+        """Extract default argument expression from a PARM_DECL cursor."""
+        try:
+            tokens = [t.spelling for t in arg_cursor.get_tokens()]
+            if "=" in tokens:
+                eq_idx = tokens.index("=")
+                default_tokens = tokens[eq_idx + 1 :]
+                if default_tokens:
+                    return "".join(default_tokens)
+        except Exception:
+            pass
+        return None
+
     def _process_struct(self, cursor: Any, is_union: bool, is_cppclass: bool = False) -> None:
         """Process a struct/union/class declaration."""
         name = cursor.spelling or None
@@ -1626,7 +1653,10 @@ class ClangASTConverter:
                 # Skip void parameter
                 if isinstance(param_type, CType) and param_type.name == "void":
                     continue
-                parameters.append(Parameter(name=arg.spelling or None, type=param_type))
+                default_val = self._get_default_argument(arg)
+                parameters.append(Parameter(name=arg.spelling or None, type=param_type, default_value=default_val))
+
+        is_noexcept = self._is_noexcept(cursor)
 
         func = Function(
             name=name,
@@ -1635,6 +1665,7 @@ class ClangASTConverter:
             is_variadic=is_variadic,
             namespace=self._current_namespace,
             template_params=template_params,
+            is_noexcept=is_noexcept,
             location=self._get_location(cursor),
         )
         self.declarations.append(func)
@@ -1682,7 +1713,8 @@ class ClangASTConverter:
                 # Skip void parameter
                 if isinstance(param_type, CType) and param_type.name == "void":
                     continue
-                parameters.append(Parameter(name=arg.spelling or None, type=param_type))
+                default_val = self._get_default_argument(arg)
+                parameters.append(Parameter(name=arg.spelling or None, type=param_type, default_value=default_val))
             else:
                 # Parameter type could not be converted
                 return None
@@ -1711,6 +1743,7 @@ class ClangASTConverter:
         with contextlib.suppress(Exception):
             is_defaulted = bool(cursor.is_default_method())
 
+        is_noexcept = self._is_noexcept(cursor)
         access = self._get_access_specifier(cursor)
 
         return Function(
@@ -1727,6 +1760,7 @@ class ClangASTConverter:
             access=access,
             is_deleted=is_deleted,
             is_defaulted=is_defaulted,
+            is_noexcept=is_noexcept,
             location=self._get_location(cursor),
         )
 
@@ -1957,11 +1991,17 @@ class ClangASTConverter:
             decl = clang_type.get_declaration()
             return CType(name=decl.spelling)
 
-        # Handle C++ reference types - represent as the underlying type for C compatibility
+        # Handle C++ reference types
         if kind == TypeKind.LVALUEREFERENCE:
-            return self._convert_type(clang_type.get_pointee())
+            target = self._convert_type(clang_type.get_pointee())
+            if target:
+                return Reference(target=target, is_rvalue=False)
+            return None
         if kind == TypeKind.RVALUEREFERENCE:
-            return self._convert_type(clang_type.get_pointee())
+            target = self._convert_type(clang_type.get_pointee())
+            if target:
+                return Reference(target=target, is_rvalue=True)
+            return None
 
         # Handle nullptr_t type (C++11)
         # std::nullptr_t resolves to TypeKind.NULLPTR

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-09-02
+
+### Added
+
+- Added `Reference` IR node (`target`, `is_rvalue`, `qualifiers`) to distinguish C++ lvalue (`&`) and rvalue (`&&`) reference types from raw pointers.
+- Extended `Parameter` IR node with `default_value` attribute to preserve default argument expressions.
+- Extended `Function` IR node with `is_noexcept` attribute for C++ exception specifications (`noexcept`, `throw()`).
+- Updated libclang backend to extract `Reference` types, parameter `default_value`, and `is_noexcept`.
+- Updated JSON serializer/deserializer and Cython writer to support references, default values, and noexcept specifications.
+
 ## [0.21.0] - 2026-09-02
 
 ### Added

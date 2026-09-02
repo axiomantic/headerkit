@@ -24,6 +24,7 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    Reference,
     SourceLocation,
     Struct,
     Typedef,
@@ -41,6 +42,13 @@ def _type_to_dict(t: TypeExpr) -> dict[str, Any]:
         return d
     elif isinstance(t, Pointer):
         d = {"kind": "pointer", "pointee": _type_to_dict(t.pointee)}
+        if t.qualifiers:
+            d["qualifiers"] = list(t.qualifiers)
+        return d
+    elif isinstance(t, Reference):
+        d = {"kind": "reference", "target": _type_to_dict(t.target)}
+        if t.is_rvalue:
+            d["is_rvalue"] = True
         if t.qualifiers:
             d["qualifiers"] = list(t.qualifiers)
         return d
@@ -76,6 +84,8 @@ def _param_to_dict(p: Parameter) -> dict[str, Any]:
     d: dict[str, Any] = {"type": _type_to_dict(p.type)}
     if p.name:
         d["name"] = p.name
+    if p.default_value is not None:
+        d["default_value"] = p.default_value
     return d
 
 
@@ -181,6 +191,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["is_deleted"] = True
         if decl.is_defaulted:
             d["is_defaulted"] = True
+        if decl.is_noexcept:
+            d["is_noexcept"] = True
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
