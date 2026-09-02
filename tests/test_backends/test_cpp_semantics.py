@@ -556,19 +556,9 @@ class TestCppClassSemantics:
         assert "area" in vtable_names
         assert "non_virtual_helper" not in vtable_names
 
-        # Verify JSON round-trip
+        # Verify full JSON round-trip
         json_writer = JsonWriter()
         json_output = json_writer.write(h)
-        data = json.loads(json_output)
-
-        shape_json = next(d for d in data["declarations"] if d.get("name") == "Shape")
-        assert shape_json["namespace"] == "graphics::render"
-        assert "vtable_entries" in shape_json
-        assert len(shape_json["vtable_entries"]) == 2
-
-        color_json = next(d for d in data["declarations"] if d.get("name") == "ColorId")
-        assert color_json["namespace"] == "graphics::render"
-
-        var_json = next(d for d in data["declarations"] if d.get("name") == "global_dpi")
-        assert var_json["namespace"] == "graphics::render"
+        reconstructed = json_to_header(json_output)
+        assert reconstructed.declarations == h.declarations
 
