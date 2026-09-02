@@ -9,7 +9,7 @@ import pytest
 
 from headerkit.backends import get_backend
 from headerkit.backends.libclang import is_system_libclang_available
-from headerkit.ir import BaseSpecifier, CType, Struct
+from headerkit.ir import BaseSpecifier, CType, Enum, Struct
 from headerkit.writers.json import JsonWriter
 
 libclang = pytest.mark.libclang
@@ -195,3 +195,22 @@ class TestCppClassSemantics:
         assert len(complex_struct.fields) == 1
         assert len(complex_struct.notes) == 1
         assert "Template has non-type parameter 'N'" in complex_struct.notes[0]
+
+    def test_enum_forward_declaration_does_not_shadow_definition(self) -> None:
+        """Test that enum forward declarations do not shadow definitions."""
+        code = textwrap.dedent("""\
+            enum Color : int;
+            enum Color : int {
+                RED = 1,
+                GREEN = 2,
+                BLUE = 3
+            };
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.hpp", extra_args=["-x", "c++", "-std=c++11"])
+        enums = [d for d in h.declarations if isinstance(d, Enum)]
+        assert len(enums) == 1
+        assert enums[0].name == "Color"
+        assert len(enums[0].values) == 3
+        assert enums[0].values[0].name == "RED"
+        assert enums[0].values[0].value == 1
