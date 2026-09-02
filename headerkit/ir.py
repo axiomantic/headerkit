@@ -571,6 +571,7 @@ class Function:
     is_variadic: bool = False
     calling_convention: str | None = None
     namespace: str | None = None
+    template_params: list[str] = field(default_factory=list)
     is_static: bool = False
     is_const: bool = False
     is_virtual: bool = False

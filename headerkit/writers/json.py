@@ -163,6 +163,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["calling_convention"] = decl.calling_convention
         if decl.namespace:
             d["namespace"] = decl.namespace
+        if decl.template_params:
+            d["template_params"] = decl.template_params
         if decl.is_static:
             d["is_static"] = True
         if decl.is_const:

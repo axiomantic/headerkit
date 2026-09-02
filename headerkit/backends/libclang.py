@@ -1004,7 +1004,7 @@ class ClangASTConverter:
             self._process_struct(cursor, is_union=True)
         elif kind == CursorKind.ENUM_DECL:
             self._process_enum(cursor)
-        elif kind == CursorKind.FUNCTION_DECL:
+        elif kind in (CursorKind.FUNCTION_DECL, CursorKind.FUNCTION_TEMPLATE):
             self._process_function(cursor)
         elif kind == CursorKind.TYPEDEF_DECL:
             self._process_typedef(cursor)
@@ -1367,7 +1367,9 @@ class ClangASTConverter:
                         notes.append(
                             f"Conversion function '{child.spelling}' skipped: unable to represent return type '{child.result_type.spelling}'"
                         )
-                elif child.kind == CursorKind.CXX_METHOD and (is_cppclass or cursor.kind == CursorKind.STRUCT_DECL):
+                elif child.kind in (CursorKind.CXX_METHOD, CursorKind.FUNCTION_TEMPLATE) and (
+                    is_cppclass or cursor.kind == CursorKind.STRUCT_DECL
+                ):
                     method = self._convert_method(child)
                     if method:
                         methods.append(method)
@@ -1493,7 +1495,7 @@ class ClangASTConverter:
                     notes.append(
                         f"Conversion function '{child.spelling}' skipped: unable to represent return type '{child.result_type.spelling}'"
                     )
-            elif child.kind == CursorKind.CXX_METHOD:
+            elif child.kind in (CursorKind.CXX_METHOD, CursorKind.FUNCTION_TEMPLATE):
                 method = self._convert_method(child)
                 if method:
                     methods.append(method)
@@ -1586,7 +1588,7 @@ class ClangASTConverter:
         self.declarations.append(enum)
 
     def _process_function(self, cursor: Any) -> None:
-        """Process a function declaration."""
+        """Process a function or function template declaration."""
         name = cursor.spelling
         if not name:
             return
@@ -1597,14 +1599,26 @@ class ClangASTConverter:
             return
         self._seen.add(key)
 
+        template_params: list[str] = []
+        for child in cursor.get_children():
+            if child.kind == CursorKind.TEMPLATE_TYPE_PARAMETER:
+                template_params.append(child.spelling or f"T{len(template_params)}")
+
         return_type = self._convert_type(cursor.result_type)
         if not return_type:
             return
 
         parameters: list[Parameter] = []
-        is_variadic = cursor.type.is_function_variadic()
+        try:
+            is_variadic = cursor.type.is_function_variadic()
+        except Exception:
+            is_variadic = False
 
-        for arg in cursor.get_arguments():
+        args = list(cursor.get_arguments())
+        if not args:
+            args = [c for c in cursor.get_children() if c.kind == CursorKind.PARM_DECL]
+
+        for arg in args:
             param_type = self._convert_type(arg.type)
             if param_type:
                 # Skip void parameter
@@ -1618,6 +1632,7 @@ class ClangASTConverter:
             parameters=parameters,
             is_variadic=is_variadic,
             namespace=self._current_namespace,
+            template_params=template_params,
             location=self._get_location(cursor),
         )
         self.declarations.append(func)
@@ -1635,6 +1650,11 @@ class ClangASTConverter:
         if not name:
             return None
 
+        template_params: list[str] = []
+        for child in cursor.get_children():
+            if child.kind == CursorKind.TEMPLATE_TYPE_PARAMETER:
+                template_params.append(child.spelling or f"T{len(template_params)}")
+
         return_type: TypeExpr | None
         if is_constructor or is_destructor:
             return_type = CType("void")
@@ -1650,7 +1670,11 @@ class ClangASTConverter:
         except Exception:
             is_variadic = False
 
-        for arg in cursor.get_arguments():
+        args = list(cursor.get_arguments())
+        if not args:
+            args = [c for c in cursor.get_children() if c.kind == CursorKind.PARM_DECL]
+
+        for arg in args:
             param_type = self._convert_type(arg.type)
             if param_type:
                 # Skip void parameter
@@ -1692,6 +1716,7 @@ class ClangASTConverter:
             return_type=return_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            template_params=template_params,
             is_static=is_static,
             is_const=is_const,
             is_virtual=is_virtual,
