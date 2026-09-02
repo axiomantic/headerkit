@@ -374,3 +374,29 @@ class TestCppClassSemantics:
         assert fn_json["is_deprecated"] is True
         buf_json = next(d for d in data["declarations"] if d.get("name") == "AlignedBuffer")
         assert buf_json["alignment"] == 8
+
+    def test_unnamed_bitfields_skipped_and_transparent_anonymous_fields(self) -> None:
+        """Test that unnamed bitfield padding is skipped and anonymous structs/unions have is_anonymous_transparent."""
+        code = textwrap.dedent("""\
+            struct BitfieldAndAnon {
+                int a: 4;
+                int : 4;  // unnamed padding bitfield - must be skipped
+                int b: 8;
+                union {
+                    int x;
+                    float y;
+                };
+            };
+        """)
+        backend = get_backend("libclang")
+        h = backend.parse(code, "test.h")
+        structs = {s.name: s for s in h.declarations if isinstance(s, Struct)}
+        s = structs["BitfieldAndAnon"]
+        # Field 'a', Field 'b', plus the anonymous union field
+        field_names = [f.name for f in s.fields]
+        assert "a" in field_names
+        assert "b" in field_names
+        # There should NOT be an empty-named bitfield field
+        assert all(f.name != "" or f.is_anonymous_transparent for f in s.fields)
+        anon_fields = [f for f in s.fields if f.is_anonymous_transparent]
+        assert len(anon_fields) == 1
