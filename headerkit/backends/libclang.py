@@ -1324,6 +1324,8 @@ class ClangASTConverter:
                     elif isinstance(node.op, ast.FloorDiv):
                         return left // right
                     elif isinstance(node.op, ast.Mod):
+                        if isinstance(left, int) and isinstance(right, int):
+                            return left - int(left / right) * right  # C99 remainder semantics
                         return left % right
                     elif isinstance(node.op, ast.BitOr):
                         return int(left) | int(right)
