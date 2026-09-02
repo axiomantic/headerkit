@@ -1336,8 +1336,9 @@ class ClangASTConverter:
                 raise ValueError("Unsupported AST node")
 
         try:
-            # Clean C-style suffixes from numeric literals like 1ULL -> 1, 0xFFL -> 0xFF
-            cleaned = re.sub(r"\b(0[xX][0-9a-fA-F]+|[0-9]+)[uUlL]+", r"\1", expr_str)
+            # Clean C-style suffixes from float and integer literals (e.g., 3.14f -> 3.14, 1ULL -> 1, 0xFFL -> 0xFF)
+            cleaned = re.sub(r"(\b\d+\.\d*(?:[eE][+-]?\d+)?|\b\d+[eE][+-]?\d+)[fFlL]\b", r"\1", expr_str)
+            cleaned = re.sub(r"\b(0[xX][0-9a-fA-F]+|\d+)[uUlL]+\b", r"\1", cleaned)
             parsed = ast.parse(cleaned, mode="eval")
             evaluator = SafeEvaluator()
             return evaluator.visit(parsed.body)

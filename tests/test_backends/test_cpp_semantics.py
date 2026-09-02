@@ -418,6 +418,7 @@ class TestCppClassSemantics:
         code = textwrap.dedent("""\
             #define BITMASK (1 << 3 | 0x02)
             #define OFFSET (100 + 20 * 2)
+            #define FLOAT_SCALE (2.5f * 4.0f)
 
             static inline int add(int a, int b) {
                 return a + b;
@@ -437,6 +438,10 @@ class TestCppClassSemantics:
         offset = consts["OFFSET"]
         assert offset.value == 140
         assert offset.evaluated_value == 140
+
+        assert "FLOAT_SCALE" in consts
+        float_scale = consts["FLOAT_SCALE"]
+        assert float_scale.evaluated_value == 10.0
 
         funcs = {f.name: f for f in h.declarations if isinstance(f, Function)}
         assert "add" in funcs
