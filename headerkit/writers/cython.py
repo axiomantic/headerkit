@@ -925,7 +925,7 @@ class PxdWriter:
         """Format a Reference type."""
         target = self._format_type(ref.target)
         quals = f"{' '.join(ref.qualifiers)} " if ref.qualifiers else ""
-        ref_symbol = "&"  # Cython syntax uses & for references
+        ref_symbol = "&&" if ref.is_rvalue else "&"
         return f"{quals}{target}{ref_symbol}"
 
     def _format_ctype(self, ctype: CType) -> str:
