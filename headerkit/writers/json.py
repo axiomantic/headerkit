@@ -12,6 +12,7 @@ from typing import Any
 
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Declaration,
@@ -78,6 +79,14 @@ def _param_to_dict(p: Parameter) -> dict[str, Any]:
     return d
 
 
+def _base_to_dict(b: BaseSpecifier) -> dict[str, Any]:
+    """Convert a BaseSpecifier to a dict."""
+    d: dict[str, Any] = {"name": b.name, "access": b.access}
+    if b.is_virtual:
+        d["is_virtual"] = True
+    return d
+
+
 def _field_to_dict(f: Field) -> dict[str, Any]:
     """Convert a Field to a dict."""
     d: dict[str, Any] = {"name": f.name, "type": _type_to_dict(f.type)}
@@ -85,6 +94,10 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["bit_width"] = f.bit_width
     if f.anonymous_struct is not None:
         d["anonymous_struct"] = _decl_to_dict(f.anonymous_struct)
+    if f.access is not None:
+        d["access"] = f.access
+    if f.is_static:
+        d["is_static"] = True
     return d
 
 
@@ -114,6 +127,16 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["notes"] = decl.notes
         if decl.inner_typedefs:
             d["inner_typedefs"] = decl.inner_typedefs
+        if decl.bases:
+            d["bases"] = [_base_to_dict(b) for b in decl.bases]
+        if decl.is_abstract:
+            d["is_abstract"] = True
+        if decl.constructors:
+            d["constructors"] = [_decl_to_dict(c) for c in decl.constructors]
+        if decl.destructor is not None:
+            d["destructor"] = _decl_to_dict(decl.destructor)
+        if decl.conversions:
+            d["conversions"] = [_decl_to_dict(c) for c in decl.conversions]
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
@@ -140,6 +163,22 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["calling_convention"] = decl.calling_convention
         if decl.namespace:
             d["namespace"] = decl.namespace
+        if decl.is_static:
+            d["is_static"] = True
+        if decl.is_const:
+            d["is_const"] = True
+        if decl.is_virtual:
+            d["is_virtual"] = True
+        if decl.is_pure_virtual:
+            d["is_pure_virtual"] = True
+        if decl.is_explicit:
+            d["is_explicit"] = True
+        if decl.access is not None:
+            d["access"] = decl.access
+        if decl.is_deleted:
+            d["is_deleted"] = True
+        if decl.is_defaulted:
+            d["is_defaulted"] = True
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d

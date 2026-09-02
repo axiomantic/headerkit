@@ -13,6 +13,7 @@ from typing import Any
 
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Declaration,
@@ -97,12 +98,22 @@ def _dict_to_parameter(d: dict[str, Any]) -> Parameter:
     )
 
 
+def _dict_to_base(d: dict[str, Any]) -> BaseSpecifier:
+    return BaseSpecifier(
+        name=d["name"],
+        access=d.get("access", "public"),
+        is_virtual=d.get("is_virtual", False),
+    )
+
+
 def _dict_to_field(d: dict[str, Any]) -> Field:
     return Field(
         name=d["name"],
         type=_dict_to_type(d["type"]),
         bit_width=d.get("bit_width"),
         anonymous_struct=(_dict_to_struct(d["anonymous_struct"]) if "anonymous_struct" in d else None),
+        access=d.get("access"),
+        is_static=d.get("is_static", False),
     )
 
 
@@ -140,6 +151,11 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         cpp_name=d.get("cpp_name"),
         notes=d.get("notes", []),
         inner_typedefs=d.get("inner_typedefs", {}),
+        bases=[_dict_to_base(b) for b in d.get("bases", [])],
+        is_abstract=d.get("is_abstract", False),
+        constructors=([_dict_to_function(c) for c in d["constructors"]] if "constructors" in d else []),
+        destructor=(_dict_to_function(d["destructor"]) if "destructor" in d else None),
+        conversions=([_dict_to_function(c) for c in d["conversions"]] if "conversions" in d else []),
         location=_dict_to_location(d["location"]) if "location" in d else None,
     )
 
@@ -161,6 +177,14 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         is_variadic=d.get("is_variadic", False),
         calling_convention=d.get("calling_convention"),
         namespace=d.get("namespace"),
+        is_static=d.get("is_static", False),
+        is_const=d.get("is_const", False),
+        is_virtual=d.get("is_virtual", False),
+        is_pure_virtual=d.get("is_pure_virtual", False),
+        is_explicit=d.get("is_explicit", False),
+        access=d.get("access"),
+        is_deleted=d.get("is_deleted", False),
+        is_defaulted=d.get("is_defaulted", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
     )
 

@@ -301,6 +301,24 @@ TypeExpr = Union[CType, Pointer, Array, FunctionPointer]
 
 
 @dataclass
+class BaseSpecifier:
+    """C++ base class specifier in class inheritance.
+
+    :param name: Name of the base class.
+    :param access: Access specifier ("public", "protected", "private").
+    :param is_virtual: True if virtually inherited.
+    """
+
+    name: str
+    access: str = "public"
+    is_virtual: bool = False
+
+    def __str__(self) -> str:
+        virt = "virtual " if self.is_virtual else ""
+        return f"{self.access} {virt}{self.name}"
+
+
+@dataclass
 class Field:
     """Struct or union field declaration.
 
@@ -313,6 +331,9 @@ class Field:
     :param anonymous_struct: When this field is an anonymous nested
         struct or union, holds the :class:`Struct` IR node for the
         anonymous type. None for regular fields.
+    :param access: Access specifier (``"public"``, ``"protected"``, ``"private"``),
+        or None for C struct fields / default access.
+    :param is_static: True if this is a static data member.
 
     Examples
     --------
@@ -342,6 +363,8 @@ class Field:
     type: TypeExpr
     bit_width: int | None = None
     anonymous_struct: Struct | None = None
+    access: str | None = None
+    is_static: bool = False
 
     def __str__(self) -> str:
         base = f"{self.type} {self.name}"
@@ -483,6 +506,11 @@ class Struct:
     cpp_name: str | None = None
     notes: list[str] = field(default_factory=list)
     inner_typedefs: dict[str, str] = field(default_factory=dict)  # name -> underlying_type
+    bases: list[BaseSpecifier] = field(default_factory=list)
+    is_abstract: bool = False
+    constructors: list[Function] = field(default_factory=list)
+    destructor: Function | None = None
+    conversions: list[Function] = field(default_factory=list)
     location: SourceLocation | None = None
 
     def __str__(self) -> str:
@@ -543,6 +571,14 @@ class Function:
     is_variadic: bool = False
     calling_convention: str | None = None
     namespace: str | None = None
+    is_static: bool = False
+    is_const: bool = False
+    is_virtual: bool = False
+    is_pure_virtual: bool = False
+    is_explicit: bool = False
+    access: str | None = None
+    is_deleted: bool = False
+    is_defaulted: bool = False
     location: SourceLocation | None = None
 
     def __str__(self) -> str:

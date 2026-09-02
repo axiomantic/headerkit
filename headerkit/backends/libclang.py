@@ -53,6 +53,7 @@ from headerkit.backends import (
 )
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Declaration,
@@ -1221,6 +1222,18 @@ class ClangASTConverter:
             return CType("double"), None
         return CType("int"), None
 
+    def _get_access_specifier(self, cursor: Any) -> str | None:
+        """Map libclang AccessSpecifier enum to string ('public', 'protected', 'private') or None."""
+        try:
+            acc = cursor.access_specifier
+            if acc is not None:
+                val = getattr(acc, "value", acc)
+                access_map = {1: "public", 2: "protected", 3: "private"}
+                return access_map.get(val)
+        except Exception:
+            pass
+        return None
+
     def _process_struct(self, cursor: Any, is_union: bool, is_cppclass: bool = False) -> None:
         """Process a struct/union/class declaration."""
         name = cursor.spelling or None
@@ -1287,16 +1300,76 @@ class ClangASTConverter:
 
         fields: list[Field] = []
         methods: list[Function] = []
+        bases: list[BaseSpecifier] = []
+        constructors: list[Function] = []
+        destructor: Function | None = None
+        conversions: list[Function] = []
+        notes: list[str] = []
+
+        is_abstract = False
+        if not is_forward_decl and (is_cppclass or cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL)):
+            try:
+                is_abstract = bool(cursor.is_abstract_record())
+            except Exception:
+                is_abstract = False
+
         if not is_forward_decl:
             for child in cursor.get_children():
-                if child.kind == CursorKind.FIELD_DECL:
+                if child.kind == CursorKind.CXX_BASE_SPECIFIER:
+                    base_name = child.spelling or (child.type.spelling if child.type else "")
+                    if base_name.startswith("class "):
+                        base_name = base_name[6:]
+                    elif base_name.startswith("struct "):
+                        base_name = base_name[7:]
+                    access = self._get_access_specifier(child) or "public"
+                    is_virt = False
+                    with contextlib.suppress(Exception):
+                        is_virt = bool(child.is_virtual_base())
+                    bases.append(BaseSpecifier(name=base_name, access=access, is_virtual=is_virt))
+                elif child.kind == CursorKind.FIELD_DECL:
                     field = self._convert_field(child)
                     if field:
                         fields.append(field)
-                elif child.kind == CursorKind.CXX_METHOD and is_cppclass:
+                    else:
+                        notes.append(
+                            f"Field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'"
+                        )
+                elif child.kind == CursorKind.VAR_DECL and (is_cppclass or cursor.kind == CursorKind.STRUCT_DECL):
+                    # Static member variable
+                    field = self._convert_field(child)
+                    if field:
+                        field.is_static = True
+                        fields.append(field)
+                    else:
+                        notes.append(
+                            f"Static field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'"
+                        )
+                elif child.kind == CursorKind.CONSTRUCTOR:
+                    ctor = self._convert_method(child, is_constructor=True)
+                    if ctor:
+                        constructors.append(ctor)
+                    else:
+                        notes.append(f"Constructor '{child.spelling}' skipped: unable to represent parameter types")
+                elif child.kind == CursorKind.DESTRUCTOR:
+                    dtor = self._convert_method(child, is_destructor=True)
+                    if dtor:
+                        destructor = dtor
+                    else:
+                        notes.append(f"Destructor '{child.spelling}' skipped: unable to represent parameter types")
+                elif child.kind == CursorKind.CONVERSION_FUNCTION:
+                    conv = self._convert_method(child, is_conversion=True)
+                    if conv:
+                        conversions.append(conv)
+                    else:
+                        notes.append(
+                            f"Conversion function '{child.spelling}' skipped: unable to represent return type '{child.result_type.spelling}'"
+                        )
+                elif child.kind == CursorKind.CXX_METHOD and (is_cppclass or cursor.kind == CursorKind.STRUCT_DECL):
                     method = self._convert_method(child)
                     if method:
                         methods.append(method)
+                    else:
+                        notes.append(f"Method '{child.spelling}' skipped: unable to represent signature")
 
         # Handle template specialization
         cpp_name = None
@@ -1312,6 +1385,12 @@ class ClangASTConverter:
             is_cppclass=is_cppclass,
             namespace=self._current_namespace,
             cpp_name=cpp_name,
+            notes=notes,
+            bases=bases,
+            is_abstract=is_abstract,
+            constructors=constructors,
+            destructor=destructor,
+            conversions=conversions,
             location=self._get_location(cursor),
         )
         self.declarations.append(struct)
@@ -1333,8 +1412,18 @@ class ClangASTConverter:
         nontype_params: list[tuple[str, str]] = []
         fields: list[Field] = []
         methods: list[Function] = []
+        bases: list[BaseSpecifier] = []
+        constructors: list[Function] = []
+        destructor: Function | None = None
+        conversions: list[Function] = []
         notes: list[str] = []
         inner_typedefs: dict[str, str] = {}
+
+        is_abstract = False
+        try:
+            is_abstract = bool(cursor.is_abstract_record())
+        except Exception:
+            is_abstract = False
 
         for child in cursor.get_children():
             if child.kind == CursorKind.TEMPLATE_TYPE_PARAMETER:
@@ -1346,6 +1435,17 @@ class ClangASTConverter:
                 param_name = child.spelling or "N"
                 param_type = child.type.spelling
                 nontype_params.append((param_name, param_type))
+            elif child.kind == CursorKind.CXX_BASE_SPECIFIER:
+                base_name = child.spelling or (child.type.spelling if child.type else "")
+                if base_name.startswith("class "):
+                    base_name = base_name[6:]
+                elif base_name.startswith("struct "):
+                    base_name = base_name[7:]
+                access = self._get_access_specifier(child) or "public"
+                is_virt = False
+                with contextlib.suppress(Exception):
+                    is_virt = bool(child.is_virtual_base())
+                bases.append(BaseSpecifier(name=base_name, access=access, is_virtual=is_virt))
             elif child.kind == CursorKind.TYPEDEF_DECL:
                 # Extract inner typedefs (e.g., typedef Iterator<T, PT> iterator)
                 typedef_name = child.spelling
@@ -1356,10 +1456,43 @@ class ClangASTConverter:
                 field = self._convert_field(child)
                 if field:
                     fields.append(field)
+                else:
+                    notes.append(f"Field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'")
+            elif child.kind == CursorKind.VAR_DECL:
+                field = self._convert_field(child)
+                if field:
+                    field.is_static = True
+                    fields.append(field)
+                else:
+                    notes.append(
+                        f"Static field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'"
+                    )
+            elif child.kind == CursorKind.CONSTRUCTOR:
+                ctor = self._convert_method(child, is_constructor=True)
+                if ctor:
+                    constructors.append(ctor)
+                else:
+                    notes.append(f"Constructor '{child.spelling}' skipped: unable to represent parameter types")
+            elif child.kind == CursorKind.DESTRUCTOR:
+                dtor = self._convert_method(child, is_destructor=True)
+                if dtor:
+                    destructor = dtor
+                else:
+                    notes.append(f"Destructor '{child.spelling}' skipped: unable to represent parameter types")
+            elif child.kind == CursorKind.CONVERSION_FUNCTION:
+                conv = self._convert_method(child, is_conversion=True)
+                if conv:
+                    conversions.append(conv)
+                else:
+                    notes.append(
+                        f"Conversion function '{child.spelling}' skipped: unable to represent return type '{child.result_type.spelling}'"
+                    )
             elif child.kind == CursorKind.CXX_METHOD:
                 method = self._convert_method(child)
                 if method:
                     methods.append(method)
+                else:
+                    notes.append(f"Method '{child.spelling}' skipped: unable to represent signature")
 
         if not template_params:
             # No template parameters found - treat as regular class
@@ -1384,6 +1517,11 @@ class ClangASTConverter:
             template_params=template_params,
             notes=notes,
             inner_typedefs=inner_typedefs,
+            bases=bases,
+            is_abstract=is_abstract,
+            constructors=constructors,
+            destructor=destructor,
+            conversions=conversions,
             location=self._get_location(cursor),
         )
         self.declarations.append(struct)
@@ -1409,51 +1547,24 @@ class ClangASTConverter:
             return
         self._seen.add(key)
 
-        # Try to find the base template to add a note to it
-        # Look for existing template with the base name
-        for decl in self.declarations:
-            if isinstance(decl, Struct) and decl.name == base_name and decl.template_params:
-                # Add note about partial specialization
-                note = (
-                    f"NOTE: Partial specialization {display_name} exists in C++ "
-                    "but cannot be declared in Cython. Use specific instantiations."
-                )
-                if note not in decl.notes:
-                    decl.notes.append(note)
-                return
-
-        # If we didn't find the base template, emit a standalone note comment
-        # by creating a minimal struct with just the note
-        # This is a fallback - ideally the base template should exist
-        note = (
-            f"NOTE: Partial specialization {display_name} exists in C++ "
-            "but cannot be declared in Cython. Use specific instantiations."
-        )
-        struct = Struct(
-            name=base_name,
-            fields=[],
-            methods=[],
-            is_union=False,
-            is_cppclass=True,
-            namespace=self._current_namespace,
-            notes=[note],
+        # Emit comment declaration
+        comment = Constant(
+            name=f"/* Partial template specialization: {display_name} */",
+            value="",
+            type=CType("void"),
             location=self._get_location(cursor),
         )
-        self.declarations.append(struct)
+        self.declarations.append(comment)
 
     def _process_enum(self, cursor: Any) -> None:
         """Process an enum declaration."""
         name = cursor.spelling or None
 
-        # Skip forward declarations
-        if not cursor.is_definition():
-            return
-
         # Skip if already processed
-        key = f"enum:{name}"
-        if name and key in self._seen:
-            return
         if name:
+            key = f"enum:{name}"
+            if key in self._seen:
+                return
             self._seen.add(key)
 
         values: list[EnumValue] = []
@@ -1501,18 +1612,33 @@ class ClangASTConverter:
         )
         self.declarations.append(func)
 
-    def _convert_method(self, cursor: Any) -> Function | None:
-        """Convert a C++ method to a Function IR node."""
+    def _convert_method(
+        self,
+        cursor: Any,
+        *,
+        is_constructor: bool = False,
+        is_destructor: bool = False,
+        is_conversion: bool = False,
+    ) -> Function | None:
+        """Convert a C++ method, constructor, destructor, or conversion function to a Function IR node."""
         name = cursor.spelling
         if not name:
             return None
 
-        return_type = self._convert_type(cursor.result_type)
-        if not return_type:
+        return_type: TypeExpr | None
+        if is_constructor or is_destructor:
+            return_type = CType("void")
+        else:
+            return_type = self._convert_type(cursor.result_type)
+
+        if return_type is None:
             return None
 
         parameters: list[Parameter] = []
-        is_variadic = cursor.type.is_function_variadic()
+        try:
+            is_variadic = cursor.type.is_function_variadic()
+        except Exception:
+            is_variadic = False
 
         for arg in cursor.get_arguments():
             param_type = self._convert_type(arg.type)
@@ -1521,12 +1647,49 @@ class ClangASTConverter:
                 if isinstance(param_type, CType) and param_type.name == "void":
                     continue
                 parameters.append(Parameter(name=arg.spelling or None, type=param_type))
+            else:
+                # Parameter type could not be converted
+                return None
+
+        # Extract C++ method attributes
+        is_static = False
+        is_const = False
+        is_virtual = False
+        is_pure_virtual = False
+        is_explicit = False
+        is_deleted = False
+        is_defaulted = False
+
+        with contextlib.suppress(Exception):
+            is_static = bool(cursor.is_static_method())
+        with contextlib.suppress(Exception):
+            is_const = bool(cursor.is_const_method())
+        with contextlib.suppress(Exception):
+            is_virtual = bool(cursor.is_virtual_method())
+        with contextlib.suppress(Exception):
+            is_pure_virtual = bool(cursor.is_pure_virtual_method())
+        with contextlib.suppress(Exception):
+            is_explicit = bool(cursor.is_explicit_method())
+        with contextlib.suppress(Exception):
+            is_deleted = bool(cursor.is_deleted_method())
+        with contextlib.suppress(Exception):
+            is_defaulted = bool(cursor.is_default_method())
+
+        access = self._get_access_specifier(cursor)
 
         return Function(
             name=name,
             return_type=return_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            is_static=is_static,
+            is_const=is_const,
+            is_virtual=is_virtual,
+            is_pure_virtual=is_pure_virtual,
+            is_explicit=is_explicit,
+            access=access,
+            is_deleted=is_deleted,
+            is_defaulted=is_defaulted,
             location=self._get_location(cursor),
         )
 
@@ -1680,7 +1843,8 @@ class ClangASTConverter:
         if not field_type:
             return None
 
-        return Field(name=name, type=field_type)
+        access = self._get_access_specifier(cursor)
+        return Field(name=name, type=field_type, access=access)
 
     def _convert_type(self, clang_type: Any) -> TypeExpr | None:
         """Convert a libclang Type to our IR type expression."""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Enum,
@@ -117,6 +118,70 @@ class TestRoundTripDeclarations:
             namespace="ui",
             template_params=["T"],
             cpp_name="Widget<T>",
+        )
+        h = Header("t.h", [s])
+        assert _round_trip(h) == h
+
+    def test_struct_cpp_class_semantics(self) -> None:
+        ctor = Function(
+            "Model",
+            CType("void"),
+            [Parameter("seed", CType("int"))],
+            access="public",
+            is_explicit=True,
+        )
+        dtor = Function(
+            "~Model",
+            CType("void"),
+            [],
+            access="public",
+            is_virtual=True,
+            is_defaulted=True,
+        )
+        pure_method = Function(
+            "getNumRows",
+            CType("int"),
+            [],
+            access="public",
+            is_virtual=True,
+            is_pure_virtual=True,
+        )
+        const_method = Function(
+            "publicMethod",
+            CType("int"),
+            [Parameter("s", Pointer(CType("char", ["const"])))],
+            access="public",
+            is_const=True,
+        )
+        static_method = Function(
+            "staticMethod",
+            CType("int"),
+            [],
+            access="public",
+            is_static=True,
+        )
+        conv = Function(
+            "operator int",
+            CType("int"),
+            [],
+            access="public",
+            is_const=True,
+        )
+        field_pub = Field("pubField", CType("int"), access="public")
+        field_priv = Field("privateField", CType("int"), access="private")
+        static_field = Field("staticField", CType("int"), access="public", is_static=True)
+
+        s = Struct(
+            "Model",
+            fields=[field_pub, field_priv, static_field],
+            methods=[pure_method, const_method, static_method],
+            bases=[BaseSpecifier("Base", "public", is_virtual=True)],
+            is_abstract=True,
+            is_cppclass=True,
+            constructors=[ctor],
+            destructor=dtor,
+            conversions=[conv],
+            namespace="juce",
         )
         h = Header("t.h", [s])
         assert _round_trip(h) == h
