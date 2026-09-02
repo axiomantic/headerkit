@@ -116,3 +116,44 @@ class TestNimWriter:
         assert 'Status* {.size: sizeof(cint), importc: "Status", header: "test.h".} = enum' in out
         assert "OK = 0" in out
         assert "MAX_COUNT* = 100" in out
+
+    def test_cpp_advanced_features(self) -> None:
+        """Test C++ smart pointers, move semantics, operators, and container iterators."""
+        h = Header(
+            path="test.hpp",
+            declarations=[
+                Struct(
+                    name="MyVector",
+                    fields=[
+                        Field("ptr", CType("std::shared_ptr<int>")),
+                    ],
+                    methods=[
+                        Function(
+                            name="operator[]",
+                            return_type=Reference(CType("int")),
+                            parameters=[Parameter("index", CType("size_t"))],
+                        ),
+                        Function(
+                            name="push",
+                            return_type=CType("void"),
+                            parameters=[Parameter("val", Reference(CType("int"), is_rvalue=True))],
+                        ),
+                        Function(
+                            name="begin",
+                            return_type=Pointer(CType("int")),
+                        ),
+                        Function(
+                            name="end",
+                            return_type=Pointer(CType("int")),
+                        ),
+                    ],
+                )
+            ],
+        )
+        out = write_nim(h, header_path="test.hpp")
+        assert "`ptr`*: SharedPtr[cint]" in out
+        assert (
+            'proc `[]`*(this: var MyVector, index: csize_t): var cint {.importcpp: "#[@]", header: "test.hpp".}' in out
+        )
+        assert 'proc push*(this: var MyVector, val: sink cint) {.importcpp: "#.push(@)", header: "test.hpp".}' in out
+        assert "iterator items*(this: MyVector): auto = {.inline.}" in out
