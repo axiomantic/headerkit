@@ -169,7 +169,26 @@ CPP_OPERATOR_MAP: dict[str, str] = {
     "operator-=": "`-=`",
     "operator*=": "`*=`",
     "operator/=": "`/=`",
+    "operator%=": "`%=`",
+    "operator&=": "`&=`",
+    "operator|=": "`|=`",
+    "operator^=": "`^=`",
+    "operator<<=": "`shl=`",
+    "operator>>=": "`shr=`",
     "operator=": "`=`",
+    "operator%": "`%`",
+    "operator&": "`&`",
+    "operator|": "`|`",
+    "operator^": "`^`",
+    "operator~": "`~`",
+    "operator!": "`!`",
+    "operator&&": "`and`",
+    "operator||": "`or`",
+    "operator<<": "`shl`",
+    "operator>>": "`shr`",
+    "operator++": "`inc`",
+    "operator--": "`dec`",
+    "operator->": "`->`",
 }
 
 
@@ -230,7 +249,7 @@ class NimWriter:
             elif isinstance(decl, Enum):
                 types_section.extend(self._write_enum(decl, header_file))
             elif isinstance(decl, Typedef):
-                types_section.extend(self._write_typedef(decl, header_file))
+                types_section.extend(self._write_typedef(decl))
             elif isinstance(decl, Function):
                 procs_section.extend(self._write_function(decl, header_file))
             elif isinstance(decl, Constant):
@@ -394,7 +413,13 @@ class NimWriter:
         params: list[str] = []
 
         # 'this' parameter
-        struct_type = self._format_type(CType(s.name or "Self"))
+        if s.template_params:
+            struct_type = (
+                f"{_escape_ident(s.name or 'Self')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            )
+        else:
+            struct_type = self._format_type(CType(s.name or "Self"))
+
         if not m.is_static:
             if m.is_const:
                 params.append(f"this: {struct_type}")
@@ -426,8 +451,9 @@ class NimWriter:
             cpp_pattern = f"#.{(m.name)}(@)"
         pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
 
-        # Generic parameters
-        t_params = f"[{', '.join(_escape_ident(tp) for tp in m.template_params)}]" if m.template_params else ""
+        # Generic parameters (combine struct and method template parameters)
+        all_tp = list(s.template_params) + [tp for tp in m.template_params if tp not in s.template_params]
+        t_params = f"[{', '.join(_escape_ident(tp) for tp in all_tp)}]" if all_tp else ""
 
         decl = f"proc {m_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"
         return ["", decl]
@@ -444,11 +470,18 @@ class NimWriter:
             default_str = f" = {p.default_value}" if p.default_value else ""
             params.append(f"{p_name}: {p_type}{default_str}")
 
-        ret_type = self._format_type(CType(s_name))
-        cpp_pattern = f"{s_name}(@)"
+        if s.template_params:
+            ret_type = f"{_escape_ident(s_name)}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            t_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            cpp_pattern = f"{s_name}<'*0>(@)"
+        else:
+            ret_type = self._format_type(CType(s_name))
+            t_params = ""
+            cpp_pattern = f"{s_name}(@)"
+
         pragma = f'importcpp: "{cpp_pattern}", header: "{header_file}", constructor'
 
-        decl = f"proc {proc_name}*({', '.join(params)}): {ret_type} {{.{pragma}.}}"
+        decl = f"proc {proc_name}*{t_params}({', '.join(params)}): {ret_type} {{.{pragma}.}}"
         return ["", decl]
 
     def _write_enum(self, e: Enum, header_file: str) -> list[str]:
@@ -464,7 +497,7 @@ class NimWriter:
                 lines.append(f"  {v_name}")
         return lines
 
-    def _write_typedef(self, t: Typedef, header_file: str) -> list[str]:
+    def _write_typedef(self, t: Typedef) -> list[str]:
         """Render a Typedef declaration."""
         t_name = _escape_ident(t.name)
         underlying = self._format_type(t.underlying_type)
@@ -487,8 +520,13 @@ class NimWriter:
         pragmas: list[str] = []
         if f.namespace:
             pragmas.append(f'importcpp: "{f.namespace}::{f.name}(@)", header: "{header_file}"')
+        elif f.template_params:
+            pragmas.append(f'importcpp: "{f.name}(@)", header: "{header_file}"')
         else:
             pragmas.append(f'importc: "{f.name}", header: "{header_file}"')
+
+        if f.is_variadic:
+            pragmas.append("varargs")
 
         if f.calling_convention:
             pragmas.append(f.calling_convention)
