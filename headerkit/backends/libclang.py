@@ -1290,12 +1290,19 @@ class ClangASTConverter:
 
     def _get_alignment(self, cursor: Any) -> int | None:
         """Extract explicit byte alignment from a cursor or type if specified."""
-        try:
+        has_explicit = False
+        with contextlib.suppress(Exception):
+            has_explicit = any("ALIGNED" in child.kind.name for child in cursor.get_children())
+        if not has_explicit:
+            with contextlib.suppress(Exception):
+                has_explicit = any(t.spelling in ("aligned", "alignas", "_Alignas") for t in cursor.get_tokens())
+        if not has_explicit:
+            return None
+
+        with contextlib.suppress(Exception):
             align = cursor.type.get_align()
             if align > 0:
                 return int(align)
-        except Exception:
-            pass
         return None
 
     def _process_struct(self, cursor: Any, is_union: bool, is_cppclass: bool = False) -> None:
