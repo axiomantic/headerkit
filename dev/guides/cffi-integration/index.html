@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1721,12 +1721,12 @@ referencing environment variables set at build time. This is useful when
 a dependency's include path is determined by CMake or another build
 system.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[tool.headerkit]</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"libclang"</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"cffi"</span><span class="p">]</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">[[tool.headerkit.headers]]</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;include/nng.h&quot;</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;${NNG_INCLUDE_DIR}&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"include/nng.h"</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"${NNG_INCLUDE_DIR}"</span><span class="p">]</span>
 </code></pre></div>
 <p>When headerkit loads this config, it replaces <code>${NNG_INCLUDE_DIR}</code> with
 the value of the <code>NNG_INCLUDE_DIR</code> environment variable. If the variable
@@ -1740,7 +1740,7 @@ evaluates them before the AST is built. The <code>define_patterns</code> option
 fills this gap by scanning the raw header text for <code>#define</code> names that
 match one or more regex patterns.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tool.headerkit.writer.cffi]</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">define_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;NNG_FLAG_</span><span class="se">\\</span><span class="s2">w+&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_</span><span class="se">\\</span><span class="s2">w+_VERSION&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_MAXADDRLEN&quot;</span><span class="p">]</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">define_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"NNG_FLAG_</span><span class="se">\\</span><span class="s2">w+"</span><span class="p">,</span><span class="w"> </span><span class="s2">"NNG_</span><span class="se">\\</span><span class="s2">w+_VERSION"</span><span class="p">,</span><span class="w"> </span><span class="s2">"NNG_MAXADDRLEN"</span><span class="p">]</span>
 </code></pre></div>
 <p>Matching names are emitted as:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="cp">#define NNG_FLAG_ALLOC ...</span>
@@ -1762,10 +1762,10 @@ names starting with <code>NNG_FLAG_</code>, while <code>"NNG_FLAG"</code> also m
 included files against your <code>include_dirs</code> and scans them too. This
 means you can use an umbrella header like:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">generate</span><span class="p">(</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">&quot;umbrella.h&quot;</span><span class="p">,</span> <span class="s2">&quot;cffi&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">code</span><span class="o">=</span><span class="s1">&#39;#include &lt;nng/nng.h&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">include_dirs</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;/path/to/nng/include&quot;</span><span class="p">],</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">writer_options</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;define_patterns&quot;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&quot;NNG_FLAG_\w+&quot;</span><span class="p">]},</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">"umbrella.h"</span><span class="p">,</span> <span class="s2">"cffi"</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">code</span><span class="o">=</span><span class="s1">'#include &lt;nng/nng.h&gt;</span><span class="se">\n</span><span class="s1">'</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">include_dirs</span><span class="o">=</span><span class="p">[</span><span class="s2">"/path/to/nng/include"</span><span class="p">],</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">writer_options</span><span class="o">=</span><span class="p">{</span><span class="s2">"define_patterns"</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">"NNG_FLAG_\w+"</span><span class="p">]},</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span>
 </code></pre></div>
 <p>headerkit will find and scan <code>nng/nng.h</code> for matching <code>#define</code> names,
@@ -1777,13 +1777,13 @@ code can call. Since these declarations do not come from a C header,
 headerkit cannot generate them automatically. The <code>extra_cdef</code> option
 appends literal cdef lines to the generated output.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[tool.headerkit.writer.cffi]</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;extern &quot;Python&quot; void _async_complete(void *);&#39;</span><span class="p">]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'extern "Python" void _async_complete(void *);'</span><span class="p">]</span>
 </code></pre></div>
 <p>Multiple lines are supported:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[tool.headerkit.writer.cffi]</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="s1">&#39;extern &quot;Python&quot; void _async_complete(void *);&#39;</span><span class="p">,</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="s1">&#39;extern &quot;Python&quot; int _dial_callback(void *, int);&#39;</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="s1">'extern "Python" void _async_complete(void *);'</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="s1">'extern "Python" int _dial_callback(void *, int);'</span><span class="p">,</span>
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">]</span>
 </code></pre></div>
 <p>These lines are appended verbatim after all generated declarations.</p>
@@ -1808,7 +1808,7 @@ for cdef generation, and cffi_buildtool for compilation.</p>
 <a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">        </span><span class="s">-o</span><span class="w"> </span><span class="s">cffi:nng/_nng.cdef.txt</span>
 <a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">        </span><span class="s">-I</span><span class="w"> </span><span class="o">${</span><span class="nv">nng_SOURCE_DIR</span><span class="o">}</span><span class="s">/include</span>
 <a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s">nng</span>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">&quot;Generating CFFI cdef with headerkit&quot;</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">"Generating CFFI cdef with headerkit"</span>
 <a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="p">)</span>
 <a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
 <a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="c"># cffi_buildtool compiles the extension module</span>
@@ -1820,28 +1820,28 @@ for cdef generation, and cffi_buildtool for compilation.</p>
 <a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">        </span><span class="s">--output</span><span class="w"> </span><span class="s">nng/_nng_cffi.c</span>
 <a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">        </span><span class="s">--module-name</span><span class="w"> </span><span class="s">nng._nng_cffi</span>
 <a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">    </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s">nng/_nng.cdef.txt</span><span class="w"> </span><span class="s">nng/_nng.csrc.c</span>
-<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">&quot;Building CFFI extension with cffi_buildtool&quot;</span>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">"Building CFFI extension with cffi_buildtool"</span>
 <a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="p">)</span>
 </code></pre></div>
 <h3 id="pyprojecttoml">pyproject.toml<a class="headerlink" href="#pyprojecttoml" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[build-system]</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;headerkit.build_backend&quot;</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"headerkit"</span><span class="p">,</span><span class="w"> </span><span class="s2">"hatchling"</span><span class="p">]</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"headerkit.build_backend"</span>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
 <a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">[tool.headerkit]</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">]</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"libclang"</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"cffi"</span><span class="p">]</span>
 <a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
 <a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="k">[[tool.headerkit.headers]]</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;include/nng/nng.h&quot;</span>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;${NNG_INCLUDE_DIR}&quot;</span><span class="p">]</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"include/nng/nng.h"</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"${NNG_INCLUDE_DIR}"</span><span class="p">]</span>
 <a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
 <a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="k">[tool.headerkit.writer.cffi]</span>
-<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">define_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;NNG_FLAG_</span><span class="se">\\</span><span class="s2">w+&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_</span><span class="se">\\</span><span class="s2">w+_VERSION&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;NNG_MAXADDRLEN&quot;</span><span class="p">]</span>
-<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;extern &quot;Python&quot; void _async_complete(void *);&#39;</span><span class="p">]</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">define_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"NNG_FLAG_</span><span class="se">\\</span><span class="s2">w+"</span><span class="p">,</span><span class="w"> </span><span class="s2">"NNG_</span><span class="se">\\</span><span class="s2">w+_VERSION"</span><span class="p">,</span><span class="w"> </span><span class="s2">"NNG_MAXADDRLEN"</span><span class="p">]</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="n">extra_cdef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'extern "Python" void _async_complete(void *);'</span><span class="p">]</span>
 <a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
 <a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="k">[tool.headerkit.output]</span>
-<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">cffi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nng/_nng.cdef.txt&quot;</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">cffi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"nng/_nng.cdef.txt"</span>
 </code></pre></div>
 <h3 id="the-csrc-file">The csrc file<a class="headerlink" href="#the-csrc-file" title="Permanent link">&para;</a></h3>
 <p>The <code>_nng.csrc.c</code> file is a small hand-written C source that
@@ -1920,7 +1920,7 @@ builds work without libclang installed. See the
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -2167,36 +2167,36 @@ numeric suffix is appended (e.g., <code>libclang.mylib.x86_64-linux-2</code>).</
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">generate</span><span class="p">,</span> <span class="n">generate_all</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Single writer: parse + generate cffi output</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span> <span class="s2">&quot;cffi&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">"include/mylib.h"</span><span class="p">,</span> <span class="s2">"cffi"</span><span class="p">)</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Second call with same inputs: loaded entirely from cache</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span> <span class="s2">&quot;cffi&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">"include/mylib.h"</span><span class="p">,</span> <span class="s2">"cffi"</span><span class="p">)</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Multiple writers: parses once, generates each writer</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">results</span> <span class="o">=</span> <span class="n">generate_all</span><span class="p">(</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">writers</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">,</span> <span class="s2">&quot;ctypes&quot;</span><span class="p">,</span> <span class="s2">&quot;json&quot;</span><span class="p">],</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="s2">"include/mylib.h"</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">writers</span><span class="o">=</span><span class="p">[</span><span class="s2">"cffi"</span><span class="p">,</span> <span class="s2">"ctypes"</span><span class="p">,</span> <span class="s2">"json"</span><span class="p">],</span>
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">output_paths</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>        <span class="s2">&quot;cffi&quot;</span><span class="p">:</span> <span class="s2">&quot;bindings/mylib.cdef.txt&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="s2">&quot;ctypes&quot;</span><span class="p">:</span> <span class="s2">&quot;bindings/mylib_ctypes.py&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="s2">&quot;json&quot;</span><span class="p">:</span> <span class="s2">&quot;bindings/mylib_ir.json&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>        <span class="s2">"cffi"</span><span class="p">:</span> <span class="s2">"bindings/mylib.cdef.txt"</span><span class="p">,</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="s2">"ctypes"</span><span class="p">:</span> <span class="s2">"bindings/mylib_ctypes.py"</span><span class="p">,</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="s2">"json"</span><span class="p">:</span> <span class="s2">"bindings/mylib_ir.json"</span><span class="p">,</span>
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="p">},</span>
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">)</span>
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
 <a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1"># With backend options</span>
 <a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="s2">&quot;cffi&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">include_dirs</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;/usr/local/include&quot;</span><span class="p">],</span>
-<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">defines</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;VERSION=2&quot;</span><span class="p">,</span> <span class="s2">&quot;DEBUG&quot;</span><span class="p">],</span>
-<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">writer_options</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;exclude_patterns&quot;</span><span class="p">:</span> <span class="s2">&quot;^__&quot;</span><span class="p">},</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="s2">"include/mylib.h"</span><span class="p">,</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="s2">"cffi"</span><span class="p">,</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">include_dirs</span><span class="o">=</span><span class="p">[</span><span class="s2">"/usr/local/include"</span><span class="p">],</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">defines</span><span class="o">=</span><span class="p">[</span><span class="s2">"VERSION=2"</span><span class="p">,</span> <span class="s2">"DEBUG"</span><span class="p">],</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">writer_options</span><span class="o">=</span><span class="p">{</span><span class="s2">"exclude_patterns"</span><span class="p">:</span> <span class="s2">"^__"</span><span class="p">},</span>
 <a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="p">)</span>
 <a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>
 <a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="c1"># Cross-compile: generate ARM64 Linux bindings on any host</span>
 <a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span>
-<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>    <span class="s2">&quot;cffi&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;aarch64-unknown-linux-gnu&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="s2">"include/mylib.h"</span><span class="p">,</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>    <span class="s2">"cffi"</span><span class="p">,</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>    <span class="n">target</span><span class="o">=</span><span class="s2">"aarch64-unknown-linux-gnu"</span><span class="p">,</span>
 <a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="p">)</span>
 </code></pre></div>
 <h3 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h3>
@@ -2216,18 +2216,18 @@ numeric suffix is appended (e.g., <code>libclang.mylib.x86_64-linux-2</code>).</
 <p>Consumer projects can use headerkit as their build backend. When <code>pip install</code>
 or <code>python -m build</code> runs, headerkit generates bindings from cached IR before
 delegating to the inner backend (hatchling by default).</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Consumer project&#39;s pyproject.toml</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Consumer project's pyproject.toml</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">[build-system]</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;headerkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;headerkit.build_backend&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"headerkit"</span><span class="p">,</span><span class="w"> </span><span class="s2">"hatchling"</span><span class="p">]</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"headerkit.build_backend"</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">[tool.headerkit]</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;libclang&quot;</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cffi&quot;</span><span class="p">]</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"libclang"</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">writers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"cffi"</span><span class="p">]</span>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">&quot;include/mylib.h&quot;</span><span class="k">]</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;VERSION=2&quot;</span><span class="p">]</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;/usr/local/include&quot;</span><span class="p">]</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="k">[tool.headerkit.headers.</span><span class="s2">"include/mylib.h"</span><span class="k">]</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"VERSION=2"</span><span class="p">]</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">include_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"/usr/local/include"</span><span class="p">]</span>
 </code></pre></div>
 <p>With a committed <code>.headerkit/</code>, the build works without libclang. The build
 backend reads from the cache and only falls back to libclang on cache miss.</p>
@@ -2274,9 +2274,9 @@ backend reads from the cache and only falls back to libclang on cache miss.</p>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>headerkit<span class="w"> </span>include/mylib.h<span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>--no-output-cache
 </code></pre></div>
 <p>In Python:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span> <span class="s2">&quot;cffi&quot;</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span> <span class="s2">&quot;cffi&quot;</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">&quot;include/mylib.h&quot;</span><span class="p">,</span> <span class="s2">&quot;cffi&quot;</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">"include/mylib.h"</span><span class="p">,</span> <span class="s2">"cffi"</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">"include/mylib.h"</span><span class="p">,</span> <span class="s2">"cffi"</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">output</span> <span class="o">=</span> <span class="n">generate</span><span class="p">(</span><span class="s2">"include/mylib.h"</span><span class="p">,</span> <span class="s2">"cffi"</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="cache-management">Cache management<a class="headerlink" href="#cache-management" title="Permanent link">&para;</a></h2>
 <p>headerkit provides subcommands for inspecting and managing the cache.</p>
@@ -2312,7 +2312,7 @@ where the store directory must reside on a mounted volume visible to the host:</
 </code></pre></div>
 <p>Cache bypass settings live in the <code>[cache]</code> section of the config file.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># .headerkit.toml</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">store_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;.headerkit&quot;</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">store_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">".headerkit"</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">[cache]</span>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">no_cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
@@ -2321,7 +2321,7 @@ where the store directory must reside on a mounted volume visible to the host:</
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># pyproject.toml</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">[tool.headerkit]</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">store_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;.headerkit&quot;</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">store_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">".headerkit"</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="k">[tool.headerkit.cache]</span>
 <a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">no_cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
@@ -2332,7 +2332,7 @@ where the store directory must reside on a mounted volume visible to the host:</
 <p>Commit <code>.headerkit/</code> to your repository so that downstream consumers and CI
 can build without libclang:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>git<span class="w"> </span>add<span class="w"> </span>.headerkit/
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;cache: update headerkit cache&quot;</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">"cache: update headerkit cache"</span>
 </code></pre></div>
 <p>When libclang is unavailable and the IR cache misses, <code>generate()</code> will check
 the output cache before raising an error. If a cached output exists for the
@@ -2408,13 +2408,13 @@ warnings because they cannot be emulated via Docker.</p>
 <code>pyproject.toml</code> or <code>.headerkit.toml</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># pyproject.toml</span>
 <a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">[tool.headerkit.cache.populate]</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux/amd64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux/arm64&quot;</span><span class="p">]</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">python_versions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;3.12&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;3.13&quot;</span><span class="p">]</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"linux/amd64"</span><span class="p">,</span><span class="w"> </span><span class="s2">"linux/arm64"</span><span class="p">]</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">python_versions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"3.12"</span><span class="p">,</span><span class="w"> </span><span class="s2">"3.13"</span><span class="p">]</span>
 <a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">600</span>
 <a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
 <a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="k">[tool.headerkit.cache.populate.images]</span>
-<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="s2">&quot;linux/amd64&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;quay.io/pypa/manylinux_2_28_x86_64&quot;</span>
-<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="s2">&quot;linux/arm64&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;quay.io/pypa/manylinux_2_28_aarch64&quot;</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="s2">"linux/amd64"</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"quay.io/pypa/manylinux_2_28_x86_64"</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="s2">"linux/arm64"</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"quay.io/pypa/manylinux_2_28_aarch64"</span>
 </code></pre></div>
 <h3 id="docker-and-qemu-setup">Docker and QEMU setup<a class="headerlink" href="#docker-and-qemu-setup" title="Permanent link">&para;</a></h3>
 <p>Cache populate requires Docker. For cross-architecture targets (e.g.,
@@ -2483,10 +2483,10 @@ each layer's <code>index.json</code> independently.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">store_merge</span>
 <a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>
 <a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">store_merge</span><span class="p">(</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;/tmp/store-linux&quot;</span><span class="p">,</span> <span class="s2">&quot;/tmp/store-macos&quot;</span><span class="p">],</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">target</span><span class="o">=</span><span class="s2">&quot;.headerkit/&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"/tmp/store-linux"</span><span class="p">,</span> <span class="s2">"/tmp/store-macos"</span><span class="p">],</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">target</span><span class="o">=</span><span class="s2">".headerkit/"</span><span class="p">,</span>
 <a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="p">)</span>
-<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;New: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">new_entries</span><span class="si">}</span><span class="s2">, Skipped: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">skipped_entries</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"New: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">new_entries</span><span class="si">}</span><span class="s2">, Skipped: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">skipped_entries</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="ci-workflow-example">CI workflow example<a class="headerlink" href="#ci-workflow-example" title="Permanent link">&para;</a></h3>
 <p>A typical multi-platform CI workflow:</p>
@@ -2514,10 +2514,10 @@ each layer's <code>index.json</code> independently.</p>
 <p>Instead of listing each header file explicitly, you can use glob patterns
 to select headers:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Process all .h files under include/</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>headerkit<span class="w"> </span><span class="s1">&#39;include/**/*.h&#39;</span><span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>-o<span class="w"> </span>cffi:<span class="o">{</span>dir<span class="o">}</span>/<span class="o">{</span>stem<span class="o">}</span>.cdef.txt
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>headerkit<span class="w"> </span><span class="s1">'include/**/*.h'</span><span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>-o<span class="w"> </span>cffi:<span class="o">{</span>dir<span class="o">}</span>/<span class="o">{</span>stem<span class="o">}</span>.cdef.txt
 <a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
 <a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Exclude internal headers</span>
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>headerkit<span class="w"> </span><span class="s1">&#39;include/**/*.h&#39;</span><span class="w"> </span>--exclude<span class="w"> </span><span class="s1">&#39;include/internal/**&#39;</span><span class="w"> </span>-w<span class="w"> </span>cffi
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>headerkit<span class="w"> </span><span class="s1">'include/**/*.h'</span><span class="w"> </span>--exclude<span class="w"> </span><span class="s1">'include/internal/**'</span><span class="w"> </span>-w<span class="w"> </span>cffi
 </code></pre></div>
 <p>Quote glob patterns to prevent shell expansion. headerkit expands them
 relative to the project root.</p>
@@ -2551,28 +2551,28 @@ Templates support these variables:</p>
 </tbody>
 </table>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Each header gets its own output file</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>headerkit<span class="w"> </span><span class="s1">&#39;include/**/*.h&#39;</span><span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>-o<span class="w"> </span>cffi:<span class="o">{</span>dir<span class="o">}</span>/<span class="o">{</span>stem<span class="o">}</span>.cdef.txt
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>headerkit<span class="w"> </span><span class="s1">'include/**/*.h'</span><span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>-o<span class="w"> </span>cffi:<span class="o">{</span>dir<span class="o">}</span>/<span class="o">{</span>stem<span class="o">}</span>.cdef.txt
 <a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
 <a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Multiple writers with different templates</span>
-<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>headerkit<span class="w"> </span><span class="s1">&#39;include/**/*.h&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>headerkit<span class="w"> </span><span class="s1">'include/**/*.h'</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span>-w<span class="w"> </span>cffi<span class="w"> </span>-o<span class="w"> </span>cffi:<span class="o">{</span>dir<span class="o">}</span>/<span class="o">{</span>stem<span class="o">}</span>.cdef.txt<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">    </span>-w<span class="w"> </span>json<span class="w"> </span>-o<span class="w"> </span>json:<span class="o">{</span>dir<span class="o">}</span>/<span class="o">{</span>stem<span class="o">}</span>.json
 </code></pre></div>
 <h3 id="configuration-file_1">Configuration file<a class="headerlink" href="#configuration-file_1" title="Permanent link">&para;</a></h3>
 <p>Configure header selection and output templates in <code>pyproject.toml</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[tool.headerkit]</span>
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">exclude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;include/internal/**&quot;</span><span class="p">]</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">exclude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"include/internal/**"</span><span class="p">]</span>
 <a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
 <a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="k">[[tool.headerkit.headers]]</span>
-<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;include/**/*.h&quot;</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"include/**/*.h"</span>
 <a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>
 <a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="k">[[tool.headerkit.headers]]</span>
-<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;vendor/special.h&quot;</span>
-<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;VENDOR_MODE&quot;</span><span class="p">]</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="n">pattern</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"vendor/special.h"</span>
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="n">defines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"VENDOR_MODE"</span><span class="p">]</span>
 <a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>
 <a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="k">[tool.headerkit.output]</span>
-<a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="n">cffi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;{dir}/{stem}.cdef.txt&quot;</span>
-<a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a><span class="n">json</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;{dir}/{stem}.json&quot;</span>
+<a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="n">cffi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"{dir}/{stem}.cdef.txt"</span>
+<a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a><span class="n">json</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"{dir}/{stem}.json"</span>
 </code></pre></div>
 <p>Per-pattern overrides (like <code>defines</code> above) apply only to headers
 matching that specific pattern.</p>
@@ -2588,16 +2588,16 @@ regenerated on every call.</p>
 <a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
 <a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>    <span class="nd">@property</span>
 <a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>        <span class="k">return</span> <span class="s2">&quot;mywriter&quot;</span>
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>        <span class="k">return</span> <span class="s2">"mywriter"</span>
 <a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>
 <a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>    <span class="nd">@property</span>
 <a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">format_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>        <span class="k">return</span> <span class="s2">&quot;My custom output format&quot;</span>
+<a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>        <span class="k">return</span> <span class="s2">"My custom output format"</span>
 <a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>
 <a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">header</span><span class="p">):</span>
 <a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a>        <span class="o">...</span>
 <a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a>
-<a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a><span class="n">register_writer</span><span class="p">(</span><span class="s2">&quot;mywriter&quot;</span><span class="p">,</span> <span class="n">MyWriter</span><span class="p">)</span>
+<a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a><span class="n">register_writer</span><span class="p">(</span><span class="s2">"mywriter"</span><span class="p">,</span> <span class="n">MyWriter</span><span class="p">)</span>
 </code></pre></div>
 <p>The built-in <code>diff</code> and <code>prompt</code> writers use this because their output
 depends on runtime context (baseline header, verbosity) that is not fully
@@ -2606,7 +2606,7 @@ captured by the cache key.</p>
 invalidates all cached output for that writer, which is useful when the
 output format changes between versions:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyWriter</span><span class="p">:</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="n">cache_version</span> <span class="o">=</span> <span class="s2">&quot;2&quot;</span>  <span class="c1"># bump to invalidate old cache entries</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="n">cache_version</span> <span class="o">=</span> <span class="s2">"2"</span>  <span class="c1"># bump to invalidate old cache entries</span>
 <a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
 <a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="c1"># ... name, format_description, write() as above</span>
 </code></pre></div>
@@ -2668,7 +2668,7 @@ output format changes between versions:</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

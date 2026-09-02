@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1738,9 +1738,9 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_backend</span><span class="p">,</span> <span class="n">get_writer</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">get_backend</span><span class="p">()</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s2">&quot;mylib.h&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">(),</span> <span class="s2">&quot;mylib.h&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s2">"mylib.h"</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">(),</span> <span class="s2">"mylib.h"</span><span class="p">)</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">&quot;cffi&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">"cffi"</span><span class="p">)</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">cdef_source</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">cdef_source</span><span class="p">)</span>
 </code></pre></div>
@@ -1750,7 +1750,7 @@
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers.cffi</span><span class="w"> </span><span class="kn">import</span> <span class="n">header_to_cffi</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">get_backend</span><span class="p">()</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s2">&quot;mylib.h&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">(),</span> <span class="s2">&quot;mylib.h&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s2">"mylib.h"</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">(),</span> <span class="s2">"mylib.h"</span><span class="p">)</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">cdef_source</span> <span class="o">=</span> <span class="n">header_to_cffi</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
 </code></pre></div>
@@ -1778,21 +1778,21 @@
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Step 1: Parse the header</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">get_backend</span><span class="p">()</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;calculator.h&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"calculator.h"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">code</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="s2">&quot;calculator.h&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="s2">"calculator.h"</span><span class="p">)</span>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Step 2: Generate CFFI cdef</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">&quot;cffi&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">"cffi"</span><span class="p">)</span>
 <a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">cdef_source</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
 <a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
 <a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># Step 3: Set up CFFI</span>
 <a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">ffibuilder</span> <span class="o">=</span> <span class="n">FFI</span><span class="p">()</span>
 <a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">ffibuilder</span><span class="o">.</span><span class="n">cdef</span><span class="p">(</span><span class="n">cdef_source</span><span class="p">)</span>
 <a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">ffibuilder</span><span class="o">.</span><span class="n">set_source</span><span class="p">(</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="s2">&quot;_calculator&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="s1">&#39;#include &quot;calculator.h&quot;&#39;</span><span class="p">,</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;calculator.c&quot;</span><span class="p">],</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="s2">"_calculator"</span><span class="p">,</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="s1">'#include "calculator.h"'</span><span class="p">,</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"calculator.c"</span><span class="p">],</span>
 <a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="p">)</span>
 <a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
 <a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="c1"># Step 4: Compile</span>
@@ -1802,21 +1802,21 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">_calculator</span><span class="w"> </span><span class="kn">import</span> <span class="n">ffi</span><span class="p">,</span> <span class="n">lib</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="n">lib</span><span class="o">.</span><span class="n">OP_ADD</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Result: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">result</span><span class="si">}</span><span class="s2">, Error: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Result: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">result</span><span class="si">}</span><span class="s2">, Error: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="excluding-declarations">Excluding Declarations<a class="headerlink" href="#excluding-declarations" title="Permanent link">&para;</a></h2>
 <p>The CFFI writer supports <code>exclude_patterns</code> to filter out declarations by name. Patterns are Python regular expressions matched against declaration names.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">&quot;cffi&quot;</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">&quot;__.*&quot;</span><span class="p">,</span>           <span class="c1"># Skip compiler builtins (__builtin_*, __attribute__, etc.)</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="s2">&quot;_private_.*&quot;</span><span class="p">,</span>    <span class="c1"># Skip private API functions</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="s2">&quot;internal_.*&quot;</span><span class="p">,</span>    <span class="c1"># Skip internal functions</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">"cffi"</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">"__.*"</span><span class="p">,</span>           <span class="c1"># Skip compiler builtins (__builtin_*, __attribute__, etc.)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="s2">"_private_.*"</span><span class="p">,</span>    <span class="c1"># Skip private API functions</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="s2">"internal_.*"</span><span class="p">,</span>    <span class="c1"># Skip internal functions</span>
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">])</span>
 <a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">cdef_source</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
 </code></pre></div>
 <p>You can also pass patterns directly to <code>header_to_cffi()</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers.cffi</span><span class="w"> </span><span class="kn">import</span> <span class="n">header_to_cffi</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">cdef_source</span> <span class="o">=</span> <span class="n">header_to_cffi</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;__.*&quot;</span><span class="p">,</span> <span class="s2">&quot;test_.*&quot;</span><span class="p">])</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">cdef_source</span> <span class="o">=</span> <span class="n">header_to_cffi</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">"__.*"</span><span class="p">,</span> <span class="s2">"test_.*"</span><span class="p">])</span>
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Pattern matching</p>
@@ -1917,7 +1917,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

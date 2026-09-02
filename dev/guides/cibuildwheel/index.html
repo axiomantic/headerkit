@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1811,13 +1811,13 @@ By mounting a host directory into the container and pointing headerkit's
 store at the mounted path, store entries survive container teardown.</p>
 <p>Add this to your <code>pyproject.toml</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[tool.headerkit]</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">store_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;${HEADERKIT_STORE_DIR}&quot;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">store_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"${HEADERKIT_STORE_DIR}"</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">[tool.cibuildwheel.linux]</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">container-engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;docker&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">create-args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="s2">&quot;--volume&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;/tmp/headerkit-store:/headerkit-store&quot;</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">container-engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"docker"</span><span class="p">,</span><span class="w"> </span><span class="n">create-args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="s2">"--volume"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/tmp/headerkit-store:/headerkit-store"</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">]}</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">environment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">HEADERKIT_STORE_DIR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;/headerkit-store&quot;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">environment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">HEADERKIT_STORE_DIR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"/headerkit-store"</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
 <p>headerkit's config supports <code>${VAR}</code> environment variable expansion in
 string values. When <code>store_dir</code> uses this syntax, the variable <strong>must</strong>
@@ -1832,10 +1832,10 @@ of the config file approach. <code>before-all</code> runs once per container
 (rather than once per Python version), which is sufficient since header
 generation is Python-version-independent:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tool.cibuildwheel.linux]</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">container-engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;docker&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">create-args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="s2">&quot;--volume&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;/tmp/headerkit-store:/headerkit-store&quot;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">container-engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"docker"</span><span class="p">,</span><span class="w"> </span><span class="n">create-args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="s2">"--volume"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/tmp/headerkit-store:/headerkit-store"</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">]}</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">before-all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pip install headerkit &amp;&amp; headerkit --store-dir /headerkit-store {project}/include/*.h -w cffi&quot;</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">before-all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"pip install headerkit &amp;&amp; headerkit --store-dir /headerkit-store {project}/include/*.h -w cffi"</span>
 </code></pre></div>
 <h2 id="ci-workflow-pattern">CI workflow pattern<a class="headerlink" href="#ci-workflow-pattern" title="Permanent link">&para;</a></h2>
 <p>The following GitHub Actions workflow builds wheels with cibuildwheel,
@@ -1846,10 +1846,10 @@ changed.</p>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">push</span><span class="p">:</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">branches</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">main</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">paths</span><span class="p">:</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;include/**/*.h&quot;</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;pyproject.toml&quot;</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"include/**/*.h"</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"pyproject.toml"</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">6</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">1&quot;</span><span class="w">  </span><span class="c1"># weekly on Monday</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="s">"0</span><span class="nv"> </span><span class="s">6</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">1"</span><span class="w">  </span><span class="c1"># weekly on Monday</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nt">jobs</span><span class="p">:</span>
 <a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span><span class="nt">build</span><span class="p">:</span>
@@ -1864,17 +1864,17 @@ changed.</p>
 <a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
 <a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/setup-python@v5</span>
 <a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">          </span><span class="nt">python-version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3.12&quot;</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">          </span><span class="nt">python-version</span><span class="p">:</span><span class="w"> </span><span class="s">"3.12"</span>
 <a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>
 <a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Prepare store mount</span>
-<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">        </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner.os == &#39;Linux&#39;</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">        </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner.os == 'Linux'</span>
 <a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mkdir -p /tmp/headerkit-store</span>
 <a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>
 <a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Build wheels</span>
 <a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pypa/cibuildwheel@v3</span>
 <a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>
 <a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collect headerkit store (Linux)</span>
-<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">        </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner.os == &#39;Linux&#39;</span>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">        </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner.os == 'Linux'</span>
 <a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 <a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">          </span><span class="no">mkdir -p .headerkit</span>
 <a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">          </span><span class="no">[ -d /tmp/headerkit-store ] &amp;&amp; cp -rp /tmp/headerkit-store/. .headerkit/</span>
@@ -1902,8 +1902,8 @@ changed.</p>
 <a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a>
 <a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">peter-evans/create-pull-request@v8</span>
 <a id="__codelineno-2-61" name="__codelineno-2-61" href="#__codelineno-2-61"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-<a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="w">          </span><span class="nt">commit-message</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;chore:</span><span class="nv"> </span><span class="s">update</span><span class="nv"> </span><span class="s">headerkit</span><span class="nv"> </span><span class="s">store&quot;</span>
-<a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a><span class="w">          </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;chore:</span><span class="nv"> </span><span class="s">update</span><span class="nv"> </span><span class="s">headerkit</span><span class="nv"> </span><span class="s">store&quot;</span>
+<a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="w">          </span><span class="nt">commit-message</span><span class="p">:</span><span class="w"> </span><span class="s">"chore:</span><span class="nv"> </span><span class="s">update</span><span class="nv"> </span><span class="s">headerkit</span><span class="nv"> </span><span class="s">store"</span>
+<a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a><span class="w">          </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="s">"chore:</span><span class="nv"> </span><span class="s">update</span><span class="nv"> </span><span class="s">headerkit</span><span class="nv"> </span><span class="s">store"</span>
 <a id="__codelineno-2-64" name="__codelineno-2-64" href="#__codelineno-2-64"></a><span class="w">          </span><span class="nt">branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">headerkit/update-store</span>
 <a id="__codelineno-2-65" name="__codelineno-2-65" href="#__codelineno-2-65"></a><span class="w">          </span><span class="nt">body</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 <a id="__codelineno-2-66" name="__codelineno-2-66" href="#__codelineno-2-66"></a><span class="w">            </span><span class="no">Automated update of `.headerkit/` store from CI matrix build.</span>
@@ -1944,7 +1944,7 @@ uploads it as-is.</p>
 <p><strong>Check</strong>: Verify <code>HEADERKIT_STORE_DIR</code> is set inside the container.
 Add a debug step to your cibuildwheel config:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[tool.cibuildwheel.linux]</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">before-build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo HEADERKIT_STORE_DIR=$HEADERKIT_STORE_DIR &amp;&amp; ls -la /headerkit-store/ 2&gt;/dev/null || echo &#39;mount not found&#39;&quot;</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">before-build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"echo HEADERKIT_STORE_DIR=$HEADERKIT_STORE_DIR &amp;&amp; ls -la /headerkit-store/ 2&gt;/dev/null || echo 'mount not found'"</span>
 </code></pre></div>
 <p><strong>Common causes</strong>:</p>
 <ul>
@@ -1959,12 +1959,12 @@ container.</p>
 <p><strong>Fix</strong>: Ensure the host directory exists and is writable before the
 build starts. Add a <code>before-all</code> step:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[tool.cibuildwheel.linux]</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">before-all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mkdir -p /headerkit-store &amp;&amp; chmod 777 /headerkit-store&quot;</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">before-all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"mkdir -p /headerkit-store &amp;&amp; chmod 777 /headerkit-store"</span>
 </code></pre></div>
 <p>Or create the host directory in your CI workflow before cibuildwheel
 runs:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Prepare store mount</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner.os == &#39;Linux&#39;</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner.os == 'Linux'</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mkdir -p /tmp/headerkit-store</span>
 </code></pre></div>
 <h3 id="macos-and-windows-do-not-need-special-config">macOS and Windows do not need special config<a class="headerlink" href="#macos-and-windows-do-not-need-special-config" title="Permanent link">&para;</a></h3>
@@ -2045,7 +2045,7 @@ single directory.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
