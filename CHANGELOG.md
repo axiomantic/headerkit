@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `NimWriter`: automated C++ smart pointer safety suite (`UniquePtr` with deleted `=copy` hook and `move`, `get`, `reset` procs; `SharedPtr` with `get`, `reset`, `useCount`).
+- `CShimWriter`: `catch_exceptions` parameter to wrap C++ constructors, methods, and functions in `try ... catch (...)` blocks for exception safety across C-ABI boundaries.
 - Real-world binding examples and idiomatic Nim wrappers in `examples/nim/` for RtMidi, RtAudio, NNG, and CLAP.
 - `examples/generate_all.py` automation script to regenerate all binding examples.
 - Reference documentation for `NimWriter` (`docs/reference/nim.md`) and `CShimWriter` (`docs/reference/cshim.md`).

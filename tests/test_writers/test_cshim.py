@@ -458,3 +458,81 @@ def test_cshim_destroy_method_collision_and_arrow_star_and_variadics() -> None:
         #endif
     """)
     assert output == expected
+
+
+def test_cshim_catch_exceptions() -> None:
+    """Test generating C-ABI wrapper with try/catch exception safety."""
+    cls = Struct(
+        name="Processor",
+        is_cppclass=True,
+        constructors=[Function(name="Processor", return_type=CType("void"), parameters=[])],
+        methods=[
+            Function(name="run", return_type=CType("int"), parameters=[]),
+            Function(name="reset", return_type=CType("void"), parameters=[]),
+        ],
+    )
+    header = Header(path="processor.h", declarations=[cls])
+    writer = CShimWriter(catch_exceptions=True)
+    output = writer.write(header)
+
+    expected = textwrap.dedent("""\
+        // Auto-generated C-ABI shim by HeaderKit
+        #pragma once
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        /* Opaque Handle Types */
+        typedef struct Processor_s Processor_t;
+
+        Processor_t* Processor_create(void);
+        void Processor_destroy(Processor_t* self);
+        int Processor_run(Processor_t* self);
+        void Processor_reset(Processor_t* self);
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+        #ifdef __cplusplus
+        #include <new>
+        #include <exception>
+        #include "processor.h"
+
+        Processor_t* Processor_create(void) {
+            try {
+                return reinterpret_cast<Processor_t*>(new (std::nothrow) Processor());
+            } catch (...) {
+                return nullptr;
+            }
+        }
+
+        void Processor_destroy(Processor_t* self) {
+            if (self) {
+                try {
+                    delete reinterpret_cast<Processor*>(self);
+                } catch (...) {
+                }
+            }
+        }
+
+        int Processor_run(Processor_t* self) {
+            try {
+                return reinterpret_cast<Processor*>(self)->run();
+            } catch (...) {
+                return static_cast<int>(0);
+            }
+        }
+
+        void Processor_reset(Processor_t* self) {
+            try {
+                reinterpret_cast<Processor*>(self)->reset();
+            } catch (...) {
+                return;
+            }
+        }
+
+        #endif
+    """)
+    assert output == expected

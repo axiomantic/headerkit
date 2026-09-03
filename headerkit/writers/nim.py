@@ -254,10 +254,46 @@ class NimWriter:
             )
             emitted_types.add("std_exception")
 
-        has_cpp_string = any("std::string" in str(decl) or "CppString" in str(decl) for decl in header.declarations)
+        has_cpp_string = any("std::string" in repr(decl) or "CppString" in repr(decl) for decl in header.declarations)
         if has_cpp_string:
             types_section.append('CppString* {.importcpp: "std::string", header: "<string>".} = object')
             emitted_types.add("CppString")
+
+        has_unique_ptr = any(
+            "std::unique_ptr" in repr(decl) or "UniquePtr" in repr(decl) for decl in header.declarations
+        )
+        if has_unique_ptr:
+            types_section.append('UniquePtr*[T] {.importcpp: "std::unique_ptr<\'0>", header: "<memory>".} = object')
+            emitted_types.add("UniquePtr")
+            procs_section.extend(
+                [
+                    "",
+                    'proc `=copy`*[T](dst: var UniquePtr[T], src: UniquePtr[T]) {.error: "std::unique_ptr cannot be copied in Nim; use std/moves.move() or sink".}',
+                    "",
+                    'proc move*[T](p: var UniquePtr[T]): UniquePtr[T] {.importcpp: "std::move(@)", header: "<utility>".}',
+                    "",
+                    'proc get*[T](p: UniquePtr[T]): ptr T {.importcpp: "#.get()", header: "<memory>".}',
+                    "",
+                    'proc reset*[T](p: var UniquePtr[T]) {.importcpp: "#.reset()", header: "<memory>".}',
+                ]
+            )
+
+        has_shared_ptr = any(
+            "std::shared_ptr" in repr(decl) or "SharedPtr" in repr(decl) for decl in header.declarations
+        )
+        if has_shared_ptr:
+            types_section.append('SharedPtr*[T] {.importcpp: "std::shared_ptr<\'0>", header: "<memory>".} = object')
+            emitted_types.add("SharedPtr")
+            procs_section.extend(
+                [
+                    "",
+                    'proc get*[T](p: SharedPtr[T]): ptr T {.importcpp: "#.get()", header: "<memory>".}',
+                    "",
+                    'proc reset*[T](p: var SharedPtr[T]) {.importcpp: "#.reset()", header: "<memory>".}',
+                    "",
+                    'proc useCount*[T](p: SharedPtr[T]): clong {.importcpp: "#.use_count()", header: "<memory>".}',
+                ]
+            )
 
         for decl in header.declarations:
             if isinstance(decl, Struct):
