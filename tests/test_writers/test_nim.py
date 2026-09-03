@@ -551,3 +551,18 @@ class TestNimWriter:
             proc reset*[T](p: var UniquePtr[T]) {.importcpp: "#.reset()", header: "<memory>".}
         """)
         assert out == expected
+
+    def test_escape_ident_preserves_underscores(self) -> None:
+        """Test that leading/trailing underscores are preserved distinctly without collisions."""
+        h = Header(
+            path="test.h",
+            declarations=[
+                Function(name="_foo", return_type=CType("void")),
+                Function(name="foo_", return_type=CType("void")),
+                Function(name="foo", return_type=CType("void")),
+            ],
+        )
+        out = write_nim(h, header_path="test.h")
+        assert 'proc u_foo*() {.importc: "_foo", header: "test.h", cdecl.}' in out
+        assert 'proc foo_u*() {.importc: "foo_", header: "test.h", cdecl.}' in out
+        assert 'proc foo*() {.importc: "foo", header: "test.h", cdecl.}' in out

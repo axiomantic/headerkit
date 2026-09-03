@@ -198,7 +198,15 @@ def _escape_ident(name: str) -> str:
         return CPP_OPERATOR_MAP[name]
     if "::" in name:
         name = name.replace("::", "_")
-    clean = name.strip("_") or "anon"
+
+    # In Nim, identifiers cannot begin or end with underscores, nor contain consecutive underscores.
+    # We replace leading underscores with 'u_' and trailing with '_u' to avoid collision between e.g. FOO and _FOO.
+    clean = name
+    if clean.startswith("_"):
+        clean = "u" + clean
+    if clean.endswith("_"):
+        clean = clean + "u"
+
     if clean in NIM_KEYWORDS:
         return f"`{clean}`"
     return clean
@@ -254,12 +262,54 @@ class NimWriter:
             )
             emitted_types.add("std_exception")
 
-        has_cpp_string = any("std::string" in repr(decl) for decl in header.declarations)
+        def _type_contains(t: TypeExpr, target_prefix: str) -> bool:
+            """Check structurally whether a TypeExpr contains target_prefix in its type names."""
+            if isinstance(t, CType):
+                return target_prefix in t.name
+            elif isinstance(t, Pointer):
+                return _type_contains(t.pointee, target_prefix)
+            elif isinstance(t, Reference):
+                return _type_contains(t.target, target_prefix)
+            elif isinstance(t, Array):
+                return _type_contains(t.element_type, target_prefix)
+            elif isinstance(t, FunctionPointer):
+                if _type_contains(t.return_type, target_prefix):
+                    return True
+                return any(_type_contains(p.type, target_prefix) for p in t.parameters)
+            return False
+
+        def _decl_contains(d: object, target_prefix: str) -> bool:
+            """Check structurally whether a Declaration references target_prefix."""
+            if isinstance(d, Struct):
+                for f in d.fields:
+                    if _type_contains(f.type, target_prefix):
+                        return True
+                for m in d.methods + d.constructors:
+                    if _type_contains(m.return_type, target_prefix):
+                        return True
+                    if any(_type_contains(p.type, target_prefix) for p in m.parameters):
+                        return True
+                if d.destructor and any(_type_contains(p.type, target_prefix) for p in d.destructor.parameters):
+                    return True
+            elif isinstance(d, Function):
+                if _type_contains(d.return_type, target_prefix):
+                    return True
+                if any(_type_contains(p.type, target_prefix) for p in d.parameters):
+                    return True
+            elif isinstance(d, Typedef):
+                if _type_contains(d.underlying_type, target_prefix):
+                    return True
+            elif isinstance(d, Variable):
+                if _type_contains(d.type, target_prefix):
+                    return True
+            return False
+
+        has_cpp_string = any(_decl_contains(decl, "std::string") for decl in header.declarations)
         if has_cpp_string:
             types_section.append('CppString* {.importcpp: "std::string", header: "<string>".} = object')
             emitted_types.add("CppString")
 
-        has_unique_ptr = any("std::unique_ptr" in repr(decl) for decl in header.declarations)
+        has_unique_ptr = any(_decl_contains(decl, "std::unique_ptr") for decl in header.declarations)
         if has_unique_ptr:
             types_section.append('UniquePtr*[T] {.importcpp: "std::unique_ptr<\'0>", header: "<memory>".} = object')
             emitted_types.add("UniquePtr")
@@ -276,7 +326,7 @@ class NimWriter:
                 ]
             )
 
-        has_shared_ptr = any("std::shared_ptr" in repr(decl) for decl in header.declarations)
+        has_shared_ptr = any(_decl_contains(decl, "std::shared_ptr") for decl in header.declarations)
         if has_shared_ptr:
             types_section.append('SharedPtr*[T] {.importcpp: "std::shared_ptr<\'0>", header: "<memory>".} = object')
             emitted_types.add("SharedPtr")
