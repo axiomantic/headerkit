@@ -103,7 +103,7 @@ C_TO_NIM_PRIMITIVES: dict[str, str] = {
     "void": "void",
     "char": "cchar",
     "signed char": "cschar",
-    "unsigned char": "cuchar",
+    "unsigned char": "uint8",
     "short": "cshort",
     "short int": "cshort",
     "signed short": "cshort",

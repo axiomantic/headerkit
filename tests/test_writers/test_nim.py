@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import textwrap
 
+import pytest
+
 from headerkit.ir import (
     BaseSpecifier,
     Constant,
@@ -566,3 +568,35 @@ class TestNimWriter:
         assert 'proc u_foo*() {.importc: "_foo", header: "test.h", cdecl.}' in out
         assert 'proc foo_u*() {.importc: "foo_", header: "test.h", cdecl.}' in out
         assert 'proc foo*() {.importc: "foo", header: "test.h", cdecl.}' in out
+
+    @pytest.mark.allow("subprocess")
+    def test_nim_examples_compile(self, tmp_path) -> None:
+        """Test that generated Nim examples compile cleanly with the Nim compiler."""
+        import shutil
+        import subprocess
+        from pathlib import Path
+
+        nim_bin = shutil.which("nim")
+        if not nim_bin:
+            import pytest
+
+            pytest.skip("Nim compiler ('nim') not installed on system")
+
+        repo_root = Path(__file__).parent.parent.parent
+        example_files = [
+            repo_root / "examples/nim/clap/example_plugin.nim",
+            repo_root / "examples/nim/nng/example.nim",
+            repo_root / "examples/nim/rtaudio/example.nim",
+            repo_root / "examples/nim/rtmidi/example.nim",
+        ]
+
+        for example_file in example_files:
+            assert example_file.exists(), f"Example file {example_file} missing"
+            # Run nim compile check (-c compile only, no linking required)
+            result = subprocess.run(
+                [nim_bin, "c", "--backend:c", "-c", f"--outdir:{tmp_path}", str(example_file)],
+                capture_output=True,
+                text=True,
+                cwd=example_file.parent,
+            )
+            assert result.returncode == 0, f"Failed to compile {example_file.name}:\n{result.stderr}\n{result.stdout}"

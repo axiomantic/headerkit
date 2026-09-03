@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `NimWriter`: emit `struct`, `union`, and `enum` tag specifiers in `{.importc.}` pragmas for C declarations.
+- `NimWriter`: map `unsigned char` to `uint8` instead of deprecated `cuchar`.
 - `NimWriter`: emit anonymous enum values as `const` instead of invalid named type declarations.
 - `NimWriter`: deduplicate self-referential typedefs (e.g. `typedef struct foo foo`).
 - `NimWriter`: disambiguate enum names that collide with function names (e.g. `foo_enum` with `importc: "foo"`).

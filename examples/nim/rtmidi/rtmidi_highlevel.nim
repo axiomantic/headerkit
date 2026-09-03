@@ -65,7 +65,7 @@ proc openPort*(midi: MidiOut, portNumber: int, portName: string = "Midi Out") =
 
 proc send*(midi: MidiOut, msg: openArray[uint8]) =
   if msg.len > 0:
-    discard rtmidi_out_send_message(RtMidiOutPtr(midi), cast[ptr cuchar](unsafeAddr msg[0]), cint(msg.len))
+    discard rtmidi_out_send_message(RtMidiOutPtr(midi), cast[ptr uint8](unsafeAddr msg[0]), cint(msg.len))
 
 # DSL / Template
 template withMidiIn*(name: string, portNum: int, body: untyped) =

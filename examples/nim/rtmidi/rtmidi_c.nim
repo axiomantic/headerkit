@@ -32,7 +32,7 @@ type
     RTMIDI_ERROR_DRIVER_ERROR = 8
     RTMIDI_ERROR_SYSTEM_ERROR = 9
     RTMIDI_ERROR_THREAD_ERROR = 10
-  RtMidiCCallback* = proc(a0: cdouble, a1: ptr cuchar, a2: csize_t, a3: pointer) {.cdecl.}
+  RtMidiCCallback* = proc(a0: cdouble, a1: ptr uint8, a2: csize_t, a3: pointer) {.cdecl.}
 
 proc rtmidi_get_version*(): cstring {.importc: "rtmidi_get_version", header: "rtmidi/rtmidi_c.h", cdecl.}
 proc rtmidi_get_compiled_api*(apis: ptr RtMidiApi, apis_size: cuint): cint {.importc: "rtmidi_get_compiled_api", header: "rtmidi/rtmidi_c.h", cdecl.}
@@ -52,9 +52,9 @@ proc rtmidi_in_get_current_api*(device: RtMidiPtr): RtMidiApi {.importc: "rtmidi
 proc rtmidi_in_set_callback*(device: RtMidiInPtr, callback: RtMidiCCallback, userData: pointer) {.importc: "rtmidi_in_set_callback", header: "rtmidi/rtmidi_c.h", cdecl.}
 proc rtmidi_in_cancel_callback*(device: RtMidiInPtr) {.importc: "rtmidi_in_cancel_callback", header: "rtmidi/rtmidi_c.h", cdecl.}
 proc rtmidi_in_ignore_types*(device: RtMidiInPtr, midiSysex: bool, midiTime: bool, midiSense: bool) {.importc: "rtmidi_in_ignore_types", header: "rtmidi/rtmidi_c.h", cdecl.}
-proc rtmidi_in_get_message*(device: RtMidiInPtr, message: ptr cuchar, size: ptr csize_t): cdouble {.importc: "rtmidi_in_get_message", header: "rtmidi/rtmidi_c.h", cdecl.}
+proc rtmidi_in_get_message*(device: RtMidiInPtr, message: ptr uint8, size: ptr csize_t): cdouble {.importc: "rtmidi_in_get_message", header: "rtmidi/rtmidi_c.h", cdecl.}
 proc rtmidi_out_create_default*(): RtMidiOutPtr {.importc: "rtmidi_out_create_default", header: "rtmidi/rtmidi_c.h", cdecl.}
 proc rtmidi_out_create*(api: RtMidiApi, clientName: cstring): RtMidiOutPtr {.importc: "rtmidi_out_create", header: "rtmidi/rtmidi_c.h", cdecl.}
 proc rtmidi_out_free*(device: RtMidiOutPtr) {.importc: "rtmidi_out_free", header: "rtmidi/rtmidi_c.h", cdecl.}
 proc rtmidi_out_get_current_api*(device: RtMidiPtr): RtMidiApi {.importc: "rtmidi_out_get_current_api", header: "rtmidi/rtmidi_c.h", cdecl.}
-proc rtmidi_out_send_message*(device: RtMidiOutPtr, message: ptr cuchar, length: cint): cint {.importc: "rtmidi_out_send_message", header: "rtmidi/rtmidi_c.h", cdecl.}
+proc rtmidi_out_send_message*(device: RtMidiOutPtr, message: ptr uint8, length: cint): cint {.importc: "rtmidi_out_send_message", header: "rtmidi/rtmidi_c.h", cdecl.}
