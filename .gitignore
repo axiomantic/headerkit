@@ -78,3 +78,9 @@ site/
 # Claude Code local workspace (worktrees, settings, etc.)
 .claude/
 .headerkit/
+
+# Nim build artifacts
+nimcache/
+*.exe
+examples/**/example
+examples/**/example_plugin

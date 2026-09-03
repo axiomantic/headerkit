@@ -1297,7 +1297,7 @@ class ClangASTConverter:
         class SafeEvaluator(ast.NodeVisitor):
             def visit(self, node: ast.AST) -> int | float:
                 if isinstance(node, ast.Constant):
-                    if isinstance(node.value, (int, float)):
+                    if isinstance(node.value, int | float):
                         return node.value
                     raise ValueError("Non-numeric constant")
                 elif isinstance(node, ast.UnaryOp):

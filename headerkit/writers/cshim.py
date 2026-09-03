@@ -128,8 +128,8 @@ class CShimWriter:
 
     default_output_pattern: ClassVar[str] = "{dir}/{stem}_cshim.cpp"
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, *, catch_exceptions: bool = False) -> None:
+        self.catch_exceptions = catch_exceptions
 
     def write(self, header: Header) -> str:
         """Generate C-ABI shim source code from headerkit IR."""
@@ -142,6 +142,13 @@ class CShimWriter:
             "#endif",
             "",
         ]
+
+        def _make_catch_stmt(ret_type: str) -> str:
+            if ret_type == "void":
+                return "return;"
+            elif ret_type.endswith("*"):
+                return "return nullptr;"
+            return f"return static_cast<{ret_type}>(0);"
 
         # 1. Forward declare opaque handles for classes
         classes = [d for d in header.declarations if isinstance(d, Struct) and (d.is_cppclass or d.methods)]
@@ -175,23 +182,47 @@ class CShimWriter:
                     lines.append(proto)
 
                     # C++ wrapper
-                    body = textwrap.dedent(f"""\
-                        {safe_cls_name}_t* {fn_name}({", ".join(params_c) if params_c else "void"}) {{
-                            return reinterpret_cast<{safe_cls_name}_t*>(new (std::nothrow) {cls_full_name}({", ".join(params_call)}));
-                        }}
-                    """)
+                    new_call = f"return reinterpret_cast<{safe_cls_name}_t*>(new (std::nothrow) {cls_full_name}({', '.join(params_call)}));"
+                    if self.catch_exceptions:
+                        body = textwrap.dedent(f"""\
+                            {safe_cls_name}_t* {fn_name}({", ".join(params_c) if params_c else "void"}) {{
+                                try {{
+                                    {new_call}
+                                }} catch (...) {{
+                                    return nullptr;
+                                }}
+                            }}
+                        """)
+                    else:
+                        body = textwrap.dedent(f"""\
+                            {safe_cls_name}_t* {fn_name}({", ".join(params_c) if params_c else "void"}) {{
+                                {new_call}
+                            }}
+                        """)
                     cpp_lines.append(body)
 
                 # Destructor
                 fn_dtor = f"{safe_cls_name}_destroy"
                 lines.append(f"void {fn_dtor}({safe_cls_name}_t* self);")
-                dtor_body = textwrap.dedent(f"""\
-                    void {fn_dtor}({safe_cls_name}_t* self) {{
-                        if (self) {{
-                            delete reinterpret_cast<{cls_full_name}*>(self);
+                if self.catch_exceptions:
+                    dtor_body = textwrap.dedent(f"""\
+                        void {fn_dtor}({safe_cls_name}_t* self) {{
+                            if (self) {{
+                                try {{
+                                    delete reinterpret_cast<{cls_full_name}*>(self);
+                                }} catch (...) {{
+                                }}
+                            }}
                         }}
-                    }}
-                """)
+                    """)
+                else:
+                    dtor_body = textwrap.dedent(f"""\
+                        void {fn_dtor}({safe_cls_name}_t* self) {{
+                            if (self) {{
+                                delete reinterpret_cast<{cls_full_name}*>(self);
+                            }}
+                        }}
+                    """)
                 cpp_lines.append(dtor_body)
 
                 # Methods
@@ -223,15 +254,27 @@ class CShimWriter:
                         call_expr = f"reinterpret_cast<{cls_full_name}*>(self)->{method.name}({', '.join(call_args)})"
 
                     if ret_type_c == "void":
-                        stmt = f"{call_expr};"
+                        raw_stmt = f"{call_expr};"
                     else:
-                        stmt = f"return {call_expr};"
+                        raw_stmt = f"return {call_expr};"
 
-                    m_body = textwrap.dedent(f"""\
-                        {ret_type_c} {fn_method_name}({", ".join(params_c) if params_c else "void"}) {{
-                            {stmt}
-                        }}
-                    """)
+                    if self.catch_exceptions:
+                        catch_stmt = _make_catch_stmt(ret_type_c)
+                        m_body = textwrap.dedent(f"""\
+                            {ret_type_c} {fn_method_name}({", ".join(params_c) if params_c else "void"}) {{
+                                try {{
+                                    {raw_stmt}
+                                }} catch (...) {{
+                                    {catch_stmt}
+                                }}
+                            }}
+                        """)
+                    else:
+                        m_body = textwrap.dedent(f"""\
+                            {ret_type_c} {fn_method_name}({", ".join(params_c) if params_c else "void"}) {{
+                                {raw_stmt}
+                            }}
+                        """)
                     cpp_lines.append(m_body)
 
             elif isinstance(decl, Function):
@@ -253,15 +296,27 @@ class CShimWriter:
                 lines.append(proto)
 
                 if ret_c == "void":
-                    stmt = f"{fn_full_name}({', '.join(call_args)});"
+                    raw_fn_stmt = f"{fn_full_name}({', '.join(call_args)});"
                 else:
-                    stmt = f"return {fn_full_name}({', '.join(call_args)});"
+                    raw_fn_stmt = f"return {fn_full_name}({', '.join(call_args)});"
 
-                fn_body = textwrap.dedent(f"""\
-                    {ret_c} {safe_fn_name}({", ".join(params_c) if params_c else "void"}) {{
-                        {stmt}
-                    }}
-                """)
+                if self.catch_exceptions:
+                    catch_stmt = _make_catch_stmt(ret_c)
+                    fn_body = textwrap.dedent(f"""\
+                        {ret_c} {safe_fn_name}({", ".join(params_c) if params_c else "void"}) {{
+                            try {{
+                                {raw_fn_stmt}
+                            }} catch (...) {{
+                                {catch_stmt}
+                            }}
+                        }}
+                    """)
+                else:
+                    fn_body = textwrap.dedent(f"""\
+                        {ret_c} {safe_fn_name}({", ".join(params_c) if params_c else "void"}) {{
+                            {raw_fn_stmt}
+                        }}
+                    """)
                 cpp_lines.append(fn_body)
 
         lines.append("")
@@ -271,6 +326,8 @@ class CShimWriter:
         lines.append("")
         lines.append("#ifdef __cplusplus")
         lines.append("#include <new>")
+        if self.catch_exceptions:
+            lines.append("#include <exception>")
         if header.path:
             lines.append(f'#include "{header.path}"')
         lines.append("")

@@ -96,11 +96,13 @@ nav:
     - Backends: reference/backends.md
     - Writers: reference/writers.md
     - CFFI Writer: reference/cffi.md
+    - CShim Writer: reference/cshim.md
     - ctypes Writer: reference/ctypes.md
     - Cython Writer: reference/cython.md
     - Diff Writer: reference/diff.md
     - JSON Writer: reference/json.md
     - Lua Writer: reference/lua.md
+    - Nim Writer: reference/nim.md
     - Prompt Writer: reference/prompt.md
     - Generate Pipeline: reference/generate.md
     - Install Libclang CLI: reference/install-libclang.md
