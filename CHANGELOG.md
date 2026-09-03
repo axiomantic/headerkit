@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Vendored official LLVM `cindex.py` Python bindings and `.pyi` type stubs for LLVM 22 (`llvmorg-22.1.8`) and LLVM 23 (`llvmorg-23.1.0`).
+- Expanded supported LLVM version detection range to LLVM 18 through 23.
+
 ## [0.28.0] - 2026-09-03
 
 ### Added

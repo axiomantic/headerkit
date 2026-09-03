@@ -48,7 +48,7 @@ class TestGetCindex:
 
     def test_vendored_versions_tuple(self):
         assert isinstance(VENDORED_VERSIONS, tuple)
-        assert VENDORED_VERSIONS == ("18", "19", "20", "21")
+        assert VENDORED_VERSIONS == ("18", "19", "20", "21", "22", "23")
 
     def test_latest_is_newer_than_oldest(self):
         """LATEST_VENDORED and OLDEST_VENDORED should be consistent with VENDORED_VERSIONS."""

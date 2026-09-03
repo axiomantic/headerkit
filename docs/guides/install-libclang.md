@@ -88,6 +88,6 @@ By default, the tool verifies that libclang is loadable after installation. If v
 
 - Set your library path (e.g., `LD_LIBRARY_PATH` on Linux)
 - Restart your shell to pick up new PATH entries
-- Check that the installed LLVM version is compatible (headerkit supports LLVM 18-21)
+- Check that the installed LLVM version is compatible (headerkit supports LLVM 18-23)
 
 Skip verification with `--skip-verify` if you know the library will not be on the default search path until a later step configures it.

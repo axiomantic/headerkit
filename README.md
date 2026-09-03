@@ -217,7 +217,7 @@ Or install it manually:
 | Fedora | `sudo dnf install clang-devel` |
 | Windows | `winget install LLVM.LLVM` or [LLVM installer](https://github.com/llvm/llvm-project/releases) |
 
-Supports LLVM 18, 19, 20, and 21.
+Supports LLVM 18, 19, 20, 21, 22, and 23.
 
 ## CLI reference
 
