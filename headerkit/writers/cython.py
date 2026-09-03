@@ -88,6 +88,7 @@ class PxdWriter:
         self.known_structs: set[str] = set()
         self.known_unions: set[str] = set()
         self.known_enums: set[str] = set()
+        self.known_typedefs: set[str] = set()
         self._collect_known_types()
 
         # Track used-but-undeclared struct/union types (need forward declarations)
@@ -499,6 +500,7 @@ class PxdWriter:
                     self.known_enums.add(decl.name)
             elif isinstance(decl, Typedef):
                 if decl.name:
+                    self.known_typedefs.add(decl.name)
                     self.known_structs.add(decl.name)
 
     def _collect_incomplete_types(self) -> None:
@@ -551,6 +553,15 @@ class PxdWriter:
     def _check_type_name(self, name: str) -> None:
         """Check a type name against registries."""
         clean_name = name.removeprefix("struct ").removeprefix("class ").removeprefix("union ")
+
+        # If the type is locally declared in this header, do not cimport from external modules or stubs
+        if (
+            clean_name in self.known_structs
+            or clean_name in self.known_unions
+            or clean_name in self.known_enums
+            or clean_name in self.known_typedefs
+        ):
+            return
 
         # Check stubs BEFORE deciding to forward-declare
         stub_module = get_stub_module_for_type(name) or get_stub_module_for_type(clean_name)

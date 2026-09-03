@@ -7,7 +7,7 @@
 # Auto-imported by autopxd when netinet/in.h is included.
 
 from libc.stdint cimport uint16_t, uint32_t
-from autopxd.stubs.sys_socket cimport sa_family_t
+from headerkit.stubs.sys_socket cimport sa_family_t
 
 cdef extern from "<netinet/in.h>":
     ctypedef uint16_t in_port_t

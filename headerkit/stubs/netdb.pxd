@@ -6,7 +6,7 @@
 #
 # Auto-imported by autopxd when netdb.h is included.
 
-from autopxd.stubs.sys_socket cimport sockaddr, socklen_t
+from headerkit.stubs.sys_socket cimport sockaddr, socklen_t
 
 cdef extern from "<netdb.h>":
     cdef struct hostent:

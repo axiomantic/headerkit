@@ -6,7 +6,7 @@
 #
 # Auto-imported by autopxd when sys/un.h is included.
 
-from autopxd.stubs.sys_socket cimport sa_family_t
+from headerkit.stubs.sys_socket cimport sa_family_t
 
 cdef extern from "<sys/un.h>":
     cdef struct sockaddr_un:
