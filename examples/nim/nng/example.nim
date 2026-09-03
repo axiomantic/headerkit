@@ -4,7 +4,7 @@ import nng_highlevel
 proc main() =
   echo "=== Nim NNG (nanomsg-next-gen) Example ==="
   let url = "inproc://demo_exchange"
-  
+
   # Server (Rep)
   var rep = openRep0()
   rep.listen(url)
