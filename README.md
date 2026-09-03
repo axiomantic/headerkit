@@ -93,6 +93,35 @@ int distance(const Point *a, const Point *b);
 ]]
 ```
 
+**Nim -- native bindings with C and C++ interop:**
+```bash
+headerkit mylib.h -w nim -o nim:mylib.nim
+```
+```nim
+# generated mylib.nim
+type
+  Point* {.importc: "struct Point", header: "mylib.h", bycopy.} = object
+    x*: cint
+    y*: cint
+
+proc distance*(a: ptr Point, b: ptr Point): cint {.importc: "distance", header: "mylib.h", cdecl.}
+```
+
+**CShim -- pure C-ABI wrapper (`extern "C"`) around C++ classes:**
+```bash
+headerkit mylib.hpp -w cshim -o cshim:mylib_cshim.cpp
+```
+```cpp
+// generated mylib_cshim.cpp
+#include "mylib.hpp"
+
+extern "C" {
+typedef void* PointHandle;
+PointHandle Point_create(int x, int y) { return new Point(x, y); }
+void Point_destroy(PointHandle self) { delete static_cast<Point*>(self); }
+}
+```
+
 **JSON -- full IR for custom tooling:**
 ```bash
 headerkit mylib.h -w json -o json:mylib.json

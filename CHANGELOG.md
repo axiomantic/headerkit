@@ -9,12 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Real-world binding examples and idiomatic Nim wrappers in `examples/nim/` for RtMidi, RtAudio, NNG, and CLAP.
+- `examples/generate_all.py` automation script to regenerate all binding examples.
+- Reference documentation for `NimWriter` (`docs/reference/nim.md`) and `CShimWriter` (`docs/reference/cshim.md`).
 - Bundled Cython `.pxd` stub declarations under `headerkit.stubs` (e.g. `pthread`, `stdatomic`, `stdarg`, `sys_socket`, `netinet_in`, `sys_statvfs`, `sys_un`, `termios`, `cpparray`, `cppchrono`, `cppvariant`, etc.).
 - `CythonWriter`, `PxdWriter`, and `write_pxd` default `stub_cimport_prefix` to `"headerkit.stubs"`.
 - Extended `HEADERKIT_STUB_TYPES` registry to automatically emit stub cimports for bundled stub types.
 
 ### Fixed
 
+- `NimWriter`: emit `struct`, `union`, and `enum` tag specifiers in `{.importc.}` pragmas for C declarations.
 - `NimWriter`: emit anonymous enum values as `const` instead of invalid named type declarations.
 - `NimWriter`: deduplicate self-referential typedefs (e.g. `typedef struct foo foo`).
 - `NimWriter`: disambiguate enum names that collide with function names (e.g. `foo_enum` with `importc: "foo"`).

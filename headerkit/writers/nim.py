@@ -386,7 +386,8 @@ class NimWriter:
             pragma_parts.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
             pragma_parts.append("bycopy")
         else:
-            pragma_parts.append(f'importc: "{name}", header: "{header_file}"')
+            tag_prefix = "union " if s.is_union else "struct "
+            pragma_parts.append(f'importc: "{tag_prefix}{name}", header: "{header_file}"')
             if s.is_union:
                 pragma_parts.append("union")
             else:
@@ -563,7 +564,7 @@ class NimWriter:
         nim_name = f"{name}_enum" if func_names and name in func_names else name
         e_name = _escape_ident(nim_name)
 
-        lines = [f'{e_name}* {{.size: sizeof(cint), importc: "{name}", header: "{header_file}".}} = enum']
+        lines = [f'{e_name}* {{.size: sizeof(cint), importc: "enum {name}", header: "{header_file}".}} = enum']
         for v in e.values:
             v_name = _escape_ident(v.name)
             if v.value is not None:
