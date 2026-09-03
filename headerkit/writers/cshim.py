@@ -348,6 +348,11 @@ class CShimWriter:
         return "C-ABI shim wrapper generator (extern C)"
 
 
+def write_cshim(header: Header, *, catch_exceptions: bool = False) -> str:
+    """Convenience function to generate C-ABI shims from a Header IR."""
+    return CShimWriter(catch_exceptions=catch_exceptions).write(header)
+
+
 # Self-register
 from headerkit.writers import register_writer  # noqa: E402
 

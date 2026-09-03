@@ -536,3 +536,17 @@ def test_cshim_catch_exceptions() -> None:
         #endif
     """)
     assert output == expected
+
+
+def test_write_cshim_convenience_function() -> None:
+    """Test the write_cshim top-level convenience function."""
+    from headerkit.writers.cshim import write_cshim
+
+    fn = Function(
+        name="hello",
+        return_type=CType("void"),
+        parameters=[],
+    )
+    h = Header(path="hello.h", declarations=[fn])
+    out = write_cshim(h)
+    assert "void hello(void);" in out
