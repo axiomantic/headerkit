@@ -254,14 +254,12 @@ class NimWriter:
             )
             emitted_types.add("std_exception")
 
-        has_cpp_string = any("std::string" in repr(decl) or "CppString" in repr(decl) for decl in header.declarations)
+        has_cpp_string = any("std::string" in repr(decl) for decl in header.declarations)
         if has_cpp_string:
             types_section.append('CppString* {.importcpp: "std::string", header: "<string>".} = object')
             emitted_types.add("CppString")
 
-        has_unique_ptr = any(
-            "std::unique_ptr" in repr(decl) or "UniquePtr" in repr(decl) for decl in header.declarations
-        )
+        has_unique_ptr = any("std::unique_ptr" in repr(decl) for decl in header.declarations)
         if has_unique_ptr:
             types_section.append('UniquePtr*[T] {.importcpp: "std::unique_ptr<\'0>", header: "<memory>".} = object')
             emitted_types.add("UniquePtr")
@@ -278,9 +276,7 @@ class NimWriter:
                 ]
             )
 
-        has_shared_ptr = any(
-            "std::shared_ptr" in repr(decl) or "SharedPtr" in repr(decl) for decl in header.declarations
-        )
+        has_shared_ptr = any("std::shared_ptr" in repr(decl) for decl in header.declarations)
         if has_shared_ptr:
             types_section.append('SharedPtr*[T] {.importcpp: "std::shared_ptr<\'0>", header: "<memory>".} = object')
             emitted_types.add("SharedPtr")
