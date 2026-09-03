@@ -81,7 +81,7 @@ class PxdWriter:
     default_output_pattern: str = "{dir}/{stem}.pxd"
     INDENT: str = "    "
 
-    def __init__(self, header: Header, *, stub_cimport_prefix: str | None = None) -> None:
+    def __init__(self, header: Header, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:
         self.header: Header = header
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
         # Track declared struct/union/enum names for type reference cleanup
@@ -712,6 +712,12 @@ class PxdWriter:
             params = ", ".join(struct.template_params)
             name = f"{name}[{params}]"
 
+        # Base classes for C++ classes
+        if struct.is_cppclass and struct.bases:
+            base_names = [self._escape_name(b.name) for b in struct.bases if b.name]
+            if base_names:
+                name = f"{name}({', '.join(base_names)})"
+
         # C++ name if different
         if struct.cpp_name and struct.cpp_name != struct.name:
             name = f'{name} "{struct.cpp_name}"'
@@ -719,7 +725,7 @@ class PxdWriter:
         keyword = "ctypedef" if struct.is_typedef else "cdef"
 
         # Forward declaration (no fields, no methods)
-        if not struct.fields and not struct.methods:
+        if not struct.fields and not struct.methods and not struct.constructors:
             lines.append(f"{keyword} {kind} {name}")
             return lines
 
@@ -760,6 +766,11 @@ class PxdWriter:
             else:
                 field_type = self._format_type(fld.type)
                 lines.append(f"{self.INDENT}{field_type} {field_name}{bit_comment}")
+
+        # Constructors (cppclass)
+        for ctor in struct.constructors:
+            params_str = self._format_params(ctor.parameters, ctor.is_variadic)
+            lines.append(f"{self.INDENT}{struct.name}({params_str})")
 
         # Methods (cppclass)
         operator_aliases: dict[str, str] = {
@@ -833,19 +844,25 @@ class PxdWriter:
 
     def _write_function(self, func: Function) -> list[str]:
         """Write a function declaration."""
+        lines: list[str] = []
+        if func.is_static:
+            lines.append("@staticmethod")
+
         return_type = self._format_type(func.return_type)
         name = self._escape_name(func.name, include_c_name=True)
         if func.template_params:
             t_params = ", ".join(func.template_params)
             name = f"{name}[{t_params}]"
         params = self._format_params(func.parameters, func.is_variadic)
+        const_suffix = " const" if func.is_const else ""
 
         # Calling convention comment (Cython doesn't support calling conventions)
         cc_comment = ""
         if func.calling_convention:
             cc_comment = f"  # calling convention: __{func.calling_convention}__"
 
-        return [f"{return_type} {name}({params}){cc_comment}"]
+        lines.append(f"{return_type} {name}({params}){const_suffix}{cc_comment}")
+        return lines
 
     # -----------------------------------------------------------------
     # Typedef
@@ -1173,16 +1190,14 @@ class PxdWriter:
 # =====================================================================
 
 
-def write_pxd(header: Header, *, stub_cimport_prefix: str | None = None) -> str:
-    """Convert an IR Header to Cython ``.pxd`` string.
+def write_pxd(header: Header, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> str:
+    """Convenience function to convert a Header IR to Cython .pxd format.
 
-    Convenience function that creates a :class:`PxdWriter` and calls
-    :meth:`~PxdWriter.write`.
-
-    :param header: Parsed header in IR format.
+    :param header: The Header IR to convert
     :param stub_cimport_prefix: If set, emit cimport lines for stub types
-        using this dotted module prefix (e.g. ``"autopxd.stubs"``).
-    :returns: Complete ``.pxd`` file content as a string.
+        (e.g., "headerkit.stubs" -> "from headerkit.stubs.stdarg cimport va_list").
+        Defaults to "headerkit.stubs". Pass None to suppress stub cimports.
+    :return: The generated .pxd file contents as a string
     """
     writer = PxdWriter(header, stub_cimport_prefix=stub_cimport_prefix)
     return writer.write()
@@ -1194,11 +1209,9 @@ def write_pxd(header: Header, *, stub_cimport_prefix: str | None = None) -> str:
 
 
 class CythonWriter:
-    """Writer that generates Cython .pxd declarations from headerkit IR.
+    """Writer that converts Header IR into Cython .pxd declarations.
 
-    Example
-    -------
-    ::
+    Example::
 
         from headerkit.writers import get_writer
 
@@ -1208,7 +1221,7 @@ class CythonWriter:
 
     default_output_pattern: str = "{dir}/{stem}.pxd"
 
-    def __init__(self, *, stub_cimport_prefix: str | None = None) -> None:
+    def __init__(self, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
 
     def write(self, header: Header) -> str:

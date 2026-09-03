@@ -1077,7 +1077,22 @@ class TestStubCimportPrefix:
     """Stub cimport prefix feature for emitting stub type cimports."""
 
     def test_stub_cimport_prefix_none_no_output(self) -> None:
-        """Default behavior: no stub cimport lines emitted."""
+        """When stub_cimport_prefix is None, no stub cimport lines emitted."""
+        header = Header(
+            "test.h",
+            [
+                Function(
+                    "vprintf_wrapper",
+                    CType("void"),
+                    [Parameter("args", CType("va_list"))],
+                ),
+            ],
+        )
+        result = write_pxd(header, stub_cimport_prefix=None)
+        assert result == 'cdef extern from "test.h":\n\n    void vprintf_wrapper(va_list args)\n'
+
+    def test_default_stub_cimport_uses_headerkit_stubs(self) -> None:
+        """Default behavior: emits 'from headerkit.stubs.stdarg cimport va_list'."""
         header = Header(
             "test.h",
             [
@@ -1089,7 +1104,14 @@ class TestStubCimportPrefix:
             ],
         )
         result = write_pxd(header)
-        assert result == 'cdef extern from "test.h":\n\n    void vprintf_wrapper(va_list args)\n'
+        expected = (
+            "from headerkit.stubs.stdarg cimport va_list\n"
+            "\n"
+            'cdef extern from "test.h":\n'
+            "\n"
+            "    void vprintf_wrapper(va_list args)\n"
+        )
+        assert result == expected
 
     def test_stub_cimport_prefix_emits_cimport(self) -> None:
         """With prefix, emits 'from prefix.stdarg cimport va_list'."""

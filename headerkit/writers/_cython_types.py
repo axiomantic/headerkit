@@ -125,10 +125,9 @@ CYTHON_STDLIB_HEADERS: dict[str, tuple[str, set[str]]] = {
 # =============================================================================
 # Headerkit Stub Type Registry
 # =============================================================================
-# Maps type names to a stub module identifier. Headerkit does not ship stub
-# .pxd files (unlike autopxd2), so these entries are used only to suppress
-# forward-declaration generation for types that are known to live in external
-# stub packages. No cimport lines are emitted for stub types.
+# Maps type names to a stub module identifier in headerkit.stubs. These entries
+# suppress forward-declaration generation for types that are provided by
+# headerkit's bundled .pxd stub files, and enable automatic cimports.
 
 HEADERKIT_STUB_TYPES: dict[str, str] = {
     # stdarg
@@ -138,8 +137,13 @@ HEADERKIT_STUB_TYPES: dict[str, str] = {
     "dirent": "dirent",
     # sys/socket.h
     "sockaddr": "sys_socket",
+    "sockaddr_storage": "sys_socket",
     "socklen_t": "sys_socket",
     "sa_family_t": "sys_socket",
+    "msghdr": "sys_socket",
+    "cmsghdr": "sys_socket",
+    "iovec": "sys_socket",
+    "linger": "sys_socket",
     # netinet/in.h
     "sockaddr_in": "netinet_in",
     "sockaddr_in6": "netinet_in",
@@ -147,11 +151,56 @@ HEADERKIT_STUB_TYPES: dict[str, str] = {
     "in6_addr": "netinet_in",
     "in_port_t": "netinet_in",
     "in_addr_t": "netinet_in",
+    "ip_mreq": "netinet_in",
+    "ipv6_mreq": "netinet_in",
+    # sys/un.h
+    "sockaddr_un": "sys_un",
     # sys/statvfs.h
     "statvfs": "sys_statvfs",
     # sys/select.h
     "fd_set": "sys_select",
     "timeval": "sys_select",
+    # pthread.h
+    "pthread_t": "pthread",
+    "pthread_attr_t": "pthread",
+    "pthread_mutex_t": "pthread",
+    "pthread_mutexattr_t": "pthread",
+    "pthread_cond_t": "pthread",
+    "pthread_condattr_t": "pthread",
+    "pthread_key_t": "pthread",
+    "pthread_once_t": "pthread",
+    "pthread_rwlock_t": "pthread",
+    "pthread_rwlockattr_t": "pthread",
+    "pthread_spinlock_t": "pthread",
+    "pthread_barrier_t": "pthread",
+    "pthread_barrierattr_t": "pthread",
+    # semaphore.h
+    "sem_t": "semaphore",
+    # stdatomic.h
+    "atomic_bool": "stdatomic",
+    "atomic_char": "stdatomic",
+    "atomic_int": "stdatomic",
+    "atomic_uint": "stdatomic",
+    "atomic_long": "stdatomic",
+    "atomic_ulong": "stdatomic",
+    "atomic_size_t": "stdatomic",
+    "atomic_intptr_t": "stdatomic",
+    "atomic_uintptr_t": "stdatomic",
+    "memory_order": "stdatomic",
+    # regex.h
+    "regex_t": "regex",
+    "regmatch_t": "regex",
+    "regoff_t": "regex",
+    # termios.h
+    "termios": "termios",
+    "cc_t": "termios",
+    "speed_t": "termios",
+    "tcflag_t": "termios",
+    # netdb.h
+    "hostent": "netdb",
+    "servent": "netdb",
+    "protoent": "netdb",
+    "addrinfo": "netdb",
 }
 
 # =============================================================================
@@ -237,9 +286,9 @@ def get_cython_module_for_type(type_name: str) -> str | None:
 def get_stub_module_for_type(type_name: str) -> str | None:
     """Get the stub module identifier for a type.
 
-    Headerkit does not ship stub ``.pxd`` files. This function is used
-    only to detect types that should *not* trigger forward declarations
-    or cimport lines.
+    Headerkit ships bundled stub ``.pxd`` files in ``headerkit.stubs``.
+    This function is used to detect types that should emit stub cimports
+    when configured and suppress undeclared type forward declarations.
 
     Args:
         type_name: The C type name (e.g., ``"va_list"``, ``"sockaddr"``).
