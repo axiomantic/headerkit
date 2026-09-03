@@ -16,7 +16,7 @@ Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the vers
 
 ## Vendored clang bindings
 
-`headerkit/_clang/` contains vendored upstream clang Python bindings for LLVM 18-21. These are excluded from ruff and mypy. Do not modify, refactor, or lint them.
+`headerkit/_clang/` contains vendored upstream clang Python bindings for LLVM 18-23. These are excluded from ruff and mypy. Do not modify, refactor, or lint them.
 
 ## Registry pattern
 

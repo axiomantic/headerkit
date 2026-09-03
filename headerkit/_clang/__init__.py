@@ -22,8 +22,8 @@ _NEEDS_INTEROP_STRING_PATCH = platform.python_implementation() != "CPython"
 
 _cached_cindex: ModuleType | None = None
 
-VENDORED_VERSIONS = ("18", "19", "20", "21")
-LATEST_VENDORED = "21"
+VENDORED_VERSIONS = ("18", "19", "20", "21", "22", "23")
+LATEST_VENDORED = "23"
 OLDEST_VENDORED = "18"
 
 
