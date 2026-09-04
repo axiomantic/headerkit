@@ -110,6 +110,8 @@ class TreeSitterBackend:
 
         if node.type == "declaration":
             return self._convert_declaration(node, filename)
+        if node.type == "function_definition":
+            return self._convert_function_definition(node, filename)
         if node.type == "type_definition":
             return self._convert_type_definition(node, filename)
         if node.type == "struct_specifier":
@@ -149,6 +151,26 @@ class TreeSitterBackend:
             alias_name = _node_text(curr) if curr else _node_text(declarator_node)
             loc = SourceLocation(file=filename, line=node.start_point[0] + 1, column=node.start_point[1] + 1)
             return [Typedef(name=alias_name, underlying_type=base_type, location=loc)]
+
+        return []
+
+    def _convert_function_definition(self, node: Node, filename: str) -> list[Declaration]:
+        for child in node.children:
+            if child.type == "storage_class_specifier" and _node_text(child) == "static":
+                return []
+
+        type_node = node.child_by_field_name("type")
+        declarator_node = node.child_by_field_name("declarator")
+
+        if declarator_node:
+            pointer_depth = 0
+            curr: Node | None = declarator_node
+            while curr and curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
+                pointer_depth += 1
+                curr = curr.child_by_field_name("declarator")
+
+            if curr and curr.type == "function_declarator":
+                return self._convert_function_declarator(type_node, curr, filename, pointer_depth=pointer_depth)
 
         return []
 

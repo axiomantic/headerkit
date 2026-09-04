@@ -13,7 +13,10 @@ what is available.
 | Backend | Description | C++ Support | Macro Extraction | Languages | Classifications |
 |---------|-------------|:-----------:|:----------------:|:---------:|:---------------:|
 | `libclang` | LLVM clang-based parser | Yes | Yes | `c`, `cpp` | `header` |
-| `tree-sitter` | Zero-dependency C parser using `tree-sitter-c` | No | No | `c` | `header` |
+| `tree-sitter` | Zero-dependency C parser using `tree-sitter-c` | No | No | `c` | `header`, `source` |
+| `rust` | C-ABI interface extractor for Rust source (`.rs`) | No | No | `rust` | `interface`, `source` |
+| `zig` | C-ABI interface extractor for Zig source (`.zig`) | No | No | `zig` | `source`, `interface` |
+| `nim` | C-ABI interface extractor for Nim source (`.nim`) | No | No | `nim` | `source`, `interface` |
 
 ## Protocol
 

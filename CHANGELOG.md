@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Polyglot source interface extraction: added support for extracting C-ABI interface surfaces directly from Rust (`.rs`), Zig (`.zig`), and Nim (`.nim`) source files into normalized `SourceUnit` IR.
+- C source definition parsing: enhanced `TreeSitterBackend` to extract non-static function definitions and declarations from `.c` source files.
+- Added `RustBackend`, `ZigBackend`, and `NimBackend` registered in the unified backend registry, accessible via `get_backend()` and `parse_unit` hooks.
+- Polyglot interface reference documentation (`docs/reference/polyglot.md`).
 - `headerkit.backends.treesitter`: lightweight, zero-system-dependency parser backend using `tree-sitter-c` for parsing C headers without requiring system LLVM or `libclang`. Added support for nested preprocessor blocks (`#ifndef`, `#ifdef __cplusplus`) and pointer-return function prototypes.
 - Comprehensive guide for Nim to Python packaging and deterministic memory management (`docs/guides/nim-python-packaging.md`) using `--mm:orc` and `scikit-build-core`.
 - Real-world working example (`examples/nim_bridge/`) demonstrating compiled Nim library, Headerkit ctypes bindings, and binary wheel distribution.
