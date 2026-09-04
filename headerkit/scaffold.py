@@ -51,17 +51,38 @@ class ProjectLayout:
         return written
 
 
+def extract_function_names(unit: SourceUnit | Header) -> list[str]:
+    """Extract top-level function names for test stubs and tripwires."""
+    decls: list[Declaration] = getattr(unit, "declarations", [])
+    return [d.name for d in decls if isinstance(d, Function) and d.name]
+
+
 @dataclass
 class ScaffoldOptions:
     """Configuration options for project scaffolding."""
 
     package_name: str = "bindings"
     target_language: str = "nim"
-    layout: str = "file"  # "file", "package", "project"
-    test_type: str = "both"  # "both", "tripwire", "unit", "none"
-    test_runner: str = "tripwire"
+    layout: str = "file"  # Configurable layout (e.g. "file", "package", "project")
+    options: dict[str, Any] = field(default_factory=dict)
     interactive: bool = False
     extra_context: dict[str, Any] = field(default_factory=dict)
+    test_type: str = "both"  # Backwards compatibility alias for options["test_type"]
+    test_runner: str = "tripwire"  # Backwards compatibility alias
+
+    def __post_init__(self) -> None:
+        if "test_type" not in self.options and self.test_type != "both":
+            self.options["test_type"] = self.test_type
+        elif "test_type" in self.options:
+            self.test_type = str(self.options["test_type"])
+
+    def get_option(self, name: str, default: Any = None) -> Any:
+        """Get a writer-specific option value."""
+        if name in self.options:
+            return self.options[name]
+        if hasattr(self, name):
+            return getattr(self, name)
+        return default
 
 
 class BYOScaffolder:
@@ -85,20 +106,30 @@ class StdlibScaffolder(BYOScaffolder):
         "json": ".json",
         "lua": ".lua",
         "luajit": ".lua",
+        "python": ".py",
     }
+
+    def _resolve_target(self, target_language: str) -> str:
+        target = target_language.lower()
+        if target == "python":
+            return "ctypes"
+        if target == "luajit":
+            return "lua"
+        return target
 
     def scaffold(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
         """Generate project layout using built-in templates."""
         from headerkit.writers import get_writer
 
-        target = options.target_language.lower()
-        writer = get_writer(target)
+        writer_target = self._resolve_target(options.target_language)
+        writer = get_writer(writer_target)
         if hasattr(writer, "write_layout"):
             return writer.write_layout(unit, options)
 
         if options.layout == "file":
-            return self._scaffold_single_file(unit, options, target)
+            return self._scaffold_single_file(unit, options, writer_target)
 
+        target = options.target_language.lower()
         if target == "nim":
             return self._scaffold_nim(unit, options)
         elif target == "mojo":
@@ -106,7 +137,7 @@ class StdlibScaffolder(BYOScaffolder):
         elif target in ("ctypes", "cffi", "python"):
             return self._scaffold_python(unit, options)
 
-        return self._scaffold_single_file(unit, options, target)
+        return self._scaffold_single_file(unit, options, writer_target)
 
     def _scaffold_single_file(
         self,
@@ -116,15 +147,15 @@ class StdlibScaffolder(BYOScaffolder):
     ) -> ProjectLayout:
         from headerkit.writers import get_writer
 
-        writer = get_writer(target)
+        writer_target = self._resolve_target(target)
+        writer = get_writer(writer_target)
         rendered = writer.write(unit)
-        ext = self._EXT_MAP.get(target, ".txt")
+        ext = self._EXT_MAP.get(target.lower(), ".txt")
         filename = f"{options.package_name}{ext}"
         return ProjectLayout(files=[OutputFile(path=filename, content=rendered)])
 
     def _extract_fn_names(self, unit: SourceUnit | Header) -> list[str]:
-        decls: list[Declaration] = getattr(unit, "declarations", [])
-        return [d.name for d in decls if isinstance(d, Function) and d.name]
+        return extract_function_names(unit)
 
     def _scaffold_nim(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
         from headerkit.writers import get_writer

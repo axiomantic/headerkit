@@ -11,6 +11,7 @@ The IR types come from ``headerkit.ir`` and represent parsed C headers.
 from __future__ import annotations
 
 import textwrap
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -28,8 +29,8 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # Maps C type names to their ctypes equivalents.
 CTYPES_TYPE_MAP: dict[str, str] = {
@@ -411,6 +412,15 @@ class CtypesWriter(BaseWriter):
     format_description: str = "Python ctypes bindings"
     default_output_pattern: str = "{dir}/{stem}_ctypes.py"
     default_extension: str = ".py"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+    )
 
     def __init__(self, lib_name: str = "_lib") -> None:
         self._lib_name = lib_name
@@ -429,8 +439,9 @@ class CtypesWriter(BaseWriter):
         options: ScaffoldOptions,
     ) -> ProjectLayout:
         pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
         bindings_code = self._render(unit)
-        fn_names = self._extract_fn_names(unit)
+        fn_names = extract_function_names(unit)
 
         pyproject = textwrap.dedent(f"""\
             [build-system]
@@ -460,7 +471,7 @@ class CtypesWriter(BaseWriter):
             OutputFile(path=f"src/{pkg}/_bindings.py", content=bindings_code),
         ]
 
-        if options.test_type in ("both", "tripwire"):
+        if test_type in ("both", "tripwire"):
             tw_fn_checks = (
                 "\n".join(
                     f'    assert hasattr(_bindings, "{name}"), "Symbol {name} missing from ctypes bindings"'
@@ -479,7 +490,7 @@ class CtypesWriter(BaseWriter):
             """)
             files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
 
-        if options.test_type in ("both", "unit"):
+        if test_type in ("both", "unit"):
             unit_test = textwrap.dedent(f"""\
                 from {pkg} import _bindings
 

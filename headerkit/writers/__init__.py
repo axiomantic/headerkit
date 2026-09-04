@@ -45,15 +45,18 @@ from typing import Any, Protocol, runtime_checkable
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
 from headerkit.ir import Header, SourceUnit
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter
+from headerkit.writers.base import BaseWriter, WriterOption
 
 __all__ = [
     "BaseWriter",
     "WriterBackend",
+    "WriterOption",
     "get_default_writer",
     "get_writer",
     "get_writer_info",
     "is_writer_available",
+    "list_writer_layouts",
+    "list_writer_options",
     "list_writers",
     "register_writer",
 ]
@@ -222,6 +225,36 @@ def is_writer_available(name: str) -> bool:
     """
     _ensure_writers_loaded()
     return name in _WRITER_REGISTRY
+
+
+def list_writer_layouts(name: str) -> tuple[str, ...]:
+    """Return the tuple of layouts supported by the named writer.
+
+    :param name: Writer name to inspect.
+    :returns: Tuple of supported layout names (e.g. ``("file", "package")``).
+    :raises ValueError: If the requested writer is not found.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        raise ValueError(f"Unknown writer: {name!r}. Available: {', '.join(list_writers())}")
+    writer_class = _WRITER_REGISTRY[name]
+    layouts = getattr(writer_class, "supported_layouts", ("file",))
+    return tuple(layouts)
+
+
+def list_writer_options(name: str) -> tuple[WriterOption, ...]:
+    """Return the tuple of options supported by the named writer.
+
+    :param name: Writer name to inspect.
+    :returns: Tuple of WriterOption specifications.
+    :raises ValueError: If the requested writer is not found.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        raise ValueError(f"Unknown writer: {name!r}. Available: {', '.join(list_writers())}")
+    writer_class = _WRITER_REGISTRY[name]
+    opts = getattr(writer_class, "supported_options", ())
+    return tuple(opts)
 
 
 def get_writer_info() -> list[dict[str, str | bool]]:

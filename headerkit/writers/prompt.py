@@ -9,6 +9,7 @@ verbose.
 from __future__ import annotations
 
 import json
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -28,7 +29,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.writers.base import BaseWriter
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # =============================================================================
 # Type formatting helpers
@@ -451,6 +452,15 @@ class PromptWriter(BaseWriter):
     default_output_pattern: str = "{dir}/{stem}_prompt.txt"
     default_extension: str = ".txt"
     cache_output: bool = False
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="verbosity",
+            description="Output verbosity tier",
+            default="compact",
+            choices=("compact", "standard", "verbose"),
+        ),
+    )
 
     def __init__(self, verbosity: str = "compact") -> None:
         if verbosity not in ("compact", "standard", "verbose"):

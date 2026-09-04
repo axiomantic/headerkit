@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import textwrap
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -24,7 +25,7 @@ from headerkit.ir import (
     TypeExpr,
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter
+from headerkit.writers.base import BaseWriter, WriterOption
 
 
 def _sanitize_name(name: str) -> str:
@@ -132,6 +133,21 @@ class CShimWriter(BaseWriter):
     format_description: str = "C-ABI shim wrapper generator (extern C)"
     default_output_pattern: str = "{dir}/{stem}_cshim.cpp"
     default_extension: str = ".cpp"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "cmake")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+        WriterOption(
+            name="catch_exceptions",
+            description="Wrap C++ functions in try-catch blocks for exception safety across ABI boundaries",
+            default=False,
+            type=bool,
+        ),
+    )
 
     def __init__(self, *, catch_exceptions: bool = False) -> None:
         self.catch_exceptions = catch_exceptions
@@ -353,28 +369,46 @@ class CShimWriter(BaseWriter):
         options: ScaffoldOptions,
     ) -> ProjectLayout:
         pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
         cpp_code = self._render(unit)
 
-        cmake = textwrap.dedent(f"""\
-            cmake_minimum_required(VERSION 3.15)
-            project({pkg}_cshim C CXX)
+        if test_type != "none":
+            cmake = textwrap.dedent(f"""\
+                cmake_minimum_required(VERSION 3.15)
+                project({pkg}_cshim C CXX)
 
-            set(CMAKE_CXX_STANDARD 17)
-            set(CMAKE_CXX_STANDARD_REQUIRED ON)
+                set(CMAKE_CXX_STANDARD 17)
+                set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-            add_library({pkg}_cshim SHARED
-                src/{pkg}_cshim.cpp
-            )
+                add_library({pkg}_cshim SHARED
+                    src/{pkg}_cshim.cpp
+                )
 
-            target_include_directories({pkg}_cshim PUBLIC
-                include
-            )
+                target_include_directories({pkg}_cshim PUBLIC
+                    include
+                )
 
-            enable_testing()
-            add_executable(test_{pkg}_cshim tests/test_cshim.c)
-            target_link_libraries(test_{pkg}_cshim PRIVATE {pkg}_cshim)
-            add_test(NAME test_{pkg}_cshim COMMAND test_{pkg}_cshim)
-        """)
+                enable_testing()
+                add_executable(test_{pkg}_cshim tests/test_cshim.c)
+                target_link_libraries(test_{pkg}_cshim PRIVATE {pkg}_cshim)
+                add_test(NAME test_{pkg}_cshim COMMAND test_{pkg}_cshim)
+            """)
+        else:
+            cmake = textwrap.dedent(f"""\
+                cmake_minimum_required(VERSION 3.15)
+                project({pkg}_cshim C CXX)
+
+                set(CMAKE_CXX_STANDARD 17)
+                set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+                add_library({pkg}_cshim SHARED
+                    src/{pkg}_cshim.cpp
+                )
+
+                target_include_directories({pkg}_cshim PUBLIC
+                    include
+                )
+            """)
 
         header_content = textwrap.dedent(f"""\
             // C-ABI Header for {pkg}
@@ -391,22 +425,23 @@ class CShimWriter(BaseWriter):
             #endif
         """)
 
-        test_c = textwrap.dedent(f"""\
-            #include <stdio.h>
-            #include <assert.h>
-
-            int main(void) {{
-                printf("Testing {pkg} C-ABI shim...\\n");
-                return 0;
-            }}
-        """)
-
         files = [
             OutputFile(path="CMakeLists.txt", content=cmake),
             OutputFile(path=f"include/{pkg}_cshim.h", content=header_content),
             OutputFile(path=f"src/{pkg}_cshim.cpp", content=cpp_code),
-            OutputFile(path="tests/test_cshim.c", content=test_c),
         ]
+        if test_type != "none":
+            test_c = textwrap.dedent(f"""\
+                #include <stdio.h>
+                #include <assert.h>
+
+                int main(void) {{
+                    printf("Testing {pkg} C-ABI shim...\\n");
+                    return 0;
+                }}
+            """)
+            files.append(OutputFile(path="tests/test_cshim.c", content=test_c))
+
         return ProjectLayout(files=files)
 
 

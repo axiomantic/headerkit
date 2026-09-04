@@ -28,6 +28,7 @@ from __future__ import annotations
 import re
 import textwrap
 from collections import defaultdict
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -54,7 +55,7 @@ from headerkit.writers._cython_types import (
     get_libcpp_module_for_type,
     get_stub_module_for_type,
 )
-from headerkit.writers.base import BaseWriter
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # Type qualifiers that Cython doesn't support -- strip from output
 UNSUPPORTED_TYPE_QUALIFIERS: set[str] = {
@@ -1238,6 +1239,15 @@ class CythonWriter(BaseWriter):
     format_description: str = "Cython .pxd declarations for C/C++ interop"
     default_output_pattern: str = "{dir}/{stem}.pxd"
     default_extension: str = ".pxd"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+    )
 
     def __init__(self, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
@@ -1257,6 +1267,7 @@ class CythonWriter(BaseWriter):
         options: ScaffoldOptions,
     ) -> ProjectLayout:
         pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
         pxd_code = self._render(unit)
 
         pyproject = textwrap.dedent(f"""\
@@ -1295,7 +1306,7 @@ class CythonWriter(BaseWriter):
             OutputFile(path=f"src/{pkg}/{pkg}.pyx", content=pyx_code),
         ]
 
-        if options.test_type in ("both", "tripwire"):
+        if test_type in ("both", "tripwire"):
             tripwire = textwrap.dedent(f"""\
                 import pytest
 
@@ -1309,7 +1320,7 @@ class CythonWriter(BaseWriter):
             """)
             files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
 
-        if options.test_type in ("both", "unit"):
+        if test_type in ("both", "unit"):
             unit_test = textwrap.dedent(f"""\
                 import {pkg}
 

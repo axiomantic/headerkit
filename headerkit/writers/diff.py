@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from headerkit.ir import (
     Constant,
@@ -22,7 +22,7 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
-from headerkit.writers.base import BaseWriter
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # =============================================================================
 # Data Structures
@@ -659,6 +659,10 @@ class DiffWriter(BaseWriter):
     format_description: str = "API compatibility diff reports (JSON or Markdown)"
     default_output_pattern: str = "{dir}/{stem}_diff.json"
     cache_output: bool = False
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption("format", "Report output format", default="json", choices=("json", "markdown")),
+    )
 
     def __init__(self, baseline: Header | None = None, format: str = "json") -> None:
         self._baseline = baseline

@@ -15,6 +15,7 @@ Features
 from __future__ import annotations
 
 import textwrap
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -32,8 +33,8 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
+from headerkit.writers.base import BaseWriter, WriterOption
 
 NIM_KEYWORDS: set[str] = {
     "addr",
@@ -224,6 +225,15 @@ class NimWriter(BaseWriter):
     format_description: str = "Nim bindings with C and C++ interop"
     default_output_pattern: str = "{dir}/{stem}.nim"
     default_extension: str = ".nim"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+    )
 
     def __init__(self, *, header_path: str | None = None) -> None:
         self.header_path = header_path
@@ -730,9 +740,9 @@ class NimWriter(BaseWriter):
         options: ScaffoldOptions,
     ) -> ProjectLayout:
         pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
         bindings_code = self._render(unit)
-        decls = getattr(unit, "declarations", [])
-        fn_names = [d.name for d in decls if isinstance(d, Function) and d.name]
+        fn_names = extract_function_names(unit)
 
         files: list[OutputFile] = []
 
@@ -774,7 +784,7 @@ class NimWriter(BaseWriter):
         files.append(OutputFile(path="nim.cfg", content=nim_cfg))
 
         # 5. Tests
-        if options.test_type in ("tripwire", "both"):
+        if test_type in ("tripwire", "both"):
             stub_lines = []
             for fn in fn_names:
                 stub_lines.append(f'  echo "Verifying tripwire symbol: {fn}"')
@@ -792,7 +802,7 @@ class NimWriter(BaseWriter):
             """)
             files.append(OutputFile(path="tests/test_tripwire.nim", content=tripwire))
 
-        if options.test_type in ("unit", "both"):
+        if test_type in ("unit", "both"):
             unit_test = textwrap.dedent(f"""\
                 import std/unittest
                 import {pkg}

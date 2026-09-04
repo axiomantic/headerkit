@@ -9,6 +9,7 @@ The IR types come from ``headerkit.ir`` and represent parsed C headers.
 from __future__ import annotations
 
 import textwrap
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -28,7 +29,7 @@ from headerkit.ir import (
     Variable,
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter
+from headerkit.writers.base import BaseWriter, WriterOption
 
 
 def _type_to_c(t: TypeExpr) -> str:
@@ -410,6 +411,15 @@ class LuaWriter(BaseWriter):
     format_description: str = "LuaJIT FFI bindings"
     default_output_pattern: str = "{dir}/{stem}_ffi.lua"
     default_extension: str = ".lua"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+    )
 
     def __init__(self) -> None:
         pass
@@ -428,6 +438,7 @@ class LuaWriter(BaseWriter):
         options: ScaffoldOptions,
     ) -> ProjectLayout:
         pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
         lua_code = self._render(unit)
 
         rockspec = textwrap.dedent(f"""\
@@ -456,7 +467,7 @@ class LuaWriter(BaseWriter):
             OutputFile(path=f"src/{pkg}.lua", content=lua_code),
         ]
 
-        if options.test_type in ("both", "tripwire"):
+        if test_type in ("both", "tripwire"):
             tripwire = textwrap.dedent(f"""\
                 local ffi = require("ffi")
                 local {pkg} = require("src.{pkg}")
@@ -465,7 +476,7 @@ class LuaWriter(BaseWriter):
             """)
             files.append(OutputFile(path="tests/test_tripwire.lua", content=tripwire))
 
-        if options.test_type in ("both", "unit"):
+        if test_type in ("both", "unit"):
             unit_test = textwrap.dedent(f"""\
                 local {pkg} = require("src.{pkg}")
                 assert({pkg} ~= nil, "{pkg} should not be nil")

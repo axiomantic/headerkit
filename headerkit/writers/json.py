@@ -8,7 +8,7 @@ custom code generators.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 from headerkit.ir import (
     Array,
@@ -32,7 +32,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.writers.base import BaseWriter
+from headerkit.writers.base import BaseWriter, WriterOption
 
 
 def _type_to_dict(t: TypeExpr) -> dict[str, Any]:
@@ -325,6 +325,10 @@ class JsonWriter(BaseWriter):
     format_description: str = "JSON serialization of IR for inspection and tooling"
     default_output_pattern: str = "{dir}/{stem}.json"
     default_extension: str = ".json"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption("indent", "JSON indentation level", default=2, type=int),
+    )
 
     def __init__(self, indent: int | None = 2) -> None:
         self._indent = indent

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Writer-defined layouts and options introspection: added `WriterOption` dataclass and `supported_layouts` / `supported_options` attributes on `BaseWriter` and all 10 concrete writers, enabling writers to declare layouts (e.g. `file`, `package`, `project`, `cmake`) and configurable arguments (`test_type`, `catch_exceptions`, `indent`, `verbosity`). Added public discovery functions `list_writer_layouts(name)` and `list_writer_options(name)` with layout validation in `BaseWriter.write_layout()`.
 - Unified output writer scaffolding architecture: all 10 writers (`ctypes`, `cffi`, `cython`, `luajit/lua`, `nim`, `mojo`, `cshim`, `json`, `diff`, `prompt`) inherit from `BaseWriter` and implement `write_layout(unit, options) -> ProjectLayout`, unifying single-file generation and multi-file package scaffolding under the Zero-Dual-System Rule ("a single file is just a project of one file").
 - Automatic scaffolder hook registration: `register_writer()` registers the `@hook("scaffold_project", writer=name, target=name)` hook, allowing all writers to transparently serve as scaffolding engines.
 - Extended package scaffolding templates for Cython (`.pxd`, `.pyx`, `pyproject.toml`, tripwire), CFFI (`build_ffi.py`, `_bindings.py`, `pyproject.toml`, tripwire), CShim (`CMakeLists.txt`, headers, bridge source, test harness), and LuaJIT (rockspec, Lua source, tripwire).

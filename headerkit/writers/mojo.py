@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import textwrap
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -27,8 +28,8 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
+from headerkit.writers.base import BaseWriter, WriterOption
 
 MOJO_KEYWORDS: set[str] = {
     "alias",
@@ -226,6 +227,15 @@ class MojoWriter(BaseWriter):
     format_description: str = "Mojo FFI binding generator (sys.ffi.DLHandle and CShim)"
     default_output_pattern: str = "{dir}/{stem}.mojo"
     default_extension: str = ".mojo"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+    )
 
     def __init__(
         self,
@@ -533,9 +543,9 @@ class MojoWriter(BaseWriter):
         options: ScaffoldOptions,
     ) -> ProjectLayout:
         pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
         bindings_code = self._render(unit)
-        decls = getattr(unit, "declarations", [])
-        fn_names = [d.name for d in decls if isinstance(d, Function) and d.name]
+        fn_names = extract_function_names(unit)
 
         files: list[OutputFile] = []
 
@@ -558,7 +568,7 @@ class MojoWriter(BaseWriter):
         files.append(OutputFile(path=f"src/{pkg}/bindings.mojo", content=bindings_code))
 
         # 4. Tests
-        if options.test_type in ("tripwire", "both"):
+        if test_type in ("tripwire", "both"):
             tw_lines = []
             for fn in fn_names:
                 tw_lines.append(f'    print("Tripwire checking entrypoint: {fn}")')
@@ -578,7 +588,7 @@ class MojoWriter(BaseWriter):
             """)
             files.append(OutputFile(path="tests/test_tripwire.mojo", content=tripwire))
 
-        if options.test_type in ("unit", "both"):
+        if test_type in ("unit", "both"):
             unit_test = textwrap.dedent(f"""\
                 from testing import assert_true
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from headerkit.ir import CType, Function, Header, Parameter
-from headerkit.scaffold import ProjectLayout, ScaffoldOptions
-from headerkit.writers import get_writer, list_writers
+from headerkit.scaffold import ProjectLayout, ScaffoldOptions, scaffold
+from headerkit.writers import get_writer, list_writer_layouts, list_writer_options, list_writers
 
 
 @pytest.fixture
@@ -82,6 +82,24 @@ class TestUnifiedWriterScaffolding:
         assert "CMakeLists.txt" in paths
         assert "include/bridge_cshim.h" in paths
         assert "src/bridge_cshim.cpp" in paths
+        assert "tests/test_cshim.c" in paths
+
+    def test_cshim_package_scaffolding_no_tests(self, sample_header: Header) -> None:
+        """CShim writer with test_type='none' must omit test artifacts."""
+        writer = get_writer("cshim")
+        opts = ScaffoldOptions(package_name="bridge", target_language="cshim", layout="package", test_type="none")
+        layout = writer.write_layout(sample_header, opts)
+
+        paths = {f.path for f in layout.files}
+        assert "CMakeLists.txt" in paths
+        assert "include/bridge_cshim.h" in paths
+        assert "src/bridge_cshim.cpp" in paths
+        assert "tests/test_cshim.c" not in paths
+
+        cmake = layout.get_file("CMakeLists.txt")
+        assert cmake is not None
+        assert "enable_testing()" not in cmake.content
+        assert "add_test" not in cmake.content
 
     def test_luajit_package_scaffolding(self, sample_header: Header) -> None:
         """LuaJIT writer must produce rockspec, src module, and tripwire tests."""
@@ -118,3 +136,69 @@ class TestUnifiedWriterScaffolding:
         assert "src/mojokit/__init__.mojo" in paths
         assert "src/mojokit/bindings.mojo" in paths
         assert "tests/test_tripwire.mojo" in paths
+
+    def test_writer_layouts_introspection(self) -> None:
+        """All writers must support at least 'file' layout, and list_writer_layouts must return it."""
+        for writer_name in list_writers():
+            layouts = list_writer_layouts(writer_name)
+            assert isinstance(layouts, tuple)
+            assert "file" in layouts
+
+        # Multi-file writers
+        assert "package" in list_writer_layouts("ctypes")
+        assert "package" in list_writer_layouts("cffi")
+        assert "package" in list_writer_layouts("cython")
+        assert "package" in list_writer_layouts("nim")
+        assert "package" in list_writer_layouts("mojo")
+        assert "package" in list_writer_layouts("lua")
+        assert "cmake" in list_writer_layouts("cshim")
+
+        # Single-file only writers
+        assert list_writer_layouts("json") == ("file",)
+        assert list_writer_layouts("diff") == ("file",)
+        assert list_writer_layouts("prompt") == ("file",)
+
+        with pytest.raises(ValueError, match="Unknown writer: 'unknown_writer'"):
+            list_writer_layouts("unknown_writer")
+
+    def test_writer_options_introspection(self) -> None:
+        """Writers must declare their options via supported_options and list_writer_options."""
+        ctypes_opts = list_writer_options("ctypes")
+        assert any(opt.name == "test_type" for opt in ctypes_opts)
+
+        cshim_opts = list_writer_options("cshim")
+        assert any(opt.name == "catch_exceptions" for opt in cshim_opts)
+        assert any(opt.name == "test_type" for opt in cshim_opts)
+
+        json_opts = list_writer_options("json")
+        assert any(opt.name == "indent" for opt in json_opts)
+
+        diff_opts = list_writer_options("diff")
+        assert any(opt.name == "format" for opt in diff_opts)
+
+        prompt_opts = list_writer_options("prompt")
+        assert any(opt.name == "verbosity" for opt in prompt_opts)
+
+        with pytest.raises(ValueError, match="Unknown writer: 'unknown_writer'"):
+            list_writer_options("unknown_writer")
+
+    def test_unsupported_layout_raises_value_error(self, sample_header: Header) -> None:
+        """Requesting an unsupported layout must raise ValueError with available choices."""
+        writer = get_writer("json")
+        opts = ScaffoldOptions(package_name="data", target_language="json", layout="package")
+        with pytest.raises(
+            ValueError, match=r"Writer 'json' does not support layout 'package'\. Supported layouts: \['file'\]"
+        ):
+            writer.write_layout(sample_header, opts)
+
+    def test_target_language_python_and_luajit_aliases(self, sample_header: Header) -> None:
+        """Scaffolder must support target_language='python' and 'luajit' seamlessly."""
+        opts_py = ScaffoldOptions(package_name="pybridge", target_language="python", layout="file")
+        layout_py = scaffold(sample_header, opts_py)
+        assert len(layout_py.files) == 1
+        assert layout_py.files[0].path == "pybridge.py"
+
+        opts_lua = ScaffoldOptions(package_name="luabridge", target_language="luajit", layout="file")
+        layout_lua = scaffold(sample_header, opts_lua)
+        assert len(layout_lua.files) == 1
+        assert layout_lua.files[0].path == "luabridge.lua"

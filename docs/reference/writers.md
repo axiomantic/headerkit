@@ -30,6 +30,10 @@ what is available.
     options:
       show_source: false
 
+::: headerkit.writers.WriterOption
+    options:
+      show_source: false
+
 ::: headerkit.writers.WriterBackend
     options:
       show_source: false
@@ -45,6 +49,14 @@ what is available.
       show_source: false
 
 ::: headerkit.writers.list_writers
+    options:
+      show_source: false
+
+::: headerkit.writers.list_writer_layouts
+    options:
+      show_source: false
+
+::: headerkit.writers.list_writer_options
     options:
       show_source: false
 
