@@ -94,16 +94,23 @@ class HookRegistry:
         self._hooks.append(impl)
 
     def get_matching(self, point: str, context: PipelineContext) -> list[HookImpl]:
-        """Return matching hooks sorted by priority descending and specificity descending."""
-        candidates = [impl for impl in self._hooks if impl.point == point and impl.matches(context)]
-        candidates.sort(key=lambda impl: (impl.priority, impl.specificity), reverse=True)
-        return candidates
+        """Return matching hooks sorted by priority descending and specificity descending.
+
+        For ties in priority and specificity, later registered hooks take precedence.
+        """
+        candidates = [
+            (idx, impl) for idx, impl in enumerate(self._hooks) if impl.point == point and impl.matches(context)
+        ]
+        candidates.sort(key=lambda item: (item[1].priority, item[1].specificity, item[0]), reverse=True)
+        return [impl for _, impl in candidates]
 
     @classmethod
     def get_global_matching(cls, point: str, context: PipelineContext) -> list[HookImpl]:
-        candidates = [impl for impl in cls._global_hooks if impl.point == point and impl.matches(context)]
-        candidates.sort(key=lambda impl: (impl.priority, impl.specificity), reverse=True)
-        return candidates
+        candidates = [
+            (idx, impl) for idx, impl in enumerate(cls._global_hooks) if impl.point == point and impl.matches(context)
+        ]
+        candidates.sort(key=lambda item: (item[1].priority, item[1].specificity, item[0]), reverse=True)
+        return [impl for _, impl in candidates]
 
     @classmethod
     def register_global(

@@ -40,9 +40,10 @@ Example
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-from headerkit.ir import Header
+from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
+from headerkit.ir import Header, SourceUnit
 
 __all__ = [
     "WriterBackend",
@@ -121,6 +122,7 @@ def register_writer(
     writer_class: type[WriterBackend],
     is_default: bool = False,
     description: str | None = None,
+    priority: int = Priority.STANDARD,
 ) -> None:
     """Register an output writer.
 
@@ -133,6 +135,7 @@ def register_writer(
     :param is_default: If True, this writer becomes the default.
     :param description: Optional short description for :func:`get_writer_info`.
         If not provided, falls back to the class docstring's first line.
+    :param priority: Execution priority for hook dispatch.
     """
     global _DEFAULT_WRITER  # pylint: disable=global-statement
     if name in _WRITER_REGISTRY:
@@ -144,6 +147,17 @@ def register_writer(
         _WRITER_DESCRIPTIONS[name] = writer_class.__doc__.strip().split("\n")[0]
     if is_default or _DEFAULT_WRITER is None:
         _DEFAULT_WRITER = name
+
+    def _get_hook(context: PipelineContext | None = None, **kwargs: Any) -> WriterBackend:
+        opts = (context.options if context and context.options else {}) | kwargs
+        return writer_class(**opts)
+
+    def _write_hook(unit: SourceUnit, context: PipelineContext | None = None, **kwargs: Any) -> str | None:
+        opts = (context.options if context and context.options else {}) | kwargs
+        return writer_class(**opts).write(unit)
+
+    HookRegistry.register_global("get_writer", _get_hook, priority=priority, writer=name)
+    HookRegistry.register_global("write_output", _write_hook, priority=priority, writer=name)
 
 
 def list_writers() -> list[str]:
@@ -161,7 +175,13 @@ def list_writers() -> list[str]:
             print(f"Available: {name}")
     """
     _ensure_writers_loaded()
-    return list(_WRITER_REGISTRY.keys())
+    names = set(_WRITER_REGISTRY.keys())
+    for impl in HookRegistry.snapshot():
+        if impl.point in ("get_writer", "write_output") and "writer" in impl.matchers:
+            w_name = impl.matchers["writer"]
+            if "*" not in w_name and "?" not in w_name:
+                names.add(w_name)
+    return sorted(names)
 
 
 def is_writer_available(name: str) -> bool:
@@ -224,12 +244,17 @@ def get_writer(name: str | None = None, **kwargs: object) -> WriterBackend:
         if _DEFAULT_WRITER is None:
             raise ValueError("No writers available")
         name = _DEFAULT_WRITER
-    if name not in _WRITER_REGISTRY:
-        available = ", ".join(_WRITER_REGISTRY.keys()) or "(none)"
-        raise ValueError(f"Unknown writer: {name!r}. Available: {available}")
-    # Protocol doesn't constrain __init__, so mypy strict can't verify
-    # that **kwargs match the concrete writer's constructor signature.
-    return _WRITER_REGISTRY[name](**kwargs)
+
+    ctx = PipelineContext(writer=name, options=dict(kwargs))
+    writer = HookDispatcher().first_result("get_writer", context=ctx, **kwargs)
+    if isinstance(writer, WriterBackend):
+        return writer
+
+    if name in _WRITER_REGISTRY:
+        return _WRITER_REGISTRY[name](**kwargs)
+
+    available = ", ".join(list_writers()) or "(none)"
+    raise ValueError(f"Unknown writer: {name!r}. Available: {available}")
 
 
 def get_default_writer() -> str:

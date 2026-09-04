@@ -36,22 +36,27 @@ class TestBackendRegistry:
     def setup_method(self):
         """Reset registry state before each test."""
         import headerkit.backends as b
+        from headerkit.hooks import HookRegistry
 
         self._saved_registry = dict(b._BACKEND_REGISTRY)
         self._saved_default = b._DEFAULT_BACKEND
         self._saved_loaded = b._BACKENDS_LOADED
+        self._saved_hooks = HookRegistry.snapshot()
         b._BACKEND_REGISTRY.clear()
         b._DEFAULT_BACKEND = None
         b._BACKENDS_LOADED = False
+        HookRegistry.clear()
 
     def teardown_method(self):
         """Restore registry state after each test."""
         import headerkit.backends as b
+        from headerkit.hooks import HookRegistry
 
         b._BACKEND_REGISTRY.clear()
         b._BACKEND_REGISTRY.update(self._saved_registry)
         b._DEFAULT_BACKEND = self._saved_default
         b._BACKENDS_LOADED = self._saved_loaded
+        HookRegistry.restore(self._saved_hooks)
 
     def test_register_and_get_backend(self):
         register_backend("mock", MockBackend, is_default=True)

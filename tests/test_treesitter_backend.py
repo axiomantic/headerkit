@@ -94,3 +94,42 @@ class TestTreeSitterBackend:
         fn = result.declarations[0]
         assert isinstance(fn, Function)
         assert fn.name == "add"
+
+    def test_parse_preprocessor_ifdef_and_linkage(self):
+        code = """
+        #ifndef FOO_H
+        #define FOO_H
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        int compute(int x);
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+        #endif
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "foo.h")
+
+        assert len(header.declarations) == 1
+        fn = header.declarations[0]
+        assert isinstance(fn, Function)
+        assert fn.name == "compute"
+
+    def test_parse_pointer_return_and_void_param(self):
+        code = """
+        char* get_version(void);
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "version.h")
+
+        assert len(header.declarations) == 1
+        fn = header.declarations[0]
+        assert isinstance(fn, Function)
+        assert fn.name == "get_version"
+        assert str(fn.return_type) == "char*"
+        assert len(fn.parameters) == 0

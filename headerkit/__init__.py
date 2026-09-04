@@ -37,12 +37,14 @@ from headerkit.ir import (
     FunctionPointer,
     # Container
     Header,
+    InputSpec,
     Parameter,
     # Protocol
     ParserBackend,
     Pointer,
     Reference,
     SourceLocation,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
@@ -80,6 +82,8 @@ __all__ = [
     "Declaration",
     # Container
     "Header",
+    "SourceUnit",
+    "InputSpec",
     "SourceLocation",
     # Parser Protocol
     "ParserBackend",

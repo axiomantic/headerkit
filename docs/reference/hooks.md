@@ -26,15 +26,28 @@ Hooks can filter invocation contexts by specifying attribute matchers:
 
 ```python
 from headerkit.hooks import hook, Priority, PipelineContext
+from headerkit.ir import SourceUnit
+
+@hook("parse_unit", backend="tree-sitter", priority=Priority.STANDARD)
+def custom_parser(code: str, filename: str, context: PipelineContext) -> SourceUnit | None:
+    ...
 
 @hook("write_output", writer="ctypes", priority=Priority.STANDARD)
-def write_ctypes(header, context: PipelineContext) -> str:
+def write_ctypes(unit: SourceUnit, context: PipelineContext) -> str:
     ...
 
 @hook("write_output", writer="*", target="*windows*", priority=Priority.PROJECT)
-def windows_override(header, context: PipelineContext) -> str:
+def windows_override(unit: SourceUnit, context: PipelineContext) -> str:
     ...
 ```
+
+## Backend and Writer Unification
+
+All parser backends and output writers register into the unified hook pipeline:
+- Backends register at `parse_unit` and `get_backend`.
+- Writers register at `write_output` and `get_writer`.
+- Calling `get_backend()` and `get_writer()` queries the highest-priority matching hook.
+- Custom plugins can override built-in backends or writers by registering hooks at `Priority.PROJECT` (100) or `Priority.OVERRIDE` (1000).
 
 ## API Reference
 

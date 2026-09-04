@@ -69,6 +69,8 @@ def test_ir_types_match_direct_import():
     assert headerkit.Variable is ir.Variable
     assert headerkit.Constant is ir.Constant
     assert headerkit.Header is ir.Header
+    assert headerkit.SourceUnit is ir.SourceUnit
+    assert headerkit.InputSpec is ir.InputSpec
     assert headerkit.SourceLocation is ir.SourceLocation
     assert headerkit.ParserBackend is ir.ParserBackend
 

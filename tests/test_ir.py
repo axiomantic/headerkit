@@ -347,7 +347,7 @@ class TestHeader:
         assert h.declarations[0].name == "Point"
         assert isinstance(h.declarations[1], Function)
         assert h.declarations[1].name == "get_point"
-        assert str(h) == "Header(test.h, 2 declarations)"
+        assert str(h) == "SourceUnit(test.h, 2 declarations)"
 
     def test_header_included_headers(self):
         h = Header(path="test.h", declarations=[], included_headers={"stdio.h", "stdlib.h"})

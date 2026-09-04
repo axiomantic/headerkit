@@ -15,8 +15,10 @@ from headerkit.ir import (
     Function,
     Header,
     Parameter,
+    ParserBackend,
     Pointer,
     SourceLocation,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
@@ -89,6 +91,18 @@ class TreeSitterBackend:
         return Header(path=filename, declarations=declarations)
 
     def _convert_top_level(self, node: Node, filename: str) -> list[Declaration]:
+        if node.type in ("preproc_ifdef", "preproc_if", "preproc_elif", "preproc_else"):
+            results: list[Declaration] = []
+            for child in node.children:
+                results.extend(self._convert_top_level(child, filename))
+            return results
+
+        if node.type in ("linkage_specification", "declaration_list"):
+            results = []
+            for child in node.children:
+                results.extend(self._convert_top_level(child, filename))
+            return results
+
         if node.type == "declaration":
             return self._convert_declaration(node, filename)
         if node.type == "type_definition":
@@ -141,8 +155,16 @@ class TreeSitterBackend:
             en = self._convert_enum(type_node, filename)
             return [en] if en else []
 
-        if declarator_node and declarator_node.type == "function_declarator":
-            return self._convert_function_declarator(type_node, declarator_node, filename)
+        # Function returning a pointer has pointer_declarator wrapping function_declarator
+        if declarator_node:
+            is_pointer_ret = False
+            curr: Node | None = declarator_node
+            while curr and curr.type == "pointer_declarator":
+                is_pointer_ret = True
+                curr = curr.child_by_field_name("declarator")
+
+            if curr and curr.type == "function_declarator":
+                return self._convert_function_declarator(type_node, curr, filename, is_pointer_return=is_pointer_ret)
 
         return []
 
@@ -151,8 +173,12 @@ class TreeSitterBackend:
         type_node: Node | None,
         declarator_node: Node,
         filename: str,
+        *,
+        is_pointer_return: bool = False,
     ) -> list[Declaration]:
         ret_type: TypeExpr = self._parse_type_expr(type_node) if type_node else CType("int")
+        if is_pointer_return:
+            ret_type = Pointer(ret_type)
         ident_node = declarator_node.child_by_field_name("declarator")
         func_name = _node_text(ident_node)
 
@@ -177,6 +203,10 @@ class TreeSitterBackend:
                                 p_name = _node_text(sub)
                         else:
                             p_name = _node_text(p_decl_node)
+
+                    # void parameter e.g. fn(void) should not produce a parameter
+                    if str(p_type) == "void" and p_name is None:
+                        continue
 
                     parameters.append(Parameter(name=p_name, type=p_type))
                 elif child.type == "...":
@@ -271,19 +301,27 @@ class TreeSitterBackend:
 _BACKEND_INSTANCE = TreeSitterBackend()
 
 
-@hook("parse_unit", backend="tree-sitter*", priority=Priority.FALLBACK)
+@hook("parse_unit", backend="tree-sitter", priority=Priority.STANDARD)
+@hook("parse_unit", backend="tree-sitter*", priority=Priority.STANDARD)
 @hook("parse_unit", backend="*", priority=Priority.FALLBACK)
 def _treesitter_parse_hook(
     code: str,
     filename: str = "input.h",
     context: PipelineContext | None = None,
     **kwargs: Any,
-) -> Header | None:
+) -> SourceUnit | None:
     if not _BACKEND_INSTANCE.is_available():
         return None
     if context and context.language not in (None, "c"):
         return None
     return _BACKEND_INSTANCE.parse(code, filename, **kwargs)
+
+
+@hook("get_backend", backend="tree-sitter", priority=Priority.STANDARD)
+@hook("get_backend", backend="tree-sitter*", priority=Priority.STANDARD)
+def _treesitter_get_backend_hook(context: PipelineContext | None = None) -> ParserBackend:
+    _ = context
+    return _BACKEND_INSTANCE
 
 
 from headerkit.backends import register_backend  # noqa: E402
