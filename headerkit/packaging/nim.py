@@ -2,16 +2,35 @@
 
 from __future__ import annotations
 
+import re
 import textwrap
 
-from headerkit.ir import Function, Header, SourceUnit
+from headerkit.ir import (
+    Array,
+    CType,
+    Function,
+    FunctionPointer,
+    Header,
+    Pointer,
+    Reference,
+    SourceUnit,
+    TypeExpr,
+)
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.ctypes import CTYPES_TYPE_MAP
 from headerkit.writers.nim import C_TO_NIM_PRIMITIVES
 
+_PKG_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_pkg_name(pkg: str) -> None:
+    if not _PKG_NAME_RE.match(pkg):
+        raise ValueError(f"Invalid package name {pkg!r}: must be a valid identifier matching ^[a-zA-Z_][a-zA-Z0-9_]*$")
+
 
 def generate_nim_cmake(pkg: str, *, nim_flags: list[str] | None = None) -> str:
     """Generate CMakeLists.txt configured for scikit-build-core compiling a Nim library."""
+    _validate_pkg_name(pkg)
     flags = nim_flags or ["--app:lib", "--mm:orc", "--threads:on", "-d:release"]
     flags_str = " ".join(flags)
 
@@ -47,6 +66,7 @@ def generate_nim_pyproject(
     description: str = "Nim extension packaged with HeaderKit",
 ) -> str:
     """Generate pyproject.toml configured for scikit-build-core wheel distribution."""
+    _validate_pkg_name(pkg)
     desc = description or f"Nim extension {pkg} packaged with HeaderKit"
     return textwrap.dedent(f"""\
         [build-system]
@@ -80,6 +100,28 @@ def _c_type_to_nim(c_type_name: str) -> str:
     return "cint"
 
 
+def _ir_type_to_nim(t: TypeExpr) -> str:
+    """Convert an IR TypeExpr to its corresponding Nim type declaration."""
+    if isinstance(t, CType):
+        name = t.name.removeprefix("struct ").removeprefix("union ").removeprefix("enum ").strip()
+        if name in C_TO_NIM_PRIMITIVES:
+            return C_TO_NIM_PRIMITIVES[name]
+        return _c_type_to_nim(name)
+    elif isinstance(t, Pointer):
+        if isinstance(t.pointee, CType) and t.pointee.name == "void":
+            return "pointer"
+        if isinstance(t.pointee, CType) and t.pointee.name == "char":
+            return "cstring"
+        return f"ptr {_ir_type_to_nim(t.pointee)}"
+    elif isinstance(t, Reference):
+        return f"var {_ir_type_to_nim(t.target)}"
+    elif isinstance(t, Array):
+        return f"array[{t.size or 0}, {_ir_type_to_nim(t.element_type)}]"
+    elif isinstance(t, FunctionPointer):
+        return "pointer"
+    return "cint"
+
+
 def _c_type_to_ctypes(c_type_name: str) -> str:
     cleaned = c_type_name.strip()
     if cleaned.startswith("const "):
@@ -93,6 +135,30 @@ def _c_type_to_ctypes(c_type_name: str) -> str:
         if base == "void":
             return "ctypes.c_void_p"
         return f"ctypes.POINTER({_c_type_to_ctypes(base)})"
+    return "ctypes.c_int"
+
+
+def _ir_type_to_ctypes(t: TypeExpr) -> str:
+    """Convert an IR TypeExpr to its corresponding ctypes type string."""
+    if isinstance(t, CType):
+        name = t.name.removeprefix("struct ").removeprefix("union ").removeprefix("enum ").strip()
+        if name.startswith("const "):
+            name = name[6:].strip()
+        if name in CTYPES_TYPE_MAP:
+            return CTYPES_TYPE_MAP[name]
+        return _c_type_to_ctypes(name)
+    elif isinstance(t, Pointer):
+        if isinstance(t.pointee, CType) and t.pointee.name == "char":
+            return "ctypes.c_char_p"
+        if isinstance(t.pointee, CType) and t.pointee.name == "void":
+            return "ctypes.c_void_p"
+        return f"ctypes.POINTER({_ir_type_to_ctypes(t.pointee)})"
+    elif isinstance(t, Reference):
+        return f"ctypes.POINTER({_ir_type_to_ctypes(t.target)})"
+    elif isinstance(t, Array):
+        return f"({_ir_type_to_ctypes(t.element_type)} * {t.size or 0})"
+    elif isinstance(t, FunctionPointer):
+        return "ctypes.c_void_p"
     return "ctypes.c_int"
 
 
@@ -127,11 +193,14 @@ def _nim_return_stub(nim_type: str) -> str:
         return "false"
     if nim_type in ("cstring", "pointer") or nim_type.startswith("ptr "):
         return "nil"
+    if nim_type.startswith("array["):
+        return f"var r: {nim_type}; r"
     return "discard"
 
 
 def generate_nim_source(pkg: str, unit: SourceUnit | Header) -> str:
     """Generate src/{pkg}.nim source file implementing C ABI entrypoints."""
+    _validate_pkg_name(pkg)
     lines: list[str] = [
         f"# Implementation module for {pkg}",
         "# Compiled with --app:lib --mm:orc",
@@ -153,13 +222,11 @@ def generate_nim_source(pkg: str, unit: SourceUnit | Header) -> str:
         params_str_list: list[str] = []
         for idx, p in enumerate(fn.parameters):
             p_name = p.name or f"arg{idx}"
-            p_type_name = getattr(p.type, "name", "int")
-            p_nim = _c_type_to_nim(p_type_name)
+            p_nim = _ir_type_to_nim(p.type)
             params_str_list.append(f"{p_name}: {p_nim}")
         params_sig = ", ".join(params_str_list)
 
-        ret_type_name = getattr(fn.return_type, "name", "void")
-        ret_nim = _c_type_to_nim(ret_type_name)
+        ret_nim = _ir_type_to_nim(fn.return_type)
         stub = _nim_return_stub(ret_nim)
 
         lines.append(f"proc {fn.name}*({params_sig}): {ret_nim} {{.exportc, dynlib, cdecl.}} =")
@@ -171,6 +238,7 @@ def generate_nim_source(pkg: str, unit: SourceUnit | Header) -> str:
 
 def generate_nim_python_wrapper(pkg: str, unit: SourceUnit | Header) -> str:
     """Generate {pkg}/__init__.py Python wrapper binding the compiled Nim library."""
+    _validate_pkg_name(pkg)
     funcs = [decl for decl in getattr(unit, "declarations", []) if isinstance(decl, Function) and decl.name]
 
     lines: list[str] = [
@@ -224,13 +292,11 @@ def generate_nim_python_wrapper(pkg: str, unit: SourceUnit | Header) -> str:
     lines.append("if _lib is not None:")
     lines.append("    init_nim()")
     for fn in funcs:
-        ret_type_name = getattr(fn.return_type, "name", "void")
-        ctypes_ret = _c_type_to_ctypes(ret_type_name)
+        ctypes_ret = _ir_type_to_ctypes(fn.return_type)
 
         arg_types: list[str] = []
         for p in fn.parameters:
-            p_type_name = getattr(p.type, "name", "int")
-            arg_types.append(_c_type_to_ctypes(p_type_name))
+            arg_types.append(_ir_type_to_ctypes(p.type))
         argtypes_str = f"[{', '.join(arg_types)}]"
 
         lines.append(f'    if hasattr(_lib, "{fn.name}"):')
@@ -260,6 +326,7 @@ def generate_nim_wheel_layout(
 ) -> ProjectLayout:
     """Generate a complete scikit-build-core wheel packaging layout for a Nim library."""
     pkg = options.package_name
+    _validate_pkg_name(pkg)
     test_type = options.get_option("test_type", "both")
     funcs = [decl for decl in getattr(unit, "declarations", []) if isinstance(decl, Function) and decl.name]
 
