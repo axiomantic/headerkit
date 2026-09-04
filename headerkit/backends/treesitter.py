@@ -142,7 +142,11 @@ class TreeSitterBackend:
 
         if struct_node and declarator_node:
             base_type = self._parse_type_expr(struct_node)
-            alias_name = _node_text(declarator_node)
+            curr: Node | None = declarator_node
+            while curr and curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
+                base_type = Pointer(base_type)
+                curr = curr.child_by_field_name("declarator")
+            alias_name = _node_text(curr) if curr else _node_text(declarator_node)
             loc = SourceLocation(file=filename, line=node.start_point[0] + 1, column=node.start_point[1] + 1)
             return [Typedef(name=alias_name, underlying_type=base_type, location=loc)]
 
@@ -162,14 +166,14 @@ class TreeSitterBackend:
 
         # Function returning a pointer has pointer_declarator wrapping function_declarator
         if declarator_node:
-            is_pointer_ret = False
+            pointer_depth = 0
             curr: Node | None = declarator_node
-            while curr and curr.type == "pointer_declarator":
-                is_pointer_ret = True
+            while curr and curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
+                pointer_depth += 1
                 curr = curr.child_by_field_name("declarator")
 
             if curr and curr.type == "function_declarator":
-                return self._convert_function_declarator(type_node, curr, filename, is_pointer_return=is_pointer_ret)
+                return self._convert_function_declarator(type_node, curr, filename, pointer_depth=pointer_depth)
 
         return []
 
@@ -179,10 +183,10 @@ class TreeSitterBackend:
         declarator_node: Node,
         filename: str,
         *,
-        is_pointer_return: bool = False,
+        pointer_depth: int = 0,
     ) -> list[Declaration]:
         ret_type: TypeExpr = self._parse_type_expr(type_node) if type_node else CType("int")
-        if is_pointer_return:
+        for _ in range(pointer_depth):
             ret_type = Pointer(ret_type)
         ident_node = declarator_node.child_by_field_name("declarator")
         func_name = _node_text(ident_node)
@@ -201,13 +205,12 @@ class TreeSitterBackend:
                     p_name = None
 
                     if p_decl_node:
-                        if p_decl_node.type == "pointer_declarator":
+                        p_curr: Node | None = p_decl_node
+                        while p_curr and p_curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
                             p_type = Pointer(p_type)
-                            sub = p_decl_node.child_by_field_name("declarator")
-                            if sub:
-                                p_name = _node_text(sub)
-                        else:
-                            p_name = _node_text(p_decl_node)
+                            p_curr = p_curr.child_by_field_name("declarator")
+                        if p_curr and p_curr.type in ("identifier", "type_identifier", "field_identifier"):
+                            p_name = _node_text(p_curr)
 
                     # void parameter e.g. fn(void) should not produce a parameter
                     if str(p_type) == "void" and p_name is None:
@@ -245,12 +248,16 @@ class TreeSitterBackend:
                     base_type = self._parse_type_expr(f_type_node) if f_type_node else CType("int")
 
                     for sibling in child.children:
-                        if sibling.type == "field_identifier":
+                        if sibling.type in ("field_identifier", "identifier"):
                             fields.append(Field(name=_node_text(sibling), type=base_type))
-                        elif sibling.type == "pointer_declarator":
-                            sub = sibling.child_by_field_name("declarator")
+                        elif sibling.type in ("pointer_declarator", "abstract_pointer_declarator"):
+                            f_type = base_type
+                            sub: Node | None = sibling
+                            while sub and sub.type in ("pointer_declarator", "abstract_pointer_declarator"):
+                                f_type = Pointer(f_type)
+                                sub = sub.child_by_field_name("declarator")
                             if sub:
-                                fields.append(Field(name=_node_text(sub), type=Pointer(base_type)))
+                                fields.append(Field(name=_node_text(sub), type=f_type))
 
         loc = SourceLocation(file=filename, line=node.start_point[0] + 1, column=node.start_point[1] + 1)
         return Struct(name=name, fields=fields, is_union=False, location=loc)
