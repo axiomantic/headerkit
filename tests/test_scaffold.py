@@ -68,6 +68,15 @@ class TestProjectLayout:
         assert layout.get_file("config.toml") is not None
         assert layout.get_file("missing.toml") is None
 
+    def test_write_to_disk_rejects_path_traversal(self, tmp_path: Path) -> None:
+        layout = ProjectLayout(
+            files=[
+                OutputFile(path="../../escaped.txt", content="malicious"),
+            ]
+        )
+        with pytest.raises(ValueError, match="Path traversal detected"):
+            layout.write_to_disk(tmp_path)
+
 
 class TestStdlibScaffolderNim:
     def test_nim_single_file_layout(self, sample_unit: Header) -> None:
@@ -137,6 +146,21 @@ class TestStdlibScaffolderMojo:
         bindings = layout.get_file("src/fastmath/bindings.mojo").content
         assert "compute_hash" in bindings
 
+    def test_mojo_test_type_filtering(self, sample_unit: Header) -> None:
+        opts_none = ScaffoldOptions(package_name="fastmath", target_language="mojo", layout="package", test_type="none")
+        layout_none = scaffold(sample_unit, opts_none)
+        paths_none = {f.path for f in layout_none.files}
+        assert "tests/test_tripwire.mojo" not in paths_none
+        assert "tests/test_fastmath.mojo" not in paths_none
+
+        opts_tw = ScaffoldOptions(
+            package_name="fastmath", target_language="mojo", layout="package", test_type="tripwire"
+        )
+        layout_tw = scaffold(sample_unit, opts_tw)
+        paths_tw = {f.path for f in layout_tw.files}
+        assert "tests/test_tripwire.mojo" in paths_tw
+        assert "tests/test_fastmath.mojo" not in paths_tw
+
 
 class TestStdlibScaffolderPython:
     def test_ctypes_package_layout(self, sample_unit: Header) -> None:
@@ -160,6 +184,30 @@ class TestStdlibScaffolderPython:
 
         tripwire = layout.get_file("tests/test_tripwire.py").content
         assert "pytest.mark.tripwire" in tripwire or "tripwire" in tripwire.lower()
+
+    def test_python_cffi_target_and_filtering(self, sample_unit: Header) -> None:
+        opts_cffi = ScaffoldOptions(
+            package_name="hashkit",
+            target_language="cffi",
+            layout="package",
+            test_type="tripwire",
+        )
+        layout_cffi = scaffold(sample_unit, opts_cffi)
+        paths = {f.path for f in layout_cffi.files}
+        assert "src/hashkit/_bindings.py" in paths
+        assert "tests/test_tripwire.py" in paths
+        assert "tests/test_bindings.py" not in paths
+
+        opts_unit = ScaffoldOptions(
+            package_name="hashkit",
+            target_language="ctypes",
+            layout="package",
+            test_type="unit",
+        )
+        layout_unit = scaffold(sample_unit, opts_unit)
+        paths_u = {f.path for f in layout_unit.files}
+        assert "tests/test_tripwire.py" not in paths_u
+        assert "tests/test_bindings.py" in paths_u
 
 
 class TestBYOScaffolderHook:

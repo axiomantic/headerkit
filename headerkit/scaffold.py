@@ -38,9 +38,11 @@ class ProjectLayout:
     def write_to_disk(self, target_dir: Path | str, *, overwrite: bool = True) -> list[Path]:
         """Write all files in this layout to the destination directory."""
         written: list[Path] = []
-        base = Path(target_dir)
+        base = Path(target_dir).resolve()
         for f in self.files:
-            p = base / f.path
+            p = (base / f.path).resolve()
+            if not p.is_relative_to(base):
+                raise ValueError(f"Path traversal detected: {f.path}")
             p.parent.mkdir(parents=True, exist_ok=True)
             if not overwrite and p.exists():
                 continue

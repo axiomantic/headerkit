@@ -611,7 +611,7 @@ def main(argv: list[str] | None = None) -> int:
             defaults = ScaffoldOptions(
                 package_name=pkg_name,
                 target_language=spec.name,
-                layout="package",
+                layout=layout_mode or "package",
                 test_type=test_type,
             )
             scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
