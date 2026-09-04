@@ -240,3 +240,30 @@ def test_target_symbols_in_all():
     assert headerkit.normalize_triple is normalize_triple
     assert headerkit.detect_process_triple is detect_process_triple
     assert headerkit.resolve_target is resolve_target
+
+
+def test_packaging_symbols_in_all():
+    """Nim wheel packaging scaffolding generators should be exported in headerkit.__all__."""
+    import headerkit
+    from headerkit.packaging import (
+        generate_nim_cmake,
+        generate_nim_pyproject,
+        generate_nim_python_wrapper,
+        generate_nim_source,
+        generate_nim_wheel_layout,
+    )
+
+    for name in (
+        "generate_nim_cmake",
+        "generate_nim_pyproject",
+        "generate_nim_python_wrapper",
+        "generate_nim_source",
+        "generate_nim_wheel_layout",
+    ):
+        assert name in headerkit.__all__, f"{name} missing from headerkit.__all__"
+
+    assert headerkit.generate_nim_cmake is generate_nim_cmake
+    assert headerkit.generate_nim_pyproject is generate_nim_pyproject
+    assert headerkit.generate_nim_python_wrapper is generate_nim_python_wrapper
+    assert headerkit.generate_nim_source is generate_nim_source
+    assert headerkit.generate_nim_wheel_layout is generate_nim_wheel_layout
