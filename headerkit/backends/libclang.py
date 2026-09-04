@@ -2357,6 +2357,9 @@ class LibclangBackend:
     def supports_cpp(self) -> bool:
         return True
 
+    def is_available(self) -> bool:
+        return _configure_libclang()
+
     def _get_index(self) -> Any:
         """Get or create the clang index."""
         if self._index is None:

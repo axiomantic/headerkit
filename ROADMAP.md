@@ -200,6 +200,29 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - Full documentation sweep to fact-check all existing tutorials, guides, and API references against new behaviors.
   - Update all example projects and tests to adopt the new `SourceUnit` conventions.
 
+#### 8. Polyglot Project & Extension Scaffolding (Unified Layouts & BYOScaffolder)
+- **Concept**: Expand beyond standalone binding files into full, idiomatic polyglot project structures with automated test suites and failing TDD/tripwire stubs, unified under a single layout model.
+- **Architectural Tenets**:
+  - **Unified Output Model ("A Single File is Just a Project of One File")**:
+    - The generation command does not split into disparate subcommands. Output is driven by a layout strategy (`--layout=file` vs `--layout=package` / `--layout=project`), defaulting to single-file when writing to a specific file or stdout, and full package layout when directed to a project directory.
+  - **Hook-Based BYOScaffolder (Bring-Your-Own-Scaffolder)**:
+    - Zero external runtime dependencies: HeaderKit includes a built-in standard-library scaffolder using `string.Template` and `pathlib`.
+    - Extensible via the unified hook engine (`register_hook("scaffold_project", ...)`), allowing third-party tools or external template engines (e.g. Copier, Cookiecutter) to self-register as custom scaffolders.
+    - Provide showcase examples demonstrating Copier integration for advanced enterprise templates with multi-file conditionals and git-based template migrations.
+  - **Dual Tripwire & Unit Test Generation**:
+    - Generates both tripwire and unit test stubs side-by-side by default (`--test-type=both|tripwire|unit|none`).
+    - *Tripwires* (`pytest-tripwire`, `nim-tripwire`): Fail immediately if foreign library binaries cannot be loaded or extracted C ABI entrypoints remain unverified, ensuring rigorous TDD discipline.
+  - **TTY-Aware Interactive Wizard**:
+    - Detects terminal status via `sys.stdin.isatty() and sys.stdout.isatty()`.
+    - When running in an interactive terminal with unspecified options, presents a clean wizard prompting for target language, package name, layout structure, test types, and scaffolder engine.
+    - In non-interactive contexts (CI, scripted pipes, or `--no-input`), cleanly falls back to CLI flags and `headerkit.toml` configuration defaults.
+  - **Zero-Dual-System Subsumption (The One True Output Path)**:
+    - Scaffolding is **THE** way output plugins produce files, not an optional secondary mode.
+    - All built-in writers (`ctypes`, `cffi`, `cython`, `nim`, `mojo`, `cshim`) immediately adopt the unified layout protocol. Single-file output is implemented as a 1-file execution of the scaffolder pipeline, completely replacing legacy isolated string-only emission.
+  - **Comprehensive Documentation & Guide Suite**:
+    - Dedicated scaffolding guide (`docs/guides/scaffolding.md`) covering package topologies, BYOScaffolder plugin development, and Copier integration examples.
+    - Full update across all writer documentation and tutorials to present the unified layout mechanism as the standard way to generate projects and bindings.
+
 ---
 
 ### 🔵 Later (Exploratory / Research)
