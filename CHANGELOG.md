@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- C++ Tree-Sitter parser backend: enhanced `TreeSitterBackend` with `tree-sitter-cpp` support, enabling zero-system-dependency parsing of C++ headers (.hpp, .hh, .hxx, .cpptest) and `-x c++` inputs.
+- C++ AST extraction in Tree-Sitter: support for extracting C++ classes (`cppclass`), member access specifiers (`public`, `protected`, `private`), constructors, virtual/pure-virtual methods (`= 0`), static methods, const-qualified methods, destructors, base inheritance (`BaseSpecifier`), nested namespaces, class/function templates, using-declaration type aliases, reference types (`&` and `&&`), and operator overloads.
+- Added `tree-sitter-cpp>=0.23` to `treesitter` optional dependency extra.
+
 - Pipeline context layout filtering: added `layout` attribute to `PipelineContext` enabling hooks to match and filter on requested layout strategies (e.g. `@hook("scaffold_project", layout="package")`), with automatic fallback when a layout is unsupported by a specific writer.
 - End-to-end roundtrip integration test coverage for all 10 writers: added `test_roundtrip_cshim.py`, `test_roundtrip_mojo.py`, and `test_roundtrip_nim.py` completing full `libclang` C/C++ AST-to-binding roundtrip verification across the entire writer surface.
 - Writer-defined layouts and options introspection: added `WriterOption` dataclass and `supported_layouts` / `supported_options` attributes on `BaseWriter` and all 10 concrete writers, enabling writers to declare layouts (e.g. `file`, `package`, `project`, `cmake`) and configurable arguments (`test_type`, `catch_exceptions`, `indent`, `verbosity`). Added public discovery functions `list_writer_layouts(name)` and `list_writer_options(name)` with layout validation in `BaseWriter.write_layout()`.
