@@ -68,10 +68,20 @@ class TestNimWheelPackaging:
             test_type="both",
         )
         layout = scaffold(sample_header, opts)
-        paths = {f.path for f in layout.files}
-        assert "pyproject.toml" in paths
-        assert "CMakeLists.txt" in paths
-        assert "fastmath/__init__.py" in paths
+        cmake = layout.get_file("CMakeLists.txt")
+        assert cmake is not None
+        assert "project(fastmath_pkg LANGUAGES C)" in cmake.content
+        assert "--mm:orc" in cmake.content
+
+        pyproj = layout.get_file("pyproject.toml")
+        assert pyproj is not None
+        assert 'name = "fastmath"' in pyproj.content
+        assert "scikit_build_core.build" in pyproj.content
+
+        wrapper = layout.get_file("fastmath/__init__.py")
+        assert wrapper is not None
+        assert "def add_numbers" in wrapper.content
+        assert "init_nim" in wrapper.content
 
     def test_pyproject_toml_structure(self, sample_header: Header) -> None:
         opts = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel")
@@ -221,3 +231,91 @@ class TestNimWheelCLI:
         assert unit.exists()
         assert "test_run_computation_wrapper_signature" in unit.read_text(encoding="utf-8")
         assert "inspect.signature" in unit.read_text(encoding="utf-8")
+
+    def test_complex_type_conversions(self) -> None:
+        from headerkit.ir import Array, CType, Function, FunctionPointer, Parameter, Pointer, Reference
+        from headerkit.packaging.nim import _ir_type_to_ctypes, _ir_type_to_nim
+
+        # Pointer to int
+        ptr_int = Pointer(CType("int"))
+        assert _ir_type_to_nim(ptr_int) == "ptr cint"
+        assert _ir_type_to_ctypes(ptr_int) == "ctypes.POINTER(ctypes.c_int)"
+
+        # Pointer to char (cstring)
+        ptr_char = Pointer(CType("char"))
+        assert _ir_type_to_nim(ptr_char) == "cstring"
+        assert _ir_type_to_ctypes(ptr_char) == "ctypes.c_char_p"
+
+        # Pointer to void
+        ptr_void = Pointer(CType("void"))
+        assert _ir_type_to_nim(ptr_void) == "pointer"
+        assert _ir_type_to_ctypes(ptr_void) == "ctypes.c_void_p"
+
+        # Reference
+        ref_double = Reference(CType("double"))
+        assert _ir_type_to_nim(ref_double) == "var cdouble"
+        assert _ir_type_to_ctypes(ref_double) == "ctypes.POINTER(ctypes.c_double)"
+
+        # Array
+        arr_float = Array(CType("float"), size=4)
+        assert _ir_type_to_nim(arr_float) == "array[4, cfloat]"
+        assert _ir_type_to_ctypes(arr_float) == "(ctypes.c_float * 4)"
+
+        # FunctionPointer
+        fn_ptr = FunctionPointer(return_type=CType("void"), parameters=[Parameter("x", CType("int"))])
+        assert _ir_type_to_nim(fn_ptr) == "pointer"
+        assert _ir_type_to_ctypes(fn_ptr) == "ctypes.c_void_p"
+
+        # Test in generated Nim source and Python wrapper
+        h = Header(
+            path="complex.h",
+            declarations=[
+                Function(
+                    name="process_buffer",
+                    return_type=Pointer(CType("char")),
+                    parameters=[
+                        Parameter("buf", Pointer(CType("int"))),
+                        Parameter("count", Reference(CType("int"))),
+                        Parameter("fixed", Array(CType("float"), size=8)),
+                    ],
+                )
+            ],
+        )
+        opts = ScaffoldOptions(package_name="complex_pkg", target_language="nim", layout="wheel")
+        layout = scaffold(h, opts)
+        src = layout.get_file("src/complex_pkg.nim")
+        assert src is not None
+        assert "proc process_buffer*(buf: ptr cint, count: var cint, fixed: array[8, cfloat]): cstring" in src.content
+
+        wrapper = layout.get_file("complex_pkg/__init__.py")
+        assert wrapper is not None
+        assert (
+            "_lib.process_buffer.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), (ctypes.c_float * 8)]"
+            in wrapper.content
+        )
+        assert "_lib.process_buffer.restype = ctypes.c_char_p" in wrapper.content
+
+    def test_package_name_validation(self, sample_header: Header) -> None:
+        import pytest
+
+        from headerkit.packaging.nim import (
+            generate_nim_cmake,
+            generate_nim_pyproject,
+            generate_nim_python_wrapper,
+            generate_nim_source,
+            generate_nim_wheel_layout,
+        )
+
+        for invalid in ["my-pkg", "123pkg", "pkg.name", "pkg/name", ""]:
+            with pytest.raises(ValueError, match="Invalid package name"):
+                generate_nim_cmake(invalid)
+            with pytest.raises(ValueError, match="Invalid package name"):
+                generate_nim_pyproject(invalid)
+            with pytest.raises(ValueError, match="Invalid package name"):
+                generate_nim_source(invalid, sample_header)
+            with pytest.raises(ValueError, match="Invalid package name"):
+                generate_nim_python_wrapper(invalid, sample_header)
+            with pytest.raises(ValueError, match="Invalid package name"):
+                generate_nim_wheel_layout(
+                    sample_header, ScaffoldOptions(package_name=invalid, target_language="nim", layout="wheel")
+                )
