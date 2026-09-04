@@ -122,7 +122,43 @@ class TestNimWheelPackaging:
         assert "proc NimMain*() {.cdecl, importc.}" in content
         assert "add_numbers" in content
         assert "compute_pi" in content
-        assert "{.exportc, dynlib, cdecl.}" in content
+        assert '{.exportc: "add_numbers", dynlib, cdecl.}' in content
+
+    def test_nim_cmake_custom_and_empty_flags(self) -> None:
+        from headerkit.packaging.nim import generate_nim_cmake
+
+        # Default flags when None
+        cmake_default = generate_nim_cmake("fastmath")
+        assert "--mm:orc" in cmake_default
+
+        # Custom flags
+        cmake_custom = generate_nim_cmake("fastmath", nim_flags=["--threads:off", "-d:debug"])
+        assert "--threads:off -d:debug" in cmake_custom
+        assert "--mm:orc" not in cmake_custom
+
+        # Explicit empty flags list
+        cmake_empty = generate_nim_cmake("fastmath", nim_flags=[])
+        assert 'COMMAND "${NIM_EXECUTABLE}" c  --out:' in cmake_empty
+        assert "--mm:orc" not in cmake_empty
+
+    def test_nim_source_escapes_reserved_keywords(self) -> None:
+        from headerkit.ir import CType, Function, Header, Parameter
+        from headerkit.packaging.nim import generate_nim_source
+
+        h = Header(
+            path="keywords.h",
+            declarations=[
+                Function(
+                    name="type",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter(name="var", type=CType("int")),
+                    ],
+                ),
+            ],
+        )
+        src = generate_nim_source("kw_pkg", h)
+        assert 'proc `type`*(`var`: cint): cint {.exportc: "type", dynlib, cdecl.} =' in src
 
     def test_python_wrapper_structure(self, sample_header: Header) -> None:
         opts = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel")
