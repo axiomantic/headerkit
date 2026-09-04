@@ -144,7 +144,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--layout",
         dest="layout",
-        choices=["file", "package", "project"],
+        choices=["file", "package", "project", "wheel", "scikit-build", "cmake"],
         default=None,
         help="Layout mode for output (default: file, or package if directory output)",
     )
@@ -584,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
     test_type = getattr(args, "test_type", "both")
     no_input = getattr(args, "no_input", False)
 
-    if layout_mode in ("package", "project") or (layout_mode is None and pkg_name_arg is not None):
+    if (layout_mode is not None and layout_mode != "file") or (layout_mode is None and pkg_name_arg is not None):
         from headerkit.backends import get_backend
         from headerkit.scaffold import ScaffoldOptions, prompt_scaffold_options, scaffold
 
