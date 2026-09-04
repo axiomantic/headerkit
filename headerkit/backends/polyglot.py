@@ -189,15 +189,20 @@ def extract_rust_interface(code: str, filename: str) -> SourceUnit:
 
         parameters: list[Parameter] = []
         if params_raw:
-            for p in _split_params(params_raw):
+            for idx, p in enumerate(_split_params(params_raw)):
                 p = p.strip()
                 if not p:
                     continue
                 parts = p.split(":", 1)
                 if len(parts) == 2:
                     p_name = parts[0].strip()
+                    if p_name == "_" or not p_name:
+                        p_name = f"arg{idx}"
                     p_type = _map_rust_type(parts[1].strip())
                     parameters.append(Parameter(name=p_name, type=p_type))
+                else:
+                    p_type = _map_rust_type(parts[0].strip())
+                    parameters.append(Parameter(name=f"arg{idx}", type=p_type))
 
         ret_type = _map_rust_type(ret_raw)
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
@@ -345,15 +350,20 @@ def extract_zig_interface(code: str, filename: str) -> SourceUnit:
 
         parameters: list[Parameter] = []
         if params_raw:
-            for p in _split_params(params_raw):
+            for idx, p in enumerate(_split_params(params_raw)):
                 p = p.strip()
                 if not p:
                     continue
                 parts = p.split(":", 1)
                 if len(parts) == 2:
                     p_name = parts[0].strip()
+                    if p_name == "_" or not p_name:
+                        p_name = f"arg{idx}"
                     p_type = _map_zig_type(parts[1].strip())
                     parameters.append(Parameter(name=p_name, type=p_type))
+                else:
+                    p_type = _map_zig_type(parts[0].strip())
+                    parameters.append(Parameter(name=f"arg{idx}", type=p_type))
 
         ret_type = _map_zig_type(ret_raw) if ret_raw else CType("void")
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
@@ -460,15 +470,20 @@ def extract_nim_interface(code: str, filename: str) -> SourceUnit:
 
         parameters: list[Parameter] = []
         if params_raw:
-            for p in params_raw.split(","):
+            for idx, p in enumerate(_split_params(params_raw)):
                 p = p.strip()
                 if not p:
                     continue
                 parts = p.split(":", 1)
                 if len(parts) == 2:
                     p_name = parts[0].strip()
+                    if p_name == "_" or not p_name:
+                        p_name = f"arg{idx}"
                     p_type = _map_nim_type(parts[1].strip())
                     parameters.append(Parameter(name=p_name, type=p_type))
+                else:
+                    p_type = _map_nim_type(parts[0].strip())
+                    parameters.append(Parameter(name=f"arg{idx}", type=p_type))
 
         ret_type = _map_nim_type(ret_raw)
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)

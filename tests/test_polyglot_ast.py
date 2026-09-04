@@ -318,3 +318,46 @@ class TestPolyglotASTExtraction:
         assert fn.parameters[0].name == "cb"
         assert isinstance(fn.parameters[0].type, FunctionPointer)
         assert fn.parameters[1].name == "user_data"
+
+    def test_unnamed_parameters_polyglot(self):
+        """Verify Rust, Zig, and Nim extractors handle unnamed or wildcard parameters."""
+        rust_code = """
+        pub extern "C" fn process_data(i32, *const u8, _: usize) -> bool {
+            true
+        }
+        """
+        unit_r = get_backend("rust").parse(rust_code, "proc.rs")
+        fn_r = [d for d in unit_r.declarations if isinstance(d, Function)][0]
+        assert len(fn_r.parameters) == 3
+        assert fn_r.parameters[0].name == "arg0"
+        assert str(fn_r.parameters[0].type) == "int32_t"
+        assert fn_r.parameters[1].name == "arg1"
+        assert isinstance(fn_r.parameters[1].type, Pointer)
+        assert fn_r.parameters[2].name == "arg2"
+        assert str(fn_r.parameters[2].type) == "uint64_t"
+
+        zig_code = """
+        export fn calculate(c_int, ?*anyopaque, _: f32) void {}
+        """
+        unit_z = get_backend("zig").parse(zig_code, "calc.zig")
+        fn_z = [d for d in unit_z.declarations if isinstance(d, Function)][0]
+        assert len(fn_z.parameters) == 3
+        assert fn_z.parameters[0].name == "arg0"
+        assert str(fn_z.parameters[0].type) == "int"
+        assert fn_z.parameters[1].name == "arg1"
+        assert isinstance(fn_z.parameters[1].type, Pointer)
+        assert fn_z.parameters[2].name == "arg2"
+        assert str(fn_z.parameters[2].type) == "float"
+
+        nim_code = """
+        proc compute*(cint, pointer, _: float64) {.exportc.} = discard
+        """
+        unit_n = get_backend("nim").parse(nim_code, "comp.nim")
+        fn_n = [d for d in unit_n.declarations if isinstance(d, Function)][0]
+        assert len(fn_n.parameters) == 3
+        assert fn_n.parameters[0].name == "arg0"
+        assert str(fn_n.parameters[0].type) == "int32_t"
+        assert fn_n.parameters[1].name == "arg1"
+        assert isinstance(fn_n.parameters[1].type, Pointer)
+        assert fn_n.parameters[2].name == "arg2"
+        assert str(fn_n.parameters[2].type) == "double"
