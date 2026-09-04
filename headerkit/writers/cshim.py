@@ -281,6 +281,8 @@ class CShimWriter(BaseWriter):
             inherited: list[Function] = []
             seen: set[str] = set()
             for b in s.bases:
+                if b.access in ("private", "protected"):
+                    continue
                 base_cls = classes_by_name.get(b.name)
                 if base_cls:
                     for m in base_cls.methods:
@@ -364,6 +366,8 @@ class CShimWriter(BaseWriter):
 
                 # Upcast helpers for base classes
                 for base in cls.bases:
+                    if base.access in ("private", "protected"):
+                        continue
                     safe_base = _sanitize_name(base.name)
                     upcast_fn = f"{safe_cls_name}_as_{safe_base}"
                     proto = f"{safe_base}_t* {upcast_fn}({safe_cls_name}_t* self);"

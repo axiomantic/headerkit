@@ -787,3 +787,45 @@ def test_cshim_conversion_and_unary_operators() -> None:
     assert "int ValueWrapper_to_int(ValueWrapper_t* self);" in out
     assert "int ValueWrapper_deref(ValueWrapper_t* self);" in out
     assert "int ValueWrapper_neg(ValueWrapper_t* self);" in out
+
+
+def test_cshim_private_and_protected_base_inheritance_filtered() -> None:
+    """Private and protected base class methods and upcast bridges must not be exposed."""
+    from headerkit.ir import BaseSpecifier
+
+    base_priv = Struct(
+        name="InternalEngine",
+        is_cppclass=True,
+        methods=[
+            Function(name="internal_step", return_type=CType("void"), parameters=[]),
+        ],
+    )
+    base_pub = Struct(
+        name="PublicInterface",
+        is_cppclass=True,
+        methods=[
+            Function(name="public_step", return_type=CType("void"), parameters=[]),
+        ],
+    )
+    derived = Struct(
+        name="Machine",
+        is_cppclass=True,
+        bases=[
+            BaseSpecifier(name="InternalEngine", access="private"),
+            BaseSpecifier(name="PublicInterface", access="public"),
+        ],
+        methods=[
+            Function(name="run", return_type=CType("void"), parameters=[]),
+        ],
+    )
+    h = Header(path="machine.h", declarations=[base_priv, base_pub, derived])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Public base methods and upcasts must be present
+    assert "PublicInterface_t* Machine_as_PublicInterface(Machine_t* self);" in out
+    assert "void Machine_public_step(Machine_t* self);" in out
+
+    # Private base methods and upcasts must NOT be present on Derived
+    assert "Machine_as_InternalEngine" not in out
+    assert "Machine_internal_step" not in out
