@@ -632,7 +632,7 @@ def test_cshim_multiple_inheritance_upcasts() -> None:
 
 
 def test_cshim_std_string_mapping() -> None:
-    """Test std::string parameter and return type flattening."""
+    """Test std::string parameter and return type flattening with thread-local safe storage."""
     cls = Struct(
         name="Greeter",
         is_cppclass=True,
@@ -657,9 +657,41 @@ def test_cshim_std_string_mapping() -> None:
     assert "void Greeter_set_name(Greeter_t* self, const char* name);" in out
     # In C prototype: std::string return becomes const char*
     assert "const char* Greeter_get_name(Greeter_t* self);" in out
-    # C++ implementation passes name and returns c_str()
+    # C++ implementation passes name and returns thread-local safe string
     assert "reinterpret_cast<Greeter*>(self)->set_name(name);" in out
-    assert "reinterpret_cast<Greeter*>(self)->get_name().c_str();" in out or "get_name()" in out
+    assert "thread_local std::string _ret_str;" in out
+    assert "_ret_str = reinterpret_cast<Greeter*>(self)->get_name();" in out
+    assert "return _ret_str.c_str();" in out
+    assert "#include <string>" in out
+
+
+def test_cshim_std_string_view_mapping() -> None:
+    """Test std::string_view parameter and return without invalid .c_str() calls."""
+    cls = Struct(
+        name="Viewer",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="show_view",
+                return_type=CType("void"),
+                parameters=[Parameter("view", CType("std::string_view"))],
+            ),
+            Function(
+                name="get_view",
+                return_type=CType("std::string_view"),
+                parameters=[],
+            ),
+        ],
+    )
+    h = Header(path="viewer.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "void Viewer_show_view(Viewer_t* self, const char* view);" in out
+    assert "const char* Viewer_get_view(Viewer_t* self);" in out
+    assert "auto _view = reinterpret_cast<Viewer*>(self)->get_view();" in out
+    assert "_ret_str.assign(_view.data(), _view.size());" in out
+    assert ".c_str()" not in out.split("get_view")[1].split("return")[0]
 
 
 def test_cshim_std_vector_parameter_flattening() -> None:
@@ -679,8 +711,60 @@ def test_cshim_std_vector_parameter_flattening() -> None:
     writer = CShimWriter()
     out = writer.write(h)
 
+    # In C header: #include <stddef.h> must be present for size_t
+    assert "#include <stddef.h>" in out
     assert "int Accumulator_add_values(Accumulator_t* self, const int* values_data, size_t values_count);" in out
     assert "std::vector<int>(values_data, values_data + values_count)" in out
+    assert "#include <vector>" in out
+    assert "#include <cstddef>" in out
+
+
+def test_cshim_non_const_vector_reference_not_flattened() -> None:
+    """Mutable std::vector<T>& reference parameters must not be flattened to const temporary arrays."""
+    cls = Struct(
+        name="Mutator",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="fill_values",
+                return_type=CType("void"),
+                parameters=[Parameter("out", Reference(CType("std::vector<int>")))],
+            ),
+        ],
+    )
+    h = Header(path="mut.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Must NOT flatten to const int* out_data, size_t out_count
+    assert "out_data" not in out
+    assert "out_count" not in out
+
+
+def test_cshim_method_overload_disambiguation() -> None:
+    """Overloaded member methods must be disambiguated with numeric index suffixes."""
+    cls = Struct(
+        name="Calculator",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="compute",
+                return_type=CType("int"),
+                parameters=[Parameter("x", CType("int"))],
+            ),
+            Function(
+                name="compute",
+                return_type=CType("double"),
+                parameters=[Parameter("x", CType("double"))],
+            ),
+        ],
+    )
+    h = Header(path="calc.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "int Calculator_compute(Calculator_t* self, int x);" in out
+    assert "double Calculator_compute_1(Calculator_t* self, double x);" in out
 
 
 def test_cshim_conversion_and_unary_operators() -> None:
