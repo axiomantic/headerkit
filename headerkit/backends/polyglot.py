@@ -445,8 +445,6 @@ _NIM_TYPE_MAP: dict[str, str] = {
     "float": "double",
     "bool": "bool",
     "void": "void",
-    "pointer": "void",
-    "cstring": "char",
 }
 
 
