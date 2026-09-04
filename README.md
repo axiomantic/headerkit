@@ -7,10 +7,10 @@
 [![License](https://img.shields.io/github/license/axiomantic/headerkit)](https://github.com/axiomantic/headerkit/blob/main/LICENSE)
 
 > **The universal interop & bindings toolkit.**  
-> **C/C++, Rust, Zig, & Nim in → Python (ctypes, CFFI, Cython), Mojo, Nim, LuaJIT, & C shims out.**  
+> **C/C++ in → Python (ctypes, CFFI, Cython), Mojo, Nim, LuaJIT, & C shims out.**  
 > **Scaffolds turnkey packages with tests. Easily extended to any source or target language. Great documentation. For humans and LLMs.**
 
-HeaderKit parses native C/C++ headers and C-ABI export surfaces from Rust, Zig, and Nim into a normalized intermediate representation (IR). From that single IR, it generates foreign language bindings, scaffolds turnkey packages with verification tests, tracks breaking API diffs, and compresses headers for LLM prompt windows.
+HeaderKit parses native C and C++ headers into a normalized intermediate representation (IR). From that single IR, it generates foreign language bindings, scaffolds turnkey packages with verification tests, tracks breaking API diffs, and compresses headers for LLM prompt windows.
 
 ---
 
@@ -261,7 +261,7 @@ headerkit [options] HEADER_OR_GLOB [HEADER_OR_GLOB ...]
 
 | Flag | Description |
 | :--- | :--- |
-| `-b NAME`, `--backend NAME` | Parser backend (default: `libclang`, or `tree-sitter`, `rust`, `zig`, `nim`) |
+| `-b NAME`, `--backend NAME` | Parser backend (default: `libclang`, or `tree-sitter`) |
 | `-w WRITER`, `--writer WRITER` | Output writer to invoke (repeatable) |
 | `-o WRITER:PATH`, `--output` | Output destination template (repeatable, e.g. `ctypes:bindings.py`) |
 | `--layout {file,package,project}` | Output layout mode (`file` or `package`) |
@@ -342,6 +342,7 @@ register_writer("ruby", RubyFfiWriter)
 
 - **Origin Library Versioning & ABI Multi-Version Metadata**: Track signatures across multiple upstream release versions to generate version-guarded symbols and automated migration shims.
 - **Bi-directional Bridges**: Generate C/C++ header interfaces and C export shims from high-level Python and Mojo source definitions.
+- **Grammar-Based Polyglot Source Extraction**: Extract C-ABI interfaces from Rust, Zig, and Nim source code into normalized IR using formal Tree-sitter grammars (`tree-sitter-rust`, `tree-sitter-zig`, `tree-sitter-nim`).
 - **Expanded Target Writers**: Additional turnkey writers for Rust (`bindgen`-free FFI), Go (`cgo`), and Swift.
 
 ---
