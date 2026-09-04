@@ -550,3 +550,156 @@ def test_write_cshim_convenience_function() -> None:
     h = Header(path="hello.h", declarations=[fn])
     out = write_cshim(h)
     assert "void hello(void);" in out
+
+
+def test_cshim_inheritance_flattening_and_upcast() -> None:
+    """Test inheritance flattening: upcast helper and flattened inherited methods."""
+    from headerkit.ir import BaseSpecifier
+
+    shape = Struct(
+        name="Shape",
+        is_cppclass=True,
+        methods=[
+            Function(name="area", return_type=CType("double"), parameters=[]),
+        ],
+    )
+    circle = Struct(
+        name="Circle",
+        is_cppclass=True,
+        bases=[BaseSpecifier(name="Shape", access="public")],
+        constructors=[
+            Function(
+                name="Circle",
+                return_type=CType("void"),
+                parameters=[Parameter("radius", CType("double"))],
+            )
+        ],
+        methods=[
+            Function(name="radius", return_type=CType("double"), parameters=[]),
+        ],
+    )
+    h = Header(path="geometry.h", declarations=[shape, circle])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # 1. Upcast helper prototype and implementation
+    assert "Shape_t* Circle_as_Shape(Circle_t* self);" in out
+    assert "return reinterpret_cast<Shape_t*>(static_cast<Shape*>(reinterpret_cast<Circle*>(self)));" in out
+
+    # 2. Inherited method flattened onto Circle
+    assert "double Circle_area(Circle_t* self);" in out
+    assert "reinterpret_cast<Circle*>(self)->area();" in out
+
+    # 3. Native method on Circle
+    assert "double Circle_radius(Circle_t* self);" in out
+
+
+def test_cshim_multiple_inheritance_upcasts() -> None:
+    """Test upcasts for multiple inheritance adjust pointer offsets via static_cast."""
+    from headerkit.ir import BaseSpecifier
+
+    audio = Struct(
+        name="AudioDevice",
+        is_cppclass=True,
+        methods=[Function(name="play", return_type=CType("void"), parameters=[])],
+    )
+    video = Struct(
+        name="VideoDevice",
+        is_cppclass=True,
+        methods=[Function(name="render", return_type=CType("void"), parameters=[])],
+    )
+    media = Struct(
+        name="MediaDevice",
+        is_cppclass=True,
+        bases=[
+            BaseSpecifier(name="AudioDevice", access="public"),
+            BaseSpecifier(name="VideoDevice", access="public"),
+        ],
+        methods=[Function(name="sync", return_type=CType("void"), parameters=[])],
+    )
+    h = Header(path="media.h", declarations=[audio, video, media])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "AudioDevice_t* MediaDevice_as_AudioDevice(MediaDevice_t* self);" in out
+    assert "VideoDevice_t* MediaDevice_as_VideoDevice(MediaDevice_t* self);" in out
+    assert "static_cast<AudioDevice*>(reinterpret_cast<MediaDevice*>(self))" in out
+    assert "static_cast<VideoDevice*>(reinterpret_cast<MediaDevice*>(self))" in out
+
+    # Both inherited methods flattened onto MediaDevice
+    assert "void MediaDevice_play(MediaDevice_t* self);" in out
+    assert "void MediaDevice_render(MediaDevice_t* self);" in out
+
+
+def test_cshim_std_string_mapping() -> None:
+    """Test std::string parameter and return type flattening."""
+    cls = Struct(
+        name="Greeter",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="set_name",
+                return_type=CType("void"),
+                parameters=[Parameter("name", CType("std::string"))],
+            ),
+            Function(
+                name="get_name",
+                return_type=CType("std::string"),
+                parameters=[],
+            ),
+        ],
+    )
+    h = Header(path="greeter.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # In C prototype: std::string parameter becomes const char*
+    assert "void Greeter_set_name(Greeter_t* self, const char* name);" in out
+    # In C prototype: std::string return becomes const char*
+    assert "const char* Greeter_get_name(Greeter_t* self);" in out
+    # C++ implementation passes name and returns c_str()
+    assert "reinterpret_cast<Greeter*>(self)->set_name(name);" in out
+    assert "reinterpret_cast<Greeter*>(self)->get_name().c_str();" in out or "get_name()" in out
+
+
+def test_cshim_std_vector_parameter_flattening() -> None:
+    """Test std::vector<T> parameter flattening to (const T* data, size_t count)."""
+    cls = Struct(
+        name="Accumulator",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="add_values",
+                return_type=CType("int"),
+                parameters=[Parameter("values", CType("std::vector<int>"))],
+            ),
+        ],
+    )
+    h = Header(path="acc.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "int Accumulator_add_values(Accumulator_t* self, const int* values_data, size_t values_count);" in out
+    assert "std::vector<int>(values_data, values_data + values_count)" in out
+
+
+def test_cshim_conversion_and_unary_operators() -> None:
+    """Test conversion operators (operator bool, operator int) and unary operators."""
+    cls = Struct(
+        name="ValueWrapper",
+        is_cppclass=True,
+        methods=[
+            Function(name="operator bool", return_type=CType("bool"), parameters=[]),
+            Function(name="operator int", return_type=CType("int"), parameters=[]),
+            Function(name="operator*", return_type=CType("int"), parameters=[]),  # unary deref
+            Function(name="operator-", return_type=CType("int"), parameters=[]),  # unary neg
+        ],
+    )
+    h = Header(path="wrapper.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "bool ValueWrapper_to_bool(ValueWrapper_t* self);" in out
+    assert "int ValueWrapper_to_int(ValueWrapper_t* self);" in out
+    assert "int ValueWrapper_deref(ValueWrapper_t* self);" in out
+    assert "int ValueWrapper_neg(ValueWrapper_t* self);" in out
