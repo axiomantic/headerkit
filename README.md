@@ -21,7 +21,7 @@ HeaderKit parses native C/C++ headers and C-ABI export surfaces from Rust, Zig, 
 | **Generate Python bindings** (ctypes, CFFI, Cython) | `headerkit mylib.h -w ctypes -o ctypes:bindings.py` | [Python Bindings](#1-generate-python-bindings-ctypes-cffi-cython) |
 | **Generate Mojo, Nim, or LuaJIT bindings** | `headerkit mylib.h -w mojo -o mojo:mylib.mojo` | [Systems & Scripting](#2-generate-systems--scripting-bindings-mojo-nim-luajit) |
 | **Wrap C++ classes in a C-ABI shim** (`extern "C"`) | `headerkit mylib.hpp -w cshim -o cshim:mylib_cshim.cpp` | [C Shim Wrappers](#3-wrap-c-classes-in-a-c-abi-shim) |
-| **Export bindings from Rust, Zig, or Nim** | `headerkit lib.rs -w ctypes -o ctypes:bindings.py` | [Polyglot Ingestion](#4-ingest-interfaces-from-rust-zig-and-nim) |
+| **Parse C/C++ without LLVM/libclang** | `headerkit mylib.h -b tree-sitter -w ctypes` | [Zero-Dependency Parsing](#4-zero-dependency-parsing-with-tree-sitter) |
 | **Scaffold a turnkey package with tests** | `headerkit mylib.h -w nim --layout package --package-name mypkg` | [Package Scaffolding](#5-scaffold-turnkey-packages-with-tests) |
 | **Detect breaking API changes between versions** | `DiffWriter(baseline=v1, format="markdown").write(v2)` | [API Diffing](#6-detect-breaking-api-changes) |
 | **Compress headers for LLM prompt windows** | `headerkit mylib.h -w prompt` | [LLM Context](#7-compress-headers-for-llm-prompts) |
@@ -107,19 +107,19 @@ void Point_destroy(PointHandle self) { delete static_cast<Point*>(self); }
 
 *See the [CShim Reference](https://axiomantic.github.io/headerkit/reference/cshim/).*
 
-### 4. Ingest Interfaces from Rust, Zig, and Nim
+### 4. Zero-Dependency Parsing with Tree-Sitter
 
-When native libraries are authored in Rust, Zig, or Nim rather than C, HeaderKit can ingest the foreign source files directly and extract their C-ABI export surfaces (`pub extern "C" fn`, `export fn`, `{.exportc.}`) into normalized IR without requiring handwritten `.h` header files:
+When system LLVM / `libclang` is not installed or in lightweight CI environments, HeaderKit can parse C and C++ headers directly using precompiled Tree-sitter grammars (`tree-sitter-c` and `tree-sitter-cpp`):
 
 ```bash
-# Ingest Rust crate exports and generate Python ctypes bindings
-headerkit mylib.rs -w ctypes -o ctypes:bindings.py
+# Parse C header using tree-sitter backend
+headerkit mylib.h -b tree-sitter -w ctypes -o ctypes:bindings.py
 
-# Ingest Zig exports and generate Mojo bindings
-headerkit mylib.zig -w mojo -o mojo:mylib.mojo
+# Parse C++ header using tree-sitter backend
+headerkit mylib.hpp -b tree-sitter -w cython -o cython:mylib.pxd
 ```
 
-*See the [Polyglot Extraction Guide](https://axiomantic.github.io/headerkit/reference/polyglot/).*
+*See the [Tree-sitter Backend Guide](https://axiomantic.github.io/headerkit/reference/treesitter/).*
 
 ### 5. Scaffold Turnkey Packages with Tests
 

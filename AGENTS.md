@@ -24,6 +24,21 @@ Backends and writers use the unified hook engine (`headerkit.hooks`) as their un
 
 When adding a new backend or writer, follow the pattern: define the class, register hooks on `parse_unit`/`get_backend` or `write_output`/`get_writer`, and call `register_*()` at the bottom of the module file.
 
+## Strict prohibition against regex-based AST extraction (CANNOT REGEX FOR CONTEXT-FREE GRAMMARS)
+
+**NEVER use regular expressions to parse, tokenize, or extract Abstract Syntax Tree (AST) structures from source code in context-free or structured programming languages (C, C++, Rust, Zig, Nim, etc.).**
+
+Context-free grammars cannot be parsed by regular languages. Attempting to extract function declarations, type definitions, structs, interfaces, or language scopes with regex is fundamentally flawed and strictly forbidden:
+- It fails on nested braces, generic type parameters, closures, macro invocations, block comments, multiline attributes, and string literals.
+- It produces fragile green mirages—tests that pass on trivial happy-path snippets while failing on any non-trivial real-world syntax.
+
+All parser backends and AST extractors in HeaderKit **MUST** use formal parser grammars or compiler toolchains:
+- **Tree-sitter grammars** (e.g. `tree-sitter-c`, `tree-sitter-cpp`, `tree-sitter-rust`, `tree-sitter-zig`) traversing concrete syntax trees.
+- **Compiler frontend ASTs** (e.g. LLVM `libclang`).
+- **Formal compiler / AST bindings** provided by the language ecosystem.
+
+Any code introducing regex-based AST extraction, source scanning, or signature scraping will be rejected immediately.
+
 ## Architectural coherence & anti-islanding (Phase 0 scope gate)
 
 Before writing code or tests for any task, perform an explicit Phase 0 scope audit:

@@ -97,7 +97,6 @@ nav:
     - IR Types: reference/ir.md
     - Backends: reference/backends.md
     - Tree-sitter Backend: reference/treesitter.md
-    - Polyglot Extraction: reference/polyglot.md
     - Hooks Pipeline: reference/hooks.md
     - Writers: reference/writers.md
     - CFFI Writer: reference/cffi.md

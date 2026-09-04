@@ -176,10 +176,7 @@ def get_backend_info() -> list[dict[str, str | bool]]:
 
     descriptions = {
         "libclang": "Full C/C++ support via LLVM",
-        "tree-sitter": "Fast C parsing without system LLVM dependencies",
-        "rust": "Rust C-ABI interface surface extraction",
-        "zig": "Zig C-ABI export interface extraction",
-        "nim": "Nim C-ABI export proc extraction",
+        "tree-sitter": "Fast C/C++ parsing without system LLVM dependencies",
     }
 
     result: list[dict[str, str | bool]] = []
@@ -301,13 +298,6 @@ def _ensure_backends_loaded() -> None:
         import logging
 
         logging.getLogger(__name__).debug("Could not import treesitter backend", exc_info=True)
-
-    try:
-        import headerkit.backends.polyglot  # noqa: F401 (side effect import)
-    except ImportError:
-        import logging
-
-        logging.getLogger(__name__).debug("Could not import polyglot backend", exc_info=True)
 
 
 def _load_backend_plugins() -> None:

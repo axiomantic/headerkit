@@ -223,6 +223,16 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
     - Dedicated scaffolding guide (`docs/guides/scaffolding.md`) covering package topologies, BYOScaffolder plugin development, and Copier integration examples.
     - Full update across all writer documentation and tutorials to present the unified layout mechanism as the standard way to generate projects and bindings.
 
+#### 9. Grammar-Based Polyglot Source AST Extraction (Rust, Zig, Nim)
+- **Concept**: Extract C-ABI interface surfaces (`extern "C"` functions, `#[repr(C)]` structs/enums, exported types) directly from foreign source code (Rust `.rs`, Zig `.zig`, Nim `.nim`) into normalized `SourceUnit` IR.
+- **Strict Grammar Invariant (Zero Regex Rule)**:
+  - Context-free and structured programming languages *cannot* be parsed with regular expressions. Hand-rolled regex tokenizers and regex AST extractors are strictly forbidden across the project.
+  - All implementations **must** use dedicated Tree-sitter grammars (`tree-sitter-rust`, `tree-sitter-zig`, `tree-sitter-nim`) or formal AST compiler frontends, traversing concrete syntax tree (CST) nodes into normalized `SourceUnit` IR.
+- **Scope & Targets**:
+  - **Rust**: `tree-sitter-rust` extraction of `pub extern "C" fn`, `#[repr(C)] pub struct`, `#[repr(C)] pub enum`.
+  - **Zig**: `tree-sitter-zig` extraction of `export fn`, `pub const Name = extern struct`, `pub const Name = extern enum`.
+  - **Nim**: Formal tree-sitter or compiler AST extraction of `proc name*(...): ret {.exportc.}`, `type Name* = object`.
+
 ---
 
 ### 🔵 Later (Exploratory / Research)

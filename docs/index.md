@@ -49,7 +49,7 @@ graph LR
     D -.- D1["WriterBackend<br>Protocol"]
 ```
 
-1. A **backend** (e.g., `LibclangBackend`, `RustBackend`, `ZigBackend`, `NimBackend`) parses source code and produces a normalized `SourceUnit` containing typed declarations.
+1. A **backend** (e.g., `LibclangBackend`, `TreeSitterBackend`) parses source code and produces a normalized `SourceUnit` containing typed declarations.
 2. A **writer** (inheriting from `BaseWriter`, such as `CtypesWriter`, `CffiWriter`, `MojoWriter`, `NimWriter`, `CshimWriter`, etc.) consumes the IR and produces single-file bindings or scaffolds full multi-file packages.
 
 Backends and writers self-register via unified hooks and Python entry points, so you can add new source languages or output formats without modifying HeaderKit itself.

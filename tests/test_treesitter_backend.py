@@ -28,6 +28,15 @@ class TestTreeSitterBackend:
         except ImportError:
             assert backend.supports_cpp is False
 
+    def test_is_cpp_mode_explicit_override(self):
+        backend = TreeSitterBackend()
+        # Explicit -x c should force C mode even for .hpp filename
+        assert backend._is_cpp_mode("struct Point { int x; };", "test.hpp", ["-x", "c"]) is False
+        # Explicit -x c++ should force C++ mode even for .h filename
+        assert backend._is_cpp_mode("struct Point { int x; };", "test.h", ["-x", "c++"]) is True
+        # Explicit -std=c11 should force C mode even for .hpp filename
+        assert backend._is_cpp_mode("struct Point { int x; };", "test.hpp", ["-std=c11"]) is False
+
     def test_parse_simple_struct(self):
         code = """
         struct Point {
@@ -377,3 +386,46 @@ class TestTreeSitterBackend:
         assert "void reset()" in out
         assert "int add(int x)" in out
         assert "int multiply(int a, int b)" in out
+
+    def test_c_source_function_definitions(self):
+        """Extract non-static function definitions from C source code (.c)."""
+        code = """
+        struct Config {
+            int timeout;
+            double threshold;
+        };
+
+        static int internal_helper(int x) {
+            return x * 2;
+        }
+
+        int process_data(const struct Config *cfg, double *values, int count) {
+            if (!cfg) return -1;
+            return 0;
+        }
+        """
+        backend = TreeSitterBackend()
+        unit = backend.parse(code, "processor.c")
+
+        structs = [d for d in unit.declarations if isinstance(d, Struct)]
+        funcs = [d for d in unit.declarations if isinstance(d, Function)]
+
+        assert len(structs) == 1
+        assert structs[0].name == "Config"
+        assert len(structs[0].fields) == 2
+        assert structs[0].fields[0].name == "timeout"
+        assert str(structs[0].fields[0].type) == "int"
+
+        func_names = [f.name for f in funcs]
+        assert "process_data" in func_names
+        assert "internal_helper" not in func_names
+
+        fn = next(f for f in funcs if f.name == "process_data")
+        assert str(fn.return_type) == "int"
+        assert len(fn.parameters) == 3
+        assert fn.parameters[0].name == "cfg"
+        assert isinstance(fn.parameters[0].type, Pointer)
+        assert fn.parameters[1].name == "values"
+        assert isinstance(fn.parameters[1].type, Pointer)
+        assert fn.parameters[2].name == "count"
+        assert str(fn.parameters[2].type) == "int"
