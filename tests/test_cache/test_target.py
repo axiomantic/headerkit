@@ -434,6 +434,23 @@ class TestCrossCompilerDetection:
         monkeypatch.setenv("CC", "/usr/bin/aarch64-linux-gnu-gcc")
         assert detect_cross_compiler_target() == "aarch64-unknown-linux-gnu"
 
+    def test_cc_cross_compiler_version_suffix_and_exe(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from headerkit._target import detect_cross_compiler_target
+
+        monkeypatch.delenv("CARGO_BUILD_TARGET", raising=False)
+        monkeypatch.delenv("LLVM_TARGET_TRIPLE", raising=False)
+        monkeypatch.delenv("CROSS_COMPILE", raising=False)
+
+        monkeypatch.setenv("CC", "/usr/bin/aarch64-linux-gnu-gcc-12")
+        assert detect_cross_compiler_target() == "aarch64-unknown-linux-gnu"
+
+        monkeypatch.setenv("CXX", "C:\\tools\\x86_64-w64-mingw32-g++.exe")
+        monkeypatch.delenv("CC", raising=False)
+        assert detect_cross_compiler_target() == "x86_64-w64-mingw32"
+
+        monkeypatch.setenv("CC", "/usr/bin/aarch64-apple-darwin21.4-clang")
+        assert detect_cross_compiler_target() == "aarch64-apple-darwin21.4"
+
     def test_resolve_target_uses_cross_detection(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("HEADERKIT_TARGET", raising=False)
         monkeypatch.setenv("CARGO_BUILD_TARGET", "aarch64-unknown-linux-musl")

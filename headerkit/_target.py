@@ -361,10 +361,11 @@ def detect_cross_compiler_target() -> str | None:
         compiler = os.environ.get(env_key)
         if not compiler:
             continue
-        name = Path(compiler).name
+        name = Path(compiler).name.split("\\")[-1]
         m = re.match(
-            r"^([a-zA-Z0-9_]+-[a-zA-Z0-9_]+-[a-zA-Z0-9_]+(?:-[a-zA-Z0-9_]+)?)-(?:gcc|g\+\+|clang|clang\+\+)",
+            r"^([a-zA-Z0-9_.-]+-[a-zA-Z0-9_.-]+-[a-zA-Z0-9_.-]+(?:-[a-zA-Z0-9_.-]+)?)-(?:gcc|g\+\+|clang|clang\+\+)(?:-[0-9.]+)?(?:\.exe)?$",
             name,
+            re.IGNORECASE,
         )
         if m:
             prefix = m.group(1)
