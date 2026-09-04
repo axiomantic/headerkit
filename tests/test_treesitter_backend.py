@@ -1,4 +1,4 @@
-from __future__ import annotations
+import pytest
 
 from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.hooks import HookDispatcher, PipelineContext
@@ -6,6 +6,11 @@ from headerkit.ir import Enum, Function, Header, Pointer, Struct
 
 
 class TestTreeSitterBackend:
+    @classmethod
+    def setup_class(cls):
+        pytest.importorskip("tree_sitter")
+        pytest.importorskip("tree_sitter_c")
+
     def test_availability_and_capabilities(self):
         backend = TreeSitterBackend()
         assert backend.name == "tree-sitter"
