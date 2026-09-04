@@ -33,7 +33,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
       - name: Install libclang (macOS)
         if: runner.os == 'macOS'
-        run: brew install llvm
+        run: |
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
       - name: Verify LLVM (Windows)
         if: runner.os == 'Windows'
         shell: bash
