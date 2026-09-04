@@ -8,6 +8,7 @@ import pytest
 
 from headerkit.hooks import HookRegistry
 from headerkit.ir import (
+    Array,
     Constant,
     CType,
     Enum,
@@ -97,20 +98,24 @@ def test_mojo_writer_pointers_and_arrays() -> None:
             Parameter("data", Pointer(CType("uint8_t"))),
             Parameter("matrix", Pointer(Pointer(CType("float")))),
             Parameter("name", Pointer(CType("char"))),
+            Parameter("fixed", Array(CType("int"), 4)),
         ],
     )
     header = Header(path="test.h", declarations=[fn])
     output = write_mojo(header)
 
+    assert "from collections import InlineArray" in output
     assert (
         "fn process_buffer(self, data: UnsafePointer[UInt8], "
         "matrix: UnsafePointer[UnsafePointer[Float32]], "
-        "name: UnsafePointer[Int8]) -> UnsafePointer[NoneType]:" in output
+        "name: UnsafePointer[Int8], "
+        "fixed: InlineArray[Int32, 4]) -> UnsafePointer[NoneType]:" in output
     )
     assert (
         "var f = self.handle.get_function[fn(UnsafePointer[UInt8], "
         "UnsafePointer[UnsafePointer[Float32]], "
-        'UnsafePointer[Int8]) -> UnsafePointer[NoneType]]("process_buffer")' in output
+        "UnsafePointer[Int8], "
+        'InlineArray[Int32, 4]) -> UnsafePointer[NoneType]]("process_buffer")' in output
     )
 
 

@@ -233,6 +233,7 @@ class MojoWriter:
         """Convert headerkit IR to Mojo FFI declarations and wrapper client."""
         lines: list[str] = [
             "# Auto-generated Mojo bindings by HeaderKit",
+            "from collections import InlineArray",
             "from sys.ffi import DLHandle",
             "from memory import UnsafePointer",
             "",
