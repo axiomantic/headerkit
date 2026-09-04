@@ -86,6 +86,7 @@ nav:
     - Writing Custom Backends: guides/custom-backends.md
     - Writing Custom Writers: guides/custom-writers.md
     - Nim to Python Packaging: guides/nim-python-packaging.md
+    - Project Scaffolding: guides/scaffolding.md
   - Tutorials:
     - PXD Writer (Cython): tutorials/pxd-writer.md
     - ctypes Writer: tutorials/ctypes-writer.md
@@ -109,6 +110,7 @@ nav:
     - Mojo Writer: reference/mojo.md
     - Nim Writer: reference/nim.md
     - Prompt Writer: reference/prompt.md
+    - Scaffolding API: reference/scaffold.md
     - Generate Pipeline: reference/generate.md
     - Install Libclang CLI: reference/install-libclang.md
 

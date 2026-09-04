@@ -142,6 +142,34 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Writer option",
     )
     parser.add_argument(
+        "--layout",
+        dest="layout",
+        choices=["file", "package", "project"],
+        default=None,
+        help="Layout mode for output (default: file, or package if directory output)",
+    )
+    parser.add_argument(
+        "--package-name",
+        "--pkg",
+        dest="package_name",
+        default=None,
+        help="Package name when scaffolding a package layout",
+    )
+    parser.add_argument(
+        "--test-type",
+        dest="test_type",
+        choices=["both", "tripwire", "unit", "none"],
+        default="both",
+        help="Type of test stubs to generate when scaffolding (default: both)",
+    )
+    parser.add_argument(
+        "--no-input",
+        dest="no_input",
+        action="store_true",
+        default=False,
+        help="Disable interactive prompting in terminal",
+    )
+    parser.add_argument(
         "--config",
         dest="config",
         metavar="PATH",
@@ -549,6 +577,51 @@ def main(argv: list[str] | None = None) -> int:
     if config is not None:
         merged_output_templates.update(config.output)
     merged_output_templates.update(output_templates)
+
+    # Check for package / project layout scaffolding
+    layout_mode = getattr(args, "layout", None)
+    pkg_name_arg = getattr(args, "package_name", None)
+    test_type = getattr(args, "test_type", "both")
+    no_input = getattr(args, "no_input", False)
+
+    if layout_mode in ("package", "project") or (layout_mode is None and pkg_name_arg is not None):
+        from headerkit.backends import get_backend
+        from headerkit.scaffold import ScaffoldOptions, prompt_scaffold_options, scaffold
+
+        backend = get_backend(backend_name)
+        backend_args_list = _parse_defines(defines) + backend_args
+
+        if not input_files:
+            print("Error: no input files provided for scaffolding", file=sys.stderr)
+            return 1
+
+        first_path = Path(input_files[0]).resolve()
+        unit = backend.parse(
+            first_path.read_text(encoding="utf-8"),
+            str(first_path),
+            include_dirs or None,
+            backend_args_list or None,
+            project_prefixes=(str(first_path.parent),),
+        )
+
+        for spec in specs:
+            pkg_name = pkg_name_arg or (Path(spec.output_template).name if spec.output_template else first_path.stem)
+            target_dir = Path(spec.output_template) if spec.output_template else Path(pkg_name)
+
+            defaults = ScaffoldOptions(
+                package_name=pkg_name,
+                target_language=spec.name,
+                layout=layout_mode or "package",
+                test_type=test_type,
+            )
+            scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
+            project_layout = scaffold(unit, scaffold_opts)
+            written = project_layout.write_to_disk(target_dir)
+            print(
+                f"headerkit: scaffolded {len(written)} files into {target_dir}",
+                file=sys.stderr,
+            )
+        return 0
 
     # Determine whether to use batch_generate() or direct generate()
     # Use direct generate() only for: single explicit file, single writer, no output template

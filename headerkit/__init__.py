@@ -51,6 +51,15 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import (
+    BYOScaffolder,
+    OutputFile,
+    ProjectLayout,
+    ScaffoldOptions,
+    StdlibScaffolder,
+    prompt_scaffold_options,
+    scaffold,
+)
 from headerkit.writers import (
     WriterBackend,
     get_default_writer,
@@ -136,4 +145,12 @@ __all__ = [
     "HookDispatcher",
     "HookCaller",
     "execute_pipeline",
+    # Scaffolding API
+    "OutputFile",
+    "ProjectLayout",
+    "ScaffoldOptions",
+    "BYOScaffolder",
+    "StdlibScaffolder",
+    "prompt_scaffold_options",
+    "scaffold",
 ]

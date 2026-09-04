@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Polyglot project and extension scaffolding engine (`headerkit.scaffold`): unified layout architecture where single-file bindings and full packages are driven by a single output model (`OutputFile`, `ProjectLayout`, `ScaffoldOptions`, `scaffold()`).
+- Built-in zero-dependency standard library scaffolder (`StdlibScaffolder`) generating complete turnkey packages with build metadata and test suites for Nim (`.nimble`, `nim.cfg`), Mojo (`mojoproject.toml`), and Python (`pyproject.toml`).
+- Pluggable `BYOScaffolder` protocol and `scaffold_project` hook integration for third-party template engines (e.g. Copier, Cookiecutter) with custom precedence.
+- Dual test stub generation: automated side-by-side failing tripwires (`pytest-tripwire`, `nim-tripwire`) for C ABI symbol/library verification and unit test skeletons.
+- TTY-aware dynamic wizard (`prompt_scaffold_options`) auto-detecting terminal status to guide users through package setup interactively, with graceful `--no-input` fallback.
+- CLI options: `--layout` (`file`, `package`, `project`), `--package-name` / `--pkg`, `--test-type` (`both`, `tripwire`, `unit`, `none`), and `--no-input`.
+- Executable Copier BYOScaffolder showcase example (`examples/scaffolding/copier_scaffolder.py`).
+- Comprehensive scaffolding guide (`docs/guides/scaffolding.md`) and API reference (`docs/reference/scaffold.md`).
 - Mojo FFI binding writer (`headerkit.writers.mojo`): generates idiomatic Modular Mojo bindings using `sys.ffi.DLHandle` and C-ABI flat shims, mapping C types, structs, enums, typedefs, constants, and high-level C++ class wrapper structs.
 - Mojo writer reference documentation (`docs/reference/mojo.md`).
 - Polyglot source interface extraction: added support for extracting C-ABI interface surfaces directly from Rust (`.rs`), Zig (`.zig`), and Nim (`.nim`) source files into normalized `SourceUnit` IR.
