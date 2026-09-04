@@ -18,11 +18,19 @@ Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the vers
 
 `headerkit/_clang/` contains vendored upstream clang Python bindings for LLVM 18-23. These are excluded from ruff and mypy. Do not modify, refactor, or lint them.
 
-## Registry pattern
+## Registry pattern & unified hooks
 
-Backends and writers use a managed circular import pattern for self-registration. Both `headerkit/backends/__init__.py` and `headerkit/writers/__init__.py` lazily import their concrete modules via `_ensure_*_loaded()`, and each concrete module imports `register_backend`/`register_writer` at the bottom of the file to self-register. Do not restructure these imports.
+Backends and writers use the unified hook engine (`headerkit.hooks`) as their underlying registry, preserving the managed circular import pattern for self-registration. Both `headerkit/backends/__init__.py` and `headerkit/writers/__init__.py` lazily import their concrete modules via `_ensure_*_loaded()`, and each concrete module self-registers via hooks and `register_backend`/`register_writer` at the bottom of the file. Do not restructure these imports.
 
-When adding a new backend or writer, follow the existing pattern: define the class, then call `register_*()` at the bottom of the module file.
+When adding a new backend or writer, follow the pattern: define the class, register hooks on `parse_unit`/`get_backend` or `write_output`/`get_writer`, and call `register_*()` at the bottom of the module file.
+
+## Architectural coherence & anti-islanding (Phase 0 scope gate)
+
+Before writing code or tests for any task, perform an explicit Phase 0 scope audit:
+
+- **Zero-Dual-System Rule**: When introducing a new engine, pipeline, or abstraction, existing built-in components must immediately adopt it in the foundational PR. Never build a new subsystem as an isolated island alongside the legacy mechanism it was designed to replace.
+- **Foundational Noun Priority**: When core IR containers, domain models, or input classifications evolve (e.g. `Header` $\rightarrow$ `SourceUnit`, `InputSpec`), establish the new nouns in the base PR so new features are never built on deprecated models.
+- **Consumer Trace**: Verify that standard callers (`get_backend()`, `get_writer()`, CLI) transparently flow through the new architecture rather than requiring special-case entry points.
 
 ## Public API
 

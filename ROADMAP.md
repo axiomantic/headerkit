@@ -26,6 +26,22 @@ Headerkit prioritizes **complete, working projects** that "just work" out of the
 To uphold rigorous quality standards and keep the codebase pristine across all initiatives, every task follows an explicit ceremony from design to completion:
 
 ### 1. Phased Ceremony for Each Task
+0. **Holistic Scope & Architectural Coherence Gate (Pre-Implementation)**:
+   - **Subsystem Islanding & Subsumption Audit**:
+     - Does this work introduce a new engine, pipeline, registry, or abstraction?
+     - If yes: Does the legacy mechanism still exist alongside it?
+     - *Zero-Dual-System Rule*: New engines must immediately subsume existing built-ins. Existing components must "eat the dogfood" in the foundational PR—never defer migration to a follow-up if that leaves dual registries or duplicate architectural paths in the codebase.
+   - **Core Noun & Domain Model Invariant Audit**:
+     - Are core IR containers, domain models, or protocols evolving (e.g. `Header` $\rightarrow$ `SourceUnit`, `InputSpec`)?
+     - If yes: Are new components built on the *new* nouns or the *old* nouns? Foundational nouns must be established in the base PR so subsequent work is never built on deprecated models that immediately need refactoring.
+   - **End-to-End Consumer Invariant Trace**:
+     - Trace the caller's path from public entry points (`get_backend()`, `get_writer()`, CLI `headerkit`). Does the existing public API transparently flow through the new architecture, or is the new capability only reachable via an obscure new entry point?
+   - **The Scope Triad (Written Checkpoint)**:
+     - Explicitly define:
+       - `[Added]`: New capabilities, classes, and modules.
+       - `[Subsumed/Migrated]`: Existing modules rewritten to use the new paradigm.
+       - `[Aliased/Bridged]`: Backward-compatibility shims preserving public API stability.
+   - *Checkpoint*: Verify Phase 0 alignment before writing functional code or test suites.
 1. **Design & Scope Alignment**:
    - Explicitly define interfaces, types, signatures, and failure modes before writing functional code.
    - Clarify edge cases, fallback behaviors, and cross-platform implications (Linux, macOS, Windows).
