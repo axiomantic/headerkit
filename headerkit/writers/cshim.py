@@ -28,9 +28,26 @@ from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import BaseWriter, WriterOption
 
 
-def _sanitize_name(name: str) -> str:
+def _sanitize_name(name: str, num_params: int | None = None) -> str:
     """Convert C++ symbols (e.g. namespaces, operators, templates) into safe C identifiers."""
     name = name.replace("::", "_")
+
+    # Conversion / cast operators: operator bool, operator int, etc.
+    if name.startswith("operator "):
+        target_type = name[9:].strip()
+        return f"to_{_sanitize_name(target_type)}"
+
+    # Unary operators when num_params == 0 (e.g. unary *, unary -, unary +)
+    unary_ops = {
+        "operator*": "deref",
+        "operator-": "neg",
+        "operator+": "pos",
+        "operator~": "bnot",
+        "operator!": "lnot",
+    }
+    if num_params == 0 and name in unary_ops:
+        return unary_ops[name]
+
     # Compound & multi-char operators first
     name = name.replace("operator[]", "get_item")
     name = name.replace("operator()", "call")
@@ -79,8 +96,36 @@ def _sanitize_name(name: str) -> str:
     return name.strip("_")
 
 
+def _is_std_string(t: TypeExpr) -> bool:
+    """Check if type expression represents std::string or std::string_view."""
+    if isinstance(t, Reference):
+        t = t.target
+    if isinstance(t, CType):
+        raw = t.name.strip()
+        if raw.startswith("const "):
+            raw = raw[6:].strip()
+        return raw in ("std::string", "string", "std::string_view", "string_view")
+    return False
+
+
+def _is_std_vector(t: TypeExpr) -> str | None:
+    """Check if type expression represents std::vector<T>, returning T if so."""
+    if isinstance(t, Reference):
+        t = t.target
+    if isinstance(t, CType):
+        raw = t.name.strip()
+        if raw.startswith("const "):
+            raw = raw[6:].strip()
+        m = re.match(r"^(?:std::)?vector<\s*(.*?)\s*>$", raw)
+        if m:
+            return m.group(1).strip()
+    return None
+
+
 def _type_to_c(t: TypeExpr) -> str:
     """Format an IR type expression as a pure C type string."""
+    if _is_std_string(t):
+        return "const char*"
     if isinstance(t, CType):
         name = t.name
         if "::" in name:
@@ -91,7 +136,9 @@ def _type_to_c(t: TypeExpr) -> str:
     elif isinstance(t, Pointer):
         return f"{_type_to_c(t.pointee)}*"
     elif isinstance(t, Reference):
-        # In C-ABI, references become pointers
+        # In C-ABI, references become pointers unless mapped to C strings
+        if _is_std_string(t.target):
+            return "const char*"
         return f"{_type_to_c(t.target)}*"
     elif isinstance(t, Array):
         size_str = str(t.size) if t.size is not None else ""
@@ -119,6 +166,29 @@ def _format_param(p: Parameter, param_name: str | None = None) -> str:
         return f"{_type_to_c(p.type.return_type)} (*{name})({params})"
     type_str = _type_to_c(p.type)
     return f"{type_str} {name}"
+
+
+def _format_parameters_and_call_args(
+    parameters: list[Parameter],
+) -> tuple[list[str], list[str]]:
+    """Format parameter list for C prototype and corresponding C++ call expressions."""
+    params_c: list[str] = []
+    call_args: list[str] = []
+    for i, p in enumerate(parameters):
+        p_name = p.name or f"arg{i}"
+        vec_elem = _is_std_vector(p.type)
+        if vec_elem:
+            elem_c = _type_to_c(CType(vec_elem))
+            params_c.append(f"const {elem_c}* {p_name}_data")
+            params_c.append(f"size_t {p_name}_count")
+            call_args.append(f"std::vector<{vec_elem}>({p_name}_data, {p_name}_data + {p_name}_count)")
+        elif _is_std_string(p.type):
+            params_c.append(f"const char* {p_name}")
+            call_args.append(p_name)
+        else:
+            params_c.append(_format_param(p, p_name))
+            call_args.append(p_name)
+    return params_c, call_args
 
 
 class CShimWriter(BaseWriter):
@@ -174,6 +244,13 @@ class CShimWriter(BaseWriter):
 
         # 1. Forward declare opaque handles for classes
         classes = [d for d in header.declarations if isinstance(d, Struct) and (d.is_cppclass or d.methods)]
+        classes_by_name: dict[str, Struct] = {}
+        for cls in classes:
+            if cls.name:
+                classes_by_name[cls.name] = cls
+                if cls.namespace:
+                    classes_by_name[f"{cls.namespace}::{cls.name}"] = cls
+
         if classes:
             lines.append("/* Opaque Handle Types */")
             for cls in classes:
@@ -181,6 +258,24 @@ class CShimWriter(BaseWriter):
                     safe_name = _sanitize_name(f"{cls.namespace}::{cls.name}" if cls.namespace else cls.name)
                     lines.append(f"typedef struct {safe_name}_s {safe_name}_t;")
             lines.append("")
+
+        def _collect_base_methods(s: Struct) -> list[Function]:
+            inherited: list[Function] = []
+            seen: set[str] = set()
+            for b in s.bases:
+                base_cls = classes_by_name.get(b.name)
+                if base_cls:
+                    for m in base_cls.methods:
+                        if m.access in ("private", "protected"):
+                            continue
+                        if m.name not in seen:
+                            seen.add(m.name)
+                            inherited.append(m)
+                    for sub_m in _collect_base_methods(base_cls):
+                        if sub_m.name not in seen:
+                            seen.add(sub_m.name)
+                            inherited.append(sub_m)
+            return inherited
 
         # 2. C Shim Prototypes & Implementations
         cpp_lines: list[str] = []
@@ -197,8 +292,7 @@ class CShimWriter(BaseWriter):
                 # Constructors
                 for idx, ctor in enumerate(cls.constructors):
                     fn_name = f"{safe_cls_name}_create" if idx == 0 else f"{safe_cls_name}_create_{idx}"
-                    params_call = [p.name or f"arg{i}" for i, p in enumerate(ctor.parameters)]
-                    params_c = [_format_param(p, params_call[i]) for i, p in enumerate(ctor.parameters)]
+                    params_c, params_call = _format_parameters_and_call_args(ctor.parameters)
 
                     # Header prototype
                     proto = f"{safe_cls_name}_t* {fn_name}({', '.join(params_c) if params_c else 'void'});"
@@ -250,22 +344,42 @@ class CShimWriter(BaseWriter):
                     """)
                 cpp_lines.append(dtor_body)
 
-                # Methods
-                for method in cls.methods:
+                # Upcast helpers for base classes
+                for base in cls.bases:
+                    safe_base = _sanitize_name(base.name)
+                    upcast_fn = f"{safe_cls_name}_as_{safe_base}"
+                    proto = f"{safe_base}_t* {upcast_fn}({safe_cls_name}_t* self);"
+                    lines.append(proto)
+                    exported_names.append(upcast_fn)
+
+                    upcast_body = textwrap.dedent(f"""\
+                        {safe_base}_t* {upcast_fn}({safe_cls_name}_t* self) {{
+                            if (!self) return nullptr;
+                            return reinterpret_cast<{safe_base}_t*>(static_cast<{base.name}*>(reinterpret_cast<{cls_full_name}*>(self)));
+                        }}
+                    """)
+                    cpp_lines.append(upcast_body)
+
+                # Methods (own methods + flattened inherited base methods)
+                cls_method_names = {m.name for m in cls.methods}
+                base_methods = [m for m in _collect_base_methods(cls) if m.name not in cls_method_names]
+                all_methods = list(cls.methods) + base_methods
+
+                for method in all_methods:
                     if method.access in ("private", "protected"):
                         continue
-                    m_safe_name = _sanitize_name(method.name)
+                    m_safe_name = _sanitize_name(method.name, len(method.parameters))
                     fn_method_name = f"{safe_cls_name}_{m_safe_name}"
                     if fn_method_name == fn_dtor:
                         fn_method_name = f"{safe_cls_name}_method_{m_safe_name}"
 
+                    if fn_method_name in exported_names:
+                        continue
+
                     ret_type_c = _type_to_c(method.return_type)
-                    params_c = []
+                    params_c, call_args = _format_parameters_and_call_args(method.parameters)
                     if not method.is_static:
-                        params_c.append(f"{safe_cls_name}_t* self")
-                    call_args = [p.name or f"arg{i}" for i, p in enumerate(method.parameters)]
-                    for i, p in enumerate(method.parameters):
-                        params_c.append(_format_param(p, call_args[i]))
+                        params_c.insert(0, f"{safe_cls_name}_t* self")
                     if method.is_variadic:
                         params_c.append("...")
 
@@ -281,6 +395,8 @@ class CShimWriter(BaseWriter):
 
                     if ret_type_c == "void":
                         raw_stmt = f"{call_expr};"
+                    elif _is_std_string(method.return_type):
+                        raw_stmt = f"return {call_expr}.c_str();"
                     else:
                         raw_stmt = f"return {call_expr};"
 
@@ -313,8 +429,7 @@ class CShimWriter(BaseWriter):
                     safe_fn_name = _sanitize_name(decl.name)
 
                 ret_c = _type_to_c(decl.return_type)
-                call_args = [p.name or f"arg{i}" for i, p in enumerate(decl.parameters)]
-                params_c = [_format_param(p, call_args[i]) for i, p in enumerate(decl.parameters)]
+                params_c, call_args = _format_parameters_and_call_args(decl.parameters)
                 if decl.is_variadic:
                     params_c.append("...")
 
@@ -324,6 +439,8 @@ class CShimWriter(BaseWriter):
 
                 if ret_c == "void":
                     raw_fn_stmt = f"{fn_full_name}({', '.join(call_args)});"
+                elif _is_std_string(decl.return_type):
+                    raw_fn_stmt = f"return {fn_full_name}({', '.join(call_args)}).c_str();"
                 else:
                     raw_fn_stmt = f"return {fn_full_name}({', '.join(call_args)});"
 
