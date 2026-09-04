@@ -1,8 +1,6 @@
 # Writers
 
-Writers convert headerkit [IR](ir.md) into various output formats. The
-[`WriterBackend`][headerkit.writers.WriterBackend] protocol defines the interface
-that all writers implement.
+Writers convert HeaderKit [IR](ir.md) into various output formats, from single-file binding modules to multi-file package scaffolding. Concrete writers inherit from [`BaseWriter`][headerkit.writers.BaseWriter] (which satisfies the [`WriterBackend`][headerkit.writers.WriterBackend] protocol).
 
 Writers are accessed through a registry that mirrors the
 [backend registry](backends.md). Use [`get_writer()`][headerkit.writers.get_writer]

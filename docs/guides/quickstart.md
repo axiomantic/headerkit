@@ -145,16 +145,28 @@ See the [JSON Export tutorial](../tutorials/json-export.md) for advanced JSON pr
 
 ## 6. Other Built-in Writers
 
-headerkit ships with seven writers. Beyond CFFI and JSON shown above, you can generate output for several other targets:
+HeaderKit ships with a rich suite of built-in writers. Beyond CFFI and JSON shown above, you can generate output for Python, modern systems languages, C shims, and LLMs:
 
 ```python
 # Python ctypes bindings
 ctypes_writer = get_writer("ctypes", lib_name="_lib")
 print(ctypes_writer.write(header))
 
+# Modern Mojo FFI bindings
+mojo_writer = get_writer("mojo", lib_name="_lib")
+print(mojo_writer.write(header))
+
+# Native Nim bindings
+nim_writer = get_writer("nim", header_file="point.h")
+print(nim_writer.write(header))
+
 # Cython .pxd declarations
 cython_writer = get_writer("cython")
 print(cython_writer.write(header))
+
+# C++ to C-ABI wrapper (extern "C")
+cshim_writer = get_writer("cshim")
+print(cshim_writer.write(header))
 
 # LuaJIT FFI bindings
 lua_writer = get_writer("lua")
@@ -172,12 +184,12 @@ diff_writer = get_writer("diff", baseline=old_header, format="markdown")
 print(diff_writer.write(new_header))
 ```
 
-Use `list_writers()` to see all registered writers at runtime:
+Use `list_writers()` to discover all registered writers at runtime:
 
 ```python
 from headerkit import list_writers
 print(list_writers())
-# ['cffi', 'ctypes', 'cython', 'diff', 'json', 'lua', 'prompt']
+# ['cffi', 'cshim', 'ctypes', 'cython', 'diff', 'json', 'lua', 'mojo', 'nim', 'prompt']
 ```
 
 ## What's Next?
