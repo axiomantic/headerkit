@@ -51,6 +51,13 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
+from headerkit.packaging import (
+    generate_nim_cmake,
+    generate_nim_pyproject,
+    generate_nim_python_wrapper,
+    generate_nim_source,
+    generate_nim_wheel_layout,
+)
 from headerkit.scaffold import (
     BYOScaffolder,
     OutputFile,
@@ -166,4 +173,10 @@ __all__ = [
     "extract_function_names",
     "prompt_scaffold_options",
     "scaffold",
+    # Packaging API
+    "generate_nim_cmake",
+    "generate_nim_pyproject",
+    "generate_nim_python_wrapper",
+    "generate_nim_source",
+    "generate_nim_wheel_layout",
 ]

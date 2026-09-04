@@ -225,7 +225,7 @@ class NimWriter(BaseWriter):
     format_description: str = "Nim bindings with C and C++ interop"
     default_output_pattern: str = "{dir}/{stem}.nim"
     default_extension: str = ".nim"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel", "scikit-build")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="test_type",
@@ -823,6 +823,17 @@ class NimWriter(BaseWriter):
             files.append(OutputFile(path=f"tests/test_{pkg}.nim", content=unit_test))
 
         return ProjectLayout(files=files)
+
+    def _write_custom_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        if options.layout in ("wheel", "scikit-build"):
+            from headerkit.packaging.nim import generate_nim_wheel_layout
+
+            return generate_nim_wheel_layout(unit, options)
+        return self._write_package_layout(unit, options)
 
 
 def write_nim(header: Header | SourceUnit, *, header_path: str | None = None) -> str:
