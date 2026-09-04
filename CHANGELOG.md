@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `headerkit.backends.treesitter`: lightweight, zero-system-dependency parser backend using `tree-sitter-c` for parsing C headers without requiring system LLVM or `libclang`.
+- `headerkit.backends.treesitter`: lightweight, zero-system-dependency parser backend using `tree-sitter-c` for parsing C headers without requiring system LLVM or `libclang`. Added support for nested preprocessor blocks (`#ifndef`, `#ifdef __cplusplus`) and pointer-return function prototypes.
+- Comprehensive guide for Nim to Python packaging and deterministic memory management (`docs/guides/nim-python-packaging.md`) using `--mm:orc` and `scikit-build-core`.
+- Real-world working example (`examples/nim_bridge/`) demonstrating compiled Nim library, Headerkit ctypes bindings, and binary wheel distribution.
 - `treesitter` optional dependency extra in `pyproject.toml` (`pip install "headerkit[treesitter]"`).
 - `headerkit.hooks` module implementing a unified hook architecture with priority tiers (`FALLBACK`, `STANDARD`, `PROJECT`, `OVERRIDE`), glob pattern matching, and `first_result` / `waterfall` dispatch modes.
 - Exported hook symbols (`Priority`, `PipelineContext`, `HookImpl`, `HookRegistry`, `hook`, `HookDispatcher`, `HookCaller`, `execute_pipeline`) in top-level `headerkit` namespace.
