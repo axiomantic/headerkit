@@ -144,6 +144,22 @@ class TestTreeSitterBackend:
         assert isinstance(fn, Function)
         assert fn.name == "compute"
 
+    def test_parse_preprocessor_does_not_traverse_else_branch(self):
+        code = """
+        #if defined(USE_FLOAT)
+        float process(float x);
+        #else
+        double process_alternative(double x);
+        #endif
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "compute.h")
+
+        assert len(header.declarations) == 1
+        fn = header.declarations[0]
+        assert isinstance(fn, Function)
+        assert fn.name == "process"
+
     def test_parse_pointer_return_and_void_param(self):
         code = """
         char* get_version(void);

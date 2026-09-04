@@ -491,11 +491,22 @@ class CtypesWriter(BaseWriter):
             files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
 
         if test_type in ("both", "unit"):
+            unit_fn_checks = (
+                "\n".join(
+                    f'    assert hasattr(_bindings, "{name}"), "Expected declaration \'{name}\' in _bindings"'
+                    for name in fn_names[:10]
+                )
+                if fn_names
+                else "    assert inspect.ismodule(_bindings)"
+            )
             unit_test = textwrap.dedent(f"""\
+                import inspect
                 from {pkg} import _bindings
 
-                def test_{pkg}_importable():
-                    assert _bindings is not None
+                def test_{pkg}_declarations():
+                    \"\"\"Verify generated bindings module exports declarations.\"\"\"
+                    assert inspect.ismodule(_bindings)
+                {unit_fn_checks}
             """)
             files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
 

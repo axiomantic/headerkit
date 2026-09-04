@@ -35,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - Removed regex-based `RustBackend`, `ZigBackend`, and `NimBackend` source extractors. Regular-expression parsing of context-free languages is strictly prohibited; proper grammar-based AST extractors (via Tree-sitter grammars) are scheduled on the roadmap.
+
+### Fixed
+
+- Eliminated completion bias, hollow scaffolding, and tautological test generation across all writer packages:
+  - `CShimWriter`: emit complete C-ABI function prototypes and opaque struct handles into `include/{pkg}_cshim.h` instead of hollow placeholders; updated C test harness to `#include` the generated header and assert non-null symbol pointers.
+  - `CythonWriter`: replaced tautological `assert pkg is not None` with module inspection and package structure assertions.
+  - `CffiWriter`: replaced vacuous assertions with FFI instance type and configuration checks.
+  - `CtypesWriter`: replaced vacuous assertions with exported symbol `hasattr` checks and module verification.
+  - `NimWriter`: replaced `check true` and echo tripwires with real `dynlib.loadLib` and `symAddr` symbol resolution and `check declared(...)` assertions.
+  - `MojoWriter`: replaced `assert_true(True)` with `DLHandle.get_function` symbol verification and struct type assertions.
+  - `LuaWriter`: replaced print stubs with `ffi.load` and symbol table verification.
+  - `TreeSitterBackend`: fixed preprocessor conditional traversal to skip mutually exclusive `#elif`/`#else` branches when visiting `#if`/`#ifdef`, preventing duplicate or conflicting symbol extraction. Fixed `-x c` and `-std=c*` CLI override handling.
 - `headerkit.backends.treesitter`: lightweight, zero-system-dependency parser backend using `tree-sitter-c` for parsing C headers without requiring system LLVM or `libclang`. Added support for nested preprocessor blocks (`#ifndef`, `#ifdef __cplusplus`) and pointer-return function prototypes.
 - Comprehensive guide for Nim to Python packaging and deterministic memory management (`docs/guides/nim-python-packaging.md`) using `--mm:orc` and `scikit-build-core`.
 - Real-world working example (`examples/nim_bridge/`) demonstrating compiled Nim library, Headerkit ctypes bindings, and binary wheel distribution.

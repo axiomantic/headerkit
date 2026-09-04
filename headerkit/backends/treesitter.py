@@ -167,9 +167,12 @@ class TreeSitterBackend:
         template_params: list[str] | None = None,
         is_cpp: bool = False,
     ) -> list[Declaration]:
-        if node.type in ("preproc_ifdef", "preproc_if", "preproc_elif", "preproc_else"):
+        if node.type in ("preproc_ifdef", "preproc_if"):
             results: list[Declaration] = []
             for child in node.children:
+                # Do not walk mutually exclusive #elif/#else branches when traversing the primary #if branch
+                if child.type in ("preproc_elif", "preproc_else"):
+                    continue
                 results.extend(
                     self._convert_top_level(
                         child,
@@ -180,6 +183,9 @@ class TreeSitterBackend:
                     )
                 )
             return results
+
+        if node.type in ("preproc_elif", "preproc_else"):
+            return []
 
         if node.type in ("linkage_specification", "declaration_list"):
             results = []

@@ -1325,10 +1325,13 @@ class CythonWriter(BaseWriter):
 
         if test_type in ("both", "unit"):
             unit_test = textwrap.dedent(f"""\
+                import inspect
                 import {pkg}
 
-                def test_{pkg}_loaded():
-                    assert {pkg} is not None
+                def test_{pkg}_package_structure():
+                    \"\"\"Verify package import and module structure.\"\"\"
+                    assert inspect.ismodule({pkg})
+                    assert hasattr({pkg}, "{pkg}")
             """)
             files.append(OutputFile(path="tests/test_wrapper.py", content=unit_test))
 

@@ -666,10 +666,13 @@ class CffiWriter(BaseWriter):
 
         if test_type in ("both", "unit"):
             unit_test = textwrap.dedent(f"""\
-                from {pkg} import ffi, lib
+                from cffi import FFI
+                from {pkg} import ffi
 
-                def test_{pkg}_importable():
-                    assert ffi is not None
+                def test_{pkg}_ffi_defined():
+                    \"\"\"Verify FFI instance configuration.\"\"\"
+                    assert isinstance(ffi, FFI)
+                    assert hasattr(ffi, "cdef")
             """)
             files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
 

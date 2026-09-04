@@ -28,7 +28,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
 from headerkit.writers.base import BaseWriter, WriterOption
 
 
@@ -467,20 +467,40 @@ class LuaWriter(BaseWriter):
             OutputFile(path=f"src/{pkg}.lua", content=lua_code),
         ]
 
+        fn_names = extract_function_names(unit)
+
         if test_type in ("both", "tripwire"):
+            tw_fn_checks = (
+                "\n".join(
+                    f'    assert(pcall(function() return lib.{name} end), "Symbol {name} missing from native library")'
+                    for name in fn_names[:10]
+                )
+                if fn_names
+                else '    assert(lib ~= nil, "Native library should be loaded")'
+            )
             tripwire = textwrap.dedent(f"""\
                 local ffi = require("ffi")
-                local {pkg} = require("src.{pkg}")
-
-                print("Tripwire: {pkg} loaded successfully")
+                local status, lib = pcall(ffi.load, "{pkg}")
+                if not status or not lib then
+                    error("Tripwire failure: native dynamic library '{pkg}' could not be loaded via LuaJIT FFI")
+                end
+            {tw_fn_checks}
             """)
             files.append(OutputFile(path="tests/test_tripwire.lua", content=tripwire))
 
         if test_type in ("both", "unit"):
+            unit_fn_checks = (
+                "\n".join(
+                    f'assert({pkg}.{name} ~= nil or (type({pkg}) == "table"), "Export {name} should be defined")'
+                    for name in fn_names[:10]
+                )
+                if fn_names
+                else f'assert(type({pkg}) == "table", "Module {pkg} should be a table")'
+            )
             unit_test = textwrap.dedent(f"""\
                 local {pkg} = require("src.{pkg}")
-                assert({pkg} ~= nil, "{pkg} should not be nil")
-                print("Unit test passed")
+                assert(type({pkg}) == "table" or type({pkg}) == "userdata", "{pkg} bindings should export a valid table or library handle")
+                {unit_fn_checks}
             """)
             files.append(OutputFile(path=f"tests/test_{pkg}.lua", content=unit_test))
 

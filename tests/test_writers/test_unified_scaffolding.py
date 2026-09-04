@@ -56,10 +56,20 @@ class TestUnifiedWriterScaffolding:
         assert "src/mathkit/mathkit.pxd" in paths
         assert "src/mathkit/mathkit.pyx" in paths
         assert "tests/test_tripwire.py" in paths
+        assert "tests/test_wrapper.py" in paths
 
         pxd_file = layout.get_file("src/mathkit/mathkit.pxd")
         assert pxd_file is not None
         assert "int multiply(int a, int b)" in pxd_file.content
+
+        tw_file = layout.get_file("tests/test_tripwire.py")
+        assert tw_file is not None
+        assert "test_cython_tripwire" in tw_file.content
+
+        unit_file = layout.get_file("tests/test_wrapper.py")
+        assert unit_file is not None
+        assert "test_mathkit_package_structure" in unit_file.content
+        assert "inspect.ismodule" in unit_file.content
 
     def test_cffi_package_scaffolding(self, sample_header: Header) -> None:
         """CFFI writer must produce build_ffi.py, _bindings.py, pyproject.toml, and tripwires."""
@@ -73,6 +83,20 @@ class TestUnifiedWriterScaffolding:
         assert "src/cffikit/__init__.py" in paths
         assert "src/cffikit/_bindings.py" in paths
         assert "tests/test_tripwire.py" in paths
+        assert "tests/test_bindings.py" in paths
+
+        build_file = layout.get_file("build_ffi.py")
+        assert build_file is not None
+        assert "int multiply(int a, int b);" in build_file.content
+
+        tw_file = layout.get_file("tests/test_tripwire.py")
+        assert tw_file is not None
+        assert "multiply" in tw_file.content
+
+        unit_file = layout.get_file("tests/test_bindings.py")
+        assert unit_file is not None
+        assert "test_cffikit_ffi_defined" in unit_file.content
+        assert "isinstance(ffi, FFI)" in unit_file.content
 
     def test_cshim_package_scaffolding(self, sample_header: Header) -> None:
         """CShim writer must produce CMakeLists.txt, include header, src bridge, and test harness."""
@@ -85,6 +109,20 @@ class TestUnifiedWriterScaffolding:
         assert "include/bridge_cshim.h" in paths
         assert "src/bridge_cshim.cpp" in paths
         assert "tests/test_cshim.c" in paths
+
+        header_file = layout.get_file("include/bridge_cshim.h")
+        assert header_file is not None
+        assert "int multiply(int a, int b);" in header_file.content
+
+        cpp_file = layout.get_file("src/bridge_cshim.cpp")
+        assert cpp_file is not None
+        assert '#include "bridge_cshim.h"' in cpp_file.content
+        assert "multiply(a, b);" in cpp_file.content
+
+        test_file = layout.get_file("tests/test_cshim.c")
+        assert test_file is not None
+        assert '#include "bridge_cshim.h"' in test_file.content
+        assert "assert((void*)multiply != NULL);" in test_file.content
 
     def test_cshim_package_scaffolding_no_tests(self, sample_header: Header) -> None:
         """CShim writer with test_type='none' must omit test artifacts."""
@@ -113,6 +151,24 @@ class TestUnifiedWriterScaffolding:
         assert "luabridge-scm-1.rockspec" in paths
         assert "src/luabridge.lua" in paths
         assert "tests/test_tripwire.lua" in paths
+        assert "tests/test_luabridge.lua" in paths
+
+        rockspec = layout.get_file("luabridge-scm-1.rockspec")
+        assert rockspec is not None
+        assert 'package = "luabridge"' in rockspec.content
+
+        src_file = layout.get_file("src/luabridge.lua")
+        assert src_file is not None
+        assert "int multiply(int a, int b);" in src_file.content
+
+        tw_file = layout.get_file("tests/test_tripwire.lua")
+        assert tw_file is not None
+        assert "pcall(ffi.load" in tw_file.content
+        assert "lib.multiply" in tw_file.content
+
+        unit_file = layout.get_file("tests/test_luabridge.lua")
+        assert unit_file is not None
+        assert "luabridge.multiply ~= nil" in unit_file.content
 
     def test_nim_package_scaffolding(self, sample_header: Header) -> None:
         """Nim writer must produce .nimble, src module, bindings, nim.cfg, and tripwires."""
@@ -126,6 +182,24 @@ class TestUnifiedWriterScaffolding:
         assert "src/nimkit/bindings.nim" in paths
         assert "nim.cfg" in paths
         assert "tests/test_tripwire.nim" in paths
+        assert "tests/test_nimkit.nim" in paths
+
+        nimble = layout.get_file("nimkit.nimble")
+        assert nimble is not None
+        assert 'packageName   = "nimkit"' in nimble.content
+
+        bindings = layout.get_file("src/nimkit/bindings.nim")
+        assert bindings is not None
+        assert "proc multiply*(a: cint, b: cint): cint" in bindings.content
+
+        tw_file = layout.get_file("tests/test_tripwire.nim")
+        assert tw_file is not None
+        assert 'loadLib("nimkit")' in tw_file.content
+        assert 'lib.symAddr("multiply")' in tw_file.content
+
+        unit_file = layout.get_file("tests/test_nimkit.nim")
+        assert unit_file is not None
+        assert "check declared(multiply)" in unit_file.content
 
     def test_mojo_package_scaffolding(self, sample_header: Header) -> None:
         """Mojo writer must produce mojoproject.toml, src module, bindings, and tripwires."""
@@ -138,6 +212,25 @@ class TestUnifiedWriterScaffolding:
         assert "src/mojokit/__init__.mojo" in paths
         assert "src/mojokit/bindings.mojo" in paths
         assert "tests/test_tripwire.mojo" in paths
+        assert "tests/test_mojokit.mojo" in paths
+
+        mojo_proj = layout.get_file("mojoproject.toml")
+        assert mojo_proj is not None
+        assert 'name = "mojokit"' in mojo_proj.content
+
+        bindings = layout.get_file("src/mojokit/bindings.mojo")
+        assert bindings is not None
+        assert "multiply" in bindings.content
+
+        tw_file = layout.get_file("tests/test_tripwire.mojo")
+        assert tw_file is not None
+        assert 'DLHandle("mojokit")' in tw_file.content
+        assert "handle.get_function" in tw_file.content
+        assert '"multiply"' in tw_file.content
+
+        unit_file = layout.get_file("tests/test_mojokit.mojo")
+        assert unit_file is not None
+        assert "sizeof[Library]()" in unit_file.content
 
     def test_writer_layouts_introspection(self) -> None:
         """All writers must support at least 'file' layout, and list_writer_layouts must return it."""
@@ -217,6 +310,20 @@ class TestUnifiedWriterScaffolding:
         assert "src/ctypeskit/_bindings.py" in paths
         assert "tests/test_tripwire.py" in paths
         assert "tests/test_bindings.py" in paths
+
+        bindings_file = layout.get_file("src/ctypeskit/_bindings.py")
+        assert bindings_file is not None
+        assert "multiply" in bindings_file.content
+
+        tw_file = layout.get_file("tests/test_tripwire.py")
+        assert tw_file is not None
+        assert 'hasattr(_bindings, "multiply")' in tw_file.content
+
+        unit_file = layout.get_file("tests/test_bindings.py")
+        assert unit_file is not None
+        assert "test_ctypeskit_declarations" in unit_file.content
+        assert 'hasattr(_bindings, "multiply")' in unit_file.content
+        assert "inspect.ismodule" in unit_file.content
 
     def test_ctypes_package_scaffolding_no_tests(self, sample_header: Header) -> None:
         """Ctypes writer with test_type='none' must omit tests directory."""

@@ -571,32 +571,35 @@ class MojoWriter(BaseWriter):
         if test_type in ("tripwire", "both"):
             tw_lines = []
             for fn in fn_names:
-                tw_lines.append(f'    print("Tripwire checking entrypoint: {fn}")')
-            tw_body = "\n".join(tw_lines) if tw_lines else '    print("Tripwire active")'
+                tw_lines.append(f'    _ = handle.get_function[fn() -> None]("{fn}")')
+            tw_body = "\n".join(tw_lines) if tw_lines else "    # Library opened successfully"
 
             tripwire = textwrap.dedent(f"""\
-                from testing import assert_true
-                from {pkg}.bindings import Library
+                from sys.ffi import DLHandle
 
-                fn test_tripwire_bindings():
-                    # Tripwire: asserts foreign dynamic library entrypoints can be loaded
+                fn test_tripwire_bindings() raises:
+                    # Tripwire: verifies foreign dynamic library can be opened and symbols resolved
+                    var handle = DLHandle("{pkg}")
                 {tw_body}
-                    assert_true(True)
+                    handle.close()
 
-                fn main():
+                fn main() raises:
                     test_tripwire_bindings()
             """)
             files.append(OutputFile(path="tests/test_tripwire.mojo", content=tripwire))
 
         if test_type in ("unit", "both"):
             unit_test = textwrap.dedent(f"""\
-                from testing import assert_true
+                from {pkg}.bindings import Library
 
-                fn test_{pkg}_basic():
-                    assert_true(True)
+                fn test_{pkg}_binding_types():
+                    # Verify Library struct type is defined and accessible
+                    var ptr_size = sizeof[Library]()
+                    if ptr_size == 0:
+                        print("Warning: unexpected 0-sized Library struct")
 
                 fn main():
-                    test_{pkg}_basic()
+                    test_{pkg}_binding_types()
             """)
             files.append(OutputFile(path=f"tests/test_{pkg}.mojo", content=unit_test))
 

@@ -787,29 +787,38 @@ class NimWriter(BaseWriter):
         if test_type in ("tripwire", "both"):
             stub_lines = []
             for fn in fn_names:
-                stub_lines.append(f'  echo "Verifying tripwire symbol: {fn}"')
-            stubs = "\n".join(stub_lines) if stub_lines else '  echo "Verifying bindings loaded"'
+                stub_lines.append(
+                    f"    if lib.symAddr(\"{fn}\") == nil:\n      checkpoint \"Entry point '{fn}' missing from native library '{pkg}'\"\n      fail()"
+                )
+            stubs = "\n".join(stub_lines) if stub_lines else f"    checkpoint \"Verified native library '{pkg}' loads\""
 
             tripwire = textwrap.dedent(f"""\
-                import std/unittest
+                import std/[unittest, dynlib]
                 import {pkg}
 
                 suite "Tripwire Symbol & ABI Verification":
                   test "verify foreign library entrypoints exist and link":
+                    let lib = loadLib("{pkg}")
+                    if lib == nil:
+                      checkpoint "Native dynamic library '{pkg}' not found in system library path"
+                      fail()
                 {stubs}
-                    # Tripwire assertion: fails until real native dynamic library is supplied
-                    checkpoint "Tripwire symbol link verification active"
             """)
             files.append(OutputFile(path="tests/test_tripwire.nim", content=tripwire))
 
         if test_type in ("unit", "both"):
+            decl_checks = (
+                "\n".join(f"    check declared({fn})" for fn in fn_names[:10])
+                if fn_names
+                else f"    check declared({pkg})"
+            )
             unit_test = textwrap.dedent(f"""\
                 import std/unittest
                 import {pkg}
 
                 suite "{pkg} Unit Tests":
-                  test "module imports and exports clean API":
-                    check true
+                  test "module exports expected declarations":
+                {decl_checks}
             """)
             files.append(OutputFile(path=f"tests/test_{pkg}.nim", content=unit_test))
 

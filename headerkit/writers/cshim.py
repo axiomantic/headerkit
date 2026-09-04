@@ -152,8 +152,8 @@ class CShimWriter(BaseWriter):
     def __init__(self, *, catch_exceptions: bool = False) -> None:
         self.catch_exceptions = catch_exceptions
 
-    def _render(self, unit: SourceUnit | Header) -> str:
-        """Generate C-ABI shim source code from headerkit IR."""
+    def _render_parts(self, unit: SourceUnit | Header) -> tuple[str, list[str], list[str]]:
+        """Generate C-ABI header code, cpp implementations, and exported symbol names."""
         header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         lines: list[str] = [
             "// Auto-generated C-ABI shim by HeaderKit",
@@ -184,6 +184,7 @@ class CShimWriter(BaseWriter):
 
         # 2. C Shim Prototypes & Implementations
         cpp_lines: list[str] = []
+        exported_names: list[str] = []
 
         for decl in header.declarations:
             if isinstance(decl, Struct) and (decl.is_cppclass or decl.methods):
@@ -202,6 +203,7 @@ class CShimWriter(BaseWriter):
                     # Header prototype
                     proto = f"{safe_cls_name}_t* {fn_name}({', '.join(params_c) if params_c else 'void'});"
                     lines.append(proto)
+                    exported_names.append(fn_name)
 
                     # C++ wrapper
                     new_call = f"return reinterpret_cast<{safe_cls_name}_t*>(new (std::nothrow) {cls_full_name}({', '.join(params_call)}));"
@@ -226,6 +228,7 @@ class CShimWriter(BaseWriter):
                 # Destructor
                 fn_dtor = f"{safe_cls_name}_destroy"
                 lines.append(f"void {fn_dtor}({safe_cls_name}_t* self);")
+                exported_names.append(fn_dtor)
                 if self.catch_exceptions:
                     dtor_body = textwrap.dedent(f"""\
                         void {fn_dtor}({safe_cls_name}_t* self) {{
@@ -268,6 +271,7 @@ class CShimWriter(BaseWriter):
 
                     proto = f"{ret_type_c} {fn_method_name}({', '.join(params_c) if params_c else 'void'});"
                     lines.append(proto)
+                    exported_names.append(fn_method_name)
 
                     # Implement method
                     if method.is_static:
@@ -316,6 +320,7 @@ class CShimWriter(BaseWriter):
 
                 proto = f"{ret_c} {safe_fn_name}({', '.join(params_c) if params_c else 'void'});"
                 lines.append(proto)
+                exported_names.append(safe_fn_name)
 
                 if ret_c == "void":
                     raw_fn_stmt = f"{fn_full_name}({', '.join(call_args)});"
@@ -345,9 +350,21 @@ class CShimWriter(BaseWriter):
         lines.append("#ifdef __cplusplus")
         lines.append("}")
         lines.append("#endif")
-        lines.append("")
-        lines.append("#ifdef __cplusplus")
-        lines.append("#include <new>")
+
+        header_code = "\n".join(lines)
+        return header_code, cpp_lines, exported_names
+
+    def _render(self, unit: SourceUnit | Header) -> str:
+        """Generate C-ABI shim source code from headerkit IR."""
+        header_code, cpp_lines, _ = self._render_parts(unit)
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
+
+        lines: list[str] = [
+            header_code,
+            "",
+            "#ifdef __cplusplus",
+            "#include <new>",
+        ]
         if self.catch_exceptions:
             lines.append("#include <exception>")
         if header.path:
@@ -370,7 +387,28 @@ class CShimWriter(BaseWriter):
     ) -> ProjectLayout:
         pkg = options.package_name
         test_type = options.get_option("test_type", "both")
-        cpp_code = self._render(unit)
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
+        header_content, cpp_lines, fn_names = self._render_parts(unit)
+
+        cpp_header_includes = [
+            f'#include "{pkg}_cshim.h"',
+            "#include <new>",
+        ]
+        if self.catch_exceptions:
+            cpp_header_includes.append("#include <exception>")
+        if header.path:
+            cpp_header_includes.append(f'#include "{header.path}"')
+
+        cpp_code = "\n".join(
+            [
+                f"// Implementation for {pkg} C-ABI shim",
+                *cpp_header_includes,
+                "",
+                *cpp_lines,
+            ]
+        )
+        if not cpp_code.endswith("\n"):
+            cpp_code += "\n"
 
         if test_type != "none":
             cmake = textwrap.dedent(f"""\
@@ -410,33 +448,25 @@ class CShimWriter(BaseWriter):
                 )
             """)
 
-        header_content = textwrap.dedent(f"""\
-            // C-ABI Header for {pkg}
-            #pragma once
-
-            #ifdef __cplusplus
-            extern "C" {{
-            #endif
-
-            // See src/{pkg}_cshim.cpp for implementations
-
-            #ifdef __cplusplus
-            }}
-            #endif
-        """)
-
         files = [
             OutputFile(path="CMakeLists.txt", content=cmake),
-            OutputFile(path=f"include/{pkg}_cshim.h", content=header_content),
+            OutputFile(path=f"include/{pkg}_cshim.h", content=header_content + "\n"),
             OutputFile(path=f"src/{pkg}_cshim.cpp", content=cpp_code),
         ]
         if test_type != "none":
+            checks = (
+                "\n".join(f"    assert((void*){fn} != NULL);" for fn in fn_names[:10])
+                if fn_names
+                else '    printf("Shim header included successfully\\n");'
+            )
             test_c = textwrap.dedent(f"""\
                 #include <stdio.h>
                 #include <assert.h>
+                #include "{pkg}_cshim.h"
 
                 int main(void) {{
                     printf("Testing {pkg} C-ABI shim...\\n");
+                {checks}
                     return 0;
                 }}
             """)
