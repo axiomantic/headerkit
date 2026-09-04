@@ -5,7 +5,7 @@ from __future__ import annotations
 import textwrap
 
 from headerkit.ir import Function, Header, SourceUnit
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.ctypes import CTYPES_TYPE_MAP
 from headerkit.writers.nim import C_TO_NIM_PRIMITIVES
 
@@ -261,7 +261,7 @@ def generate_nim_wheel_layout(
     """Generate a complete scikit-build-core wheel packaging layout for a Nim library."""
     pkg = options.package_name
     test_type = options.get_option("test_type", "both")
-    fn_names = extract_function_names(unit)
+    funcs = [decl for decl in getattr(unit, "declarations", []) if isinstance(decl, Function) and decl.name]
 
     files: list[OutputFile] = []
 
@@ -305,13 +305,13 @@ def generate_nim_wheel_layout(
     # 6. Tests
     if test_type in ("tripwire", "both"):
         tw_checks: list[str] = []
-        for fn in fn_names:
+        for fn in funcs:
             tw_checks.append(
                 textwrap.dedent(f"""\
                 @pytest.mark.tripwire
-                def test_entrypoint_{fn}() -> None:
-                    assert hasattr({pkg}._lib, "{fn}"), "Entry point '{fn}' missing from compiled library"
-                    assert callable(getattr({pkg}, "{fn}"))
+                def test_entrypoint_{fn.name}() -> None:
+                    assert hasattr({pkg}._lib, "{fn.name}"), "Entry point '{fn.name}' missing from compiled library"
+                    assert callable(getattr({pkg}, "{fn.name}"))
             """)
             )
 
@@ -338,12 +338,17 @@ def generate_nim_wheel_layout(
 
     if test_type in ("unit", "both"):
         unit_checks: list[str] = []
-        for fn in fn_names:
+        for fn in funcs:
+            param_names = [p.name or f"arg{idx}" for idx, p in enumerate(fn.parameters)]
             unit_checks.append(
                 textwrap.dedent(f"""\
-                def test_{fn}_wrapper_callable() -> None:
-                    assert hasattr({pkg}, "{fn}")
-                    assert callable(getattr({pkg}, "{fn}"))
+                def test_{fn.name}_wrapper_signature() -> None:
+                    assert hasattr({pkg}, "{fn.name}")
+                    fn_obj = getattr({pkg}, "{fn.name}")
+                    assert callable(fn_obj)
+                    sig = inspect.signature(fn_obj)
+                    assert len(sig.parameters) == {len(fn.parameters)}
+                    assert list(sig.parameters.keys()) == {repr(param_names)}
             """)
             )
 
