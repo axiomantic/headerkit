@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from headerkit.ir import CType, Function, Header, Parameter
@@ -261,3 +263,37 @@ class TestUnifiedWriterScaffolding:
         layout_v = writer.write_layout(sample_header, opts_v)
         assert layout_v.files[0].path == "llm_ctx.txt"
         assert "{" in layout_v.files[0].content  # verbose emits JSON
+
+    def test_scaffold_hook_layout_filtering(self, sample_header: Header) -> None:
+        """Hooks can match specifically on layout and override layout generation."""
+        from headerkit.hooks import HookRegistry, Priority
+        from headerkit.scaffold import OutputFile
+
+        # Register layout-specific hook for ctypes package layout only
+        def custom_package_hook(_unit: Header, _options: ScaffoldOptions, **_kwargs: Any) -> ProjectLayout:
+            return ProjectLayout(files=[OutputFile(path="custom_pkg.txt", content="custom package layout")])
+
+        # Save registry snapshot
+        snap = HookRegistry.snapshot()
+        try:
+            HookRegistry.register_global(
+                "scaffold_project",
+                custom_package_hook,
+                priority=Priority.OVERRIDE,
+                writer="ctypes",
+                layout="package",
+            )
+
+            # layout="package" should use custom hook
+            opts_pkg = ScaffoldOptions(package_name="test", target_language="ctypes", layout="package")
+            layout_pkg = scaffold(sample_header, opts_pkg)
+            assert len(layout_pkg.files) == 1
+            assert layout_pkg.files[0].path == "custom_pkg.txt"
+
+            # layout="file" should NOT use custom hook because of layout filter
+            opts_file = ScaffoldOptions(package_name="test", target_language="ctypes", layout="file")
+            layout_file = scaffold(sample_header, opts_file)
+            assert layout_file.files[0].path != "custom_pkg.txt"
+            assert "ctypes" in layout_file.files[0].content
+        finally:
+            HookRegistry.restore(snap)

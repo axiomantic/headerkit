@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pipeline context layout filtering: added `layout` attribute to `PipelineContext` enabling hooks to match and filter on requested layout strategies (e.g. `@hook("scaffold_project", layout="package")`), with automatic fallback when a layout is unsupported by a specific writer.
+- End-to-end roundtrip integration test coverage for all 10 writers: added `test_roundtrip_cshim.py`, `test_roundtrip_mojo.py`, and `test_roundtrip_nim.py` completing full `libclang` C/C++ AST-to-binding roundtrip verification across the entire writer surface.
 - Writer-defined layouts and options introspection: added `WriterOption` dataclass and `supported_layouts` / `supported_options` attributes on `BaseWriter` and all 10 concrete writers, enabling writers to declare layouts (e.g. `file`, `package`, `project`, `cmake`) and configurable arguments (`test_type`, `catch_exceptions`, `indent`, `verbosity`). Added public discovery functions `list_writer_layouts(name)` and `list_writer_options(name)` with layout validation in `BaseWriter.write_layout()`.
 - Unified output writer scaffolding architecture: all 10 writers (`ctypes`, `cffi`, `cython`, `luajit/lua`, `nim`, `mojo`, `cshim`, `json`, `diff`, `prompt`) inherit from `BaseWriter` and implement `write_layout(unit, options) -> ProjectLayout`, unifying single-file generation and multi-file package scaffolding under the Zero-Dual-System Rule ("a single file is just a project of one file").
 - Automatic scaffolder hook registration: `register_writer()` registers the `@hook("scaffold_project", writer=name, target=name)` hook, allowing all writers to transparently serve as scaffolding engines.

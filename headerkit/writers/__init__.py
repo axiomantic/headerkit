@@ -40,6 +40,7 @@ Example
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Protocol, runtime_checkable
 
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
@@ -181,8 +182,19 @@ def register_writer(
         context: PipelineContext | None = None,
         **kwargs: Any,
     ) -> ProjectLayout | None:
-        opts = (context.options if context and context.options else {}) | kwargs
-        inst = writer_class(**opts)
+        sig = inspect.signature(writer_class.__init__)
+        has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        if has_var_keyword:
+            inst = writer_class(**kwargs)
+        else:
+            valid_keys = set(sig.parameters.keys()) - {"self"}
+            combined = (context.options if context and context.options else {}) | kwargs
+            init_kwargs = {k: v for k, v in combined.items() if k in valid_keys}
+            inst = writer_class(**init_kwargs)
+
+        supported = getattr(inst, "supported_layouts", ("file",))
+        if options.layout not in supported:
+            return None
         if hasattr(inst, "write_layout"):
             return inst.write_layout(unit, options)
         ext = getattr(inst, "default_extension", ".txt")

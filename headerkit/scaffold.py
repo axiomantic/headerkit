@@ -193,7 +193,28 @@ def scaffold(
     """Scaffold a project layout for a source unit, dispatching to registered hooks."""
     from headerkit.hooks import PipelineContext
 
-    ctx = context or PipelineContext(writer=options.target_language)
+    if context is None:
+        ctx = PipelineContext(
+            writer=options.target_language,
+            target=options.target_language,
+            layout=options.layout,
+            options=options.options,
+        )
+    else:
+        if getattr(context, "layout", None) is None:
+            ctx = PipelineContext(
+                backend=getattr(context, "backend", None),
+                writer=getattr(context, "writer", None) or options.target_language,
+                target=getattr(context, "target", None) or options.target_language,
+                layout=options.layout,
+                language=getattr(context, "language", None),
+                classification=getattr(context, "classification", None),
+                runtime=getattr(context, "runtime", None),
+                options=getattr(context, "options", None) or options.options,
+            )
+        else:
+            ctx = context
+
     dispatcher = HookDispatcher()
     result = dispatcher.first_result("scaffold_project", unit, options, context=ctx)
     if isinstance(result, ProjectLayout):
