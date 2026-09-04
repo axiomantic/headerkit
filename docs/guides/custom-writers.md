@@ -59,19 +59,19 @@ class MarkdownWriter(BaseWriter):
 
 ### What `BaseWriter` Provides
 
-By inheriting from `BaseWriter`, you get:
+Inheriting from `BaseWriter` gives you:
 
-1. **`write(unit)`**: Calls `write_layout(layout="file")` and returns the rendered string directly.
-2. **`write_layout(unit, options)`**: Dispatches to `_write_single_file_layout` or `_write_package_layout` based on `options.layout`.
-3. **Unified CLI Scaffolding**: Registering a `BaseWriter` subclass via `register_writer()` automatically hooks your writer into HeaderKit's scaffolding engine. Users can run both single-file generation and full package scaffolding with no extra glue code:
+1. **`write(unit)`**: Returns the rendered string output.
+2. **`write_layout(unit, options)`**: Produces single-file or multi-file package layouts according to `options.layout`.
+3. **CLI Integration**: Works immediately with the CLI for single files or scaffolded packages:
    ```bash
-   # Single-file layout (default)
+   # Single-file output (default)
    headerkit mylib.h -w markdown -o docs.md
 
-   # Multi-file package layout
+   # Package scaffolding
    headerkit mylib.h -w markdown --layout package --package-name mydocs -o ./docs_site
    ```
-4. **Option and Layout Discovery**: Your writer's options and layouts are automatically queryable via `list_writer_options("markdown")` and `list_writer_layouts("markdown")`.
+4. **Introspection**: Supported options and layouts are automatically queryable via `list_writer_options("markdown")` and `list_writer_layouts("markdown")`.
 
 ---
 
