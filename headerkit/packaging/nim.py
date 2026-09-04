@@ -31,7 +31,7 @@ def _validate_pkg_name(pkg: str) -> None:
 def generate_nim_cmake(pkg: str, *, nim_flags: list[str] | None = None) -> str:
     """Generate CMakeLists.txt configured for scikit-build-core compiling a Nim library."""
     _validate_pkg_name(pkg)
-    flags = nim_flags or ["--app:lib", "--mm:orc", "--threads:on", "-d:release"]
+    flags = ["--app:lib", "--mm:orc", "--threads:on", "-d:release"] if nim_flags is None else nim_flags
     flags_str = " ".join(flags)
 
     return textwrap.dedent(f"""\
@@ -244,15 +244,16 @@ def generate_nim_source(pkg: str, unit: SourceUnit | Header) -> str:
     for fn in funcs:
         params_str_list: list[str] = []
         for idx, p in enumerate(fn.parameters):
-            p_name = p.name or f"arg{idx}"
+            p_name = _escape_nim_ident(p.name or f"arg{idx}")
             p_nim = _ir_type_to_nim(p.type)
             params_str_list.append(f"{p_name}: {p_nim}")
         params_sig = ", ".join(params_str_list)
 
         ret_nim = _ir_type_to_nim(fn.return_type)
         stub = _nim_return_stub(ret_nim)
+        fn_nim_name = _escape_nim_ident(fn.name)
 
-        lines.append(f"proc {fn.name}*({params_sig}): {ret_nim} {{.exportc, dynlib, cdecl.}} =")
+        lines.append(f'proc {fn_nim_name}*({params_sig}): {ret_nim} {{.exportc: "{fn.name}", dynlib, cdecl.}} =')
         lines.append(f"  {stub}")
         lines.append("")
 
