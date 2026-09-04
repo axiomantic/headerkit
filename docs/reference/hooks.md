@@ -49,6 +49,24 @@ All parser backends and output writers register into the unified hook pipeline:
 - Calling `get_backend()` and `get_writer()` queries the highest-priority matching hook.
 - Custom plugins can override built-in backends or writers by registering hooks at `Priority.PROJECT` (100) or `Priority.OVERRIDE` (1000).
 
+## 3-Stage Pipeline: Ingestion to Output
+
+The pipeline executes in three stages:
+1. **`parse_unit`** (`first_result`): Parses raw source into a [`SourceUnit`][headerkit.ir.SourceUnit] Intermediate Representation.
+2. **`transform_unit`** (`waterfall`): Passes the `SourceUnit` through sequential AST transformations (such as runtime lifecycle injections, macro expansion, or dialect conversions).
+3. **`write_output`** (`first_result`): Generates code for the requested writer target.
+
+[`execute_pipeline`][headerkit.hooks.execute_pipeline] automates this three-stage flow:
+
+```python
+from headerkit.hooks import execute_pipeline, PipelineContext
+from headerkit.ir import InputSpec
+
+spec = InputSpec.from_path("api.h", content="int compute(int x);")
+ctx = PipelineContext(backend="tree-sitter", writer="json", runtime="nim")
+unit, output = execute_pipeline(spec, context=ctx)
+```
+
 ## API Reference
 
 ::: headerkit.hooks.Priority
@@ -74,3 +92,8 @@ All parser backends and output writers register into the unified hook pipeline:
 ::: headerkit.hooks.HookCaller
     options:
       show_source: false
+
+::: headerkit.hooks.execute_pipeline
+    options:
+      show_source: false
+

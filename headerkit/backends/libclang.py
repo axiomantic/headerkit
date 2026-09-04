@@ -2333,6 +2333,9 @@ class LibclangBackend:
         )
     """
 
+    supported_languages: frozenset[str] = frozenset({"c", "cpp"})
+    supported_classifications: frozenset[str] = frozenset({"header", "source"})
+
     def __init__(self) -> None:
         self._index: Any = None
         # Cache for parsed headers (path -> Header) to avoid re-parsing

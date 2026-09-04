@@ -962,3 +962,13 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
     def supports_cpp(self) -> bool:
         """Whether this backend can parse C++ code."""
         ...
+
+    @property
+    def supported_languages(self) -> frozenset[str]:
+        """Set of source languages supported by this backend (e.g., ``frozenset({"c", "cpp"})``)."""
+        ...
+
+    @property
+    def supported_classifications(self) -> frozenset[str]:
+        """Set of input classifications supported by this backend (e.g., ``frozenset({"header", "source"})``)."""
+        ...

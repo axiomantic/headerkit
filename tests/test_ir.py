@@ -432,6 +432,14 @@ class TestParserBackendProtocol:
             def supports_cpp(self) -> bool:
                 return False
 
+            @property
+            def supported_languages(self) -> set[str]:
+                return {"c"}
+
+            @property
+            def supported_classifications(self) -> set[str]:
+                return {"header"}
+
         assert isinstance(MockBackend(), ParserBackend)
 
     def test_protocol_rejects_non_conforming(self):

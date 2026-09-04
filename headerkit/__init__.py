@@ -19,6 +19,7 @@ from headerkit.hooks import (
     HookRegistry,
     PipelineContext,
     Priority,
+    execute_pipeline,
     hook,
 )
 from headerkit.install_libclang import auto_install
@@ -134,4 +135,5 @@ __all__ = [
     "hook",
     "HookDispatcher",
     "HookCaller",
+    "execute_pipeline",
 ]

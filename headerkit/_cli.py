@@ -18,6 +18,7 @@ from headerkit._config import (
 )
 from headerkit._generate import batch_generate, generate
 from headerkit.backends import _load_backend_plugins
+from headerkit.hooks import _load_hook_plugins
 from headerkit.writers import _load_writer_plugins
 
 
@@ -195,12 +196,36 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--runtime",
+        dest="runtime",
+        metavar="NAME",
+        default=None,
+        help="Target runtime environment (e.g., nim, mojo). Env: HEADERKIT_RUNTIME",
+    )
+    parser.add_argument(
+        "--language",
+        dest="language",
+        metavar="LANG",
+        default=None,
+        help="Input source language (e.g., c, cpp). Env: HEADERKIT_LANGUAGE",
+    )
+    parser.add_argument(
+        "--classification",
+        dest="classification",
+        metavar="KIND",
+        default=None,
+        help="Input classification (e.g., header, source). Env: HEADERKIT_CLASSIFICATION",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {importlib.metadata.version('headerkit')}",
     )
     parser.set_defaults(
         backend="libclang",
+        runtime=None,
+        language=None,
+        classification=None,
         include_dirs=[],
         defines=[],
         backend_args=[],
@@ -352,15 +377,16 @@ def _merge_config_writer_opts(
     return specs
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns exit code (0 = success, 1 = error)."""
+    raw_args = sys.argv[1:] if argv is None else argv
     # Subcommand dispatch: `headerkit install-libclang [args]`
-    if len(sys.argv) > 1 and sys.argv[1] == "install-libclang":
+    if raw_args and raw_args[0] == "install-libclang":
         from headerkit.install_libclang import main as _install_main
 
-        return _install_main(sys.argv[2:])
+        return _install_main(raw_args[1:])
 
-    if len(sys.argv) > 1 and sys.argv[1] == "cache":
+    if raw_args and raw_args[0] == "cache":
         from headerkit._cache_cli import (
             cache_clear_main,
             cache_populate_main,
@@ -368,7 +394,7 @@ def main() -> int:
             cache_status_main,
         )
 
-        sub_argv = sys.argv[2:]
+        sub_argv = raw_args[1:]
         if sub_argv and sub_argv[0] == "status":
             return cache_status_main(sub_argv[1:])
         if sub_argv and sub_argv[0] == "clear":
@@ -383,10 +409,10 @@ def main() -> int:
         )
         return 1
 
-    if len(sys.argv) > 1 and sys.argv[1] == "store":
+    if raw_args and raw_args[0] == "store":
         from headerkit._cache_cli import store_merge_main
 
-        sub_argv = sys.argv[2:]
+        sub_argv = raw_args[1:]
         if sub_argv and sub_argv[0] == "merge":
             return store_merge_main(sub_argv[1:])
         print(
@@ -396,7 +422,7 @@ def main() -> int:
         return 1
 
     parser = _build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(raw_args)
 
     # Reject mutually exclusive flags
     if args.no_config and args.config is not None:
@@ -464,8 +490,13 @@ def main() -> int:
     # Load plugins (F3/F7: no --plugins flag; config.plugins loaded here)
     _load_backend_plugins()
     _load_writer_plugins()
+    _load_hook_plugins()
     if config is not None and config.plugins:
         _load_explicit_plugins(config.plugins)
+
+    resolved_runtime = getattr(args, "runtime", None) or os.environ.get("HEADERKIT_RUNTIME")
+    resolved_language = getattr(args, "language", None) or os.environ.get("HEADERKIT_LANGUAGE")
+    resolved_classification = getattr(args, "classification", None) or os.environ.get("HEADERKIT_CLASSIFICATION")
 
     # Parse writer specs
     try:
@@ -555,6 +586,9 @@ def main() -> int:
                 exclude_patterns=exclude_pats or None,
                 writers=writer_names,
                 backend_name=backend_name,
+                runtime=resolved_runtime,
+                language=resolved_language,
+                classification=resolved_classification,
                 include_dirs=include_dirs or None,
                 defines=defines or None,
                 extra_args=extra_args_list or None,
@@ -592,7 +626,14 @@ def main() -> int:
             return 1
 
     # Build umbrella
-    code, filename, project_prefixes = _build_umbrella(input_files)
+    project_prefixes: tuple[str, ...]
+    if len(input_files) == 1 and backend_name != "libclang":
+        p = Path(input_files[0]).resolve()
+        code = None
+        filename = str(p)
+        project_prefixes = (str(p.parent),)
+    else:
+        code, filename, project_prefixes = _build_umbrella(input_files)
 
     # Generate outputs via cache-aware pipeline
     extra_args = _parse_defines(defines) + backend_args
@@ -614,6 +655,9 @@ def main() -> int:
                 writer_name=spec.name,
                 code=code,
                 backend_name=backend_name,
+                runtime=resolved_runtime,
+                language=resolved_language,
+                classification=resolved_classification,
                 include_dirs=include_dirs or None,
                 extra_args=extra_args or None,
                 writer_options=writer_kwargs or None,

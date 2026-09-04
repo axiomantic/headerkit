@@ -36,6 +36,7 @@ class PipelineContext:
     target: str | None = None
     language: str | None = None
     classification: str | None = None
+    runtime: str | None = None
     options: dict[str, Any] | None = None
 
 
@@ -196,3 +197,58 @@ class HookCaller:
 
     def waterfall(self, initial_value: T, *args: Any, context: PipelineContext, **kwargs: Any) -> T:
         return self._dispatcher.waterfall(self._point, initial_value, *args, context=context, **kwargs)
+
+
+def execute_pipeline(
+    input_item: Any,
+    code: str | None = None,
+    context: PipelineContext | None = None,
+    dispatcher: HookDispatcher | None = None,
+    **kwargs: Any,
+) -> tuple[Any, str | None]:
+    """Execute the 3-stage hook pipeline: parse_unit -> transform_unit -> write_output."""
+    from headerkit.backends import _ensure_backends_loaded
+    from headerkit.ir import InputSpec, SourceUnit
+    from headerkit.writers import _ensure_writers_loaded
+
+    _ensure_backends_loaded()
+    _ensure_writers_loaded()
+
+    disp = dispatcher or HookDispatcher()
+
+    if isinstance(input_item, str):
+        spec = InputSpec.from_path(input_item, content=code)
+    elif isinstance(input_item, InputSpec):
+        spec = input_item
+    else:
+        raise TypeError(f"Expected path str or InputSpec, got {type(input_item).__name__}")
+
+    raw_code = code if code is not None else (spec.content or "")
+    ctx = context or PipelineContext(
+        language=spec.language,
+        classification=spec.classification,
+    )
+
+    unit: SourceUnit | None = disp.first_result("parse_unit", raw_code, spec.path, context=ctx, **kwargs)
+    if unit is None:
+        raise RuntimeError(f"No parser hook able to parse {spec.path} (language={ctx.language})")
+
+    unit = disp.waterfall("transform_unit", unit, context=ctx, **kwargs)
+
+    output: str | None = None
+    if ctx.writer:
+        output = disp.first_result("write_output", unit, context=ctx, **kwargs)
+
+    return unit, output
+
+
+def _load_hook_plugins() -> None:
+    """Load hook plugins registered via entry points under group 'headerkit.hooks'."""
+    import importlib.metadata
+    import logging
+
+    for ep in importlib.metadata.entry_points(group="headerkit.hooks"):
+        try:
+            ep.load()
+        except (ImportError, ValueError) as exc:
+            logging.getLogger(__name__).warning("Failed to load hook plugin %r: %s", ep.name, exc)

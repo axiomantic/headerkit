@@ -88,3 +88,6 @@ markers = [
 [project.entry-points."headerkit.backends"]
 
 [project.entry-points."headerkit.writers"]
+
+[tool.tripwire.guard]
+subprocess = "off"

@@ -28,6 +28,14 @@ class MockBackend:
     def supports_cpp(self) -> bool:
         return False
 
+    @property
+    def supported_languages(self) -> set[str]:
+        return {"c"}
+
+    @property
+    def supported_classifications(self) -> set[str]:
+        return {"header"}
+
     def parse(self, code: str, filename: str, **kwargs) -> Header:
         return Header(path=filename, declarations=[])
 
@@ -162,6 +170,14 @@ class TestBackendRegistry:
             @property
             def supports_cpp(self) -> bool:
                 return True
+
+            @property
+            def supported_languages(self) -> set[str]:
+                return {"c"}
+
+            @property
+            def supported_classifications(self) -> set[str]:
+                return {"header"}
 
             def parse(self, code: str, filename: str, **kwargs) -> Header:
                 return Header(path=filename, declarations=[])
