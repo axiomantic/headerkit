@@ -61,6 +61,7 @@ from headerkit.scaffold import (
     scaffold,
 )
 from headerkit.writers import (
+    BaseWriter,
     WriterBackend,
     get_default_writer,
     get_writer,
@@ -104,6 +105,7 @@ __all__ = [
     "LibclangUnavailableError",
     # Writer Protocol
     "WriterBackend",
+    "BaseWriter",
     # Writer API
     "get_default_writer",
     "get_writer",

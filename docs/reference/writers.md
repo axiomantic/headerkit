@@ -24,7 +24,11 @@ what is available.
 | [`nim`](nim.md) | `headerkit.writers.nim` | Native Nim bindings with C and C++ interop |
 | [`prompt`](prompt.md) | `headerkit.writers.prompt` | Token-optimized LLM context (compact/standard/verbose) |
 
-## Protocol
+## Base Class & Protocol
+
+::: headerkit.writers.BaseWriter
+    options:
+      show_source: false
 
 ::: headerkit.writers.WriterBackend
     options:

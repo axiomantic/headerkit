@@ -8,6 +8,8 @@ The IR types come from ``headerkit.ir`` and represent parsed C headers.
 
 from __future__ import annotations
 
+import textwrap
+
 from headerkit.ir import (
     Array,
     Constant,
@@ -19,11 +21,14 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers.base import BaseWriter
 
 
 def _type_to_c(t: TypeExpr) -> str:
@@ -383,7 +388,7 @@ def header_to_lua(header: Header) -> str:
     return "\n".join(output_lines)
 
 
-class LuaWriter:
+class LuaWriter(BaseWriter):
     """Writer that generates LuaJIT FFI binding files from headerkit IR.
 
     Example
@@ -401,22 +406,74 @@ class LuaWriter:
         lua_source = writer.write(header)
     """
 
+    name: str = "lua"
+    format_description: str = "LuaJIT FFI bindings"
     default_output_pattern: str = "{dir}/{stem}_ffi.lua"
+    default_extension: str = ".lua"
 
     def __init__(self) -> None:
         pass
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to a LuaJIT FFI binding file."""
+    def _render(self, unit: SourceUnit | Header) -> str:
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         return header_to_lua(header)
 
-    @property
-    def name(self) -> str:
-        return "lua"
+    def write(self, header: Header) -> str:
+        """Convert header IR to a LuaJIT FFI binding file."""
+        return self._render(header)
 
-    @property
-    def format_description(self) -> str:
-        return "LuaJIT FFI bindings"
+    def _write_package_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        pkg = options.package_name
+        lua_code = self._render(unit)
+
+        rockspec = textwrap.dedent(f"""\
+            package = "{pkg}"
+            version = "scm-1"
+            source = {{
+                url = "git://github.com/example/{pkg}.git"
+            }}
+            description = {{
+                summary = "LuaJIT FFI bindings for {pkg}",
+                license = "MIT"
+            }}
+            dependencies = {{
+                "lua >= 5.1"
+            }}
+            build = {{
+                type = "builtin",
+                modules = {{
+                    ["{pkg}"] = "src/{pkg}.lua"
+                }}
+            }}
+        """)
+
+        files = [
+            OutputFile(path=f"{pkg}-scm-1.rockspec", content=rockspec),
+            OutputFile(path=f"src/{pkg}.lua", content=lua_code),
+        ]
+
+        if options.test_type in ("both", "tripwire"):
+            tripwire = textwrap.dedent(f"""\
+                local ffi = require("ffi")
+                local {pkg} = require("src.{pkg}")
+
+                print("Tripwire: {pkg} loaded successfully")
+            """)
+            files.append(OutputFile(path="tests/test_tripwire.lua", content=tripwire))
+
+        if options.test_type in ("both", "unit"):
+            unit_test = textwrap.dedent(f"""\
+                local {pkg} = require("src.{pkg}")
+                assert({pkg} ~= nil, "{pkg} should not be nil")
+                print("Unit test passed")
+            """)
+            files.append(OutputFile(path=f"tests/test_{pkg}.lua", content=unit_test))
+
+        return ProjectLayout(files=files)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Lua comments."""

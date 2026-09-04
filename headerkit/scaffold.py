@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import sys
-import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from headerkit.hooks import HookDispatcher, Priority, hook
 from headerkit.ir import Declaration, Function, Header, SourceUnit
-from headerkit.writers import get_writer
 
 
 @dataclass(frozen=True)
@@ -91,7 +89,13 @@ class StdlibScaffolder(BYOScaffolder):
 
     def scaffold(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
         """Generate project layout using built-in templates."""
+        from headerkit.writers import get_writer
+
         target = options.target_language.lower()
+        writer = get_writer(target)
+        if hasattr(writer, "write_layout"):
+            return writer.write_layout(unit, options)
+
         if options.layout == "file":
             return self._scaffold_single_file(unit, options, target)
 
@@ -110,6 +114,8 @@ class StdlibScaffolder(BYOScaffolder):
         options: ScaffoldOptions,
         target: str,
     ) -> ProjectLayout:
+        from headerkit.writers import get_writer
+
         writer = get_writer(target)
         rendered = writer.write(unit)
         ext = self._EXT_MAP.get(target, ".txt")
@@ -121,208 +127,20 @@ class StdlibScaffolder(BYOScaffolder):
         return [d.name for d in decls if isinstance(d, Function) and d.name]
 
     def _scaffold_nim(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
-        pkg = options.package_name
-        writer = get_writer("nim")
-        bindings_code = writer.write(unit)
-        fn_names = self._extract_fn_names(unit)
+        from headerkit.writers import get_writer
 
-        files: list[OutputFile] = []
-
-        # 1. Nimble package spec
-        nimble = textwrap.dedent(f"""\
-            # Package
-            version       = "0.1.0"
-            author        = "HeaderKit"
-            description   = "Nim bindings for {pkg}"
-            license       = "MIT"
-            srcDir        = "src"
-            packageName   = "{pkg}"
-
-            # Dependencies
-            requires "nim >= 2.0.0"
-
-            task test, "Run tests":
-              exec "nim c -r tests/test_tripwire.nim"
-        """)
-        files.append(OutputFile(path=f"{pkg}.nimble", content=nimble))
-
-        # 2. Main package re-export
-        main_src = textwrap.dedent(f"""\
-            # Primary export module for {pkg}
-            import {pkg}/bindings
-            export bindings
-        """)
-        files.append(OutputFile(path=f"src/{pkg}.nim", content=main_src))
-
-        # 3. Generated bindings module
-        files.append(OutputFile(path=f"src/{pkg}/bindings.nim", content=bindings_code))
-
-        # 4. nim.cfg compiler flags
-        nim_cfg = textwrap.dedent("""\
-            --mm:orc
-            --threads:on
-            --styleCheck:hint
-        """)
-        files.append(OutputFile(path="nim.cfg", content=nim_cfg))
-
-        # 5. Tests
-        if options.test_type in ("tripwire", "both"):
-            stub_lines = []
-            for fn in fn_names:
-                stub_lines.append(f'  echo "Verifying tripwire symbol: {fn}"')
-            stubs = "\n".join(stub_lines) if stub_lines else '  echo "Verifying bindings loaded"'
-
-            tripwire = textwrap.dedent(f"""\
-                import std/unittest
-                import {pkg}
-
-                suite "Tripwire Symbol & ABI Verification":
-                  test "verify foreign library entrypoints exist and link":
-                {stubs}
-                    # Tripwire assertion: fails until real native dynamic library is supplied
-                    checkpoint "Tripwire symbol link verification active"
-            """)
-            files.append(OutputFile(path="tests/test_tripwire.nim", content=tripwire))
-
-        if options.test_type in ("unit", "both"):
-            unit_test = textwrap.dedent(f"""\
-                import std/unittest
-                import {pkg}
-
-                suite "{pkg} Unit Tests":
-                  test "module imports and exports clean API":
-                    check true
-            """)
-            files.append(OutputFile(path=f"tests/test_{pkg}.nim", content=unit_test))
-
-        return ProjectLayout(files=files)
+        return get_writer("nim").write_layout(unit, options)
 
     def _scaffold_mojo(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
-        pkg = options.package_name
-        writer = get_writer("mojo")
-        bindings_code = writer.write(unit)
-        fn_names = self._extract_fn_names(unit)
+        from headerkit.writers import get_writer
 
-        files: list[OutputFile] = []
-
-        # 1. mojoproject.toml
-        mojo_proj = textwrap.dedent(f"""\
-            [project]
-            name = "{pkg}"
-            version = "0.1.0"
-            description = "Mojo bindings for {pkg}"
-        """)
-        files.append(OutputFile(path="mojoproject.toml", content=mojo_proj))
-
-        # 2. Package init
-        init_mojo = textwrap.dedent("""\
-            from .bindings import *
-        """)
-        files.append(OutputFile(path=f"src/{pkg}/__init__.mojo", content=init_mojo))
-
-        # 3. Bindings
-        files.append(OutputFile(path=f"src/{pkg}/bindings.mojo", content=bindings_code))
-
-        # 4. Tests
-        if options.test_type in ("tripwire", "both"):
-            tw_lines = []
-            for fn in fn_names:
-                tw_lines.append(f'    print("Tripwire checking entrypoint: {fn}")')
-            tw_body = "\n".join(tw_lines) if tw_lines else '    print("Tripwire active")'
-
-            tripwire = textwrap.dedent(f"""\
-                from testing import assert_true
-                from {pkg}.bindings import Library
-
-                fn test_tripwire_bindings():
-                    # Tripwire: asserts foreign dynamic library entrypoints can be loaded
-                {tw_body}
-                    assert_true(True)
-
-                fn main():
-                    test_tripwire_bindings()
-            """)
-            files.append(OutputFile(path="tests/test_tripwire.mojo", content=tripwire))
-
-        if options.test_type in ("unit", "both"):
-            unit_test = textwrap.dedent(f"""\
-                from testing import assert_true
-
-                fn test_{pkg}_basic():
-                    assert_true(True)
-
-                fn main():
-                    test_{pkg}_basic()
-            """)
-            files.append(OutputFile(path=f"tests/test_{pkg}.mojo", content=unit_test))
-
-        return ProjectLayout(files=files)
+        return get_writer("mojo").write_layout(unit, options)
 
     def _scaffold_python(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
-        pkg = options.package_name
+        from headerkit.writers import get_writer
+
         target = "cffi" if options.target_language.lower() == "cffi" else "ctypes"
-        writer = get_writer(target)
-        bindings_code = writer.write(unit)
-        fn_names = self._extract_fn_names(unit)
-
-        files: list[OutputFile] = []
-
-        # 1. pyproject.toml
-        pyproject = textwrap.dedent(f"""\
-            [build-system]
-            requires = ["hatchling"]
-            build-backend = "hatchling.build"
-
-            [project]
-            name = "{pkg}"
-            version = "0.1.0"
-            description = "Python bindings for {pkg}"
-            dependencies = []
-
-            [project.optional-dependencies]
-            test = ["pytest", "pytest-tripwire"]
-        """)
-        files.append(OutputFile(path="pyproject.toml", content=pyproject))
-
-        # 2. Package init
-        init_py = textwrap.dedent(f"""\
-            \"\"\"{pkg} foreign bindings.\"\"\"
-
-            from ._bindings import *
-        """)
-        files.append(OutputFile(path=f"src/{pkg}/__init__.py", content=init_py))
-
-        # 3. Bindings
-        files.append(OutputFile(path=f"src/{pkg}/_bindings.py", content=bindings_code))
-
-        # 4. Tests
-        if options.test_type in ("tripwire", "both"):
-            tw_lines = []
-            for fn in fn_names:
-                tw_lines.append(f"    assert hasattr(_bindings, '{fn}'), 'Missing export entrypoint {fn}'")
-            tw_body = "\n".join(tw_lines) if tw_lines else "    assert _bindings is not None"
-
-            tripwire = textwrap.dedent(f"""\
-                import pytest
-                from {pkg} import _bindings
-
-                @pytest.mark.tripwire
-                def test_tripwire_exported_symbols():
-                    \"\"\"Tripwire verification: asserts all foreign C symbols are bound.\"\"\"
-                {tw_body}
-            """)
-            files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
-
-        if options.test_type in ("unit", "both"):
-            unit_test = textwrap.dedent(f"""\
-                from {pkg} import _bindings
-
-                def test_{pkg}_importable():
-                    assert _bindings is not None
-            """)
-            files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
-
-        return ProjectLayout(files=files)
+        return get_writer(target).write_layout(unit, options)
 
 
 @hook("scaffold_project", priority=Priority.STANDARD)

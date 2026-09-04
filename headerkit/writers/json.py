@@ -26,11 +26,13 @@ from headerkit.ir import (
     Pointer,
     Reference,
     SourceLocation,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
     Variable,
 )
+from headerkit.writers.base import BaseWriter
 
 
 def _type_to_dict(t: TypeExpr) -> dict[str, Any]:
@@ -301,7 +303,7 @@ def header_to_json_dict(header: Header) -> dict[str, Any]:
     return data
 
 
-class JsonWriter:
+class JsonWriter(BaseWriter):
     """Writer that serializes headerkit IR to JSON.
 
     Options
@@ -319,24 +321,21 @@ class JsonWriter:
         json_string = writer.write(header)
     """
 
+    name: str = "json"
+    format_description: str = "JSON serialization of IR for inspection and tooling"
     default_output_pattern: str = "{dir}/{stem}.json"
+    default_extension: str = ".json"
 
     def __init__(self, indent: int | None = 2) -> None:
         self._indent = indent
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to JSON string."""
+    def _render(self, unit: SourceUnit | Header) -> str:
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         return header_to_json(header, indent=self._indent)
 
-    @property
-    def name(self) -> str:
-        """Human-readable name of this writer."""
-        return "json"
-
-    @property
-    def format_description(self) -> str:
-        """Short description of the output format."""
-        return "JSON serialization of IR for inspection and tooling"
+    def write(self, header: Header) -> str:
+        """Convert header IR to JSON string."""
+        return self._render(header)
 
 
 # Uses bottom-of-module self-registration. Unlike backends (which import

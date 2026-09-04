@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Unified output writer scaffolding architecture: all 10 writers (`ctypes`, `cffi`, `cython`, `luajit/lua`, `nim`, `mojo`, `cshim`, `json`, `diff`, `prompt`) inherit from `BaseWriter` and implement `write_layout(unit, options) -> ProjectLayout`, unifying single-file generation and multi-file package scaffolding under the Zero-Dual-System Rule ("a single file is just a project of one file").
+- Automatic scaffolder hook registration: `register_writer()` registers the `@hook("scaffold_project", writer=name, target=name)` hook, allowing all writers to transparently serve as scaffolding engines.
+- Extended package scaffolding templates for Cython (`.pxd`, `.pyx`, `pyproject.toml`, tripwire), CFFI (`build_ffi.py`, `_bindings.py`, `pyproject.toml`, tripwire), CShim (`CMakeLists.txt`, headers, bridge source, test harness), and LuaJIT (rockspec, Lua source, tripwire).
+- Legacy `writer.write(header)` backward-compatibility facade natively delegating to `write_layout(layout="file")`.
 - Polyglot project and extension scaffolding engine (`headerkit.scaffold`): unified layout architecture where single-file bindings and full packages are driven by a single output model (`OutputFile`, `ProjectLayout`, `ScaffoldOptions`, `scaffold()`).
 - Built-in zero-dependency standard library scaffolder (`StdlibScaffolder`) generating complete turnkey packages with build metadata and test suites for Nim (`.nimble`, `nim.cfg`), Mojo (`mojoproject.toml`), and Python (`pyproject.toml`).
 - Pluggable `BYOScaffolder` protocol and `scaffold_project` hook integration for third-party template engines (e.g. Copier, Cookiecutter) with custom precedence.

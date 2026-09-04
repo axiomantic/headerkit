@@ -22,11 +22,13 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
     Variable,
 )
+from headerkit.writers.base import BaseWriter
 
 # =============================================================================
 # Type formatting helpers
@@ -419,7 +421,7 @@ def _header_to_verbose(header: Header) -> str:
 # =============================================================================
 
 
-class PromptWriter:
+class PromptWriter(BaseWriter):
     """Writer that produces token-optimized output for LLM context.
 
     Three verbosity tiers control the output density:
@@ -444,7 +446,10 @@ class PromptWriter:
         output = writer.write(header)
     """
 
+    name: str = "prompt"
+    format_description: str = "Token-optimized output for LLM context"
     default_output_pattern: str = "{dir}/{stem}_prompt.txt"
+    default_extension: str = ".txt"
     cache_output: bool = False
 
     def __init__(self, verbosity: str = "compact") -> None:
@@ -452,8 +457,8 @@ class PromptWriter:
             raise ValueError(f"Unknown verbosity: {verbosity!r}. Use 'compact', 'standard', or 'verbose'.")
         self._verbosity = verbosity
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to token-optimized string."""
+    def _render(self, unit: SourceUnit | Header) -> str:
+        header = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)
         if self._verbosity == "compact":
             return _header_to_compact(header)
         elif self._verbosity == "standard":
@@ -461,15 +466,9 @@ class PromptWriter:
         else:
             return _header_to_verbose(header)
 
-    @property
-    def name(self) -> str:
-        """Human-readable name of this writer."""
-        return "prompt"
-
-    @property
-    def format_description(self) -> str:
-        """Short description of the output format."""
-        return "Token-optimized output for LLM context"
+    def write(self, header: Header | SourceUnit) -> str:
+        """Convert header IR to token-optimized string."""
+        return self._render(header)
 
 
 # Uses bottom-of-module self-registration pattern.

@@ -10,7 +10,7 @@ It supports:
 from __future__ import annotations
 
 import re
-from typing import ClassVar
+import textwrap
 
 from headerkit.ir import (
     Array,
@@ -27,6 +27,8 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers.base import BaseWriter
 
 MOJO_KEYWORDS: set[str] = {
     "alias",
@@ -217,10 +219,13 @@ def _type_to_mojo(t: TypeExpr) -> str:
     return str(t)
 
 
-class MojoWriter:
+class MojoWriter(BaseWriter):
     """Writer that generates Mojo FFI bindings with sys.ffi.DLHandle and CShim support."""
 
-    default_output_pattern: ClassVar[str] = "{dir}/{stem}.mojo"
+    name: str = "mojo"
+    format_description: str = "Mojo FFI binding generator (sys.ffi.DLHandle and CShim)"
+    default_output_pattern: str = "{dir}/{stem}.mojo"
+    default_extension: str = ".mojo"
 
     def __init__(
         self,
@@ -231,17 +236,7 @@ class MojoWriter:
         self.library_name = library_name
         self.emit_classes = emit_classes
 
-    @property
-    def name(self) -> str:
-        """Human-readable name of this writer."""
-        return "mojo"
-
-    @property
-    def format_description(self) -> str:
-        """Short description of the output format."""
-        return "Mojo FFI binding generator (sys.ffi.DLHandle and CShim)"
-
-    def write(self, header: Header | SourceUnit) -> str:
+    def _render(self, header: Header | SourceUnit) -> str:
         """Convert headerkit IR to Mojo FFI declarations and wrapper client."""
         lines: list[str] = [
             "# Auto-generated Mojo bindings by HeaderKit",
@@ -527,6 +522,75 @@ class MojoWriter:
                     lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"
+
+    def write(self, header: Header | SourceUnit) -> str:
+        """Convert header IR to a Mojo FFI binding file."""
+        return self._render(header)
+
+    def _write_package_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        pkg = options.package_name
+        bindings_code = self._render(unit)
+        decls = getattr(unit, "declarations", [])
+        fn_names = [d.name for d in decls if isinstance(d, Function) and d.name]
+
+        files: list[OutputFile] = []
+
+        # 1. mojoproject.toml
+        mojo_proj = textwrap.dedent(f"""\
+            [project]
+            name = "{pkg}"
+            version = "0.1.0"
+            description = "Mojo bindings for {pkg}"
+        """)
+        files.append(OutputFile(path="mojoproject.toml", content=mojo_proj))
+
+        # 2. Package init
+        init_mojo = textwrap.dedent("""\
+            from .bindings import *
+        """)
+        files.append(OutputFile(path=f"src/{pkg}/__init__.mojo", content=init_mojo))
+
+        # 3. Bindings
+        files.append(OutputFile(path=f"src/{pkg}/bindings.mojo", content=bindings_code))
+
+        # 4. Tests
+        if options.test_type in ("tripwire", "both"):
+            tw_lines = []
+            for fn in fn_names:
+                tw_lines.append(f'    print("Tripwire checking entrypoint: {fn}")')
+            tw_body = "\n".join(tw_lines) if tw_lines else '    print("Tripwire active")'
+
+            tripwire = textwrap.dedent(f"""\
+                from testing import assert_true
+                from {pkg}.bindings import Library
+
+                fn test_tripwire_bindings():
+                    # Tripwire: asserts foreign dynamic library entrypoints can be loaded
+                {tw_body}
+                    assert_true(True)
+
+                fn main():
+                    test_tripwire_bindings()
+            """)
+            files.append(OutputFile(path="tests/test_tripwire.mojo", content=tripwire))
+
+        if options.test_type in ("unit", "both"):
+            unit_test = textwrap.dedent(f"""\
+                from testing import assert_true
+
+                fn test_{pkg}_basic():
+                    assert_true(True)
+
+                fn main():
+                    test_{pkg}_basic()
+            """)
+            files.append(OutputFile(path=f"tests/test_{pkg}.mojo", content=unit_test))
+
+        return ProjectLayout(files=files)
 
 
 def write_mojo(

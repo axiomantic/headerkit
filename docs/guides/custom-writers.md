@@ -72,6 +72,47 @@ Parameters:
 !!! warning "Unique names"
     `register_writer()` raises `ValueError` if a writer with the same name is already registered. Choose a unique name for your writer.
 
+## The BaseWriter Class and Scaffolding
+
+Under HeaderKit's Zero-Dual-System Rule ("a single file is just a project of one file"), writers are encouraged to inherit from [`BaseWriter`][headerkit.writers.BaseWriter] rather than implementing raw `WriterBackend` directly:
+
+```python
+from headerkit.ir import Header, SourceUnit
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers import BaseWriter, register_writer
+
+
+class MarkdownWriter(BaseWriter):
+    name: str = "markdown"
+    format_description: str = "Markdown API documentation"
+    default_output_pattern: str = "{dir}/{stem}.md"
+    default_extension: str = ".md"
+
+    def _render(self, unit: SourceUnit | Header) -> str:
+        # Core rendering logic returning the primary string
+        return "# My Docs\n"
+
+    def _write_package_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        # Optional: override to emit complete multi-file project layouts
+        pkg = options.package_name
+        return ProjectLayout(
+            files=[
+                OutputFile(path="mkdocs.yml", content=f"site_name: {pkg}\n"),
+                OutputFile(path="docs/index.md", content=self._render(unit)),
+            ]
+        )
+```
+
+By inheriting from `BaseWriter`:
+
+1. `write(header)` is automatically provided by delegating to `write_layout(layout="file")`.
+2. `write_layout(unit, options)` generates single-file or multi-file project layouts seamlessly.
+3. `register_writer("markdown", MarkdownWriter)` automatically registers the writer as a `@hook("scaffold_project", writer="markdown", target="markdown")` hook, allowing CLI commands like `headerkit myheader.h -t markdown --layout package` to scaffold full projects without separate boilerplate.
+
 ## Complete Example: Markdown Documentation Writer
 
 Here is a complete writer that generates Markdown documentation from a parsed C header:
