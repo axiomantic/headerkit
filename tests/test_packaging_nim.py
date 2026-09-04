@@ -295,6 +295,43 @@ class TestNimWheelCLI:
         )
         assert "_lib.process_buffer.restype = ctypes.c_char_p" in wrapper.content
 
+    def test_non_primitive_and_opaque_type_conversions(self) -> None:
+        from headerkit.ir import CType, Pointer
+        from headerkit.packaging.nim import (
+            _c_type_to_ctypes,
+            _c_type_to_nim,
+            _ir_type_to_ctypes,
+            _ir_type_to_nim,
+            _nim_return_stub,
+        )
+
+        # Struct, union, enum prefixes stripped and preserved as identifiers
+        assert _c_type_to_nim("struct Point") == "Point"
+        assert _c_type_to_nim("union Value") == "Value"
+        assert _c_type_to_nim("enum Color") == "Color"
+        assert _c_type_to_nim("struct Point*") == "ptr Point"
+
+        # Reserved Nim keywords escaped
+        assert _c_type_to_nim("struct type") == "`type`"
+        assert _c_type_to_nim("struct type*") == "ptr `type`"
+
+        # Ctypes mappings for structs/enums/typedefs
+        assert _c_type_to_ctypes("struct Point") == "ctypes.c_void_p"
+        assert _c_type_to_ctypes("struct Point*") == "ctypes.c_void_p"
+        assert _c_type_to_ctypes("size_t") == "ctypes.c_size_t"
+        assert _c_type_to_ctypes("ssize_t") == "ctypes.c_ssize_t"
+        assert _c_type_to_ctypes("uintptr_t") == "ctypes.c_size_t"
+        assert _c_type_to_ctypes("intptr_t") == "ctypes.c_ssize_t"
+
+        # IR mappings
+        struct_ptr = Pointer(CType("struct CustomContext"))
+        assert _ir_type_to_nim(struct_ptr) == "ptr CustomContext"
+        assert _ir_type_to_ctypes(struct_ptr) == "ctypes.c_void_p"
+
+        # Return stubs
+        assert _nim_return_stub("Point") == "default(Point)"
+        assert _nim_return_stub("ptr Point") == "nil"
+
     def test_package_name_validation(self, sample_header: Header) -> None:
         import pytest
 
