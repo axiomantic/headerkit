@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Mojo FFI binding writer (`headerkit.writers.mojo`): generates idiomatic Modular Mojo bindings using `sys.ffi.DLHandle` and C-ABI flat shims, mapping C types, structs, enums, typedefs, constants, and high-level C++ class wrapper structs.
+- Mojo writer reference documentation (`docs/reference/mojo.md`).
 - Polyglot source interface extraction: added support for extracting C-ABI interface surfaces directly from Rust (`.rs`), Zig (`.zig`), and Nim (`.nim`) source files into normalized `SourceUnit` IR.
 - C source definition parsing: enhanced `TreeSitterBackend` to extract non-static function definitions and declarations from `.c` source files.
 - Added `RustBackend`, `ZigBackend`, and `NimBackend` registered in the unified backend registry, accessible via `get_backend()` and `parse_unit` hooks.

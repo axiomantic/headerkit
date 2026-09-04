@@ -20,6 +20,7 @@ what is available.
 | [`diff`](diff.md) | `headerkit.writers.diff` | API compatibility reports (JSON/Markdown) |
 | [`json`](json.md) | `headerkit.writers.json` | JSON serialization for inspection and tooling |
 | [`lua`](lua.md) | `headerkit.writers.lua` | LuaJIT FFI bindings |
+| [`mojo`](mojo.md) | `headerkit.writers.mojo` | Idiomatic Mojo FFI bindings with `sys.ffi.DLHandle` and CShim bridge |
 | [`nim`](nim.md) | `headerkit.writers.nim` | Native Nim bindings with C and C++ interop |
 | [`prompt`](prompt.md) | `headerkit.writers.prompt` | Token-optimized LLM context (compact/standard/verbose) |
 

@@ -106,6 +106,7 @@ nav:
     - Diff Writer: reference/diff.md
     - JSON Writer: reference/json.md
     - Lua Writer: reference/lua.md
+    - Mojo Writer: reference/mojo.md
     - Nim Writer: reference/nim.md
     - Prompt Writer: reference/prompt.md
     - Generate Pipeline: reference/generate.md
