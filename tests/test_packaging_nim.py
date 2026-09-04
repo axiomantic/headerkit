@@ -160,7 +160,10 @@ class TestNimWheelPackaging:
         unit = layout.get_file("tests/test_fastmath.py")
         assert unit is not None
         assert "assert True" not in unit.content
-        assert "callable(fastmath.add_numbers)" in unit.content or "add_numbers" in unit.content
+        assert "test_add_numbers_wrapper_signature" in unit.content
+        assert "inspect.signature" in unit.content
+        assert "len(sig.parameters) == 2" in unit.content
+        assert "['a', 'b']" in unit.content
 
 
 class TestNimWheelCLI:
@@ -188,9 +191,33 @@ class TestNimWheelCLI:
 
         ret = main()
         assert ret == 0
-        assert (out_dir / "pyproject.toml").exists()
-        assert (out_dir / "CMakeLists.txt").exists()
-        assert (out_dir / "src/nim_wheel_pkg.nim").exists()
-        assert (out_dir / "nim_wheel_pkg/__init__.py").exists()
-        assert (out_dir / "tests/test_tripwire.py").exists()
-        assert (out_dir / "tests/test_nim_wheel_pkg.py").exists()
+
+        pyproj = out_dir / "pyproject.toml"
+        assert pyproj.exists()
+        assert "scikit_build_core.build" in pyproj.read_text(encoding="utf-8")
+        assert 'name = "nim_wheel_pkg"' in pyproj.read_text(encoding="utf-8")
+
+        cmake = out_dir / "CMakeLists.txt"
+        assert cmake.exists()
+        assert "find_program(NIM_EXECUTABLE nim REQUIRED)" in cmake.read_text(encoding="utf-8")
+        assert "--mm:orc" in cmake.read_text(encoding="utf-8")
+
+        nim_src = out_dir / "src/nim_wheel_pkg.nim"
+        assert nim_src.exists()
+        assert "proc NimMain" in nim_src.read_text(encoding="utf-8")
+        assert "proc run_computation" in nim_src.read_text(encoding="utf-8")
+
+        wrapper = out_dir / "nim_wheel_pkg/__init__.py"
+        assert wrapper.exists()
+        assert "def init_nim" in wrapper.read_text(encoding="utf-8")
+        assert "def run_computation" in wrapper.read_text(encoding="utf-8")
+
+        tw = out_dir / "tests/test_tripwire.py"
+        assert tw.exists()
+        assert "test_native_library_loaded" in tw.read_text(encoding="utf-8")
+        assert "test_entrypoint_run_computation" in tw.read_text(encoding="utf-8")
+
+        unit = out_dir / "tests/test_nim_wheel_pkg.py"
+        assert unit.exists()
+        assert "test_run_computation_wrapper_signature" in unit.read_text(encoding="utf-8")
+        assert "inspect.signature" in unit.read_text(encoding="utf-8")
