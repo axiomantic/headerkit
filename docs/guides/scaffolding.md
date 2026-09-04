@@ -1,34 +1,34 @@
 # Project & Extension Scaffolding
 
-HeaderKit features a unified output architecture where generating a single binding file and scaffolding a complete multi-file project are handled through the exact same pipeline:
+HeaderKit can generate both standalone binding files and complete, multi-file packages using the `--layout` option:
 
-> **Core Tenet**: *A single file output is just a project of one file.*
-
-Rather than requiring distinct, fragmented subcommands, HeaderKit's generation engine is driven by a layout strategy (`--layout=file` vs `--layout=package` / `--layout=project`).
+- `--layout file` (default): Emits a single binding file.
+- `--layout package`: Scaffolds a complete package directory with build manifests, package entrypoints, compiler settings, and verification tests.
 
 ---
 
-## Why Project Scaffolding?
+## What Scaffolding Generates
 
-Generating raw binding code strings is only half the battle. Downstream developers typically need:
-1. **Package Metadata**: Idiomatic build files (`.nimble`, `pyproject.toml`, `mojoproject.toml`).
+Generating raw binding code is only half the job of creating a package. When targeting `--layout package`, HeaderKit generates:
+
+1. **Package Manifests**: Idiomatic build files (`.nimble`, `pyproject.toml`, `mojoproject.toml`).
 2. **Package Structure**: Separation between low-level generated foreign bindings (`_bindings.*`) and clean user-facing package entrypoints (`__init__.*`).
-3. **Compiler / Linker Flags**: Safe memory management flags (`--mm:orc`, threading options).
-4. **Failing Tripwire & Unit Tests**: Immediate TDD verification that foreign dynamic libraries can be linked and all exported C symbols resolve.
+3. **Compiler & Linker Flags**: Memory management flags (`--mm:orc`, threading options) and dynamic library loading configurations.
+4. **Symbol & Interface Tests**: Automated test stubs that verify foreign dynamic libraries can be linked and all exported symbols resolve.
 
 ---
 
 ## Quick Start (CLI)
 
-### 1. Generating a Single File (Minimal 1-File Layout)
+### 1. Generating a Single File (Default)
 
-By default or when targeting an output file or stdout, HeaderKit produces a standalone binding module:
+When targeting an output file or stdout, HeaderKit produces a standalone binding module:
 
 ```bash
 headerkit include/vector.h -w nim -o vector_bindings.nim
 ```
 
-### 2. Scaffolding a Full Polyglot Package
+### 2. Scaffolding a Full Package
 
 To generate a full turnkey package with build configuration and tests, specify `--layout package`:
 
@@ -50,15 +50,15 @@ nim_vector/
 ├── src/
 │   ├── nim_vector.nim         # Public API re-export
 │   └── nim_vector/
-│       └── bindings.nim       # Full HeaderKit-generated Nim FFI bindings
+│       └── bindings.nim       # Generated foreign function interface
 └── tests/
-    ├── test_tripwire.nim      # Failing tripwire stubs for symbol/ABI verification
+    ├── test_tripwire.nim      # Symbol and ABI linking verification tests
     └── test_nim_vector.nim    # High-level unit test skeleton
 ```
 
-### 3. TTY-Aware Interactive Wizard
+### 3. Interactive Wizard
 
-When executed in an interactive terminal without explicit arguments, HeaderKit launches a terminal questionnaire:
+When executed in a terminal without explicit arguments, HeaderKit launches an interactive questionnaire:
 
 ```bash
 $ headerkit include/vector.h -w mojo -o ./mojo_vector
@@ -72,15 +72,15 @@ To bypass prompts in CI or automated scripts, pass `--no-input`.
 
 ---
 
-## Test Generation & Tripwires
+## Test Generation Options
 
 When scaffolding a package, HeaderKit generates test suites tailored to the target language via `--test-type`:
 
 | Value | Description |
 |---|---|
-| `both` (Default) | Emits both failing tripwire stubs and structured unit test skeletons side-by-side. |
-| `tripwire` | Generates tripwire tests verifying every C export symbol and dynamic library resolution. |
-| `unit` | Generates standard assertion skeletons for verifying module interfaces. |
+| `both` (Default) | Emits both symbol linking tests and unit test skeletons. |
+| `tripwire` | Generates symbol verification tests confirming each C export symbol resolves in the dynamic library. |
+| `unit` | Generates standard assertion skeletons for verifying high-level functions. |
 | `none` | Omits the `tests/` directory entirely. |
 
 ### Tripwire Verification in Python (`pytest-tripwire`)
