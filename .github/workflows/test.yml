@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: pip install -e '.[test,treesitter]'
       - name: Cache test header downloads
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/headerkit-test-headers
           key: test-headers-v2
