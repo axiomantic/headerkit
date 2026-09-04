@@ -51,6 +51,7 @@ from headerkit.ir import (
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers._cython_keywords import keywords
 from headerkit.writers._cython_types import (
+    LIBCPP_TYPES,
     get_cython_module_for_type,
     get_libcpp_module_for_type,
     get_stub_module_for_type,
@@ -496,6 +497,8 @@ class PxdWriter:
         for decl in self.header.declarations:
             if isinstance(decl, Struct):
                 if decl.name:
+                    if getattr(decl, "namespace", None) == "std" and decl.name in LIBCPP_TYPES:
+                        continue
                     if decl.is_union:
                         self.known_unions.add(decl.name)
                     else:
