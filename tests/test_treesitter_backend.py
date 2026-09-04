@@ -2,7 +2,8 @@ import pytest
 
 from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.hooks import HookDispatcher, PipelineContext
-from headerkit.ir import CType, Enum, Function, Header, Pointer, Struct, Typedef
+from headerkit.ir import BaseSpecifier, CType, Enum, Function, Header, Pointer, Reference, Struct, Typedef
+from headerkit.writers.cython import CythonWriter
 
 treesitter = pytest.mark.treesitter
 
@@ -19,7 +20,13 @@ class TestTreeSitterBackend:
         assert backend.name == "tree-sitter"
         assert backend.is_available() is True
         assert "c" in backend.supported_languages
-        assert backend.supports_cpp is False
+        try:
+            import tree_sitter_cpp  # noqa: F401
+
+            assert backend.supports_cpp is True
+            assert "c++" in backend.supported_languages
+        except ImportError:
+            assert backend.supports_cpp is False
 
     def test_parse_simple_struct(self):
         code = """
@@ -221,3 +228,152 @@ class TestTreeSitterBackend:
         assert isinstance(td.underlying_type.pointee, Pointer)
         assert isinstance(td.underlying_type.pointee.pointee, CType)
         assert td.underlying_type.pointee.pointee.name == "int"
+
+    def test_parse_cpp_class_and_methods(self):
+        pytest.importorskip("tree_sitter_cpp")
+        code = """
+        class Widget {
+        private:
+            int m_id;
+        public:
+            Widget();
+            explicit Widget(int id);
+            virtual ~Widget();
+
+            int get_id() const;
+            void set_id(int id);
+            static Widget create_default();
+        };
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "widget.hpp")
+
+        assert len(header.declarations) == 1
+        st = header.declarations[0]
+        assert isinstance(st, Struct)
+        assert st.name == "Widget"
+        assert st.is_cppclass is True
+
+        # Fields
+        assert len(st.fields) == 1
+        assert st.fields[0].name == "m_id"
+        assert st.fields[0].access == "private"
+
+        # Constructors
+        assert len(st.constructors) == 2
+        assert st.constructors[0].name == "Widget"
+        assert st.constructors[1].name == "Widget"
+        assert len(st.constructors[1].parameters) == 1
+
+        # Destructor
+        assert st.destructor is not None
+        assert st.destructor.name == "~Widget"
+
+        # Methods
+        assert len(st.methods) == 3
+        m_map = {m.name: m for m in st.methods}
+        assert m_map["get_id"].is_const is True
+        assert m_map["create_default"].is_static is True
+
+    def test_parse_cpp_inheritance_and_virtual(self):
+        pytest.importorskip("tree_sitter_cpp")
+        code = """
+        class Shape {
+        public:
+            virtual void draw() = 0;
+        };
+
+        class Circle : public Shape {
+        public:
+            Circle();
+            void draw() override;
+        };
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "shapes.hpp")
+
+        assert len(header.declarations) == 2
+        shape, circle = header.declarations[0], header.declarations[1]
+        assert isinstance(shape, Struct) and isinstance(circle, Struct)
+
+        assert shape.name == "Shape"
+        assert len(shape.methods) == 1
+        assert shape.methods[0].name == "draw"
+        assert shape.methods[0].is_virtual is True
+        assert shape.methods[0].is_pure_virtual is True
+
+        assert circle.name == "Circle"
+        assert len(circle.bases) == 1
+        assert isinstance(circle.bases[0], BaseSpecifier)
+        assert circle.bases[0].name == "Shape"
+        assert circle.bases[0].access == "public"
+        assert circle.bases[0].is_virtual is False
+
+    def test_parse_cpp_namespaces_and_templates(self):
+        pytest.importorskip("tree_sitter_cpp")
+        code = """
+        namespace math {
+        namespace linalg {
+
+        template <typename T>
+        class Vector {
+        public:
+            using ValueType = T;
+            T x;
+            T y;
+            Vector(T x, T y);
+            T get_x() const;
+            Vector& operator+=(const Vector& other);
+        };
+
+        template <typename T>
+        T dot_product(const Vector<T>& a, const Vector<T>& b);
+
+        } // linalg
+        } // math
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "linalg.hpp")
+
+        assert len(header.declarations) == 2
+        vec, dot = header.declarations[0], header.declarations[1]
+
+        assert isinstance(vec, Struct)
+        assert vec.name == "Vector"
+        assert vec.namespace == "math::linalg"
+        assert vec.template_params == ["T"]
+        assert vec.is_cppclass is True
+        assert vec.inner_typedefs.get("ValueType") == "T"
+
+        # operator
+        op = [m for m in vec.methods if m.name == "operator+="]
+        assert len(op) == 1
+        assert isinstance(op[0].return_type, Reference)
+
+        assert isinstance(dot, Function)
+        assert dot.name == "dot_product"
+        assert dot.namespace == "math::linalg"
+        assert dot.template_params == ["T"]
+
+    def test_parse_cpp_roundtrip_cython_writer(self):
+        pytest.importorskip("tree_sitter_cpp")
+        code = """
+        class Calculator {
+        public:
+            int value;
+            void reset();
+            int add(int x);
+            int multiply(int a, int b);
+        };
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "calc.hpp")
+
+        writer = CythonWriter()
+        out = writer.write(header)
+        assert 'cdef extern from "calc.hpp":' in out
+        assert "cdef cppclass Calculator:" in out
+        assert "int value" in out
+        assert "void reset()" in out
+        assert "int add(int x)" in out
+        assert "int multiply(int a, int b)" in out
