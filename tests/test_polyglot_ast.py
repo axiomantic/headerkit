@@ -6,6 +6,7 @@ from headerkit.backends import get_backend
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, execute_pipeline
 from headerkit.ir import (
     Function,
+    FunctionPointer,
     Pointer,
     SourceUnit,
     Struct,
@@ -361,3 +362,56 @@ class TestPolyglotASTExtraction:
         assert isinstance(fn_n.parameters[1].type, Pointer)
         assert fn_n.parameters[2].name == "arg2"
         assert str(fn_n.parameters[2].type) == "double"
+
+    def test_nested_parentheses_in_parameters(self):
+        """Verify Rust, Zig, and Nim extractors handle nested parentheses in parameter types."""
+        rust_code = """
+        pub extern "C" fn register_handler(
+            callback: extern "C" fn(i32, i32) -> i32,
+            user_data: *mut void,
+        ) -> bool {
+            true
+        }
+        """
+        unit_r = get_backend("rust").parse(rust_code, "handler.rs")
+        fn_r = [d for d in unit_r.declarations if isinstance(d, Function)][0]
+        assert fn_r.name == "register_handler"
+        assert str(fn_r.return_type) == "bool"
+        assert len(fn_r.parameters) == 2
+        assert fn_r.parameters[0].name == "callback"
+        assert isinstance(fn_r.parameters[0].type, FunctionPointer)
+        assert str(fn_r.parameters[0].type.return_type) == "int32_t"
+        assert fn_r.parameters[1].name == "user_data"
+        assert isinstance(fn_r.parameters[1].type, Pointer)
+
+        zig_code = """
+        export fn set_callback(
+            cb: *const fn(c_int) callconv(.C) c_int,
+            ctx: ?*anyopaque,
+        ) void {}
+        """
+        unit_z = get_backend("zig").parse(zig_code, "cb.zig")
+        fn_z = [d for d in unit_z.declarations if isinstance(d, Function)][0]
+        assert fn_z.name == "set_callback"
+        assert str(fn_z.return_type) == "void"
+        assert len(fn_z.parameters) == 2
+        assert fn_z.parameters[0].name == "cb"
+        assert isinstance(fn_z.parameters[0].type, FunctionPointer)
+        assert str(fn_z.parameters[0].type.return_type) == "int"
+
+        nim_code = """
+        proc register_hook*(
+            cb: proc(x: cint): cint,
+            data: pointer,
+        ): cint {.exportc, dynlib.} =
+            discard
+        """
+        unit_n = get_backend("nim").parse(nim_code, "hook.nim")
+        fn_n = [d for d in unit_n.declarations if isinstance(d, Function)][0]
+        assert fn_n.name == "register_hook"
+        assert str(fn_n.return_type) == "int32_t"
+        assert len(fn_n.parameters) == 2
+        assert fn_n.parameters[0].name == "cb"
+        assert isinstance(fn_n.parameters[0].type, FunctionPointer)
+        assert str(fn_n.parameters[0].type.return_type) == "int32_t"
+        assert fn_n.parameters[1].name == "data"

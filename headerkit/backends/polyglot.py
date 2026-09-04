@@ -79,7 +79,12 @@ def _map_rust_type(raw_type: str) -> TypeExpr:
         return Pointer(inner)
 
     if "fn(" in t or "fn (" in t:
-        return FunctionPointer(return_type=CType("void"), parameters=[])
+        ret_type: TypeExpr = CType("void")
+        if "->" in t:
+            ret_part = t.rsplit("->", 1)[1].strip()
+            if ret_part:
+                ret_type = _map_rust_type(ret_part)
+        return FunctionPointer(return_type=ret_type, parameters=[])
 
     c_name = _RUST_TYPE_MAP.get(t, t)
     return CType(c_name)
@@ -102,21 +107,35 @@ def _split_params(params_str: str) -> list[str]:
     """Split comma-separated parameters respecting nested parentheses and brackets."""
     params: list[str] = []
     current: list[str] = []
-    depth = 0
-    for char in params_str:
+    stack: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+
+    i = 0
+    n = len(params_str)
+    while i < n:
+        char = params_str[i]
+        # Skip arrow -> without treating > as closing bracket
+        if char == "-" and i + 1 < n and params_str[i + 1] == ">":
+            current.append("->")
+            i += 2
+            continue
+
         if char in "([{<":
-            depth += 1
+            stack.append(char)
             current.append(char)
         elif char in ")]}>":
-            depth -= 1
+            if stack and stack[-1] == matching[char]:
+                stack.pop()
             current.append(char)
-        elif char == "," and depth == 0:
+        elif char == "," and not stack:
             p = "".join(current).strip()
             if p:
                 params.append(p)
             current = []
         else:
             current.append(char)
+        i += 1
+
     last = "".join(current).strip()
     if last:
         params.append(last)
@@ -177,15 +196,31 @@ def extract_rust_interface(code: str, filename: str) -> SourceUnit:
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
         declarations.append(Enum(name=name, values=values, location=loc))
 
-    # Match pub extern "C" fn name(...) -> ret
-    fn_pat = re.compile(
-        r"(?:#\[[^\n\]]*\]\s*)*pub\s+(?:unsafe\s+)?extern\s+\"C\"\s+fn\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*(?:->\s*([^\{;]+))?",
+    # Match pub extern "C" fn name(...) -> ret using matching parentheses
+    fn_start_pat = re.compile(
+        r"(?:#\[[^\n\]]*\]\s*)*pub\s+(?:unsafe\s+)?extern\s+\"C\"\s+fn\s+([A-Za-z0-9_]+)\s*\(",
         re.MULTILINE,
     )
-    for m in fn_pat.finditer(code):
+    for m in fn_start_pat.finditer(code):
         name = m.group(1)
-        params_raw = m.group(2).strip()
-        ret_raw = (m.group(3) or "void").strip()
+        open_paren_idx = m.end() - 1
+        close_paren_idx = _find_matching_paren(code, open_paren_idx)
+        if close_paren_idx == -1:
+            continue
+        params_raw = code[open_paren_idx + 1 : close_paren_idx].strip()
+
+        # Extract return type from close_paren_idx to '{' or ';'
+        rest = code[close_paren_idx + 1 :]
+        ret_end = len(rest)
+        for char in ("{", ";"):
+            idx = rest.find(char)
+            if idx != -1 and idx < ret_end:
+                ret_end = idx
+        rest_after = rest[:ret_end].strip()
+        if "->" in rest_after:
+            ret_raw = rest_after.split("->", 1)[1].strip()
+        else:
+            ret_raw = "void"
 
         parameters: list[Parameter] = []
         if params_raw:
@@ -423,6 +458,14 @@ def _map_nim_type(raw_type: str) -> TypeExpr:
         return Pointer(CType("char", qualifiers=["const"]))
     if t == "pointer":
         return Pointer(CType("void"))
+    if "proc(" in t or "proc (" in t:
+        ret_type: TypeExpr = CType("void")
+        if ":" in t.rsplit(")", 1)[-1]:
+            after_paren = t.rsplit(")", 1)[-1]
+            ret_part = after_paren.split(":", 1)[1].strip()
+            if ret_part:
+                ret_type = _map_nim_type(ret_part)
+        return FunctionPointer(return_type=ret_type, parameters=[])
 
     c_name = _NIM_TYPE_MAP.get(t, t)
     return CType(c_name)
@@ -458,15 +501,38 @@ def extract_nim_interface(code: str, filename: str) -> SourceUnit:
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
         declarations.append(Struct(name=name, fields=fields, location=loc))
 
-    # Match exported procs: proc name*(...): ret {.exportc...}
-    fn_pat = re.compile(
-        r"proc\s+([A-Za-z0-9_]+)\*\s*(?:\(([^)]*)\))?\s*(?::\s*([^{=\n]+))?\s*\{\.[^}]*exportc[^}]*\.\}",
-        re.MULTILINE,
-    )
-    for m in fn_pat.finditer(code):
+    # Match exported procs: proc name*... {.exportc...} using matching parentheses
+    proc_pat = re.compile(r"proc\s+([A-Za-z0-9_]+)\*", re.MULTILINE)
+    for m in proc_pat.finditer(code):
         name = m.group(1)
-        params_raw = (m.group(2) or "").strip()
-        ret_raw = (m.group(3) or "void").strip()
+        rest = code[m.end() :]
+        pragma_start = rest.find("{.")
+        if pragma_start == -1:
+            continue
+        if re.search(r"\bproc\s+", rest[:pragma_start]):
+            continue
+        pragma_end = rest.find(".}", pragma_start)
+        if pragma_end == -1:
+            continue
+        pragma_content = rest[pragma_start + 2 : pragma_end]
+        if "exportc" not in pragma_content:
+            continue
+
+        proc_header = rest[:pragma_start].strip()
+        params_raw = ""
+        ret_raw = "void"
+
+        paren_pos = rest.find("(")
+        if paren_pos != -1 and paren_pos < pragma_start:
+            open_paren_idx = m.end() + paren_pos
+            close_paren_idx = _find_matching_paren(code, open_paren_idx)
+            if close_paren_idx != -1 and close_paren_idx < m.end() + pragma_start:
+                params_raw = code[open_paren_idx + 1 : close_paren_idx].strip()
+                after_close = code[close_paren_idx + 1 : m.end() + pragma_start].strip()
+                if after_close.startswith(":"):
+                    ret_raw = after_close[1:].strip()
+        elif ":" in proc_header:
+            ret_raw = proc_header.split(":", 1)[1].strip()
 
         parameters: list[Parameter] = []
         if params_raw:
