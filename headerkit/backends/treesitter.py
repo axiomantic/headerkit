@@ -95,7 +95,7 @@ class TreeSitterBackend:
     def is_available(self) -> bool:
         return _HAS_TREESITTER and (_HAS_TREESITTER_C or _HAS_TREESITTER_CPP)
 
-    def _is_cpp_mode(self, filename: str, extra_args: list[str] | None = None) -> bool:
+    def _is_cpp_mode(self, code: str, filename: str, extra_args: list[str] | None = None) -> bool:
         if extra_args:
             for i, arg in enumerate(extra_args):
                 if arg == "-x" and i + 1 < len(extra_args) and extra_args[i + 1] in ("c++", "cpp"):
@@ -103,7 +103,12 @@ class TreeSitterBackend:
                 if arg.startswith("-std=c++") or arg.startswith("-std=gnu++"):
                     return True
         ext = filename.lower()
-        return ext.endswith((".hpp", ".hh", ".hxx", ".h++", ".cpp", ".cc", ".cxx", ".c++", ".cpptest"))
+        if ext.endswith((".hpp", ".hh", ".hxx", ".h++", ".cpp", ".cc", ".cxx", ".c++", ".cpptest")):
+            return True
+        if _HAS_TREESITTER_CPP:
+            if "class " in code or "namespace " in code or "template<" in code or "template <" in code:
+                return True
+        return False
 
     def parse(
         self,
@@ -121,7 +126,7 @@ class TreeSitterBackend:
             msg = "tree-sitter is not installed. Install with: pip install 'headerkit[treesitter]'"
             raise RuntimeError(msg)
 
-        is_cpp = self._is_cpp_mode(filename, extra_args)
+        is_cpp = self._is_cpp_mode(code, filename, extra_args)
 
         if is_cpp:
             if not _HAS_TREESITTER_CPP:
