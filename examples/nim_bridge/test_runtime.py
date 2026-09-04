@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 import ctypes
+import sys
 import threading
 from pathlib import Path
 
-lib_path = Path(__file__).parent / "src" / "libfastmath.dylib"
-assert lib_path.exists(), f"Missing {lib_path}"
+if sys.platform == "darwin":
+    _lib_name = "libfastmath.dylib"
+elif sys.platform == "win32":
+    _lib_name = "fastmath.dll"
+else:
+    _lib_name = "libfastmath.so"
+
+lib_path = Path(__file__).parent / "src" / _lib_name
+if not lib_path.exists():
+    raise SystemExit(
+        f"Compiled Nim shared library not found at: {lib_path}\n"
+        "Build it first with:\n"
+        "  nim c --app:lib --mm:orc --threads:on src/fastmath.nim"
+    )
 _lib = ctypes.CDLL(str(lib_path))
 
 
