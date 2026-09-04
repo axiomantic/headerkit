@@ -201,6 +201,33 @@ class TestUnifiedWriterScaffolding:
         assert unit_file is not None
         assert "check declared(multiply)" in unit_file.content
 
+    def test_nim_wheel_scaffolding(self, sample_header: Header) -> None:
+        """Nim writer must produce pyproject.toml, CMakeLists.txt, src/nim, python wrapper, and tests in wheel layout."""
+        writer = get_writer("nim")
+        opts = ScaffoldOptions(package_name="nimkit", target_language="nim", layout="wheel", test_type="both")
+        layout = writer.write_layout(sample_header, opts)
+
+        paths = {f.path for f in layout.files}
+        assert "pyproject.toml" in paths
+        assert "CMakeLists.txt" in paths
+        assert "src/nimkit.nim" in paths
+        assert "nimkit/__init__.py" in paths
+        assert "tests/test_tripwire.py" in paths
+        assert "tests/test_nimkit.py" in paths
+
+        pyproj = layout.get_file("pyproject.toml")
+        assert pyproj is not None
+        assert "scikit-build-core" in pyproj.content
+
+        cmake = layout.get_file("CMakeLists.txt")
+        assert cmake is not None
+        assert "find_program(NIM_EXECUTABLE nim REQUIRED)" in cmake.content
+
+        wrapper = layout.get_file("nimkit/__init__.py")
+        assert wrapper is not None
+        assert "def multiply" in wrapper.content
+        assert "init_nim" in wrapper.content
+
     def test_mojo_package_scaffolding(self, sample_header: Header) -> None:
         """Mojo writer must produce mojoproject.toml, src module, bindings, and tripwires."""
         writer = get_writer("mojo")
