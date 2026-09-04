@@ -376,6 +376,14 @@ class TestTargetTriple:
         assert musl.is_linux is True
         assert musl.is_musl is True
 
+        arm_linux = parse_triple("arm-unknown-linux-gnueabi")
+        assert arm_linux.is_linux is True
+        assert arm_linux.is_embedded is False
+
+        armv7_linux = parse_triple("armv7-unknown-linux-gnueabihf")
+        assert armv7_linux.is_linux is True
+        assert armv7_linux.is_embedded is False
+
         wasm = parse_triple("wasm32-unknown-wasi")
         assert wasm.is_wasm is True
 
@@ -386,19 +394,34 @@ class TestTargetTriple:
         assert t64.pointer_width == 8
         assert t64.is_64_bit is True
         assert t64.is_32_bit is False
+        assert t64.is_16_bit is False
 
         t32 = parse_triple("i686-pc-windows-msvc")
         assert t32.pointer_width == 4
         assert t32.is_64_bit is False
         assert t32.is_32_bit is True
+        assert t32.is_16_bit is False
 
         arm32 = parse_triple("armv7-unknown-linux-gnueabihf")
         assert arm32.pointer_width == 4
         assert arm32.is_32_bit is True
+        assert arm32.is_16_bit is False
 
         wasm = parse_triple("wasm32-unknown-wasi")
         assert wasm.pointer_width == 4
         assert wasm.is_32_bit is True
+        assert wasm.is_16_bit is False
+
+        msp16 = parse_triple("msp430-none-elf")
+        assert msp16.pointer_width == 2
+        assert msp16.is_16_bit is True
+        assert msp16.is_32_bit is False
+        assert msp16.is_64_bit is False
+        assert msp16.is_embedded is True
+
+        avr16 = parse_triple("avr-none-unknown")
+        assert avr16.pointer_width == 2
+        assert avr16.is_16_bit is True
 
 
 class TestCrossCompilerDetection:
