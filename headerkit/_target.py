@@ -100,6 +100,14 @@ _32_BIT_ARCHES = frozenset(
     }
 )
 
+# 16-bit architectures
+_16_BIT_ARCHES = frozenset(
+    {
+        "msp430",
+        "avr",
+    }
+)
+
 
 @dataclass(frozen=True)
 class TargetTriple:
@@ -122,7 +130,7 @@ class TargetTriple:
 
     @property
     def is_darwin(self) -> bool:
-        """True if targeting macOS / Darwin."""
+        """True if targeting macOS / Apple Darwin."""
         return self.os == "darwin" or self.os.startswith("darwin")
 
     @property
@@ -142,8 +150,10 @@ class TargetTriple:
 
     @property
     def is_embedded(self) -> bool:
-        """True if targeting bare-metal / embedded platforms."""
-        return self.vendor == "none" or self.os == "none" or (self.env is not None and "eabi" in self.env)
+        """True if targeting bare-metal / embedded platforms without an OS."""
+        if self.is_linux or self.is_darwin or self.is_windows or self.is_wasm:
+            return False
+        return self.os == "none" or (self.env is not None and self.env in ("eabi", "eabihf", "elf"))
 
     @property
     def pointer_width(self) -> int:
@@ -152,6 +162,8 @@ class TargetTriple:
             return 8
         if self.arch in _32_BIT_ARCHES:
             return 4
+        if self.arch in _16_BIT_ARCHES:
+            return 2
         return 8 if "64" in self.arch else 4
 
     @property
@@ -163,6 +175,11 @@ class TargetTriple:
     def is_32_bit(self) -> bool:
         """True if the target architecture is 32-bit."""
         return self.pointer_width == 4
+
+    @property
+    def is_16_bit(self) -> bool:
+        """True if the target architecture is 16-bit."""
+        return self.pointer_width == 2
 
     @classmethod
     def parse(cls, raw: str, *, allow_shorthand: bool = True) -> TargetTriple:
