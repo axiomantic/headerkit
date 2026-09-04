@@ -86,17 +86,25 @@ def generate_nim_pyproject(
     """)
 
 
+def _escape_nim_ident(name: str) -> str:
+    from headerkit.writers.nim import _escape_ident
+
+    return _escape_ident(name)
+
+
 def _c_type_to_nim(c_type_name: str) -> str:
-    cleaned = c_type_name.strip()
+    cleaned = c_type_name.removeprefix("struct ").removeprefix("union ").removeprefix("enum ").strip()
     if cleaned in C_TO_NIM_PRIMITIVES:
         return C_TO_NIM_PRIMITIVES[cleaned]
     if cleaned.endswith("*"):
         base = cleaned[:-1].strip()
-        if base == "char" or base == "const char":
+        if base in ("char", "const char"):
             return "cstring"
-        if base == "void":
+        if base in ("void", "const void"):
             return "pointer"
         return f"ptr {_c_type_to_nim(base)}"
+    if cleaned.isidentifier():
+        return _escape_nim_ident(cleaned)
     return "cint"
 
 
@@ -108,7 +116,7 @@ def _ir_type_to_nim(t: TypeExpr) -> str:
             return C_TO_NIM_PRIMITIVES[name]
         return _c_type_to_nim(name)
     elif isinstance(t, Pointer):
-        if isinstance(t.pointee, CType) and t.pointee.name == "void":
+        if isinstance(t.pointee, CType) and t.pointee.name in ("void", "const void"):
             return "pointer"
         if isinstance(t.pointee, CType) and t.pointee.name == "char":
             return "cstring"
@@ -123,7 +131,7 @@ def _ir_type_to_nim(t: TypeExpr) -> str:
 
 
 def _c_type_to_ctypes(c_type_name: str) -> str:
-    cleaned = c_type_name.strip()
+    cleaned = c_type_name.removeprefix("struct ").removeprefix("union ").removeprefix("enum ").strip()
     if cleaned.startswith("const "):
         cleaned = cleaned[6:].strip()
     if cleaned in CTYPES_TYPE_MAP:
@@ -132,9 +140,18 @@ def _c_type_to_ctypes(c_type_name: str) -> str:
         base = cleaned[:-1].strip()
         if base == "char":
             return "ctypes.c_char_p"
-        if base == "void":
+        if base in ("void", "const void"):
             return "ctypes.c_void_p"
-        return f"ctypes.POINTER({_c_type_to_ctypes(base)})"
+        base_ctypes = _c_type_to_ctypes(base)
+        if base_ctypes in ("ctypes.c_void_p", "ctypes.c_char_p"):
+            return "ctypes.c_void_p"
+        return f"ctypes.POINTER({base_ctypes})"
+    if cleaned.isidentifier():
+        if cleaned in ("size_t", "uintptr_t"):
+            return "ctypes.c_size_t"
+        if cleaned in ("ssize_t", "intptr_t"):
+            return "ctypes.c_ssize_t"
+        return "ctypes.c_void_p"
     return "ctypes.c_int"
 
 
@@ -150,11 +167,17 @@ def _ir_type_to_ctypes(t: TypeExpr) -> str:
     elif isinstance(t, Pointer):
         if isinstance(t.pointee, CType) and t.pointee.name == "char":
             return "ctypes.c_char_p"
-        if isinstance(t.pointee, CType) and t.pointee.name == "void":
+        if isinstance(t.pointee, CType) and t.pointee.name in ("void", "const void"):
             return "ctypes.c_void_p"
-        return f"ctypes.POINTER({_ir_type_to_ctypes(t.pointee)})"
+        inner = _ir_type_to_ctypes(t.pointee)
+        if inner == "ctypes.c_void_p":
+            return "ctypes.c_void_p"
+        return f"ctypes.POINTER({inner})"
     elif isinstance(t, Reference):
-        return f"ctypes.POINTER({_ir_type_to_ctypes(t.target)})"
+        inner = _ir_type_to_ctypes(t.target)
+        if inner == "ctypes.c_void_p":
+            return "ctypes.c_void_p"
+        return f"ctypes.POINTER({inner})"
     elif isinstance(t, Array):
         return f"({_ir_type_to_ctypes(t.element_type)} * {t.size or 0})"
     elif isinstance(t, FunctionPointer):
@@ -195,7 +218,7 @@ def _nim_return_stub(nim_type: str) -> str:
         return "nil"
     if nim_type.startswith("array["):
         return f"var r: {nim_type}; r"
-    return "discard"
+    return f"default({nim_type})"
 
 
 def generate_nim_source(pkg: str, unit: SourceUnit | Header) -> str:
