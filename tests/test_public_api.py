@@ -232,6 +232,9 @@ def test_target_symbols_in_all():
     import headerkit
     from headerkit._target import TargetTriple, detect_process_triple, normalize_triple, parse_triple, resolve_target
 
+    for name in ("TargetTriple", "parse_triple", "normalize_triple", "detect_process_triple", "resolve_target"):
+        assert name in headerkit.__all__, f"{name} missing from headerkit.__all__"
+
     assert headerkit.TargetTriple is TargetTriple
     assert headerkit.parse_triple is parse_triple
     assert headerkit.normalize_triple is normalize_triple
