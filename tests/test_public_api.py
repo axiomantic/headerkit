@@ -225,3 +225,15 @@ def test_is_up_to_date_batch_not_in_all():
     import headerkit
 
     assert "is_up_to_date_batch" not in headerkit.__all__
+
+
+def test_target_symbols_in_all():
+    """Target detection and normalization symbols should be exported in headerkit.__all__."""
+    import headerkit
+    from headerkit._target import TargetTriple, detect_process_triple, normalize_triple, parse_triple, resolve_target
+
+    assert headerkit.TargetTriple is TargetTriple
+    assert headerkit.parse_triple is parse_triple
+    assert headerkit.normalize_triple is normalize_triple
+    assert headerkit.detect_process_triple is detect_process_triple
+    assert headerkit.resolve_target is resolve_target

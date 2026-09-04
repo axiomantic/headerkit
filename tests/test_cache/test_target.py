@@ -271,3 +271,170 @@ class TestShortTarget:
     def test_three_component_darwin(self) -> None:
         """3-component triple like aarch64-apple-darwin."""
         assert short_target("aarch64-apple-darwin") == "aarch64-darwin"
+
+
+class TestTargetTriple:
+    """Tests for structured TargetTriple dataclass and parsing."""
+
+    def test_parse_four_component(self) -> None:
+        from headerkit._target import TargetTriple, parse_triple
+
+        triple = parse_triple("x86_64-pc-linux-gnu")
+        assert isinstance(triple, TargetTriple)
+        assert triple.arch == "x86_64"
+        assert triple.vendor == "pc"
+        assert triple.os == "linux"
+        assert triple.env == "gnu"
+        assert str(triple) == "x86_64-pc-linux-gnu"
+
+    def test_parse_three_component(self) -> None:
+        from headerkit._target import parse_triple
+
+        triple = parse_triple("aarch64-apple-darwin")
+        assert triple.arch == "aarch64"
+        assert triple.vendor == "apple"
+        assert triple.os == "darwin"
+        assert triple.env is None
+        assert str(triple) == "aarch64-apple-darwin"
+
+    def test_parse_shorthand_linux(self) -> None:
+        from headerkit._target import parse_triple
+
+        triple = parse_triple("x86_64-linux")
+        assert triple.arch == "x86_64"
+        assert triple.vendor == "unknown"
+        assert triple.os == "linux"
+        assert triple.env == "gnu"
+        assert str(triple) == "x86_64-unknown-linux-gnu"
+
+    def test_parse_shorthand_darwin(self) -> None:
+        from headerkit._target import parse_triple
+
+        triple = parse_triple("aarch64-darwin")
+        assert triple.arch == "aarch64"
+        assert triple.vendor == "apple"
+        assert triple.os == "darwin"
+        assert str(triple) == "aarch64-apple-darwin"
+
+    def test_parse_shorthand_windows(self) -> None:
+        from headerkit._target import parse_triple
+
+        triple = parse_triple("x86_64-windows")
+        assert triple.arch == "x86_64"
+        assert triple.vendor == "pc"
+        assert triple.os == "windows"
+        assert triple.env == "msvc"
+        assert str(triple) == "x86_64-pc-windows-msvc"
+
+    def test_parse_shorthand_musl(self) -> None:
+        from headerkit._target import parse_triple
+
+        triple = parse_triple("x86_64-musl")
+        assert triple.arch == "x86_64"
+        assert triple.vendor == "unknown"
+        assert triple.os == "linux"
+        assert triple.env == "musl"
+        assert str(triple) == "x86_64-unknown-linux-musl"
+
+    def test_parse_wasm_wasi(self) -> None:
+        from headerkit._target import parse_triple
+
+        triple = parse_triple("wasm32-wasi")
+        assert triple.arch == "wasm32"
+        assert triple.vendor == "unknown"
+        assert triple.os == "wasi"
+        assert str(triple) == "wasm32-unknown-wasi"
+
+    def test_parse_embedded(self) -> None:
+        from headerkit._target import parse_triple
+
+        triple = parse_triple("arm-none-eabi")
+        assert triple.arch == "arm"
+        assert triple.vendor == "none"
+        assert triple.os == "none"
+        assert triple.env == "eabi"
+        assert triple.is_embedded is True
+
+    def test_platform_predicates(self) -> None:
+        from headerkit._target import parse_triple
+
+        win = parse_triple("x86_64-pc-windows-msvc")
+        assert win.is_windows is True
+        assert win.is_linux is False
+        assert win.is_darwin is False
+
+        mac = parse_triple("aarch64-apple-darwin")
+        assert mac.is_darwin is True
+        assert mac.is_windows is False
+        assert mac.is_linux is False
+
+        linux = parse_triple("x86_64-pc-linux-gnu")
+        assert linux.is_linux is True
+        assert linux.is_musl is False
+
+        musl = parse_triple("x86_64-unknown-linux-musl")
+        assert musl.is_linux is True
+        assert musl.is_musl is True
+
+        wasm = parse_triple("wasm32-unknown-wasi")
+        assert wasm.is_wasm is True
+
+    def test_pointer_width_and_bitness(self) -> None:
+        from headerkit._target import parse_triple
+
+        t64 = parse_triple("x86_64-pc-linux-gnu")
+        assert t64.pointer_width == 8
+        assert t64.is_64_bit is True
+        assert t64.is_32_bit is False
+
+        t32 = parse_triple("i686-pc-windows-msvc")
+        assert t32.pointer_width == 4
+        assert t32.is_64_bit is False
+        assert t32.is_32_bit is True
+
+        arm32 = parse_triple("armv7-unknown-linux-gnueabihf")
+        assert arm32.pointer_width == 4
+        assert arm32.is_32_bit is True
+
+        wasm = parse_triple("wasm32-unknown-wasi")
+        assert wasm.pointer_width == 4
+        assert wasm.is_32_bit is True
+
+
+class TestCrossCompilerDetection:
+    """Tests for cross-compiler environment variable auto-detection."""
+
+    def test_cargo_build_target(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from headerkit._target import detect_cross_compiler_target
+
+        monkeypatch.setenv("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl")
+        assert detect_cross_compiler_target() == "x86_64-unknown-linux-musl"
+
+    def test_llvm_target_triple(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from headerkit._target import detect_cross_compiler_target
+
+        monkeypatch.delenv("CARGO_BUILD_TARGET", raising=False)
+        monkeypatch.setenv("LLVM_TARGET_TRIPLE", "aarch64-unknown-linux-gnu")
+        assert detect_cross_compiler_target() == "aarch64-unknown-linux-gnu"
+
+    def test_cross_compile_prefix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from headerkit._target import detect_cross_compiler_target
+
+        monkeypatch.delenv("CARGO_BUILD_TARGET", raising=False)
+        monkeypatch.delenv("LLVM_TARGET_TRIPLE", raising=False)
+        monkeypatch.setenv("CROSS_COMPILE", "aarch64-linux-gnu-")
+        assert detect_cross_compiler_target() == "aarch64-unknown-linux-gnu"
+
+    def test_cc_cross_compiler(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from headerkit._target import detect_cross_compiler_target
+
+        monkeypatch.delenv("CARGO_BUILD_TARGET", raising=False)
+        monkeypatch.delenv("LLVM_TARGET_TRIPLE", raising=False)
+        monkeypatch.delenv("CROSS_COMPILE", raising=False)
+        monkeypatch.setenv("CC", "/usr/bin/aarch64-linux-gnu-gcc")
+        assert detect_cross_compiler_target() == "aarch64-unknown-linux-gnu"
+
+    def test_resolve_target_uses_cross_detection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("HEADERKIT_TARGET", raising=False)
+        monkeypatch.setenv("CARGO_BUILD_TARGET", "aarch64-unknown-linux-musl")
+        assert resolve_target() == "aarch64-unknown-linux-musl"
