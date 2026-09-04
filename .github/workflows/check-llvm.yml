@@ -81,7 +81,7 @@ jobs:
             echo "TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: steps.detect.outputs.missing != ''
         with:
           python-version: "3.12"
