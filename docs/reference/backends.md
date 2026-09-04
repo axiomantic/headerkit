@@ -13,6 +13,7 @@ what is available.
 | Backend | Description | C++ Support | Macro Extraction |
 |---------|-------------|:-----------:|:----------------:|
 | `libclang` | LLVM clang-based parser | Yes | Yes |
+| `tree-sitter` | Zero-dependency C parser using `tree-sitter-c` | No | No |
 
 ## Protocol
 

@@ -12,6 +12,15 @@ from headerkit.backends import (
     is_backend_available,
     list_backends,
 )
+from headerkit.hooks import (
+    HookCaller,
+    HookDispatcher,
+    HookImpl,
+    HookRegistry,
+    PipelineContext,
+    Priority,
+    hook,
+)
 from headerkit.install_libclang import auto_install
 from headerkit.ir import (
     Array,
@@ -113,4 +122,12 @@ __all__ = [
     # Target detection API
     "detect_process_triple",
     "resolve_target",
+    # Hooks API
+    "Priority",
+    "PipelineContext",
+    "HookImpl",
+    "HookRegistry",
+    "hook",
+    "HookDispatcher",
+    "HookCaller",
 ]

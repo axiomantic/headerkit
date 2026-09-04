@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "headerkit"
-version = "0.29.0"
+version = "0.30.0"
 description = "C/C++ header analysis toolkit with pluggable backends and writers for ctypes, Cython, CFFI, LuaJIT FFI, and more"
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
@@ -49,7 +49,8 @@ headerkit = "headerkit._cli:main"
 test = ["pytest>=9,<10", "pytest-timeout>=2,<3", "pytest-tripwire>=0.20,<1", "dirty-equals>=0.11,<1"]
 lint = ["ruff>=0.14,<1", "mypy>=1,<3"]
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5,<10", "mkdocstrings[python]>=0.27,<2", "mike>=2.1,<3"]
-dev = ["headerkit[test,lint,docs]"]
+treesitter = ["tree-sitter>=0.23", "tree-sitter-c>=0.23"]
+dev = ["headerkit[test,lint,docs,treesitter]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["headerkit"]

@@ -234,6 +234,13 @@ def _ensure_backends_loaded() -> None:
 
         logging.getLogger(__name__).debug("Could not import libclang backend", exc_info=True)
 
+    try:
+        import headerkit.backends.treesitter  # noqa: F401 (side effect import)
+    except ImportError:
+        import logging
+
+        logging.getLogger(__name__).debug("Could not import treesitter backend", exc_info=True)
+
 
 def _load_backend_plugins() -> None:
     """Load backend plugins registered via entry points.

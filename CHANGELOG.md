@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `headerkit.backends.treesitter`: lightweight, zero-system-dependency parser backend using `tree-sitter-c` for parsing C headers without requiring system LLVM or `libclang`.
+- `treesitter` optional dependency extra in `pyproject.toml` (`pip install "headerkit[treesitter]"`).
+- `headerkit.hooks` module implementing a unified hook architecture with priority tiers (`FALLBACK`, `STANDARD`, `PROJECT`, `OVERRIDE`), glob pattern matching, and `first_result` / `waterfall` dispatch modes.
+- Exported hook symbols (`Priority`, `PipelineContext`, `HookImpl`, `HookRegistry`, `hook`, `HookDispatcher`, `HookCaller`) in top-level `headerkit` namespace.
+- Project `ROADMAP.md` defining strategic pillars and horizons (Now, Next, Later) for language integrations (Nim, Mojo), packaging templates, a unified priority/glob hook pipeline, polyglot input classification, `SourceUnit` IR evolution, and documentation sweeps.
+
 ## [0.29.0] - 2026-09-03
 
 ### Added
