@@ -176,6 +176,10 @@ def get_backend_info() -> list[dict[str, str | bool]]:
 
     descriptions = {
         "libclang": "Full C/C++ support via LLVM",
+        "tree-sitter": "Fast C parsing without system LLVM dependencies",
+        "rust": "Rust C-ABI interface surface extraction",
+        "zig": "Zig C-ABI export interface extraction",
+        "nim": "Nim C-ABI export proc extraction",
     }
 
     result: list[dict[str, str | bool]] = []
