@@ -97,21 +97,39 @@ def _sanitize_name(name: str, num_params: int | None = None) -> str:
 
 
 def _is_std_string(t: TypeExpr) -> bool:
-    """Check if type expression represents std::string or std::string_view."""
+    """Check if type expression represents std::string."""
     if isinstance(t, Reference):
         t = t.target
     if isinstance(t, CType):
         raw = t.name.strip()
         if raw.startswith("const "):
             raw = raw[6:].strip()
-        return raw in ("std::string", "string", "std::string_view", "string_view")
+        return raw in ("std::string", "string")
+    return False
+
+
+def _is_std_string_view(t: TypeExpr) -> bool:
+    """Check if type expression represents std::string_view."""
+    if isinstance(t, Reference):
+        t = t.target
+    if isinstance(t, CType):
+        raw = t.name.strip()
+        if raw.startswith("const "):
+            raw = raw[6:].strip()
+        return raw in ("std::string_view", "string_view")
     return False
 
 
 def _is_std_vector(t: TypeExpr) -> str | None:
-    """Check if type expression represents std::vector<T>, returning T if so."""
+    """Check if type expression represents by-value or const-ref std::vector<T>, returning T if so."""
     if isinstance(t, Reference):
-        t = t.target
+        target = t.target
+        if isinstance(target, CType):
+            if "const" not in target.qualifiers and not target.name.strip().startswith("const "):
+                return None
+            t = target
+        else:
+            return None
     if isinstance(t, CType):
         raw = t.name.strip()
         if raw.startswith("const "):
@@ -124,7 +142,7 @@ def _is_std_vector(t: TypeExpr) -> str | None:
 
 def _type_to_c(t: TypeExpr) -> str:
     """Format an IR type expression as a pure C type string."""
-    if _is_std_string(t):
+    if _is_std_string(t) or _is_std_string_view(t):
         return "const char*"
     if isinstance(t, CType):
         name = t.name
@@ -137,7 +155,7 @@ def _type_to_c(t: TypeExpr) -> str:
         return f"{_type_to_c(t.pointee)}*"
     elif isinstance(t, Reference):
         # In C-ABI, references become pointers unless mapped to C strings
-        if _is_std_string(t.target):
+        if _is_std_string(t.target) or _is_std_string_view(t.target):
             return "const char*"
         return f"{_type_to_c(t.target)}*"
     elif isinstance(t, Array):
@@ -182,7 +200,7 @@ def _format_parameters_and_call_args(
             params_c.append(f"const {elem_c}* {p_name}_data")
             params_c.append(f"size_t {p_name}_count")
             call_args.append(f"std::vector<{vec_elem}>({p_name}_data, {p_name}_data + {p_name}_count)")
-        elif _is_std_string(p.type):
+        elif _is_std_string(p.type) or _is_std_string_view(p.type):
             params_c.append(f"const char* {p_name}")
             call_args.append(p_name)
         else:
@@ -374,7 +392,10 @@ class CShimWriter(BaseWriter):
                         fn_method_name = f"{safe_cls_name}_method_{m_safe_name}"
 
                     if fn_method_name in exported_names:
-                        continue
+                        idx = 1
+                        while f"{fn_method_name}_{idx}" in exported_names:
+                            idx += 1
+                        fn_method_name = f"{fn_method_name}_{idx}"
 
                     ret_type_c = _type_to_c(method.return_type)
                     params_c, call_args = _format_parameters_and_call_args(method.parameters)
@@ -394,29 +415,39 @@ class CShimWriter(BaseWriter):
                         call_expr = f"reinterpret_cast<{cls_full_name}*>(self)->{method.name}({', '.join(call_args)})"
 
                     if ret_type_c == "void":
-                        raw_stmt = f"{call_expr};"
+                        body_stmts = [f"{call_expr};"]
+                    elif _is_std_string_view(method.return_type):
+                        body_stmts = [
+                            "thread_local std::string _ret_str;",
+                            f"auto _view = {call_expr};",
+                            "_ret_str.assign(_view.data(), _view.size());",
+                            "return _ret_str.c_str();",
+                        ]
                     elif _is_std_string(method.return_type):
-                        raw_stmt = f"return {call_expr}.c_str();"
+                        body_stmts = [
+                            "thread_local std::string _ret_str;",
+                            f"_ret_str = {call_expr};",
+                            "return _ret_str.c_str();",
+                        ]
                     else:
-                        raw_stmt = f"return {call_expr};"
+                        body_stmts = [f"return {call_expr};"]
 
+                    params_str = ", ".join(params_c) if params_c else "void"
                     if self.catch_exceptions:
                         catch_stmt = _make_catch_stmt(ret_type_c)
-                        m_body = textwrap.dedent(f"""\
-                            {ret_type_c} {fn_method_name}({", ".join(params_c) if params_c else "void"}) {{
-                                try {{
-                                    {raw_stmt}
-                                }} catch (...) {{
-                                    {catch_stmt}
-                                }}
-                            }}
-                        """)
+                        inner = "\n        ".join(body_stmts)
+                        m_body = (
+                            f"{ret_type_c} {fn_method_name}({params_str}) {{\n"
+                            f"    try {{\n"
+                            f"        {inner}\n"
+                            f"    }} catch (...) {{\n"
+                            f"        {catch_stmt}\n"
+                            f"    }}\n"
+                            f"}}\n"
+                        )
                     else:
-                        m_body = textwrap.dedent(f"""\
-                            {ret_type_c} {fn_method_name}({", ".join(params_c) if params_c else "void"}) {{
-                                {raw_stmt}
-                            }}
-                        """)
+                        inner = "\n    ".join(body_stmts)
+                        m_body = f"{ret_type_c} {fn_method_name}({params_str}) {{\n    {inner}\n}}\n"
                     cpp_lines.append(m_body)
 
             elif isinstance(decl, Function):
@@ -428,6 +459,12 @@ class CShimWriter(BaseWriter):
                     fn_full_name = decl.name
                     safe_fn_name = _sanitize_name(decl.name)
 
+                if safe_fn_name in exported_names:
+                    idx = 1
+                    while f"{safe_fn_name}_{idx}" in exported_names:
+                        idx += 1
+                    safe_fn_name = f"{safe_fn_name}_{idx}"
+
                 ret_c = _type_to_c(decl.return_type)
                 params_c, call_args = _format_parameters_and_call_args(decl.parameters)
                 if decl.is_variadic:
@@ -438,35 +475,48 @@ class CShimWriter(BaseWriter):
                 exported_names.append(safe_fn_name)
 
                 if ret_c == "void":
-                    raw_fn_stmt = f"{fn_full_name}({', '.join(call_args)});"
+                    fn_body_stmts = [f"{fn_full_name}({', '.join(call_args)});"]
+                elif _is_std_string_view(decl.return_type):
+                    fn_body_stmts = [
+                        "thread_local std::string _ret_str;",
+                        f"auto _view = {fn_full_name}({', '.join(call_args)});",
+                        "_ret_str.assign(_view.data(), _view.size());",
+                        "return _ret_str.c_str();",
+                    ]
                 elif _is_std_string(decl.return_type):
-                    raw_fn_stmt = f"return {fn_full_name}({', '.join(call_args)}).c_str();"
+                    fn_body_stmts = [
+                        "thread_local std::string _ret_str;",
+                        f"_ret_str = {fn_full_name}({', '.join(call_args)});",
+                        "return _ret_str.c_str();",
+                    ]
                 else:
-                    raw_fn_stmt = f"return {fn_full_name}({', '.join(call_args)});"
+                    fn_body_stmts = [f"return {fn_full_name}({', '.join(call_args)});"]
 
+                params_fn_str = ", ".join(params_c) if params_c else "void"
                 if self.catch_exceptions:
                     catch_stmt = _make_catch_stmt(ret_c)
-                    fn_body = textwrap.dedent(f"""\
-                        {ret_c} {safe_fn_name}({", ".join(params_c) if params_c else "void"}) {{
-                            try {{
-                                {raw_fn_stmt}
-                            }} catch (...) {{
-                                {catch_stmt}
-                            }}
-                        }}
-                    """)
+                    inner = "\n        ".join(fn_body_stmts)
+                    fn_body = (
+                        f"{ret_c} {safe_fn_name}({params_fn_str}) {{\n"
+                        f"    try {{\n"
+                        f"        {inner}\n"
+                        f"    }} catch (...) {{\n"
+                        f"        {catch_stmt}\n"
+                        f"    }}\n"
+                        f"}}\n"
+                    )
                 else:
-                    fn_body = textwrap.dedent(f"""\
-                        {ret_c} {safe_fn_name}({", ".join(params_c) if params_c else "void"}) {{
-                            {raw_fn_stmt}
-                        }}
-                    """)
+                    inner = "\n    ".join(fn_body_stmts)
+                    fn_body = f"{ret_c} {safe_fn_name}({params_fn_str}) {{\n    {inner}\n}}\n"
                 cpp_lines.append(fn_body)
 
         lines.append("")
         lines.append("#ifdef __cplusplus")
         lines.append("}")
         lines.append("#endif")
+
+        if any("size_t" in line for line in lines):
+            lines.insert(2, "#include <stddef.h>")
 
         header_code = "\n".join(lines)
         return header_code, cpp_lines, exported_names
@@ -476,20 +526,28 @@ class CShimWriter(BaseWriter):
         header_code, cpp_lines, _ = self._render_parts(unit)
         header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
 
+        cpp_includes = ["#include <new>"]
+        if any("std::string" in stmt or "_ret_str" in stmt for stmt in cpp_lines):
+            cpp_includes.append("#include <string>")
+        if any("std::vector" in stmt for stmt in cpp_lines):
+            cpp_includes.append("#include <vector>")
+        if any("size_t" in stmt or "std::vector" in stmt for stmt in cpp_lines):
+            cpp_includes.append("#include <cstddef>")
+        if self.catch_exceptions:
+            cpp_includes.append("#include <exception>")
+        if header.path:
+            cpp_includes.append(f'#include "{header.path}"')
+
         lines: list[str] = [
             header_code,
             "",
             "#ifdef __cplusplus",
-            "#include <new>",
+            *cpp_includes,
+            "",
+            *cpp_lines,
+            "#endif",
+            "",
         ]
-        if self.catch_exceptions:
-            lines.append("#include <exception>")
-        if header.path:
-            lines.append(f'#include "{header.path}"')
-        lines.append("")
-        lines.extend(cpp_lines)
-        lines.append("#endif")
-        lines.append("")
 
         return "\n".join(lines)
 
@@ -511,6 +569,12 @@ class CShimWriter(BaseWriter):
             f'#include "{pkg}_cshim.h"',
             "#include <new>",
         ]
+        if any("std::string" in stmt or "_ret_str" in stmt for stmt in cpp_lines):
+            cpp_header_includes.append("#include <string>")
+        if any("std::vector" in stmt for stmt in cpp_lines):
+            cpp_header_includes.append("#include <vector>")
+        if any("size_t" in stmt or "std::vector" in stmt for stmt in cpp_lines):
+            cpp_header_includes.append("#include <cstddef>")
         if self.catch_exceptions:
             cpp_header_includes.append("#include <exception>")
         if header.path:
