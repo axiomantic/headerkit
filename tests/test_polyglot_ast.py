@@ -26,6 +26,7 @@ class TestPolyglotASTExtraction:
         yield
         HookRegistry.restore(saved)
 
+    @pytest.mark.treesitter
     def test_c_source_function_definitions(self):
         """Extract non-static function definitions from C source code (.c)."""
         code = """
@@ -257,3 +258,63 @@ class TestPolyglotASTExtraction:
         unit_n = nim_backend.parse("proc test_fn*() {.exportc.}", "test.nim")
         assert isinstance(unit_n, SourceUnit)
         assert len(unit_n.declarations) == 1
+
+    def test_rust_and_zig_enum_extraction(self):
+        """Verify enum extraction for Rust and Zig sources."""
+        from headerkit.ir import Enum
+
+        rust_code = """
+        #[repr(C)]
+        pub enum Status {
+            Ok = 0,
+            Error = 1,
+            Pending,
+        }
+        """
+        backend_r = get_backend("rust")
+        unit_r = backend_r.parse(rust_code, "status.rs")
+        enums_r = [d for d in unit_r.declarations if isinstance(d, Enum)]
+        assert len(enums_r) == 1
+        assert enums_r[0].name == "Status"
+        assert len(enums_r[0].values) == 3
+        assert enums_r[0].values[0].name == "Ok" and enums_r[0].values[0].value == 0
+        assert enums_r[0].values[1].name == "Error" and enums_r[0].values[1].value == 1
+        assert enums_r[0].values[2].name == "Pending" and enums_r[0].values[2].value == 2
+
+        zig_code = """
+        pub const Mode = extern enum {
+            Fast = 10,
+            Slow = 20,
+        };
+        """
+        backend_z = get_backend("zig")
+        unit_z = backend_z.parse(zig_code, "mode.zig")
+        enums_z = [d for d in unit_z.declarations if isinstance(d, Enum)]
+        assert len(enums_z) == 1
+        assert enums_z[0].name == "Mode"
+        assert len(enums_z[0].values) == 2
+        assert enums_z[0].values[0].name == "Fast" and enums_z[0].values[0].value == 10
+        assert enums_z[0].values[1].name == "Slow" and enums_z[0].values[1].value == 20
+
+    def test_zig_function_pointer_parameter(self):
+        """Verify Zig export fn with function-pointer callback parameters."""
+        from headerkit.ir import Function, FunctionPointer
+
+        zig_code = """
+        export fn register_callback(
+            cb: ?*const fn (code: c_int) callconv(.c) void,
+            user_data: ?*anyopaque,
+        ) c_int {
+            return 0;
+        }
+        """
+        backend_z = get_backend("zig")
+        unit = backend_z.parse(zig_code, "callback.zig")
+        funcs = [d for d in unit.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        fn = funcs[0]
+        assert fn.name == "register_callback"
+        assert len(fn.parameters) == 2
+        assert fn.parameters[0].name == "cb"
+        assert isinstance(fn.parameters[0].type, FunctionPointer)
+        assert fn.parameters[1].name == "user_data"

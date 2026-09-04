@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 from typing import Any
 
@@ -9,8 +10,11 @@ from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     CType,
     Declaration,
+    Enum,
+    EnumValue,
     Field,
     Function,
+    FunctionPointer,
     Parameter,
     Pointer,
     SourceLocation,
@@ -74,8 +78,49 @@ def _map_rust_type(raw_type: str) -> TypeExpr:
             return Pointer(CType(inner.name, qualifiers=list(set(inner.qualifiers + ["const"]))))
         return Pointer(inner)
 
+    if "fn(" in t or "fn (" in t:
+        return FunctionPointer(return_type=CType("void"), parameters=[])
+
     c_name = _RUST_TYPE_MAP.get(t, t)
     return CType(c_name)
+
+
+def _find_matching_paren(text: str, open_idx: int) -> int:
+    """Find the index of the matching closing parenthesis for text[open_idx]."""
+    depth = 0
+    for i in range(open_idx, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _split_params(params_str: str) -> list[str]:
+    """Split comma-separated parameters respecting nested parentheses and brackets."""
+    params: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in params_str:
+        if char in "([{<":
+            depth += 1
+            current.append(char)
+        elif char in ")]}>":
+            depth -= 1
+            current.append(char)
+        elif char == "," and depth == 0:
+            p = "".join(current).strip()
+            if p:
+                params.append(p)
+            current = []
+        else:
+            current.append(char)
+    last = "".join(current).strip()
+    if last:
+        params.append(last)
+    return params
 
 
 def extract_rust_interface(code: str, filename: str) -> SourceUnit:
@@ -106,6 +151,32 @@ def extract_rust_interface(code: str, filename: str) -> SourceUnit:
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
         declarations.append(Struct(name=name, fields=fields, location=loc))
 
+    # Match repr(C) enums: #[repr(C)] pub enum Name { ... }
+    enum_pat = re.compile(
+        r"(?:#\[[^\n\]]*\]\s*)*#\[repr\([^)]*(?:C|i32|u32|i64|u64|c_int)[^)]*\)\]\s*(?:#\[[^\n\]]*\]\s*)*pub\s+enum\s+([A-Za-z0-9_]+)\s*\{([^}]*)\}",
+        re.MULTILINE,
+    )
+    for m in enum_pat.finditer(code):
+        name = m.group(1)
+        body = m.group(2)
+        values: list[EnumValue] = []
+        cur_val = 0
+        for line in body.splitlines():
+            line = line.strip().rstrip(",")
+            if not line or line.startswith("//") or line.startswith("/*"):
+                continue
+            if "=" in line:
+                v_name, v_val_str = line.split("=", 1)
+                v_name = v_name.strip()
+                with contextlib.suppress(ValueError):
+                    cur_val = int(v_val_str.strip(), 0)
+            else:
+                v_name = line.strip()
+            values.append(EnumValue(name=v_name, value=cur_val))
+            cur_val += 1
+        loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
+        declarations.append(Enum(name=name, values=values, location=loc))
+
     # Match pub extern "C" fn name(...) -> ret
     fn_pat = re.compile(
         r"(?:#\[[^\n\]]*\]\s*)*pub\s+(?:unsafe\s+)?extern\s+\"C\"\s+fn\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*(?:->\s*([^\{;]+))?",
@@ -118,7 +189,7 @@ def extract_rust_interface(code: str, filename: str) -> SourceUnit:
 
         parameters: list[Parameter] = []
         if params_raw:
-            for p in params_raw.split(","):
+            for p in _split_params(params_raw):
                 p = p.strip()
                 if not p:
                     continue
@@ -169,6 +240,20 @@ _ZIG_TYPE_MAP: dict[str, str] = {
 
 def _map_zig_type(raw_type: str) -> TypeExpr:
     t = raw_type.strip()
+    if "fn" in t and ("*const fn" in t or "fn (" in t or "fn(" in t):
+        ret_type: TypeExpr = CType("void")
+        if "callconv(" in t:
+            after_callconv = t.split("callconv(", 1)[1]
+            if ")" in after_callconv:
+                ret_part = after_callconv.split(")", 1)[1].strip()
+                if ret_part:
+                    ret_type = _map_zig_type(ret_part)
+        elif ")" in t:
+            ret_part = t.rsplit(")", 1)[1].strip()
+            if ret_part:
+                ret_type = _map_zig_type(ret_part)
+        return FunctionPointer(return_type=ret_type, parameters=[])
+
     if t.startswith("[*c]") or t.startswith("?[*c]"):
         inner = _map_zig_type(t[4:] if t.startswith("[*c]") else t[5:])
         return Pointer(inner)
@@ -213,19 +298,54 @@ def extract_zig_interface(code: str, filename: str) -> SourceUnit:
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
         declarations.append(Struct(name=name, fields=fields, location=loc))
 
-    # Match export fn name(...) ret { ... }
-    fn_pat = re.compile(
-        r"export\s+fn\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*([^\{;]+)",
+    # Match pub const Name = extern enum { ... }; or enum(c_int) { ... };
+    enum_pat = re.compile(
+        r"(?:pub\s+)?const\s+([A-Za-z0-9_]+)\s*=\s*(?:extern\s+)?enum(?:\([^)]*\))?\s*\{([^}]*)\};",
         re.MULTILINE,
     )
-    for m in fn_pat.finditer(code):
+    for m in enum_pat.finditer(code):
         name = m.group(1)
-        params_raw = m.group(2).strip()
-        ret_raw = m.group(3).strip()
+        body = m.group(2)
+        values: list[EnumValue] = []
+        cur_val = 0
+        for line in body.splitlines():
+            line = line.strip().rstrip(",")
+            if not line or line.startswith("//"):
+                continue
+            if "=" in line:
+                v_name, v_val_str = line.split("=", 1)
+                v_name = v_name.strip()
+                with contextlib.suppress(ValueError):
+                    cur_val = int(v_val_str.strip(), 0)
+            else:
+                v_name = line.strip()
+            values.append(EnumValue(name=v_name, value=cur_val))
+            cur_val += 1
+        loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
+        declarations.append(Enum(name=name, values=values, location=loc))
+
+    # Match export fn name(...) ret { ... } using matching parentheses
+    fn_start_pat = re.compile(r"export\s+fn\s+([A-Za-z0-9_]+)\s*\(", re.MULTILINE)
+    for m in fn_start_pat.finditer(code):
+        name = m.group(1)
+        open_paren_idx = m.end() - 1
+        close_paren_idx = _find_matching_paren(code, open_paren_idx)
+        if close_paren_idx == -1:
+            continue
+        params_raw = code[open_paren_idx + 1 : close_paren_idx].strip()
+
+        # Extract return type from close_paren_idx to '{' or ';'
+        rest = code[close_paren_idx + 1 :]
+        ret_end = len(rest)
+        for char in ("{", ";", "\n"):
+            idx = rest.find(char)
+            if idx != -1 and idx < ret_end:
+                ret_end = idx
+        ret_raw = rest[:ret_end].strip()
 
         parameters: list[Parameter] = []
         if params_raw:
-            for p in params_raw.split(","):
+            for p in _split_params(params_raw):
                 p = p.strip()
                 if not p:
                     continue
@@ -235,7 +355,7 @@ def extract_zig_interface(code: str, filename: str) -> SourceUnit:
                     p_type = _map_zig_type(parts[1].strip())
                     parameters.append(Parameter(name=p_name, type=p_type))
 
-        ret_type = _map_zig_type(ret_raw)
+        ret_type = _map_zig_type(ret_raw) if ret_raw else CType("void")
         loc = SourceLocation(file=filename, line=code[: m.start()].count("\n") + 1, column=1)
         declarations.append(
             Function(
