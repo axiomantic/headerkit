@@ -2,6 +2,11 @@ name: Tests
 
 on:
   workflow_call:
+    inputs:
+      full-matrix:
+        type: boolean
+        default: false
+        description: "Run full Python version matrix (all versions) instead of boundary versions"
 
 jobs:
   test:
@@ -11,7 +16,7 @@ jobs:
       fail-fast: true
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ${{ fromJSON(inputs.full-matrix && '["3.10", "3.11", "3.12", "3.13", "3.14"]' || '["3.10", "3.14"]') }}
         include:
           - os: macos-latest
             python-version: "3.14"

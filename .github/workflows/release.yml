@@ -23,6 +23,8 @@ permissions: {}
 jobs:
   test:
     uses: ./.github/workflows/test.yml
+    with:
+      full-matrix: true
 
   build:
     needs: test

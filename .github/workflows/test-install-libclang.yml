@@ -3,20 +3,16 @@ name: Test install_libclang
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'mkdocs.yml'
-      - 'LICENSE'
-      - '.gitignore'
+    paths:
+      - 'headerkit/install_libclang.py'
+      - 'tests/test_install_libclang.py'
+      - '.github/workflows/test-install-libclang.yml'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'mkdocs.yml'
-      - 'LICENSE'
-      - '.gitignore'
+    paths:
+      - 'headerkit/install_libclang.py'
+      - 'tests/test_install_libclang.py'
+      - '.github/workflows/test-install-libclang.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
