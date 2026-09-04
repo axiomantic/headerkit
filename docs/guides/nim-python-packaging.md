@@ -153,6 +153,21 @@ install(
 )
 ```
 
+### Automated Project Scaffolding via HeaderKit CLI
+
+HeaderKit can scaffold the entire `scikit-build-core` packaging structure automatically from your C header:
+
+```bash
+headerkit fastmath_api.h -w nim --layout wheel --package-name fastmath -o nim:fastmath_pkg --no-input
+```
+
+This generates:
+- `pyproject.toml` with `scikit-build-core` configuration.
+- `CMakeLists.txt` configured to compile and install the Nim library.
+- `src/fastmath.nim` skeleton with exported procs and `NimMain()`.
+- `fastmath/__init__.py` Python wrapper with library resolution and `init_nim()`.
+- `tests/test_tripwire.py` and `tests/test_fastmath.py`.
+
 ### Building the Wheel
 ```bash
 python -m build --wheel

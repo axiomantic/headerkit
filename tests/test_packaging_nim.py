@@ -1,0 +1,196 @@
+"""Tests for Nim scikit-build wheel packaging template and layout generation."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from headerkit.ir import CType, Function, Header, Parameter
+from headerkit.scaffold import ProjectLayout, ScaffoldOptions, scaffold
+from headerkit.writers import list_writer_layouts
+
+
+@pytest.fixture
+def sample_header() -> Header:
+    return Header(
+        path="fastmath.h",
+        declarations=[
+            Function(
+                name="add_numbers",
+                return_type=CType("int"),
+                parameters=[
+                    Parameter(name="a", type=CType("int")),
+                    Parameter(name="b", type=CType("int")),
+                ],
+            ),
+            Function(
+                name="compute_pi",
+                return_type=CType("double"),
+                parameters=[],
+            ),
+        ],
+    )
+
+
+class TestNimWheelPackaging:
+    """Test suite for Nim scikit-build wheel packaging template."""
+
+    def test_nim_writer_declares_wheel_layouts(self) -> None:
+        layouts = list_writer_layouts("nim")
+        assert "wheel" in layouts
+        assert "scikit-build" in layouts
+
+    def test_nim_wheel_layout_files_presence(self, sample_header: Header) -> None:
+        opts = ScaffoldOptions(
+            package_name="fastmath",
+            target_language="nim",
+            layout="wheel",
+            test_type="both",
+        )
+        layout = scaffold(sample_header, opts)
+        assert isinstance(layout, ProjectLayout)
+
+        paths = {f.path for f in layout.files}
+        assert "pyproject.toml" in paths
+        assert "CMakeLists.txt" in paths
+        assert "src/fastmath.nim" in paths
+        assert "fastmath/__init__.py" in paths
+        assert "tests/test_tripwire.py" in paths
+        assert "tests/test_fastmath.py" in paths
+        assert "README.md" in paths
+
+    def test_nim_scikit_build_alias(self, sample_header: Header) -> None:
+        opts = ScaffoldOptions(
+            package_name="fastmath",
+            target_language="nim",
+            layout="scikit-build",
+            test_type="both",
+        )
+        layout = scaffold(sample_header, opts)
+        paths = {f.path for f in layout.files}
+        assert "pyproject.toml" in paths
+        assert "CMakeLists.txt" in paths
+        assert "fastmath/__init__.py" in paths
+
+    def test_pyproject_toml_structure(self, sample_header: Header) -> None:
+        opts = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel")
+        layout = scaffold(sample_header, opts)
+        pyproj = layout.get_file("pyproject.toml")
+        assert pyproj is not None
+        content = pyproj.content
+
+        assert 'build-backend = "scikit_build_core.build"' in content
+        assert "scikit-build-core" in content
+        assert 'name = "fastmath"' in content
+        assert "[tool.scikit-build]" in content
+        assert 'wheel.packages = ["fastmath"]' in content
+
+    def test_cmake_lists_structure(self, sample_header: Header) -> None:
+        opts = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel")
+        layout = scaffold(sample_header, opts)
+        cmake = layout.get_file("CMakeLists.txt")
+        assert cmake is not None
+        content = cmake.content
+
+        assert "cmake_minimum_required(VERSION 3.18)" in content
+        assert "project(fastmath_pkg LANGUAGES C)" in content
+        assert "find_program(NIM_EXECUTABLE nim REQUIRED)" in content
+        assert "--app:lib" in content
+        assert "--mm:orc" in content
+        assert "--threads:on" in content
+        assert "-d:release" in content
+        assert 'DESTINATION "fastmath"' in content
+
+    def test_nim_source_structure(self, sample_header: Header) -> None:
+        opts = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel")
+        layout = scaffold(sample_header, opts)
+        nim_src = layout.get_file("src/fastmath.nim")
+        assert nim_src is not None
+        content = nim_src.content
+
+        assert "proc NimMain*() {.cdecl, importc.}" in content
+        assert "add_numbers" in content
+        assert "compute_pi" in content
+        assert "{.exportc, dynlib, cdecl.}" in content
+
+    def test_python_wrapper_structure(self, sample_header: Header) -> None:
+        opts = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel")
+        layout = scaffold(sample_header, opts)
+        wrapper = layout.get_file("fastmath/__init__.py")
+        assert wrapper is not None
+        content = wrapper.content
+
+        assert "ctypes" in content
+        assert "def init_nim" in content
+        assert "NimMain" in content
+        assert "add_numbers" in content
+        assert "compute_pi" in content
+        assert "argtypes" in content
+        assert "restype" in content
+
+    def test_test_type_filtering(self, sample_header: Header) -> None:
+        opts_none = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel", test_type="none")
+        layout_none = scaffold(sample_header, opts_none)
+        paths_none = {f.path for f in layout_none.files}
+        assert "tests/test_tripwire.py" not in paths_none
+        assert "tests/test_fastmath.py" not in paths_none
+
+        opts_tw = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel", test_type="tripwire")
+        layout_tw = scaffold(sample_header, opts_tw)
+        paths_tw = {f.path for f in layout_tw.files}
+        assert "tests/test_tripwire.py" in paths_tw
+        assert "tests/test_fastmath.py" not in paths_tw
+
+        opts_unit = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel", test_type="unit")
+        layout_unit = scaffold(sample_header, opts_unit)
+        paths_unit = {f.path for f in layout_unit.files}
+        assert "tests/test_tripwire.py" not in paths_unit
+        assert "tests/test_fastmath.py" in paths_unit
+
+    def test_tripwire_and_unit_no_tautological_assertions(self, sample_header: Header) -> None:
+        opts = ScaffoldOptions(package_name="fastmath", target_language="nim", layout="wheel", test_type="both")
+        layout = scaffold(sample_header, opts)
+        tw = layout.get_file("tests/test_tripwire.py")
+        assert tw is not None
+        assert "assert True" not in tw.content
+        assert "pytest.mark.tripwire" in tw.content
+        assert "add_numbers" in tw.content
+
+        unit = layout.get_file("tests/test_fastmath.py")
+        assert unit is not None
+        assert "assert True" not in unit.content
+        assert "callable(fastmath.add_numbers)" in unit.content or "add_numbers" in unit.content
+
+
+class TestNimWheelCLI:
+    def test_cli_scaffold_wheel(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from headerkit._cli import main
+
+        header = tmp_path / "libtest.h"
+        header.write_text("int run_computation(int x);\n", encoding="utf-8")
+        out_dir = tmp_path / "nim_wheel_pkg"
+
+        test_args = [
+            "headerkit",
+            str(header),
+            "-w",
+            "nim",
+            "--layout",
+            "wheel",
+            "--package-name",
+            "nim_wheel_pkg",
+            "-o",
+            f"nim:{out_dir}",
+            "--no-input",
+        ]
+        monkeypatch.setattr("sys.argv", test_args)
+
+        ret = main()
+        assert ret == 0
+        assert (out_dir / "pyproject.toml").exists()
+        assert (out_dir / "CMakeLists.txt").exists()
+        assert (out_dir / "src/nim_wheel_pkg.nim").exists()
+        assert (out_dir / "nim_wheel_pkg/__init__.py").exists()
+        assert (out_dir / "tests/test_tripwire.py").exists()
+        assert (out_dir / "tests/test_nim_wheel_pkg.py").exists()
