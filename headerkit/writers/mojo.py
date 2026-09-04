@@ -182,6 +182,14 @@ def _type_to_mojo(t: TypeExpr) -> str:
         raw_name = t.name
         if "::" in raw_name:
             raw_name = _sanitize_name(raw_name)
+
+        if t.qualifiers:
+            non_cv = [q for q in t.qualifiers if q not in ("const", "volatile", "restrict")]
+            if non_cv:
+                qualified = f"{' '.join(non_cv)} {raw_name}"
+                if qualified in PRIMITIVE_MAP:
+                    return PRIMITIVE_MAP[qualified]
+
         if raw_name in PRIMITIVE_MAP:
             return PRIMITIVE_MAP[raw_name]
         return _escape_identifier(raw_name)
@@ -189,11 +197,13 @@ def _type_to_mojo(t: TypeExpr) -> str:
         if isinstance(t.pointee, CType) and t.pointee.name == "void":
             return "UnsafePointer[NoneType]"
         if isinstance(t.pointee, FunctionPointer):
-            return "UnsafePointer[NoneType]"
+            return _type_to_mojo(t.pointee)
         return f"UnsafePointer[{_type_to_mojo(t.pointee)}]"
     elif isinstance(t, Reference):
         if isinstance(t.target, CType) and t.target.name == "void":
             return "UnsafePointer[NoneType]"
+        if isinstance(t.target, FunctionPointer):
+            return _type_to_mojo(t.target)
         return f"UnsafePointer[{_type_to_mojo(t.target)}]"
     elif isinstance(t, Array):
         elem = _type_to_mojo(t.element_type)
@@ -201,7 +211,9 @@ def _type_to_mojo(t: TypeExpr) -> str:
             return f"InlineArray[{elem}, {t.size}]"
         return f"UnsafePointer[{elem}]"
     elif isinstance(t, FunctionPointer):
-        return "UnsafePointer[NoneType]"
+        params_str = ", ".join(_type_to_mojo(p.type) for p in t.parameters)
+        ret_mojo = _type_to_mojo(t.return_type)
+        return f"fn({params_str}) -> {ret_mojo}"
     return str(t)
 
 
@@ -329,6 +341,9 @@ class MojoWriter:
             full_fn_name = f"{fn.namespace}::{fn.name}" if fn.namespace else fn.name
             safe_fn_name = _sanitize_name(full_fn_name)
 
+            if getattr(fn, "is_variadic", False):
+                lines.append(f"    # Warning: '{fn.name}' is a C variadic function; only fixed parameters are bound.")
+
             ret_mojo = _type_to_mojo(fn.return_type)
             ret_sig = f" -> {ret_mojo}" if ret_mojo != "None" else ""
 
@@ -393,6 +408,10 @@ class MojoWriter:
             for method in cls.methods:
                 if method.access in ("private", "protected"):
                     continue
+                if getattr(method, "is_variadic", False):
+                    lines.append(
+                        f"    # Warning: '{method.name}' is a C variadic method; only fixed parameters are bound."
+                    )
                 m_safe = _sanitize_name(method.name)
                 fn_method_name = f"{safe_cls_name}_{m_safe}"
                 if fn_method_name == fn_dtor:
@@ -473,6 +492,10 @@ class MojoWriter:
                 for method in cls.methods:
                     if method.access in ("private", "protected"):
                         continue
+                    if getattr(method, "is_variadic", False):
+                        lines.append(
+                            f"    # Warning: '{method.name}' is a C variadic method; only fixed parameters are bound."
+                        )
                     m_safe = _sanitize_name(method.name)
                     fn_method_name = f"{safe_cls_name}_{m_safe}"
                     if fn_method_name == fn_dtor:

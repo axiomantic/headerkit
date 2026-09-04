@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +16,7 @@ from headerkit.ir import (
     EnumValue,
     Field,
     Function,
+    FunctionPointer,
     Header,
     Parameter,
     Pointer,
@@ -277,8 +279,11 @@ def test_mojo_writer_hook_pipeline() -> None:
     assert "fn ping(self):" in output
 
 
-def test_mojo_writer_tree_sitter_end_to_end(tmp_path) -> None:
+@pytest.mark.treesitter
+def test_mojo_writer_tree_sitter_end_to_end(tmp_path: Path) -> None:
     """Test parsing a C header with TreeSitter and emitting Mojo bindings."""
+    pytest.importorskip("tree_sitter")
+    pytest.importorskip("tree_sitter_c")
     from headerkit.backends.treesitter import TreeSitterBackend
 
     header_file = tmp_path / "simple_math.h"
@@ -308,3 +313,36 @@ def test_mojo_writer_tree_sitter_end_to_end(tmp_path) -> None:
     assert "struct Vec2:" in output
     assert "var x: Float32" in output
     assert "var y: Float32" in output
+
+
+def test_mojo_writer_variadic_function() -> None:
+    """Verify variadic C function emits warning comment about fixed parameters."""
+    fn = Function(
+        name="custom_printf",
+        return_type=CType("int"),
+        parameters=[Parameter("fmt", Pointer(CType("char", qualifiers=["const"])))],
+        is_variadic=True,
+    )
+    unit = Header(path="printf.h", declarations=[fn])
+    output = write_mojo(unit, library_name="PrintLib")
+
+    assert "Warning: 'custom_printf' is a C variadic function" in output
+    assert "fn custom_printf(self, fmt: UnsafePointer[Int8]) -> Int32:" in output
+
+
+def test_mojo_writer_type_qualifiers_and_fn_pointers() -> None:
+    """Verify CType qualifiers and typed FunctionPointer emission in Mojo."""
+    cb = FunctionPointer(
+        return_type=CType("void"),
+        parameters=[Parameter("code", CType("int", qualifiers=["unsigned"]))],
+    )
+    fn = Function(
+        name="register_handler",
+        return_type=CType("int", qualifiers=["unsigned"]),
+        parameters=[Parameter("callback", cb)],
+    )
+    unit = Header(path="handler.h", declarations=[fn])
+    output = write_mojo(unit, library_name="HandlerLib")
+
+    assert "fn register_handler(self, callback: fn(UInt32) -> None) -> UInt32:" in output
+    assert 'var f = self.handle.get_function[fn(fn(UInt32) -> None) -> UInt32]("register_handler")' in output
