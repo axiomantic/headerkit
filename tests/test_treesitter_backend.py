@@ -4,7 +4,10 @@ from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.hooks import HookDispatcher, PipelineContext
 from headerkit.ir import Enum, Function, Header, Pointer, Struct
 
+treesitter = pytest.mark.treesitter
 
+
+@treesitter
 class TestTreeSitterBackend:
     @classmethod
     def setup_class(cls):

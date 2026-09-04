@@ -94,6 +94,8 @@ def register_backend(
     ) -> SourceUnit | None:
         _ = (context, kwargs)
         inst = backend_class()
+        if hasattr(inst, "is_available") and not inst.is_available():
+            return None
         return inst.parse(
             code,
             filename,
@@ -154,7 +156,14 @@ def is_backend_available(name: str) -> bool:
 
         return is_system_libclang_available()
 
-    # Non-libclang backends: registration implies availability.
+    backend_cls = _BACKEND_REGISTRY[name]
+    try:
+        inst = backend_cls()
+        if hasattr(inst, "is_available"):
+            return bool(inst.is_available())
+    except Exception:
+        return False
+
     return True
 
 

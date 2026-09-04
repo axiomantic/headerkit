@@ -4,7 +4,7 @@ import pytest
 
 from headerkit.backends import get_backend, list_backends
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority, hook
-from headerkit.ir import Function, Header, InputSpec, SourceUnit
+from headerkit.ir import CType, Function, Header, InputSpec, SourceUnit
 from headerkit.writers import get_writer, list_writers
 
 
@@ -13,6 +13,11 @@ class TestHookRegistryMigration:
 
     @pytest.fixture(autouse=True)
     def clean_registry(self):
+        from headerkit.backends import _ensure_backends_loaded
+        from headerkit.writers import _ensure_writers_loaded
+
+        _ensure_backends_loaded()
+        _ensure_writers_loaded()
         saved = HookRegistry.snapshot()
         yield
         HookRegistry.restore(saved)
@@ -68,6 +73,7 @@ class TestHookRegistryMigration:
         assert hdr.language == "c"
         assert hdr.classification == "header"
 
+    @pytest.mark.treesitter
     def test_backend_hook_registration_and_dispatch(self):
         backends = list_backends()
         assert "tree-sitter" in backends
@@ -124,7 +130,10 @@ class TestHookRegistryMigration:
         @hook("parse_unit", backend="tree-sitter", priority=Priority.PROJECT)
         def custom_parser(code: str, filename: str, context: PipelineContext, **kwargs) -> SourceUnit:
             _ = (code, context, kwargs)
-            return SourceUnit(path=filename, declarations=[Function("mock_override", [])])
+            return SourceUnit(
+                path=filename,
+                declarations=[Function(name="mock_override", return_type=CType("void"), parameters=[])],
+            )
 
         dispatcher = HookDispatcher()
         ctx = PipelineContext(backend="tree-sitter", language="c")
@@ -135,6 +144,10 @@ class TestHookRegistryMigration:
         assert unit.declarations[0].name == "mock_override"
 
     def test_lower_priority_fallback_does_not_override_standard_writer(self):
+        from headerkit.writers import _ensure_writers_loaded
+
+        _ensure_writers_loaded()
+
         @hook("write_output", writer="json", priority=Priority.FALLBACK)
         def fallback_writer(unit: SourceUnit, context: PipelineContext) -> str:
             _ = (unit, context)

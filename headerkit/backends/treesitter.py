@@ -36,10 +36,15 @@ except ImportError:
     pass
 
 
-def _node_text(node: Node | None) -> str:
-    if node is None or node.text is None:
+def _node_text(node: Any) -> str:
+    if node is None:
         return ""
-    return node.text.decode("utf-8")
+    raw = getattr(node, "text", None)
+    if raw is None:
+        return ""
+    if isinstance(raw, bytes | bytearray):
+        return raw.decode("utf-8")
+    return str(raw)
 
 
 class TreeSitterBackend:
@@ -302,7 +307,6 @@ _BACKEND_INSTANCE = TreeSitterBackend()
 
 
 @hook("parse_unit", backend="tree-sitter", priority=Priority.STANDARD)
-@hook("parse_unit", backend="tree-sitter*", priority=Priority.STANDARD)
 @hook("parse_unit", backend="*", priority=Priority.FALLBACK)
 def _treesitter_parse_hook(
     code: str,
@@ -318,7 +322,6 @@ def _treesitter_parse_hook(
 
 
 @hook("get_backend", backend="tree-sitter", priority=Priority.STANDARD)
-@hook("get_backend", backend="tree-sitter*", priority=Priority.STANDARD)
 def _treesitter_get_backend_hook(context: PipelineContext | None = None) -> ParserBackend:
     _ = context
     return _BACKEND_INSTANCE

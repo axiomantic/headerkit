@@ -74,6 +74,7 @@ class TestPolyglotPipeline:
         names = [d.name for d in transformed.declarations if isinstance(d, Function)]
         assert names == ["add", "NimMain"]
 
+    @pytest.mark.treesitter
     def test_execute_pipeline_end_to_end(self):
         spec = InputSpec.from_path(
             "math.h",
@@ -93,6 +94,7 @@ class TestPolyglotPipeline:
         assert output is not None
         assert '"multiply"' in output
 
+    @pytest.mark.treesitter
     def test_generate_accepts_input_spec(self, tmp_path):
         from headerkit._generate import generate
 
@@ -103,6 +105,7 @@ class TestPolyglotPipeline:
         result = generate(spec, writer_name="json", backend_name="tree-sitter", no_cache=True)
         assert '"compute"' in result
 
+    @pytest.mark.treesitter
     def test_generate_runs_transform_unit_waterfall(self, tmp_path):
         from headerkit._generate import generate
 
@@ -138,6 +141,7 @@ class TestPolyglotPipeline:
         assert '"do_something"' in res_nim
         assert '"NimMain"' in res_nim
 
+    @pytest.mark.treesitter
     def test_cli_accepts_runtime_and_language_options(self, tmp_path, monkeypatch, capsys):
         from headerkit._cli import main
 

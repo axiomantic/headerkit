@@ -76,11 +76,21 @@ strict = true
 module = "headerkit._config"
 warn_unused_ignores = false
 
+[[tool.mypy.overrides]]
+module = [
+    "tree_sitter",
+    "tree_sitter.*",
+    "tree_sitter_c",
+    "tree_sitter_c.*",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 timeout = 60
 markers = [
     "libclang: tests requiring system libclang installation",
+    "treesitter: tests requiring tree-sitter optional dependency",
     "download: tests requiring network access to download headers",
     "slow: marks tests as slow-running",
 ]

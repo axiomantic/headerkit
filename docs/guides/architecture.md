@@ -204,7 +204,7 @@ classDiagram
 | [`Constant`][headerkit.ir.Constant] | `#define` macros and `const` values |
 
 ### The SourceUnit Container
- 
+
 [`SourceUnit`][headerkit.ir.SourceUnit] (with backward-compatible alias [`Header`][headerkit.ir.Header]) is the top-level container returned by all backends:
 
 ```python

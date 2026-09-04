@@ -96,4 +96,3 @@ unit, output = execute_pipeline(spec, context=ctx)
 ::: headerkit.hooks.execute_pipeline
     options:
       show_source: false
-
