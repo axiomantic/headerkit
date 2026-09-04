@@ -220,34 +220,39 @@ from headerkit.ir import SourceUnit
 
 ## Layer 3: Writers (Output)
 
-A writer implements the [`WriterBackend`][headerkit.writers.WriterBackend] protocol and converts IR into a string output:
+Writers convert [`SourceUnit`][headerkit.ir.SourceUnit] IR into code, definitions, or packages. Concrete writers inherit from [`BaseWriter`][headerkit.writers.BaseWriter] (which satisfies the underlying [`WriterBackend`][headerkit.writers.WriterBackend] protocol).
+
+`BaseWriter` unifies single-string rendering (`write()`) and multi-file package scaffolding (`write_layout()`):
 
 ```python
-from headerkit.writers import WriterBackend
-from headerkit.ir import Header
+from headerkit.ir import SourceUnit
+from headerkit.scaffold import ProjectLayout, ScaffoldOptions
+from headerkit.writers import BaseWriter, WriterOption
 
-class WriterBackend(Protocol):
-    def write(self, header: Header) -> str: ...
+class MyWriter(BaseWriter):
+    name: str = "mywriter"
+    format_description: str = "My custom bindings"
 
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def format_description(self) -> str: ...
+    def _render(self, unit: SourceUnit) -> str:
+        # Generate the primary output string
+        ...
 ```
 
-Writer-specific options (e.g., `exclude_patterns` for CFFI, `indent` for JSON) are constructor parameters on the concrete class, not part of the `write()` method signature.
+Writers declare their supported layout modes (`supported_layouts`) and configuration options (`supported_options`). Writer-specific options are passed to the constructor or via `--writer-opt`.
 
 ### Built-in Writers
 
-| Writer | Registry Name | Output | Constructor Options |
-|--------|--------------|--------|-------------------|
+| Writer | Registry Name | Output | Primary Options |
+|---|---|---|---|
 | [`CffiWriter`][headerkit.writers.cffi.CffiWriter] | `cffi` (default) | CFFI `cdef` strings | `exclude_patterns: list[str] \| None` |
+| [`CshimWriter`][headerkit.writers.cshim.CShimWriter] | `cshim` | Pure C-ABI (`extern "C"`) wrappers for C++ | `wrapper_header_name: str`, `catch_exceptions: bool` |
 | [`CtypesWriter`][headerkit.writers.ctypes.CtypesWriter] | `ctypes` | Python ctypes binding modules | `lib_name: str` |
 | [`CythonWriter`][headerkit.writers.cython.CythonWriter] | `cython` | Cython `.pxd` declarations | -- |
-| [`DiffWriter`][headerkit.writers.diff.DiffWriter] | `diff` | API compatibility diff reports (JSON or Markdown) | `baseline: Header \| None`, `format: str` |
+| [`DiffWriter`][headerkit.writers.diff.DiffWriter] | `diff` | API compatibility diff reports (JSON or Markdown) | `baseline: SourceUnit \| None`, `format: str` |
 | [`JsonWriter`][headerkit.writers.json.JsonWriter] | `json` | JSON serialization of IR | `indent: int \| None` |
 | [`LuaWriter`][headerkit.writers.lua.LuaWriter] | `lua` | LuaJIT FFI bindings | -- |
+| [`MojoWriter`][headerkit.writers.mojo.MojoWriter] | `mojo` | Idiomatic Mojo FFI bindings (`sys.ffi.DLHandle`) | `lib_name: str` |
+| [`NimWriter`][headerkit.writers.nim.NimWriter] | `nim` | Native Nim modules with `{.importc.}` pragmas | `header_file: str`, `cdecl: bool` |
 | [`PromptWriter`][headerkit.writers.prompt.PromptWriter] | `prompt` | Token-optimized output for LLM context | `verbosity: str` |
 
 ### Writer Registry

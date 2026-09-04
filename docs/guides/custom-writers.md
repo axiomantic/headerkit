@@ -1,56 +1,83 @@
 # Writing Custom Writers
 
-headerkit writers convert IR into output strings. headerkit ships with seven built-in writers (cffi, ctypes, cython, diff, json, lua, prompt), and you can create custom writers for any additional target format: documentation generators, language-specific bindings, or anything else you need.
+HeaderKit writers convert Intermediate Representation (IR) into target code, documentation, or configuration files. HeaderKit ships with built-in writers for Python (`ctypes`, `cffi`, `cython`), systems languages (`mojo`, `nim`), C shims (`cshim`), `lua` (LuaJIT FFI), `diff`, `json`, and `prompt` (LLM context). You can easily create custom writers for any additional target language, documentation generator, or code-generation pipeline.
 
-## The WriterBackend Protocol
+## The BaseWriter Class
 
-Every writer must implement the [`WriterBackend`][headerkit.writers.WriterBackend] protocol:
+The standard and recommended way to create a writer is by inheriting from [`BaseWriter`][headerkit.writers.BaseWriter].
 
-```python
-from headerkit.ir import Header
-from headerkit.writers import WriterBackend
-
-class WriterBackend(Protocol):
-    def write(self, header: Header) -> str: ...
-
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def format_description(self) -> str: ...
-```
-
-### Method and Property Details
-
-**`write(header)`** -- Convert a [`Header`][headerkit.ir.Header] IR object into the target format string. Writers should produce best-effort output, silently skipping declarations they cannot represent. Writers must not raise exceptions for valid `Header` input.
-
-**`name`** -- A human-readable name for the writer (e.g., `"markdown"`). This is the string users pass to `get_writer()`.
-
-**`format_description`** -- A short description of the output format (e.g., `"Markdown API documentation"`). Used by `get_writer_info()`.
-
-### Writer-Specific Options
-
-Configuration options belong on the writer's `__init__()`, not on `write()`. This keeps the protocol simple and type-safe:
+`BaseWriter` handles single-string rendering (`writer.write(unit)`), layout scaffolding (`writer.write_layout(unit, options)`), layout validation, and option declarations out of the box:
 
 ```python
-class MarkdownWriter:
+from headerkit.ir import SourceUnit
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers import BaseWriter, WriterOption, register_writer
+
+
+class MarkdownWriter(BaseWriter):
+    """Writer that generates Markdown API documentation."""
+
+    name: str = "markdown"
+    format_description: str = "Markdown API documentation"
+    default_output_pattern: str = "{dir}/{stem}.md"
+    default_extension: str = ".md"
+
+    # Declare supported layout modes and options
+    supported_layouts: tuple[str, ...] = ("file", "package")
+    supported_options: tuple[WriterOption, ...] = (
+        WriterOption(
+            name="include_source_locations",
+            description="Include source file and line info in documentation",
+            default=False,
+        ),
+    )
+
     def __init__(self, include_source_locations: bool = False) -> None:
         self._include_locations = include_source_locations
 
-    def write(self, header: Header) -> str:
-        # Use self._include_locations here
-        ...
+    def _render(self, unit: SourceUnit) -> str:
+        """Render the primary documentation string from the parsed unit."""
+        lines = [f"# API Reference: {unit.path}", ""]
+        for decl in unit.declarations:
+            lines.append(f"- **{decl.name}** ({type(decl).__name__})")
+        return "\n".join(lines) + "\n"
+
+    def _write_package_layout(
+        self,
+        unit: SourceUnit,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        """Optional: generate a multi-file documentation site layout."""
+        pkg = options.package_name or "api_docs"
+        return ProjectLayout(
+            files=[
+                OutputFile(path="mkdocs.yml", content=f"site_name: {pkg}\n"),
+                OutputFile(path="docs/index.md", content=self._render(unit)),
+            ]
+        )
 ```
 
-Users pass options through `get_writer()`:
+### What `BaseWriter` Provides
 
-```python
-writer = get_writer("markdown", include_source_locations=True)
-```
+Inheriting from `BaseWriter` gives you:
+
+1. **`write(unit)`**: Returns the rendered string output.
+2. **`write_layout(unit, options)`**: Produces single-file or multi-file package layouts according to `options.layout`.
+3. **CLI Integration**: Works immediately with the CLI for single files or scaffolded packages:
+   ```bash
+   # Single-file output (default)
+   headerkit mylib.h -w markdown -o docs.md
+
+   # Package scaffolding
+   headerkit mylib.h -w markdown --layout package --package-name mydocs -o ./docs_site
+   ```
+4. **Introspection**: Supported options and layouts are automatically queryable via `list_writer_options("markdown")` and `list_writer_layouts("markdown")`.
+
+---
 
 ## Registering a Writer
 
-Use [`register_writer()`][headerkit.writers.register_writer] to add your writer to the global registry:
+Use [`register_writer()`][headerkit.writers.register_writer] to add your writer to HeaderKit's registry:
 
 ```python
 from headerkit.writers import register_writer
@@ -64,9 +91,9 @@ register_writer(
 
 Parameters:
 
-- `name` -- The lookup key for `get_writer(name)`
-- `writer_class` -- The class implementing `WriterBackend`
-- `is_default` -- If `True`, this becomes the default writer
+- `name` -- The lookup key for `get_writer(name)` and CLI `-w <name>`
+- `writer_class` -- The writer class inheriting from `BaseWriter`
+- `is_default` -- If `True`, this becomes the default writer for `get_writer()`
 - `description` -- Short description; falls back to the class docstring's first line if not provided
 
 !!! warning "Unique names"
@@ -90,25 +117,47 @@ from headerkit.ir import (
     Struct,
     Typedef,
     Variable,
+from headerkit.ir import (
+    Constant,
+    Declaration,
+    Enum,
+    Function,
+    SourceUnit,
+    Struct,
+    Typedef,
+    Variable,
 )
-from headerkit.writers import register_writer
+from headerkit.writers import BaseWriter, WriterOption, register_writer
 
 
-class MarkdownWriter:
+class MarkdownWriter(BaseWriter):
     """Writer that generates Markdown API documentation."""
+
+    name: str = "markdown"
+    format_description: str = "Markdown API documentation"
+    default_output_pattern: str = "{dir}/{stem}.md"
+    default_extension: str = ".md"
+
+    supported_options: tuple[WriterOption, ...] = (
+        WriterOption(
+            name="include_source_locations",
+            description="Include source file and line info in documentation",
+            default=False,
+        ),
+    )
 
     def __init__(self, include_source_locations: bool = False) -> None:
         self._include_locations = include_source_locations
 
-    def write(self, header: Header) -> str:
-        lines = [f"# API Reference: `{header.path}`", ""]
+    def _render(self, unit: SourceUnit) -> str:
+        lines = [f"# API Reference: `{unit.path}`", ""]
 
         # Group declarations by kind
-        structs = [d for d in header.declarations if isinstance(d, Struct)]
-        enums = [d for d in header.declarations if isinstance(d, Enum)]
-        functions = [d for d in header.declarations if isinstance(d, Function)]
-        typedefs = [d for d in header.declarations if isinstance(d, Typedef)]
-        constants = [d for d in header.declarations if isinstance(d, Constant)]
+        structs = [d for d in unit.declarations if isinstance(d, Struct)]
+        enums = [d for d in unit.declarations if isinstance(d, Enum)]
+        functions = [d for d in unit.declarations if isinstance(d, Function)]
+        typedefs = [d for d in unit.declarations if isinstance(d, Typedef)]
+        constants = [d for d in unit.declarations if isinstance(d, Constant)]
 
         if structs:
             lines.append("## Structures")
@@ -194,14 +243,6 @@ class MarkdownWriter:
             lines.append("")
         return lines
 
-    @property
-    def name(self) -> str:
-        return "markdown"
-
-    @property
-    def format_description(self) -> str:
-        return "Markdown API documentation"
-
 
 # Self-register
 register_writer("markdown", MarkdownWriter, description="Markdown API documentation")
@@ -215,16 +256,36 @@ Once registered, your writer is available through the standard API:
 from headerkit import get_backend, get_writer, list_writers
 
 # List all available writers
-print(list_writers())  # ['cffi', 'ctypes', 'cython', 'diff', 'json', 'lua', 'prompt', 'markdown']
+print(list_writers())
 
 # Use your writer
 backend = get_backend()
-header = backend.parse(code, "mylib.h")
+unit = backend.parse(code, "mylib.h")
 
 writer = get_writer("markdown", include_source_locations=True)
-docs = writer.write(header)
+docs = writer.write(unit)
 print(docs)
 ```
+
+## Advanced: The WriterBackend Protocol
+
+Under the hood, HeaderKit uses the [`WriterBackend`][headerkit.writers.WriterBackend] protocol (from `typing.Protocol`) to define the minimal structural contract for any writer:
+
+```python
+from typing import Protocol
+from headerkit.ir import SourceUnit
+
+class WriterBackend(Protocol):
+    def write(self, header: SourceUnit) -> str: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def format_description(self) -> str: ...
+```
+
+Because [`BaseWriter`][headerkit.writers.BaseWriter] already implements `WriterBackend` while seamlessly providing layout scaffolding, option validation, and hook integration, you should virtually always inherit from `BaseWriter`.
 
 ## Handling IR Types
 

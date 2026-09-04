@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from headerkit.ir import (
     Constant,
@@ -17,10 +17,13 @@ from headerkit.ir import (
     Enum,
     Function,
     Header,
+    SourceUnit,
     Struct,
     Typedef,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # =============================================================================
 # Data Structures
@@ -629,7 +632,7 @@ def diff_to_markdown(report: DiffReport) -> str:
 # =============================================================================
 
 
-class DiffWriter:
+class DiffWriter(BaseWriter):
     """Writer that compares two headers and produces API compatibility reports.
 
     Compares a target header against a baseline and produces a structured
@@ -653,37 +656,51 @@ class DiffWriter:
         report = writer.write(new_header)
     """
 
+    name: str = "diff"
+    format_description: str = "API compatibility diff reports (JSON or Markdown)"
     default_output_pattern: str = "{dir}/{stem}_diff.json"
     cache_output: bool = False
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption("format", "Report output format", default="json", choices=("json", "markdown")),
+    )
 
     def __init__(self, baseline: Header | None = None, format: str = "json") -> None:
         self._baseline = baseline
         self._format = format
+        self.default_extension = ".md" if format == "markdown" else ".json"
 
-    def write(self, header: Header) -> str:
-        """Compare header against baseline and produce a diff report.
-
-        :param header: The target header to compare.
-        :returns: Diff report as JSON or Markdown string.
-        """
+    def _write_single_file_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        fmt = options.get_option("format", self._format)
         if self._baseline is None:
             baseline = Header(path="(empty)", declarations=[])
         else:
             baseline = self._baseline
-        report = diff_headers(baseline, header)
+        target = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)
+        report = diff_headers(baseline, target)
+        content = diff_to_markdown(report) if fmt == "markdown" else diff_to_json(report)
+        ext = ".md" if fmt == "markdown" else ".json"
+        filename = f"{options.package_name}{ext}"
+        return ProjectLayout(files=[OutputFile(path=filename, content=content)])
+
+    def _render(self, unit: SourceUnit | Header) -> str:
+        if self._baseline is None:
+            baseline = Header(path="(empty)", declarations=[])
+        else:
+            baseline = self._baseline
+        target = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)
+        report = diff_headers(baseline, target)
         if self._format == "markdown":
             return diff_to_markdown(report)
         return diff_to_json(report)
 
-    @property
-    def name(self) -> str:
-        """Human-readable name of this writer."""
-        return "diff"
-
-    @property
-    def format_description(self) -> str:
-        """Short description of the output format."""
-        return "API compatibility diff reports (JSON or Markdown)"
+    def write(self, header: Header) -> str:
+        """Compare header against baseline and produce a diff report."""
+        return self._render(header)
 
 
 # Uses bottom-of-module self-registration. See headerkit/writers/json.py

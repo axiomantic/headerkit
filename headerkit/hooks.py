@@ -34,6 +34,7 @@ class PipelineContext:
     backend: str | None = None
     writer: str | None = None
     target: str | None = None
+    layout: str | None = None
     language: str | None = None
     classification: str | None = None
     runtime: str | None = None

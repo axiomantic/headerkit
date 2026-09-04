@@ -20,9 +20,12 @@ from headerkit.ir import (
     Parameter,
     Pointer,
     Reference,
+    SourceUnit,
     Struct,
     TypeExpr,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers.base import BaseWriter, WriterOption
 
 
 def _sanitize_name(name: str) -> str:
@@ -118,7 +121,7 @@ def _format_param(p: Parameter, param_name: str | None = None) -> str:
     return f"{type_str} {name}"
 
 
-class CShimWriter:
+class CShimWriter(BaseWriter):
     """Writer that generates C-ABI wrapper shims around C++ headers.
 
     Emits two parts (or combined header/source):
@@ -126,13 +129,32 @@ class CShimWriter:
     - C++ implementation wrapping member calls, constructors, and destructors.
     """
 
-    default_output_pattern: ClassVar[str] = "{dir}/{stem}_cshim.cpp"
+    name: str = "cshim"
+    format_description: str = "C-ABI shim wrapper generator (extern C)"
+    default_output_pattern: str = "{dir}/{stem}_cshim.cpp"
+    default_extension: str = ".cpp"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "cmake")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+        WriterOption(
+            name="catch_exceptions",
+            description="Wrap C++ functions in try-catch blocks for exception safety across ABI boundaries",
+            default=False,
+            type=bool,
+        ),
+    )
 
     def __init__(self, *, catch_exceptions: bool = False) -> None:
         self.catch_exceptions = catch_exceptions
 
-    def write(self, header: Header) -> str:
+    def _render(self, unit: SourceUnit | Header) -> str:
         """Generate C-ABI shim source code from headerkit IR."""
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         lines: list[str] = [
             "// Auto-generated C-ABI shim by HeaderKit",
             "#pragma once",
@@ -337,15 +359,90 @@ class CShimWriter:
 
         return "\n".join(lines)
 
-    @property
-    def name(self) -> str:
-        """Human-readable name of this writer."""
-        return "cshim"
+    def write(self, header: Header) -> str:
+        """Convert header IR to C-ABI shim source code."""
+        return self._render(header)
 
-    @property
-    def format_description(self) -> str:
-        """Short description of the output format."""
-        return "C-ABI shim wrapper generator (extern C)"
+    def _write_package_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
+        cpp_code = self._render(unit)
+
+        if test_type != "none":
+            cmake = textwrap.dedent(f"""\
+                cmake_minimum_required(VERSION 3.15)
+                project({pkg}_cshim C CXX)
+
+                set(CMAKE_CXX_STANDARD 17)
+                set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+                add_library({pkg}_cshim SHARED
+                    src/{pkg}_cshim.cpp
+                )
+
+                target_include_directories({pkg}_cshim PUBLIC
+                    include
+                )
+
+                enable_testing()
+                add_executable(test_{pkg}_cshim tests/test_cshim.c)
+                target_link_libraries(test_{pkg}_cshim PRIVATE {pkg}_cshim)
+                add_test(NAME test_{pkg}_cshim COMMAND test_{pkg}_cshim)
+            """)
+        else:
+            cmake = textwrap.dedent(f"""\
+                cmake_minimum_required(VERSION 3.15)
+                project({pkg}_cshim C CXX)
+
+                set(CMAKE_CXX_STANDARD 17)
+                set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+                add_library({pkg}_cshim SHARED
+                    src/{pkg}_cshim.cpp
+                )
+
+                target_include_directories({pkg}_cshim PUBLIC
+                    include
+                )
+            """)
+
+        header_content = textwrap.dedent(f"""\
+            // C-ABI Header for {pkg}
+            #pragma once
+
+            #ifdef __cplusplus
+            extern "C" {{
+            #endif
+
+            // See src/{pkg}_cshim.cpp for implementations
+
+            #ifdef __cplusplus
+            }}
+            #endif
+        """)
+
+        files = [
+            OutputFile(path="CMakeLists.txt", content=cmake),
+            OutputFile(path=f"include/{pkg}_cshim.h", content=header_content),
+            OutputFile(path=f"src/{pkg}_cshim.cpp", content=cpp_code),
+        ]
+        if test_type != "none":
+            test_c = textwrap.dedent(f"""\
+                #include <stdio.h>
+                #include <assert.h>
+
+                int main(void) {{
+                    printf("Testing {pkg} C-ABI shim...\\n");
+                    return 0;
+                }}
+            """)
+            files.append(OutputFile(path="tests/test_cshim.c", content=test_c))
+
+        return ProjectLayout(files=files)
 
 
 def write_cshim(header: Header, *, catch_exceptions: bool = False) -> str:

@@ -6,20 +6,45 @@
 [![Python](https://img.shields.io/pypi/pyversions/headerkit)](https://pypi.org/project/headerkit/)
 [![License](https://img.shields.io/github/license/axiomantic/headerkit)](https://github.com/axiomantic/headerkit/blob/main/LICENSE)
 
-**headerkit**: A CLI tool and Python library for parsing C/C++ headers.
+> **The universal interop & bindings toolkit.**  
+> **C/C++, Rust, Zig, & Nim in → Python (ctypes, CFFI, Cython), Mojo, Nim, LuaJIT, & C shims out.**  
+> **Scaffolds turnkey packages with tests. Easily extended to any source or target language. Great documentation. For humans and LLMs.**
 
-Generates:
+HeaderKit parses native C/C++ headers and C-ABI export surfaces from Rust, Zig, and Nim into a normalized intermediate representation (IR). From that single IR, it generates foreign language bindings, scaffolds turnkey packages with verification tests, tracks breaking API diffs, and compresses headers for LLM prompt windows.
 
-- **Bindings**: ctypes modules, CFFI definitions, Cython `.pxd` files, and LuaJIT FFI.
-- **Data**: JSON Intermediate Representation (IR) and API diffs.
-- **LLMs**: Token-optimized header summaries for prompt windows.
-- **Builds**: PEP 517 backend for standard Python packaging.
+---
 
-Parse once. Build anywhere.
+## What are you looking to do?
 
-### Quick examples
+| Goal | Quick Command / Action | Section |
+| :--- | :--- | :--- |
+| **Generate Python bindings** (ctypes, CFFI, Cython) | `headerkit mylib.h -w ctypes -o ctypes:bindings.py` | [Python Bindings](#1-generate-python-bindings-ctypes-cffi-cython) |
+| **Generate Mojo, Nim, or LuaJIT bindings** | `headerkit mylib.h -w mojo -o mojo:mylib.mojo` | [Systems & Scripting](#2-generate-systems--scripting-bindings-mojo-nim-luajit) |
+| **Wrap C++ classes in a C-ABI shim** (`extern "C"`) | `headerkit mylib.hpp -w cshim -o cshim:mylib_cshim.cpp` | [C Shim Wrappers](#3-wrap-c-classes-in-a-c-abi-shim) |
+| **Export bindings from Rust, Zig, or Nim** | `headerkit lib.rs -w ctypes -o ctypes:bindings.py` | [Polyglot Ingestion](#4-ingest-interfaces-from-rust-zig-and-nim) |
+| **Scaffold a turnkey package with tests** | `headerkit mylib.h -w nim --layout package --package-name mypkg` | [Package Scaffolding](#5-scaffold-turnkey-packages-with-tests) |
+| **Detect breaking API changes between versions** | `DiffWriter(baseline=v1, format="markdown").write(v2)` | [API Diffing](#6-detect-breaking-api-changes) |
+| **Compress headers for LLM prompt windows** | `headerkit mylib.h -w prompt` | [LLM Context](#7-compress-headers-for-llm-prompts) |
+| **Ship wheels without requiring libclang on user machines** | `headerkit cache populate mylib.h -w cffi` | [Build Backend & Cache](#8-ship-wheels-without-requiring-libclang) |
+| **Inspect or transform IR programmatically** | `headerkit mylib.h -w json -o json:ast.json` | [Programmatic IR](#9-inspect-ir-programmatically) |
 
-Every example below assumes this input header:
+---
+
+## Why HeaderKit?
+
+Traditional binding generators (SWIG, bindgen, ctypesgen) dump raw, isolated binding code into the void. Integrating those files into a project requires handwritten Makefiles, setup scripts, package manifests, and linking glue. Keeping bindings updated as upstream libraries evolve is an error-prone chore.
+
+HeaderKit solves this with three core design pillars:
+
+1. **Turnkey Packages vs. Raw Code Dumps**: HeaderKit's `--layout package` doesn't just emit binding syntax; it scaffolds complete, idiomatic packages (e.g. Nimble packages with `--mm:orc`, Mojo packages with dynamic library handles, Python packages with build backends) along with automated tests that immediately verify foreign symbol resolution.
+2. **Easily Extended to Any Source or Target Language**: Built on a unified hook engine (`headerkit.hooks`). Write a custom backend or target writer in ~50 lines of Python using typed [`SourceUnit`][headerkit.ir.SourceUnit] IR, register it via standard Python entry points or config files, or customize layout scaffolding templates without touching core code.
+3. **Automated Upstream Updates & Zero-Dependency Downstream**: Keep bindings in lockstep with upstream releases. HeaderKit's PEP 517 build backend and committed cache store (`.headerkit/`) let downstream consumers `pip install` wheels without needing `libclang` or system compilers installed.
+
+---
+
+## Quick Solutions
+
+Every example below assumes this sample C header:
 
 ```c
 // mylib.h
@@ -27,90 +52,48 @@ typedef struct { int x, y; } Point;
 int distance(const Point *a, const Point *b);
 ```
 
-**ctypes -- drop-in Python module, no build step:**
+### 1. Generate Python Bindings (ctypes, CFFI, Cython)
+
+Generate zero-build ctypes modules, CFFI cdef declarations, or compiled Cython `.pxd` headers:
+
 ```bash
+# Drop-in Python ctypes module (zero build step)
 headerkit mylib.h -w ctypes -o ctypes:bindings.py
-```
-```python
-# generated bindings.py
-class Point(ctypes.Structure):
-    _fields_ = [
-        ("x", ctypes.c_int),
-        ("y", ctypes.c_int),
-    ]
 
-_lib.distance.argtypes = [ctypes.POINTER(Point), ctypes.POINTER(Point)]
-_lib.distance.restype = ctypes.c_int
-```
-
-**CFFI -- declarations for `ffibuilder.cdef()`:**
-```bash
+# CFFI declarations for ffibuilder.cdef()
 headerkit mylib.h -w cffi -o cffi:_defs.cdef.txt
-```
-```c
-/* generated  _defs.cdef.txt */
-typedef struct Point {
-    int x;
-    int y;
-} Point;
-int distance(const Point *a, const Point *b);
-```
 
-**Cython -- `.pxd` for compiled C/C++ interop:**
-```bash
+# Cython .pxd declaration file for compiled C/C++ interop
 headerkit mylib.h -w cython -o cython:mylib.pxd
 ```
-```cython
-# generated mylib.pxd
-cdef extern from "mylib.h":
 
-    ctypedef struct Point:
-        int x
-        int y
+*See the [ctypes Reference](https://axiomantic.github.io/headerkit/reference/ctypes/), [CFFI Guide](https://axiomantic.github.io/headerkit/guides/cffi/), and [Cython Reference](https://axiomantic.github.io/headerkit/reference/cython/).*
 
-    int distance(const Point *a, const Point *b)
-```
+### 2. Generate Systems & Scripting Bindings (Mojo, Nim, LuaJIT)
 
-**LuaJIT FFI -- `ffi.cdef` bindings for LuaJIT:**
+Bridge C and C++ libraries into modern systems and scripting runtimes:
+
 ```bash
+# Mojo module with DLHandle dynamic symbol loading
+headerkit mylib.h -w mojo -o mojo:mylib.mojo
+
+# Native Nim module with {.importc.} pragma bindings
+headerkit mylib.h -w nim -o nim:mylib.nim
+
+# LuaJIT FFI bindings with ffi.cdef[[ ... ]]
 headerkit mylib.h -w lua -o lua:mylib_ffi.lua
 ```
-```lua
-/* generated mylib_ffi.lua */
-local ffi = require("ffi")
 
-ffi.cdef[[
+*See the [Mojo Reference](https://axiomantic.github.io/headerkit/reference/mojo/), [Nim Reference](https://axiomantic.github.io/headerkit/reference/nim/), and [LuaJIT Reference](https://axiomantic.github.io/headerkit/reference/lua/).*
 
-/* Structs */
-typedef struct {
-    int x;
-    int y;
-} Point;
+### 3. Wrap C++ Classes in a C-ABI Shim
 
-/* Functions */
-int distance(const Point *a, const Point *b);
+Directly binding complex C++ classes across foreign function interfaces is fragile due to mangled symbols and exception boundaries. The `cshim` writer automatically generates an `extern "C"` wrapper library with opaque handles and exception guards:
 
-]]
-```
-
-**Nim -- native bindings with C and C++ interop:**
-```bash
-headerkit mylib.h -w nim -o nim:mylib.nim
-```
-```nim
-# generated mylib.nim
-type
-  Point* {.importc: "struct Point", header: "mylib.h", bycopy.} = object
-    x*: cint
-    y*: cint
-
-proc distance*(a: ptr Point, b: ptr Point): cint {.importc: "distance", header: "mylib.h", cdecl.}
-```
-
-**CShim -- pure C-ABI wrapper (`extern "C"`) around C++ classes:**
 ```bash
 headerkit mylib.hpp -w cshim -o cshim:mylib_cshim.cpp
 ```
+
 ```cpp
 // generated mylib_cshim.cpp
 #include "mylib.hpp"
@@ -122,77 +105,124 @@ void Point_destroy(PointHandle self) { delete static_cast<Point*>(self); }
 }
 ```
 
-**JSON -- full IR for custom tooling:**
+*See the [CShim Reference](https://axiomantic.github.io/headerkit/reference/cshim/).*
+
+### 4. Ingest Interfaces from Rust, Zig, and Nim
+
+When native libraries are authored in Rust, Zig, or Nim rather than C, HeaderKit can ingest the foreign source files directly and extract their C-ABI export surfaces (`pub extern "C" fn`, `export fn`, `{.exportc.}`) into normalized IR without requiring handwritten `.h` header files:
+
 ```bash
-headerkit mylib.h -w json -o json:mylib.json
-```
-```json
-{
-  "path": "mylib.h",
-  "declarations": [
-    {"kind": "struct", "name": "Point", "fields": [
-      {"name": "x", "type": {"kind": "ctype", "name": "int"}},
-      {"name": "y", "type": {"kind": "ctype", "name": "int"}}
-    ]},
-    {"kind": "function", "name": "distance", ...}
-  ]
-}
+# Ingest Rust crate exports and generate Python ctypes bindings
+headerkit mylib.rs -w ctypes -o ctypes:bindings.py
+
+# Ingest Zig exports and generate Mojo bindings
+headerkit mylib.zig -w mojo -o mojo:mylib.mojo
 ```
 
-**Prompt -- token-optimized summary for LLM context windows:**
+*See the [Polyglot Extraction Guide](https://axiomantic.github.io/headerkit/reference/polyglot/).*
+
+### 5. Scaffold Turnkey Packages with Tests
+
+Generate complete, buildable multi-file packages containing package manifests, compiler configs, and automated test stubs that verify foreign symbol resolution:
+
 ```bash
-headerkit mylib.h -w prompt
-```
-```
-// mylib.h (headerkit compact)
-STRUCT Point {x:int, y:int}
-FUNC distance(a:const Point*, b:const Point*) -> int
+# Scaffold a full Nimble package with tests
+headerkit mylib.h -w nim --layout package --package-name nim_vector -o nim:./nim_vector
+
+# Scaffold with specific test stub styles (tripwire, unit, or both)
+headerkit mylib.h -w nim --layout package --package-name nim_vector --test-type tripwire
 ```
 
-**Diff -- API compatibility reports between header versions:**
+Generated project structure:
+```text
+nim_vector/
+├── nim_vector.nimble          # Package manifest with test tasks
+├── nim.cfg                    # Compiler configuration (--mm:orc, --threads:on)
+├── src/
+│   ├── nim_vector.nim         # Public API module
+│   └── nim_vector/
+│       └── bindings.nim       # Generated foreign function interface
+└── tests/
+    ├── test_tripwire.nim      # Symbol resolution verification tests
+    └── test_nim_vector.nim    # High-level unit test skeleton
+```
+
+*See the [Scaffolding Guide](https://axiomantic.github.io/headerkit/guides/scaffolding/).*
+
+### 6. Detect Breaking API Changes
+
+Compare two versions of a C/C++ header to detect signature mutations, missing struct fields, altered enum values, and type changes:
+
 ```python
 from headerkit.backends import get_backend
 from headerkit.writers.diff import DiffWriter
 
 backend = get_backend("libclang")
-old = backend.parse('#include "mylib_v1.h"', "v1.h")
-new = backend.parse('#include "mylib_v2.h"', "v2.h")
-print(DiffWriter(baseline=old, format="markdown").write(new))
-```
-```markdown
-## Breaking Changes
-### function_signature_changed
-- **distance**: parameter 0 type changed from 'const Point *' to 'const Point3D *'
+old_api = backend.parse('#include "mylib_v1.h"', "v1.h")
+new_api = backend.parse('#include "mylib_v2.h"', "v2.h")
+
+print(DiffWriter(baseline=old_api, format="markdown").write(new_api))
 ```
 
-**Build backend -- generate cacheable bindings at `pip install` time:**
+*See the [Diff Writer Reference](https://axiomantic.github.io/headerkit/reference/diff/).*
+
+### 7. Compress Headers for LLM Prompts
+
+Large C/C++ headers waste tokens and clutter context windows with preprocessor noise and implementation details. The `prompt` writer produces a dense, token-optimized summary designed for LLM prompts:
+
+```bash
+headerkit mylib.h -w prompt
+```
+
+```text
+// mylib.h (headerkit compact)
+STRUCT Point {x:int, y:int}
+FUNC distance(a:const Point*, b:const Point*) -> int
+```
+
+*See the [Prompt Writer Reference](https://axiomantic.github.io/headerkit/reference/prompt/).*
+
+### 8. Ship Wheels Without Requiring libclang
+
+HeaderKit includes a two-layer cache (`.headerkit/`) storing parsed IR and generated bindings. Commit the cache to version control and downstream users can install wheels without having `libclang` or LLVM installed:
+
+```bash
+# Populate cache across multiple architecture targets
+headerkit cache populate mylib.h -w cffi --platform linux/amd64 --platform linux/arm64
+git add .headerkit/ && git commit -m "cache: populate bindings"
+```
+
+In your project's `pyproject.toml`, declare the PEP 517 build backend to automatically regenerate bindings during `pip install`:
+
 ```toml
-# In your project's pyproject.toml:
 [build-system]
 requires = ["headerkit", "hatchling"]
 build-backend = "headerkit.build_backend"
 ```
 
-**Python API -- parse and generate from code:**
+*See the [Cache Guide](https://axiomantic.github.io/headerkit/guides/cache/) and [Build Backend Guide](https://axiomantic.github.io/headerkit/guides/build-backend/).*
+
+### 9. Inspect IR Programmatically
+
+Parse headers directly into a strongly typed Python AST or serialize them to JSON for downstream code generators, linters, or analysis tools:
+
 ```python
 from headerkit import generate
+from headerkit.backends import get_backend
 
-output = generate("mylib.h", "cffi")
+# Serialized JSON IR
+json_ir = generate("mylib.h", "json")
+
+# Typed Python AST
+backend = get_backend("libclang")
+unit = backend.parse('#include "mylib.h"', "mylib.h")
+for decl in unit.declarations:
+    print(decl.name, type(decl))
 ```
 
-```mermaid
-graph LR
-    A[C/C++ headers] --> B[backend]
-    B --> C[IR]
-    C --> D[writer]
-    D --> E[output]
-```
+*See the [IR Reference](https://axiomantic.github.io/headerkit/reference/ir/) and [JSON Reference](https://axiomantic.github.io/headerkit/reference/json/).*
 
-## Features
-
-- **One parse, many outputs**: generate multiple bindings in a single pass with `-w ctypes -w cython -o ctypes:lib.py -o cython:lib.pxd`
-- **Config file support**: `.headerkit.toml` or `[tool.headerkit]` in `pyproject.toml`
-- **Multi-header merging**: pass multiple `.h` files and they are merged into a single umbrella header
+---
 
 ## Installation
 
@@ -202,99 +232,82 @@ pip install headerkit
 
 Requires Python 3.10+.
 
-Then install libclang (if not already present):
+To install the optional `libclang` parser backend (if not already present on your system):
 
 ```bash
 headerkit install-libclang
 ```
 
-Or install it manually:
+Or install it via your system package manager:
 
 | Platform | Command |
-|----------|---------|
-| macOS | `brew install llvm` or Xcode Command Line Tools |
-| Ubuntu | `sudo apt install libclang-dev` |
-| Fedora | `sudo dnf install clang-devel` |
-| Windows | `winget install LLVM.LLVM` or [LLVM installer](https://github.com/llvm/llvm-project/releases) |
+| :--- | :--- |
+| **macOS** | `brew install llvm` or Xcode Command Line Tools |
+| **Ubuntu / Debian** | `sudo apt install libclang-dev` |
+| **Fedora / RHEL** | `sudo dnf install clang-devel` |
+| **Windows** | `winget install LLVM.LLVM` or [LLVM releases](https://github.com/llvm/llvm-project/releases) |
 
-Supports LLVM 18, 19, 20, 21, 22, and 23.
+*HeaderKit vendors LLVM bindings supporting libclang 18, 19, 20, 21, 22, and 23.*
 
-## CLI reference
+---
 
+## CLI Reference
+
+```text
+headerkit [options] HEADER_OR_GLOB [HEADER_OR_GLOB ...]
 ```
-headerkit [options] FILE [FILE ...]
-```
 
-### Flags
+### Options
 
 | Flag | Description |
-|------|-------------|
-| `-b NAME`, `--backend NAME` | Parser backend (default: `libclang`) |
-| `-I DIR` | Add include directory (repeatable) |
+| :--- | :--- |
+| `-b NAME`, `--backend NAME` | Parser backend (default: `libclang`, or `tree-sitter`, `rust`, `zig`, `nim`) |
+| `-w WRITER`, `--writer WRITER` | Output writer to invoke (repeatable) |
+| `-o WRITER:PATH`, `--output` | Output destination template (repeatable, e.g. `ctypes:bindings.py`) |
+| `--layout {file,package,project}` | Output layout mode (`file` or `package`) |
+| `--package-name NAME` | Package name when scaffolding package layouts |
+| `--test-type {both,tripwire,unit,none}` | Test stub style to scaffold (default: `both`) |
+| `-I DIR`, `--include-dir DIR` | Add include directory (repeatable) |
 | `-D MACRO[=VALUE]` | Define preprocessor macro (repeatable) |
-| `--backend-arg ARG` | Pass extra argument to the backend (repeatable) |
-| `-w WRITER` | Writer to use (repeatable) |
-| `-o WRITER:TEMPLATE` | Output path template for a writer (repeatable) |
-| `--exclude PATTERN` | Exclude headers matching glob pattern (repeatable) |
-| `--store-dir DIR` | Store directory (default: `.headerkit/`; env: `HEADERKIT_STORE_DIR`) |
-| `--writer-opt WRITER:KEY=VALUE` | Pass an option to a writer (repeatable) |
-| `--config PATH` | Load config from `PATH` instead of searching |
-| `--no-config` | Skip all config file loading |
-| `--version` | Print version and exit |
+| `--backend-arg ARG` | Pass extra argument to the parser backend |
+| `--writer-opt WRITER:KEY=VALUE` | Pass writer-specific options (repeatable) |
+| `--store-dir DIR` | Cache store directory (default: `.headerkit/`) |
+| `--target TRIPLE` | Target triple for cross-compilation (e.g. `aarch64-apple-darwin`) |
+| `--no-cache` | Disable all cache lookups |
+| `--config PATH` | Path to explicit `.headerkit.toml` config file |
+| `--no-config` | Skip loading configuration files |
+| `--version` | Display version and exit |
 
-When no `-o` flag is given for a writer, output goes to stdout. At most
-one writer may write to stdout.
+---
 
-### Writers
+## Configuration File
 
-| Writer | Output | Notes |
-|--------|--------|-------|
-| `cffi` | CFFI cdef strings | Declarations for `ffibuilder.cdef()` |
-| `ctypes` | Python module | Complete ctypes binding module |
-| `cython` | .pxd file | Cython declaration file with C++ support |
-| `diff` | JSON or Markdown | API compatibility report between two header versions |
-| `json` | JSON | Full IR serialization |
-| `lua` | LuaJIT FFI bindings | `ffi.cdef()` declarations for LuaJIT |
-| `prompt` | Compact text | Token-optimized IR for LLM context windows |
-
-Pass writer options with `--writer-opt`:
-
-```bash
-headerkit mylib.h -w cffi --writer-opt cffi:exclude_patterns=^__
-headerkit mylib.h -w ctypes -o ctypes:mylib.py --writer-opt ctypes:lib_name=mylib
-```
-
-### Config file
-
-headerkit searches from the current directory upward for `.headerkit.toml`, or for a
-`[tool.headerkit]` section in `pyproject.toml`. Use `--no-config` to skip this.
+HeaderKit automatically reads configuration from `.headerkit.toml` or the `[tool.headerkit]` table in `pyproject.toml`:
 
 ```toml
 # .headerkit.toml
 backend = "libclang"
-writers = ["cffi"]
+writers = ["ctypes", "cffi"]
 include_dirs = ["/usr/local/include"]
-plugins = ["mypkg.headerkit_plugin"]
-
-[writer.cffi]
-exclude_patterns = ["^__", "^_internal"]
 
 [writer.ctypes]
 lib_name = "mylib"
+
+[writer.cffi]
+exclude_patterns = ["^__", "^_internal"]
 ```
 
-Config string values support `${VAR}` environment variable expansion at load time, which is useful for build-time paths injected by CMake or similar tools (e.g., `include_dirs = ["${MY_INCLUDE_DIR}"]`).
+Values support `${ENV_VAR}` expansion for build-time paths injected by CMake or CI systems.
 
-Command-line flags override config file values.
+---
 
-For projects using CFFI with `cffi_buildtool`, see the [CFFI Integration Guide](https://axiomantic.github.io/headerkit/guides/cffi-integration/).
+## Extensibility & Plugins
 
-### Plugins
+HeaderKit's hook architecture makes it straightforward to add new source languages, target writers, or custom package layouts without modifying the core repository.
 
-Register third-party backends and writers via Python entry points:
+Register third-party plugins in your own package via `pyproject.toml` entry points:
 
 ```toml
-# In your package's pyproject.toml
 [project.entry-points."headerkit.backends"]
 mybackend = "mypkg.backend:MyBackend"
 
@@ -302,80 +315,36 @@ mybackend = "mypkg.backend:MyBackend"
 mywriter = "mypkg.writer:MyWriter"
 ```
 
-Or load plugins explicitly from the config file:
-
-```toml
-# .headerkit.toml
-plugins = ["mypkg.headerkit_plugin"]
-```
-
-## Cache and build backend
-
-headerkit includes a two-layer cache that stores parsed IR and generated output in `.headerkit/`. Commit the cache to version control and downstream consumers can build without libclang installed.
+Or write a custom writer in Python:
 
 ```python
-from headerkit import generate
+from headerkit.ir import SourceUnit
+from headerkit.writers import BaseWriter, register_writer
 
-# First run: parses with libclang, caches result
-output = generate("mylib.h", "cffi")
+class RubyFfiWriter(BaseWriter):
+    @property
+    def name(self) -> str:
+        return "ruby"
 
-# Second run: loads from cache, no libclang needed
-output = generate("mylib.h", "cffi")
+    def write(self, unit: SourceUnit) -> str:
+        lines = ["require 'ffi'", "module MyLib", "  extend FFI::Library"]
+        # Iterate over unit.declarations...
+        return "\n".join(lines)
+
+register_writer("ruby", RubyFfiWriter)
 ```
 
-```bash
-# CLI: generate with caching (on by default)
-headerkit mylib.h -w cffi -o cffi:mylib.cdef.txt --store-dir .headerkit
-```
+*See the [Architecture Guide](https://axiomantic.github.io/headerkit/guides/architecture/) and [Custom Writers Guide](https://axiomantic.github.io/headerkit/guides/custom-writers/).*
 
-headerkit also ships a PEP 517 build backend. Consumer projects declare it in `pyproject.toml` and get bindings generated automatically during `pip install` or `python -m build`, with no libclang required when the cache is committed:
+---
 
-```toml
-[build-system]
-requires = ["headerkit", "hatchling"]
-build-backend = "headerkit.build_backend"
-```
+## Roadmap
 
-### Multi-platform cache population
+- **Origin Library Versioning & ABI Multi-Version Metadata**: Track signatures across multiple upstream release versions to generate version-guarded symbols and automated migration shims.
+- **Bi-directional Bridges**: Generate C/C++ header interfaces and C export shims from high-level Python and Mojo source definitions.
+- **Expanded Target Writers**: Additional turnkey writers for Rust (`bindgen`-free FFI), Go (`cgo`), and Swift.
 
-Generate cache entries for multiple platforms using Docker:
-
-```bash
-# Populate for common Linux targets
-headerkit cache populate mylib.h -w cffi \
-    --platform linux/amd64 --platform linux/arm64
-
-# Auto-detect platforms from cibuildwheel config
-headerkit cache populate mylib.h -w cffi --cibuildwheel
-
-# Commit the populated cache
-git add .headerkit/
-git commit -m "cache: populate for linux amd64 + arm64"
-```
-
-When `.headerkit/` contains entries for all target platforms, downstream
-builds never need libclang installed.
-
-See the [Cache Strategy Guide](https://axiomantic.github.io/headerkit/guides/cache/) for cache layout, bypass flags, and CI integration, and the [Build Backend Guide](https://axiomantic.github.io/headerkit/guides/build-backend/) for full setup instructions.
-
-## Python API
-
-```python
-from headerkit.backends import get_backend
-from headerkit.writers import get_writer
-
-backend = get_backend("libclang")
-header = backend.parse('#include "mylib.h"', "wrapper.h", include_dirs=["/path/to/include"])
-
-writer = get_writer("cffi")
-print(writer.write(header))
-```
-
-Full documentation, guides, and API reference: [axiomantic.github.io/headerkit](https://axiomantic.github.io/headerkit/)
-
-## CI Store Population
-
-headerkit's build backend populates `.headerkit/` during wheel builds. To keep the store updated across platforms in CI, see the [CI Store Population guide](https://axiomantic.github.io/headerkit/guides/github-action/). For projects using [cibuildwheel](https://cibuildwheel.pypa.io/), see the [cibuildwheel Integration guide](https://axiomantic.github.io/headerkit/guides/cibuildwheel/) for Linux Docker volume mount configuration.
+---
 
 ## Development
 
@@ -386,10 +355,10 @@ pip install -e '.[dev]'
 pytest
 ```
 
+---
+
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+HeaderKit is open source licensed under the [MIT License](LICENSE).
 
-The vendored clang Python bindings in `headerkit/_clang/v*/` are from the
-[LLVM Project](https://llvm.org/) and are licensed under the
-[Apache License v2.0 with LLVM Exceptions](headerkit/_clang/LICENSE).
+Vendored LLVM clang Python bindings in `headerkit/_clang/` are licensed under the [Apache License v2.0 with LLVM Exceptions](headerkit/_clang/LICENSE).

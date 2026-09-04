@@ -57,15 +57,20 @@ from headerkit.scaffold import (
     ProjectLayout,
     ScaffoldOptions,
     StdlibScaffolder,
+    extract_function_names,
     prompt_scaffold_options,
     scaffold,
 )
 from headerkit.writers import (
+    BaseWriter,
     WriterBackend,
+    WriterOption,
     get_default_writer,
     get_writer,
     get_writer_info,
     is_writer_available,
+    list_writer_layouts,
+    list_writer_options,
     list_writers,
     register_writer,
 )
@@ -104,11 +109,15 @@ __all__ = [
     "LibclangUnavailableError",
     # Writer Protocol
     "WriterBackend",
+    "BaseWriter",
+    "WriterOption",
     # Writer API
     "get_default_writer",
     "get_writer",
     "get_writer_info",
     "is_writer_available",
+    "list_writer_layouts",
+    "list_writer_options",
     "list_writers",
     "register_writer",
     # Generate API
@@ -151,6 +160,7 @@ __all__ = [
     "ScaffoldOptions",
     "BYOScaffolder",
     "StdlibScaffolder",
+    "extract_function_names",
     "prompt_scaffold_options",
     "scaffold",
 ]

@@ -40,17 +40,24 @@ Example
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Protocol, runtime_checkable
 
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
 from headerkit.ir import Header, SourceUnit
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers.base import BaseWriter, WriterOption
 
 __all__ = [
+    "BaseWriter",
     "WriterBackend",
+    "WriterOption",
     "get_default_writer",
     "get_writer",
     "get_writer_info",
     "is_writer_available",
+    "list_writer_layouts",
+    "list_writer_options",
     "list_writers",
     "register_writer",
 ]
@@ -91,6 +98,19 @@ class WriterBackend(Protocol):
 
         :param header: Parsed header IR from a parser backend.
         :returns: String representation in the target format.
+        """
+        ...
+
+    def write_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions | None = None,
+    ) -> ProjectLayout:
+        """Convert parsed unit IR into a complete ProjectLayout.
+
+        :param unit: Parsed unit IR from a parser backend.
+        :param options: Scaffolding configuration options.
+        :returns: ProjectLayout containing all generated files.
         """
         ...
 
@@ -156,8 +176,33 @@ def register_writer(
         opts = (context.options if context and context.options else {}) | kwargs
         return writer_class(**opts).write(unit)
 
+    def _scaffold_hook(
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+        context: PipelineContext | None = None,
+        **kwargs: Any,
+    ) -> ProjectLayout | None:
+        sig = inspect.signature(writer_class.__init__)
+        has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        combined = (context.options if context and context.options else {}) | kwargs
+        if has_var_keyword:
+            inst = writer_class(**combined)
+        else:
+            valid_keys = set(sig.parameters.keys()) - {"self"}
+            init_kwargs = {k: v for k, v in combined.items() if k in valid_keys}
+            inst = writer_class(**init_kwargs)
+
+        supported = getattr(inst, "supported_layouts", ("file",))
+        if options.layout not in supported:
+            return None
+        if hasattr(inst, "write_layout"):
+            return inst.write_layout(unit, options)
+        ext = getattr(inst, "default_extension", ".txt")
+        return ProjectLayout(files=[OutputFile(path=f"{options.package_name}{ext}", content=inst.write(unit))])
+
     HookRegistry.register_global("get_writer", _get_hook, priority=priority, writer=name)
     HookRegistry.register_global("write_output", _write_hook, priority=priority, writer=name)
+    HookRegistry.register_global("scaffold_project", _scaffold_hook, priority=priority, writer=name, target=name)
 
 
 def list_writers() -> list[str]:
@@ -192,6 +237,36 @@ def is_writer_available(name: str) -> bool:
     """
     _ensure_writers_loaded()
     return name in _WRITER_REGISTRY
+
+
+def list_writer_layouts(name: str) -> tuple[str, ...]:
+    """Return the tuple of layouts supported by the named writer.
+
+    :param name: Writer name to inspect.
+    :returns: Tuple of supported layout names (e.g. ``("file", "package")``).
+    :raises ValueError: If the requested writer is not found.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        raise ValueError(f"Unknown writer: {name!r}. Available: {', '.join(list_writers())}")
+    writer_class = _WRITER_REGISTRY[name]
+    layouts = getattr(writer_class, "supported_layouts", ("file",))
+    return tuple(layouts)
+
+
+def list_writer_options(name: str) -> tuple[WriterOption, ...]:
+    """Return the tuple of options supported by the named writer.
+
+    :param name: Writer name to inspect.
+    :returns: Tuple of WriterOption specifications.
+    :raises ValueError: If the requested writer is not found.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        raise ValueError(f"Unknown writer: {name!r}. Available: {', '.join(list_writers())}")
+    writer_class = _WRITER_REGISTRY[name]
+    opts = getattr(writer_class, "supported_options", ())
+    return tuple(opts)
 
 
 def get_writer_info() -> list[dict[str, str | bool]]:
