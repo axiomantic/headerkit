@@ -5,7 +5,7 @@ from headerkit._ir_json import json_to_header
 from headerkit._populate import PopulateResult, PopulateTarget, populate
 from headerkit._resolve import check_output_collisions, resolve_headers, resolve_output_path
 from headerkit._store_merge import MergeResult, store_merge
-from headerkit._target import detect_process_triple, resolve_target
+from headerkit._target import TargetTriple, detect_process_triple, normalize_triple, parse_triple, resolve_target
 from headerkit.backends import (
     LibclangUnavailableError,
     get_backend,
@@ -143,7 +143,10 @@ __all__ = [
     "store_merge",
     "MergeResult",
     # Target detection API
+    "TargetTriple",
     "detect_process_triple",
+    "normalize_triple",
+    "parse_triple",
     "resolve_target",
     # Hooks API
     "Priority",

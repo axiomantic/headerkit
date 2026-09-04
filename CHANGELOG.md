@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Structured `TargetTriple` dataclass and parsing (`headerkit.TargetTriple`, `parse_triple`): parses 3- and 4-component triples as well as 2-component shorthands (`x86_64-linux`, `aarch64-darwin`, `win64`, `wasm32-wasi`, `arm-none-eabi`) into structured target models with platform predicates (`is_windows`, `is_darwin`, `is_linux`, `is_musl`, `is_wasm`, `is_embedded`) and architecture-aware `pointer_width` (8 for 64-bit, 4 for 32-bit, 2 for 16-bit).
+- Cross-compilation toolchain auto-detection (`detect_cross_compiler_target`): automatically detects active cross-compilation targets from `CARGO_BUILD_TARGET`, `LLVM_TARGET_TRIPLE`, `CROSS_COMPILE`, and `CC`/`CXX` cross-compiler binary prefixes (e.g. `aarch64-linux-gnu-gcc`) in `resolve_target()`.
 - C++ Tree-Sitter parser backend: enhanced `TreeSitterBackend` with `tree-sitter-cpp` support, enabling zero-system-dependency parsing of C++ headers (.hpp, .hh, .hxx, .cpptest) and `-x c++` inputs.
 - C++ AST extraction in Tree-Sitter: support for extracting C++ classes (`cppclass`), member access specifiers (`public`, `protected`, `private`), constructors, virtual/pure-virtual methods (`= 0`), static methods, const-qualified methods, destructors, base inheritance (`BaseSpecifier`), nested namespaces, class/function templates, using-declaration type aliases, reference types (`&` and `&&`), and operator overloads.
 - Added `tree-sitter-cpp>=0.23` to `treesitter` optional dependency extra.
