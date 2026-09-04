@@ -184,11 +184,11 @@ def register_writer(
     ) -> ProjectLayout | None:
         sig = inspect.signature(writer_class.__init__)
         has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        combined = (context.options if context and context.options else {}) | kwargs
         if has_var_keyword:
-            inst = writer_class(**kwargs)
+            inst = writer_class(**combined)
         else:
             valid_keys = set(sig.parameters.keys()) - {"self"}
-            combined = (context.options if context and context.options else {}) | kwargs
             init_kwargs = {k: v for k, v in combined.items() if k in valid_keys}
             inst = writer_class(**init_kwargs)
 

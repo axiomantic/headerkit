@@ -240,6 +240,8 @@ class TestUnifiedWriterScaffolding:
         paths = {f.path for f in layout.files}
         assert "CMakeLists.txt" in paths
         assert "include/shimming_cshim.h" in paths
+        assert "src/shimming_cshim.cpp" in paths
+        assert "tests/test_cshim.c" in paths
 
     def test_json_writer_options(self, sample_header: Header) -> None:
         """Json writer must respect indent option in ScaffoldOptions."""
