@@ -98,10 +98,17 @@ class TreeSitterBackend:
     def _is_cpp_mode(self, code: str, filename: str, extra_args: list[str] | None = None) -> bool:
         if extra_args:
             for i, arg in enumerate(extra_args):
-                if arg == "-x" and i + 1 < len(extra_args) and extra_args[i + 1] in ("c++", "cpp"):
-                    return True
+                if arg == "-x" and i + 1 < len(extra_args):
+                    if extra_args[i + 1] in ("c++", "cpp"):
+                        return True
+                    if extra_args[i + 1] == "c":
+                        return False
                 if arg.startswith("-std=c++") or arg.startswith("-std=gnu++"):
                     return True
+                if (arg.startswith("-std=c") or arg.startswith("-std=gnu")) and not (
+                    arg.startswith("-std=c++") or arg.startswith("-std=gnu++")
+                ):
+                    return False
         ext = filename.lower()
         if ext.endswith((".hpp", ".hh", ".hxx", ".h++", ".cpp", ".cc", ".cxx", ".c++", ".cpptest")):
             return True
