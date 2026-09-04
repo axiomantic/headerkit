@@ -228,6 +228,16 @@ class TestUnifiedWriterScaffolding:
         assert "def multiply" in wrapper.content
         assert "init_nim" in wrapper.content
 
+        tw = layout.get_file("tests/test_tripwire.py")
+        assert tw is not None
+        assert "test_native_library_loaded" in tw.content
+        assert "test_entrypoint_multiply" in tw.content
+
+        unit = layout.get_file("tests/test_nimkit.py")
+        assert unit is not None
+        assert "test_multiply_wrapper_signature" in unit.content
+        assert "inspect.signature" in unit.content
+
     def test_mojo_package_scaffolding(self, sample_header: Header) -> None:
         """Mojo writer must produce mojoproject.toml, src module, bindings, and tripwires."""
         writer = get_writer("mojo")
