@@ -202,3 +202,62 @@ class TestUnifiedWriterScaffolding:
         layout_lua = scaffold(sample_header, opts_lua)
         assert len(layout_lua.files) == 1
         assert layout_lua.files[0].path == "luabridge.lua"
+
+    def test_ctypes_package_scaffolding(self, sample_header: Header) -> None:
+        """Ctypes writer must produce pyproject.toml, package module, and tripwires."""
+        writer = get_writer("ctypes")
+        opts = ScaffoldOptions(package_name="ctypeskit", target_language="ctypes", layout="package", test_type="both")
+        layout = writer.write_layout(sample_header, opts)
+
+        paths = {f.path for f in layout.files}
+        assert "pyproject.toml" in paths
+        assert "src/ctypeskit/__init__.py" in paths
+        assert "src/ctypeskit/_bindings.py" in paths
+        assert "tests/test_tripwire.py" in paths
+        assert "tests/test_bindings.py" in paths
+
+    def test_ctypes_package_scaffolding_no_tests(self, sample_header: Header) -> None:
+        """Ctypes writer with test_type='none' must omit tests directory."""
+        writer = get_writer("ctypes")
+        opts = ScaffoldOptions(package_name="ctypeskit", target_language="ctypes", layout="package", test_type="none")
+        layout = writer.write_layout(sample_header, opts)
+
+        paths = {f.path for f in layout.files}
+        assert "pyproject.toml" in paths
+        assert "src/ctypeskit/__init__.py" in paths
+        assert "src/ctypeskit/_bindings.py" in paths
+        assert "tests/test_tripwire.py" not in paths
+        assert "tests/test_bindings.py" not in paths
+
+    def test_cshim_cmake_layout(self, sample_header: Header) -> None:
+        """CShim writer must support 'cmake' layout."""
+        writer = get_writer("cshim")
+        opts = ScaffoldOptions(package_name="shimming", target_language="cshim", layout="cmake")
+        layout = writer.write_layout(sample_header, opts)
+
+        paths = {f.path for f in layout.files}
+        assert "CMakeLists.txt" in paths
+        assert "include/shimming_cshim.h" in paths
+
+    def test_json_writer_options(self, sample_header: Header) -> None:
+        """Json writer must respect indent option in ScaffoldOptions."""
+        writer = get_writer("json")
+        opts_4 = ScaffoldOptions(package_name="out", layout="file", options={"indent": 4})
+        layout_4 = writer.write_layout(sample_header, opts_4)
+        assert "    " in layout_4.files[0].content
+
+    def test_diff_writer_options(self, sample_header: Header) -> None:
+        """Diff writer must respect format='markdown' in ScaffoldOptions."""
+        writer = get_writer("diff")
+        opts_md = ScaffoldOptions(package_name="report", layout="file", options={"format": "markdown"})
+        layout_md = writer.write_layout(sample_header, opts_md)
+        assert layout_md.files[0].path == "report.md"
+        assert "# API Diff:" in layout_md.files[0].content
+
+    def test_prompt_writer_options(self, sample_header: Header) -> None:
+        """Prompt writer must respect verbosity option in ScaffoldOptions."""
+        writer = get_writer("prompt")
+        opts_v = ScaffoldOptions(package_name="llm_ctx", layout="file", options={"verbosity": "verbose"})
+        layout_v = writer.write_layout(sample_header, opts_v)
+        assert layout_v.files[0].path == "llm_ctx.txt"
+        assert "{" in layout_v.files[0].content  # verbose emits JSON

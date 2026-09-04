@@ -22,6 +22,7 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import BaseWriter, WriterOption
 
 # =============================================================================
@@ -668,6 +669,23 @@ class DiffWriter(BaseWriter):
         self._baseline = baseline
         self._format = format
         self.default_extension = ".md" if format == "markdown" else ".json"
+
+    def _write_single_file_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        fmt = options.get_option("format", self._format)
+        if self._baseline is None:
+            baseline = Header(path="(empty)", declarations=[])
+        else:
+            baseline = self._baseline
+        target = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)
+        report = diff_headers(baseline, target)
+        content = diff_to_markdown(report) if fmt == "markdown" else diff_to_json(report)
+        ext = ".md" if fmt == "markdown" else ".json"
+        filename = f"{options.package_name}{ext}"
+        return ProjectLayout(files=[OutputFile(path=filename, content=content)])
 
     def _render(self, unit: SourceUnit | Header) -> str:
         if self._baseline is None:

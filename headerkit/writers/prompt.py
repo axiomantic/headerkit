@@ -29,6 +29,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import BaseWriter, WriterOption
 
 # =============================================================================
@@ -466,6 +467,24 @@ class PromptWriter(BaseWriter):
         if verbosity not in ("compact", "standard", "verbose"):
             raise ValueError(f"Unknown verbosity: {verbosity!r}. Use 'compact', 'standard', or 'verbose'.")
         self._verbosity = verbosity
+
+    def _write_single_file_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        verbosity = options.get_option("verbosity", self._verbosity)
+        if verbosity not in ("compact", "standard", "verbose"):
+            raise ValueError(f"Unknown verbosity: {verbosity!r}. Use 'compact', 'standard', or 'verbose'.")
+        header = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)
+        if verbosity == "compact":
+            content = _header_to_compact(header)
+        elif verbosity == "standard":
+            content = _header_to_standard(header)
+        else:
+            content = _header_to_verbose(header)
+        filename = f"{options.package_name}{self.default_extension}"
+        return ProjectLayout(files=[OutputFile(path=filename, content=content)])
 
     def _render(self, unit: SourceUnit | Header) -> str:
         header = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)

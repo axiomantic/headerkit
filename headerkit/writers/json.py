@@ -32,6 +32,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import BaseWriter, WriterOption
 
 
@@ -332,6 +333,17 @@ class JsonWriter(BaseWriter):
 
     def __init__(self, indent: int | None = 2) -> None:
         self._indent = indent
+
+    def _write_single_file_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        indent = options.get_option("indent", self._indent)
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
+        content = header_to_json(header, indent=indent)
+        filename = f"{options.package_name}{self.default_extension}"
+        return ProjectLayout(files=[OutputFile(path=filename, content=content)])
 
     def _render(self, unit: SourceUnit | Header) -> str:
         header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
