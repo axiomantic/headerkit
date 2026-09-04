@@ -35,6 +35,12 @@ generate("mylib.h", writer_name="ctypes", output_path="mylib_bindings.py")
 
 # Parse from a string instead of a file
 output = generate("virtual.h", code="int add(int a, int b);")
+
+# Pass an InputSpec directly or specify a runtime target
+from headerkit.ir import InputSpec
+
+spec = InputSpec.from_path("api.h", content="int compute(int x);", language="c")
+output = generate(spec, writer_name="json", runtime="nim")
 ```
 
 ### `generate_all()`
@@ -59,11 +65,37 @@ for r in results:
     print(f"{r.writer_name}: cached={r.from_cache}, path={r.output_path}")
 ```
 
+### `batch_generate()`
+
+Resolve header paths from glob patterns and generate output with per-pattern overrides and collision checking.
+
+::: headerkit._generate.batch_generate
+    options:
+      show_source: false
+
+**Example:**
+
+```python
+from headerkit import batch_generate
+
+result = batch_generate(
+    patterns=["include/**/*.h"],
+    writers=["ctypes", "json"],
+)
+print(f"Processed {result.headers_processed} headers, {len(result.results)} outputs")
+```
+
 ## Data Classes
 
 ### `GenerateResult`
 
 ::: headerkit._generate.GenerateResult
+    options:
+      show_source: false
+
+### `BatchResult`
+
+::: headerkit._generate.BatchResult
     options:
       show_source: false
 

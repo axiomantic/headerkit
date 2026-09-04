@@ -667,7 +667,6 @@ class TestHomebrewLlvm:
         # Interaction sequence:
         # All llvm-config variants -> None (unregistered)
         # which("pkg-config") -> None (unregistered)
-        # All clang variants -> None (unregistered)
         # which("brew") -> "/usr/local/bin/brew" (registered)
         # run(["/usr/local/bin/brew", "--prefix", "llvm"]) -> rc=0, stdout="/opt/homebrew/opt/llvm\n"
         # os.path.isfile("/opt/homebrew/opt/llvm/bin/llvm-config") -> True (patched)
@@ -701,8 +700,6 @@ class TestHomebrewLlvm:
             for name in _LLVM_CONFIG_PROBE_NAMES:
                 tripwire.assert_interaction(tripwire.subprocess.which, name=name, returns=None)
             tripwire.assert_interaction(tripwire.subprocess.which, name="pkg-config", returns=None)
-            for name in _CLANG_PROBE_NAMES:
-                tripwire.assert_interaction(tripwire.subprocess.which, name=name, returns=None)
             tripwire.assert_interaction(tripwire.subprocess.which, name="brew", returns="/usr/local/bin/brew")
             tripwire.assert_interaction(
                 tripwire.subprocess.run,

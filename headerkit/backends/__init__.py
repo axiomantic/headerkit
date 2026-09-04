@@ -26,7 +26,10 @@ Example
         print(name)
 """
 
-from headerkit.ir import ParserBackend
+from typing import Any
+
+from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
+from headerkit.ir import ParserBackend, SourceUnit
 
 
 class LibclangUnavailableError(RuntimeError):
@@ -50,7 +53,12 @@ __all__ = [
 ]
 
 
-def register_backend(name: str, backend_class: type[ParserBackend], is_default: bool = False) -> None:
+def register_backend(
+    name: str,
+    backend_class: type[ParserBackend],
+    is_default: bool = False,
+    priority: int = Priority.STANDARD,
+) -> None:
     """Register a parser backend.
 
     Called by backend modules during import to add themselves to the registry.
@@ -60,11 +68,47 @@ def register_backend(name: str, backend_class: type[ParserBackend], is_default: 
     :param name: Unique name for the backend (e.g., ``"libclang"``).
     :param backend_class: Class implementing the :class:`~headerkit.ir.ParserBackend` protocol.
     :param is_default: If True, this becomes the default backend for :func:`get_backend`.
+    :param priority: Execution priority for hook dispatch.
     """
     global _DEFAULT_BACKEND  # pylint: disable=global-statement
     _BACKEND_REGISTRY[name] = backend_class
     if is_default or _DEFAULT_BACKEND is None:
         _DEFAULT_BACKEND = name
+
+    def _get_hook(context: PipelineContext | None = None) -> ParserBackend:
+        _ = context
+        return backend_class()
+
+    def _parse_hook(
+        code: str,
+        filename: str = "input.h",
+        include_dirs: list[str] | None = None,
+        extra_args: list[str] | None = None,
+        *,
+        use_default_includes: bool = True,
+        recursive_includes: bool = True,
+        max_depth: int = 10,
+        project_prefixes: tuple[str, ...] | None = None,
+        context: PipelineContext | None = None,
+        **kwargs: Any,
+    ) -> SourceUnit | None:
+        _ = (context, kwargs)
+        inst = backend_class()
+        if hasattr(inst, "is_available") and not inst.is_available():
+            return None
+        return inst.parse(
+            code,
+            filename,
+            include_dirs=include_dirs,
+            extra_args=extra_args,
+            use_default_includes=use_default_includes,
+            recursive_includes=recursive_includes,
+            max_depth=max_depth,
+            project_prefixes=project_prefixes,
+        )
+
+    HookRegistry.register_global("get_backend", _get_hook, priority=priority, backend=name)
+    HookRegistry.register_global("parse_unit", _parse_hook, priority=priority, backend=name)
 
 
 def list_backends() -> list[str]:
@@ -82,7 +126,13 @@ def list_backends() -> list[str]:
             print(f"Available: {name}")
     """
     _ensure_backends_loaded()
-    return list(_BACKEND_REGISTRY.keys())
+    names = set(_BACKEND_REGISTRY.keys())
+    for impl in HookRegistry.snapshot():
+        if impl.point in ("get_backend", "parse_unit") and "backend" in impl.matchers:
+            b_name = impl.matchers["backend"]
+            if "*" not in b_name and "?" not in b_name:
+                names.add(b_name)
+    return sorted(names)
 
 
 def is_backend_available(name: str) -> bool:
@@ -106,7 +156,14 @@ def is_backend_available(name: str) -> bool:
 
         return is_system_libclang_available()
 
-    # Non-libclang backends: registration implies availability.
+    backend_cls = _BACKEND_REGISTRY[name]
+    try:
+        inst = backend_cls()
+        if hasattr(inst, "is_available"):
+            return bool(inst.is_available())
+    except Exception:
+        return False
+
     return True
 
 
@@ -172,11 +229,16 @@ def get_backend(name: str | None = None) -> ParserBackend:
             raise ValueError("No backends available")
         name = _DEFAULT_BACKEND
 
-    if name not in _BACKEND_REGISTRY:
-        available = ", ".join(_BACKEND_REGISTRY.keys()) or "(none)"
-        raise ValueError(f"Unknown backend: {name!r}. Available: {available}")
+    ctx = PipelineContext(backend=name)
+    backend_inst = HookDispatcher().first_result("get_backend", context=ctx)
+    if isinstance(backend_inst, ParserBackend):
+        return backend_inst
 
-    return _BACKEND_REGISTRY[name]()
+    if name in _BACKEND_REGISTRY:
+        return _BACKEND_REGISTRY[name]()
+
+    available = ", ".join(list_backends()) or "(none)"
+    raise ValueError(f"Unknown backend: {name!r}. Available: {available}")
 
 
 def get_default_backend() -> str:
@@ -233,6 +295,13 @@ def _ensure_backends_loaded() -> None:
         import logging
 
         logging.getLogger(__name__).debug("Could not import libclang backend", exc_info=True)
+
+    try:
+        import headerkit.backends.treesitter  # noqa: F401 (side effect import)
+    except ImportError:
+        import logging
+
+        logging.getLogger(__name__).debug("Could not import treesitter backend", exc_info=True)
 
 
 def _load_backend_plugins() -> None:

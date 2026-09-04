@@ -51,6 +51,7 @@ from headerkit._clang import get_cindex as _get_cindex
 from headerkit.backends import (
     register_backend,
 )
+from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     Array,
     BaseSpecifier,
@@ -64,9 +65,11 @@ from headerkit.ir import (
     FunctionPointer,
     Header,
     Parameter,
+    ParserBackend,
     Pointer,
     Reference,
     SourceLocation,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
@@ -2330,6 +2333,9 @@ class LibclangBackend:
         )
     """
 
+    supported_languages: frozenset[str] = frozenset({"c", "cpp"})
+    supported_classifications: frozenset[str] = frozenset({"header", "source"})
+
     def __init__(self) -> None:
         self._index: Any = None
         # Cache for parsed headers (path -> Header) to avoid re-parsing
@@ -2350,6 +2356,9 @@ class LibclangBackend:
     @property
     def supports_cpp(self) -> bool:
         return True
+
+    def is_available(self) -> bool:
+        return _configure_libclang()
 
     def _get_index(self) -> Any:
         """Get or create the clang index."""
@@ -2676,6 +2685,40 @@ class LibclangBackend:
             )
 
         return header
+
+
+@hook("parse_unit", backend="libclang", language="c*", priority=Priority.STANDARD)
+def _libclang_parse_hook(
+    code: str,
+    filename: str = "input.h",
+    include_dirs: list[str] | None = None,
+    extra_args: list[str] | None = None,
+    *,
+    use_default_includes: bool = True,
+    recursive_includes: bool = True,
+    max_depth: int = 10,
+    project_prefixes: tuple[str, ...] | None = None,
+    context: PipelineContext | None = None,
+    **kwargs: Any,
+) -> SourceUnit | None:
+    _ = (context, kwargs)
+    backend = LibclangBackend()
+    return backend.parse(
+        code,
+        filename,
+        include_dirs=include_dirs,
+        extra_args=extra_args,
+        use_default_includes=use_default_includes,
+        recursive_includes=recursive_includes,
+        max_depth=max_depth,
+        project_prefixes=project_prefixes,
+    )
+
+
+@hook("get_backend", backend="libclang", priority=Priority.STANDARD)
+def _libclang_get_backend_hook(context: PipelineContext | None = None) -> ParserBackend:
+    _ = context
+    return LibclangBackend()
 
 
 # Always register the backend class.  The class is Python code and always

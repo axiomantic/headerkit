@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `headerkit.backends.treesitter`: lightweight, zero-system-dependency parser backend using `tree-sitter-c` for parsing C headers without requiring system LLVM or `libclang`.
+- `treesitter` optional dependency extra in `pyproject.toml` (`pip install "headerkit[treesitter]"`).
+- `headerkit.hooks` module implementing a unified hook architecture with priority tiers (`FALLBACK`, `STANDARD`, `PROJECT`, `OVERRIDE`), glob pattern matching, and `first_result` / `waterfall` dispatch modes.
+- Exported hook symbols (`Priority`, `PipelineContext`, `HookImpl`, `HookRegistry`, `hook`, `HookDispatcher`, `HookCaller`, `execute_pipeline`) in top-level `headerkit` namespace.
+- Core IR evolution: renamed `Header` to `SourceUnit` with `Header = SourceUnit` backward-compatibility alias, and added `InputSpec` for polyglot input classification.
+- Unified backend and writer registry: migrated all 9 built-in writers and parser backends into `HookRegistry`, with `get_backend()` and `get_writer()` delegating to `HookDispatcher`.
+- Enhanced `TreeSitterBackend` with recursive preprocessor block extraction, pointer return parsing, and void parameter handling.
+- `execute_pipeline`: automated 3-stage execution pipeline (`parse_unit` -> `transform_unit` -> `write_output`) with context threading.
+- Polyglot generator trunk migration: `generate()`, `generate_all()`, and `batch_generate()` accept `InputSpec` directly and route parsing through `parse_unit` and AST transformations through `transform_unit`.
+- Added `runtime`, `language`, and `classification` parameters to `generate()`, `generate_all()`, `batch_generate()`, and `PipelineContext`.
+- CLI `--runtime`, `--language`, and `--classification` options and corresponding `HEADERKIT_RUNTIME`, `HEADERKIT_LANGUAGE`, `HEADERKIT_CLASSIFICATION` environment variable overrides.
+- `_load_hook_plugins()` for discovery and dynamic loading of third-party hook plugins via `headerkit.hooks` entry points.
+- Cheap static capability discovery: `supported_languages` and `supported_classifications` declared on `ParserBackend` protocol, `TreeSitterBackend`, and `LibclangBackend`.
+- Project `ROADMAP.md` defining strategic pillars and horizons (Now, Next, Later) for language integrations (Nim, Mojo), packaging templates, a unified priority/glob hook pipeline, polyglot input classification, `SourceUnit` IR evolution, and documentation sweeps.
+
 ## [0.29.0] - 2026-09-03
 
 ### Added

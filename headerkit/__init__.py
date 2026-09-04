@@ -12,6 +12,16 @@ from headerkit.backends import (
     is_backend_available,
     list_backends,
 )
+from headerkit.hooks import (
+    HookCaller,
+    HookDispatcher,
+    HookImpl,
+    HookRegistry,
+    PipelineContext,
+    Priority,
+    execute_pipeline,
+    hook,
+)
 from headerkit.install_libclang import auto_install
 from headerkit.ir import (
     Array,
@@ -28,12 +38,14 @@ from headerkit.ir import (
     FunctionPointer,
     # Container
     Header,
+    InputSpec,
     Parameter,
     # Protocol
     ParserBackend,
     Pointer,
     Reference,
     SourceLocation,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
@@ -71,6 +83,8 @@ __all__ = [
     "Declaration",
     # Container
     "Header",
+    "SourceUnit",
+    "InputSpec",
     "SourceLocation",
     # Parser Protocol
     "ParserBackend",
@@ -113,4 +127,13 @@ __all__ = [
     # Target detection API
     "detect_process_triple",
     "resolve_target",
+    # Hooks API
+    "Priority",
+    "PipelineContext",
+    "HookImpl",
+    "HookRegistry",
+    "hook",
+    "HookDispatcher",
+    "HookCaller",
+    "execute_pipeline",
 ]

@@ -47,3 +47,5 @@ jobs:
 
   test:
     uses: ./.github/workflows/test.yml
+    with:
+      full-matrix: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

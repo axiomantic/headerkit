@@ -1,22 +1,23 @@
 # Architecture Overview
 
-headerkit is organized around a three-layer pipeline: **backends** parse C/C++ headers, producing an **IR** (Intermediate Representation), which **writers** consume to generate output.
+headerkit is organized around a unified, hook-driven pipeline: **backends** parse source units into an **IR** (Intermediate Representation) rooted at `SourceUnit`, optional **transform hooks** apply AST mutations or dialect adaptations, and **writers** consume the IR to generate target output.
 
 ## The Pipeline
 
 ```mermaid
 graph TD
-    A["C/C++ Source Code"] --> B
-    B["Backend<br>(ParserBackend protocol)"] --> C
-    C["IR<br>(Header, Declaration, TypeExpr)"] --> D
-    D["Writer<br>(WriterBackend protocol)"] --> E
-    E["Output String<br>(CFFI cdef, ctypes, Cython .pxd, ...)"]
+    A["Input Source / InputSpec"] --> B
+    B["Backend: parse_unit<br>(ParserBackend protocol)"] --> C
+    C["IR<br>(SourceUnit, Declaration, TypeExpr)"] --> D
+    D["Transformations: transform_unit<br>(Waterfall hook pipeline)"] --> E
+    E["Writer: write_output<br>(WriterBackend protocol)"] --> F
+    F["Output String<br>(CFFI cdef, ctypes, Cython .pxd, Nim, ...)"]
 
-    B -.- B1["e.g., LibclangBackend"]
-    D -.- D1["e.g., CffiWriter, CtypesWriter,<br>CythonWriter, LuaWriter, ..."]
+    B -.- B1["e.g., LibclangBackend, TreeSitterBackend"]
+    E -.- E1["e.g., CffiWriter, CtypesWriter,<br>CythonWriter, NimWriter, LuaWriter, ..."]
 ```
 
-Each layer is independent. Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.
+Each stage is decoupled through the unified hook engine (`headerkit.hooks`). Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.
 
 ## Layer 1: Backends (Parsing)
 
@@ -202,17 +203,19 @@ classDiagram
 | [`Variable`][headerkit.ir.Variable] | Global/extern variables |
 | [`Constant`][headerkit.ir.Constant] | `#define` macros and `const` values |
 
-### The Header Container
+### The SourceUnit Container
 
-[`Header`][headerkit.ir.Header] is the top-level container returned by all backends:
+[`SourceUnit`][headerkit.ir.SourceUnit] (with backward-compatible alias [`Header`][headerkit.ir.Header]) is the top-level container returned by all backends:
 
 ```python
-from headerkit.ir import Header
+from headerkit.ir import SourceUnit
 
-# Header fields:
-#   path: str                        -- original file path
+# SourceUnit fields:
+#   path: str                        -- original file path or synthetic name
 #   declarations: list[Declaration]  -- all extracted declarations
 #   included_headers: set[str]       -- basenames of included headers
+#   language: str                    -- source language (e.g., "c", "cpp")
+#   classification: str              -- classification (e.g., "header", "source")
 ```
 
 ## Layer 3: Writers (Output)
