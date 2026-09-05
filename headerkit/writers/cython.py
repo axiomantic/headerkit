@@ -1151,13 +1151,14 @@ class PxdWriter:
         if isinstance(ptr.pointee, FunctionPointer):
             return self._format_func_ptr_as_ptr(ptr.pointee, ptr.qualifiers)
 
-        if isinstance(ptr.pointee, Pointer) and isinstance(ptr.pointee.pointee, FunctionPointer):
-            fp = ptr.pointee.pointee
+        unwrapped = self._unwrap_func_ptr(ptr.pointee)
+        if unwrapped is not None:
+            fp, inner_stars = unwrapped
             return_type = self._format_type(fp.return_type)
             params = self._format_params(fp.parameters, fp.is_variadic)
             if not params:
                 params = "void"
-            result = f"{return_type} (**)({params})"
+            result = f"{return_type} ({'*' * (inner_stars + 1)})({params})"
             if ptr.qualifiers:
                 quals = " ".join(ptr.qualifiers)
                 result = f"{result} {quals}"
@@ -1194,13 +1195,32 @@ class PxdWriter:
             return True
         return isinstance(fp.return_type, Pointer) and isinstance(fp.return_type.pointee, FunctionPointer)
 
-    def _format_func_ptr(self, fp: FunctionPointer, name: str | None = None) -> str:
+    @staticmethod
+    def _unwrap_func_ptr(typ: TypeExpr) -> tuple[FunctionPointer, int] | None:
+        """Unwrap a pointer chain that bottoms out in a function pointer.
+
+        A bare :class:`FunctionPointer` and a ``Pointer`` wrapping one both mean
+        a single-star declarator, so the star count is the pointer depth floored
+        at one.
+
+        :returns: The function pointer and the number of stars its declarator
+            needs, or ``None`` if ``typ`` is not a function pointer.
+        """
+        stars = 0
+        current = typ
+        while isinstance(current, Pointer):
+            stars += 1
+            current = current.pointee
+        if isinstance(current, FunctionPointer):
+            return current, max(stars, 1)
+        return None
+
+    def _format_func_ptr(self, fp: FunctionPointer, name: str | None = None, stars: int = 1) -> str:
         """Format a FunctionPointer type."""
         return_type = self._format_type(fp.return_type)
         params = self._format_params(fp.parameters, fp.is_variadic)
-        if name:
-            return f"{return_type} (*{name})({params})"
-        return f"{return_type} (*)({params})"
+        declarator = "*" * stars + (name or "")
+        return f"{return_type} ({declarator})({params})"
 
     def _format_func_ptr_as_ptr(self, fp: FunctionPointer, ptr_quals: list[str]) -> str:
         """Format a pointer to function pointer."""
@@ -1218,10 +1238,10 @@ class PxdWriter:
         for param in params:
             if param.name:
                 name = self._escape_name(param.name)
-                if isinstance(param.type, FunctionPointer):
-                    parts.append(self._format_func_ptr(param.type, name))
-                elif isinstance(param.type, Pointer) and isinstance(param.type.pointee, FunctionPointer):
-                    parts.append(self._format_func_ptr(param.type.pointee, name))
+                unwrapped = self._unwrap_func_ptr(param.type)
+                if unwrapped is not None:
+                    fp, stars = unwrapped
+                    parts.append(self._format_func_ptr(fp, name, stars))
                 elif isinstance(param.type, Array):
                     param_type = self._format_type(param.type)
                     dims = self._format_array_dims(param.type)

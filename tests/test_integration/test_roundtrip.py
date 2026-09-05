@@ -648,9 +648,12 @@ class TestComplexPatternRoundtrip:
     def test_nested_struct_field(self, backend):
         code = "struct Outer { struct Inner { int x; } inner; };"
         cdef = parse_and_convert(backend, code)
-        # Inner is a nested type definition; the libclang backend does not hoist it
-        # to a separate top-level declaration, so only Outer is emitted.
+        # Inner is hoisted ahead of Outer. Emitting only Outer would leave the
+        # by-value ``inner`` member naming an incomplete type.
         assert cdef == textwrap.dedent("""\
+            struct Inner {
+                int x;
+            };
             struct Outer {
                 struct Inner inner;
             };""")

@@ -640,6 +640,36 @@ def _mangle_specialization_name(cpp_name: str) -> str:
     return name
 
 
+_MACRO_PROBE_PREFIX = "__headerkit_macro_probe_"
+
+
+def _is_function_like_macro(tokens: list[Any]) -> bool:
+    """Report whether a macro definition's tokens describe a function-like macro.
+
+    The C preprocessor distinguishes ``#define F(a) ...`` from ``#define X (1+2)``
+    purely by whether the ``(`` is immediately adjacent to the macro name, with no
+    intervening whitespace. Token extents give that adjacency exactly, so the
+    replacement list never has to be inspected -- which is what lets an
+    empty-bodied function-like macro such as ``#define F(v)`` be recognised.
+    """
+    if len(tokens) < 2 or tokens[1].spelling != "(":
+        return False
+    try:
+        return bool(tokens[0].extent.end.offset == tokens[1].extent.start.offset)
+    except AttributeError:
+        return False
+
+
+def _same_macro_value(a: Constant, b: Constant) -> bool:
+    """Report whether two macro Constants carry the same value and type."""
+    return (a.value, a.evaluated_value, a.raw_expression, a.type) == (
+        b.value,
+        b.evaluated_value,
+        b.raw_expression,
+        b.type,
+    )
+
+
 class ClangASTConverter:
     """Converts libclang cursors to headerkit IR.
 
@@ -677,6 +707,10 @@ class ClangASTConverter:
         self.declarations: list[Declaration] = []
         # Track seen declarations to avoid duplicates
         self._seen: set[str] = set()
+        # Macro name -> the Constant currently emitted for it. A later #define of
+        # the same name supersedes an earlier one, so the previous Constant is
+        # withdrawn from ``declarations`` rather than the redefinition ignored.
+        self._macro_decls: dict[str, Constant] = {}
         # Current namespace context (for nested namespace support)
         self._namespace_stack: list[str] = []
         # Store translation unit for dependency resolution
@@ -1142,51 +1176,54 @@ class ClangASTConverter:
         - String literals: ``#define VERSION "1.0"``
         - Expression macros: ``#define TOTAL (A + B)``
 
-        Function-like macros (with parameters) are skipped.
+        Function-like macros (with parameters) and macros with an empty
+        replacement list are skipped: neither denotes a value, so emitting
+        either as a variable declaration produces code that does not compile.
+
+        A later ``#define`` of a name supersedes an earlier one. When the
+        superseding definition is not emittable, the earlier Constant is
+        withdrawn.
         """
         name = cursor.spelling
         if not name:
             return
 
-        # Skip if already processed
-        key = f"macro:{name}"
-        if key in self._seen:
-            return
-        self._seen.add(key)
+        constant = self._build_macro_constant(cursor, name)
 
-        # Get tokens - first token is the macro name, rest is the value
+        previous = self._macro_decls.get(name)
+        if previous is not None and constant is not None and _same_macro_value(previous, constant):
+            # Identical redefinition - keep the original declaration and its position.
+            return
+
+        self._macro_decls.pop(name, None)
+        if previous is not None:
+            # A redefinition replaces the earlier value; drop the stale Constant.
+            self.declarations = [d for d in self.declarations if d is not previous]
+
+        if constant is not None:
+            self._macro_decls[name] = constant
+            self.declarations.append(constant)
+
+    def _build_macro_constant(self, cursor: Any, name: str) -> Constant | None:
+        """Build the :class:`Constant` for a ``#define``, or None if it denotes no value.
+
+        Function-like macros and macros with an empty replacement list are
+        rejected: neither has a type or a value, so emitting either as a variable
+        declaration yields code that does not compile.
+        """
+        # First token is the macro name, the rest is the replacement list.
         tokens = list(cursor.get_tokens())
+
+        if _is_function_like_macro(tokens):
+            return None
+
         if len(tokens) < 2:
-            # No value (e.g., #define EMPTY)
-            return
+            # Empty replacement list (e.g. #define FLAG) - a flag, not a constant.
+            return None
 
-        # Check for function-like macro: name followed by '('
-        # Function-like macros have the pattern: NAME ( params ) body
-        if len(tokens) >= 2 and tokens[1].spelling == "(":
-            # Could be function-like macro OR expression starting with paren
-            # Function-like: #define MAX(a,b) ...
-            # Expression: #define X (1+2)
-            # Check if there's an identifier after the opening paren
-            if len(tokens) >= 3:
-                third = tokens[2].spelling
-                # If it's an identifier followed by comma or close paren, it's function-like
-                if third.isidentifier() or third == ")":
-                    # Look ahead for comma or close paren pattern
-                    for i, tok in enumerate(tokens[2:], start=2):
-                        if tok.spelling == ")":
-                            # Check if this closes the parameter list (more tokens after)
-                            if i + 1 < len(tokens):
-                                # Has body after params - function-like macro
-                                return
-                            break
-                        if tok.spelling == ",":
-                            # Has comma in parens - function-like macro
-                            return
-
-        # Determine macro type from tokens
         macro_type, value, evaluated_value, raw_expr = self._analyze_macro_tokens(tokens[1:])
         if macro_type is None:
-            return
+            return None
 
         loc = cursor.location
         location = SourceLocation(
@@ -1195,16 +1232,14 @@ class ClangASTConverter:
             column=loc.column,
         )
 
-        self.declarations.append(
-            Constant(
-                name=name,
-                value=value if value is not None else evaluated_value,
-                evaluated_value=evaluated_value,
-                raw_expression=raw_expr,
-                type=macro_type,
-                is_macro=True,
-                location=location,
-            )
+        return Constant(
+            name=name,
+            value=value if value is not None else evaluated_value,
+            evaluated_value=evaluated_value,
+            raw_expression=raw_expr,
+            type=macro_type,
+            is_macro=True,
+            location=location,
         )
 
     def _analyze_macro_tokens(
@@ -1803,7 +1838,16 @@ class ClangASTConverter:
                         )
                 elif child.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
                     if not self._is_anonymous_decl(child):
-                        pass
+                        # A tagged record *defined* inside another record body
+                        # still needs a top-level definition; a field using it
+                        # by value would otherwise name an incomplete type.
+                        # Non-definitions are left alone: a bare ``struct x *p``
+                        # member introduces the tag without a body, and the
+                        # writer already emits those forward declarations.
+                        # C++ nested classes are excluded because they require
+                        # the scope qualification this path does not apply.
+                        if not is_cppclass and child.is_definition():
+                            self._process_struct(child, is_union=child.kind == CursorKind.UNION_DECL)
                     elif self._normalize_anon_name(child) is None:
                         nested = self._build_anonymous_record(child)
                         if nested is not None:
@@ -3106,7 +3150,103 @@ class LibclangBackend:
                 project_prefixes=project_prefixes,
             )
 
+        # Included headers are parsed in isolation, so a macro that a *later*
+        # header redefines is otherwise emitted with the stale value it had in
+        # the header that first defined it. The main translation unit's
+        # preprocessing record is the only place the real, ordered macro history
+        # is visible, so it decides the final state.
+        self._apply_final_macro_state(header, tu, converter)
+        self._drop_undefined_macros(header, filename, code, args)
+
         return header
+
+    def _drop_undefined_macros(self, header: Header, filename: str, code: str, args: list[str]) -> None:
+        """Remove macro Constants for names that are no longer defined at end of translation.
+
+        libclang's preprocessing record carries no entry for ``#undef``, so a
+        macro a header undefines is still reported as defined and would be
+        emitted as a declaration of a symbol the compiler cannot see. Re-parsing
+        the same source with an ``#ifdef`` probe appended per candidate asks the
+        preprocessor itself which names survive, so the answer cannot disagree
+        with the compiler.
+        """
+        candidates = [d.name for d in header.declarations if isinstance(d, Constant) and d.is_macro]
+        if not candidates:
+            return
+
+        probe = [code, "\n"]
+        probe.extend(
+            f"#ifdef {name}\nint {_MACRO_PROBE_PREFIX}{index};\n#endif\n" for index, name in enumerate(candidates)
+        )
+
+        try:
+            probe_tu = self._get_index().parse(
+                filename,
+                args=args,
+                unsaved_files=[(filename, "".join(probe))],
+                options=_cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES,
+            )
+        except _cindex.TranslationUnitLoadError:
+            return
+
+        if any(diag.severity >= _cindex.Diagnostic.Error for diag in probe_tu.diagnostics):
+            # The probe did not compile; its silence is not evidence of an #undef.
+            return
+
+        defined: set[str] = set()
+        for cur in probe_tu.cursor.get_children():
+            if cur.kind != CursorKind.VAR_DECL:
+                continue
+            spelling = cur.spelling
+            if spelling.startswith(_MACRO_PROBE_PREFIX):
+                index = spelling[len(_MACRO_PROBE_PREFIX) :]
+                if index.isdigit():
+                    defined.add(candidates[int(index)])
+
+        header.declarations = [
+            d for d in header.declarations if not (isinstance(d, Constant) and d.is_macro and d.name not in defined)
+        ]
+
+    @staticmethod
+    def _final_macro_state(tu: Any, converter: ClangASTConverter) -> dict[str, Constant | None]:
+        """Map each macro name to the Constant its LAST ``#define`` yields, or None.
+
+        The preprocessing record lists ``#define`` directives in the order the
+        preprocessor met them and omits directives in branches it did not take,
+        so iterating it and letting later entries win reproduces the macro table
+        as it stands at the end of the translation unit.
+        """
+        state: dict[str, Constant | None] = {}
+        for cur in tu.cursor.get_children():
+            if cur.kind != CursorKind.MACRO_DEFINITION:
+                continue
+            if cur.location.file is None:
+                # Compiler builtin, not written in any source file.
+                continue
+            name = cur.spelling
+            if name:
+                state[name] = converter._build_macro_constant(cur, name)
+        return state
+
+    @classmethod
+    def _apply_final_macro_state(cls, header: Header, tu: Any, converter: ClangASTConverter) -> None:
+        """Drop or correct macro Constants that the final macro table contradicts."""
+        state = cls._final_macro_state(tu, converter)
+        if not state:
+            return
+
+        kept: list[Declaration] = []
+        for decl in header.declarations:
+            if isinstance(decl, Constant) and decl.is_macro and decl.name in state:
+                final = state[decl.name]
+                if final is None:
+                    # Last definition has no value - emitting it would not compile.
+                    continue
+                if not _same_macro_value(decl, final):
+                    kept.append(final)
+                    continue
+            kept.append(decl)
+        header.declarations = kept
 
 
 @hook("parse_unit", backend="libclang", priority=Priority.STANDARD)

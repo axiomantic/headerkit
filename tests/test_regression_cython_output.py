@@ -585,6 +585,171 @@ class TestQualifiers:
 
 
 # ---------------------------------------------------------------------------
+# R5 -- records defined inside another record body
+# ---------------------------------------------------------------------------
+
+
+NESTED_UNION = textwrap.dedent("""\
+    struct my_s {
+      union my_nested_u {
+        char c;
+        int i;
+      } n;
+      unsigned u;
+    };
+""")
+
+
+class TestNestedTaggedRecords:
+    """A tagged record defined inside another record body must keep its body.
+
+    The backend dropped the nested definition entirely, so the writer saw only
+    an undeclared tag and emitted a bare forward declaration. The containing
+    struct then used that incomplete type *by value*, which Cython rejects with
+    ``Variable type 'my_nested_u' is incomplete``.
+    """
+
+    def test_nested_union_body_is_emitted_before_the_parent(self, backend: Any) -> None:
+        assert render(backend, NESTED_UNION) == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                cdef union my_nested_u:
+                    char c
+                    int i
+
+                cdef struct my_s:
+                    my_nested_u n
+                    unsigned int u
+        """)
+
+    def test_doubly_nested_records_are_hoisted_innermost_first(self, backend: Any) -> None:
+        """Each level must precede the level that uses it by value."""
+        source = textwrap.dedent("""\
+            typedef struct my_s {
+              union my_nested_u {
+                char c;
+                struct my_nested_s { int i; } n;
+                int i;
+              } n;
+              unsigned u;
+            } my_t;
+        """)
+        assert render(backend, source) == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                cdef struct my_nested_s:
+                    int i
+
+                cdef union my_nested_u:
+                    char c
+                    my_nested_s n
+                    int i
+
+                cdef struct my_s:
+                    my_nested_u n
+                    unsigned int u
+
+                ctypedef my_s my_t
+        """)
+
+    def test_pointer_only_nested_tag_stays_a_forward_declaration(self, backend: Any) -> None:
+        """A tag introduced by a pointer member has no body to hoist.
+
+        This is the negative control for the fix: only *definitions* are
+        hoisted, so this must not gain a spurious empty body.
+        """
+        assert render(backend, "struct node { struct peer *p; };") == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                cdef struct peer
+
+                cdef struct node:
+                    peer* p
+        """)
+
+    @requires_toolchain
+    def test_nested_union_compiles(self, backend: Any, tmp_path: Path) -> None:
+        pyx = textwrap.dedent("""\
+            from m cimport *
+
+            cpdef public int exercise():
+                cdef my_s v
+                v.n.i = 7
+                v.u = 3
+                return v.n.i + <int>v.u
+        """)
+        c_source = build(backend, tmp_path, NESTED_UNION, pyx)
+        assert "struct my_s" in c_source
+
+
+# ---------------------------------------------------------------------------
+# R6 -- pointer-to-function-pointer parameters
+# ---------------------------------------------------------------------------
+
+
+DOUBLE_FUNC_PTR_PARAM = "void reg(void (**pxFunc)(int, char), void **ppArg);\n"
+
+
+class TestPointerToFunctionPointerParameters:
+    """A named ``void (**p)(...)`` parameter must keep its name inside the declarator.
+
+    Only single-level function-pointer parameters were routed through the
+    declarator formatter. A double pointer fell through to the generic type
+    formatter, which produced the abstract ``void (**)(int, char)`` and then
+    appended the name *after* it -- ``void (**)(int, char) pxFunc`` -- which
+    Cython rejects with ``Expected ')', found 'pxFunc'``. Reduced from
+    sqlite3's ``xFindFunction``.
+    """
+
+    def test_double_pointer_parameter_name_sits_inside_the_declarator(self, backend: Any) -> None:
+        assert render(backend, DOUBLE_FUNC_PTR_PARAM) == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                void reg(void (**pxFunc)(int, char), void** ppArg)
+        """)
+
+    def test_triple_pointer_parameter(self, backend: Any) -> None:
+        """The star count follows the pointer depth rather than a fixed case."""
+        assert render(backend, "void f(void (***p)(int));") == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                void f(void (***p)(int))
+        """)
+
+    def test_single_pointer_parameter_is_unchanged(self, backend: Any) -> None:
+        assert render(backend, "void reg(void (*pxFunc)(int, char));") == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                void reg(void (*pxFunc)(int, char))
+        """)
+
+    def test_unnamed_double_pointer_parameter_stays_abstract(self, backend: Any) -> None:
+        assert render(backend, "typedef int (*cb)(void (**inner)(int), int n);") == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                ctypedef int (*cb)(void (**)(int), int)
+        """)
+
+    @requires_toolchain
+    def test_double_pointer_parameter_compiles(self, backend: Any, tmp_path: Path) -> None:
+        pyx = textwrap.dedent("""\
+            from m cimport *
+
+            cdef void impl(int a, char b) noexcept:
+                pass
+
+            cpdef public int exercise():
+                cdef void (*fp)(int, char) noexcept
+                fp = impl
+                cdef void **arg = NULL
+                reg(&fp, arg)
+                return 1
+        """)
+        c_source = build(backend, tmp_path, DOUBLE_FUNC_PTR_PARAM, pyx)
+        assert "reg(" in c_source
+
+
+# ---------------------------------------------------------------------------
 # Negative controls for the harness itself
 # ---------------------------------------------------------------------------
 
