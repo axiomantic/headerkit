@@ -638,10 +638,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-header-container" class="md-nav__link">
+  <a href="#the-sourceunit-container" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Header Container
+        The SourceUnit Container
       
     </span>
   </a>
@@ -951,6 +951,62 @@
     
   
     Writing Custom Writers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nim-python-packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nim to Python Packaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scaffolding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Scaffolding
   
 
     
@@ -1289,6 +1345,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/treesitter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tree-sitter Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/writers/" class="md-nav__link">
         
   
@@ -1513,6 +1625,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/mojo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mojo Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/nim/" class="md-nav__link">
         
   
@@ -1549,6 +1689,34 @@
     
   
     Prompt Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/scaffold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaffolding API
   
 
     
@@ -1736,10 +1904,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-header-container" class="md-nav__link">
+  <a href="#the-sourceunit-container" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Header Container
+        The SourceUnit Container
       
     </span>
   </a>
@@ -1822,18 +1990,19 @@
 
 
 <h1 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h1>
-<p>headerkit is organized around a three-layer pipeline: <strong>backends</strong> parse C/C++ headers, producing an <strong>IR</strong> (Intermediate Representation), which <strong>writers</strong> consume to generate output.</p>
+<p>headerkit is organized around a unified, hook-driven pipeline: <strong>backends</strong> parse source units into an <strong>IR</strong> (Intermediate Representation) rooted at <code>SourceUnit</code>, optional <strong>transform hooks</strong> apply AST mutations or dialect adaptations, and <strong>writers</strong> consume the IR to generate target output.</p>
 <h2 id="the-pipeline">The Pipeline<a class="headerlink" href="#the-pipeline" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>graph TD
-    A["C/C++ Source Code"] --&gt; B
-    B["Backend&lt;br&gt;(ParserBackend protocol)"] --&gt; C
-    C["IR&lt;br&gt;(Header, Declaration, TypeExpr)"] --&gt; D
-    D["Writer&lt;br&gt;(WriterBackend protocol)"] --&gt; E
-    E["Output String&lt;br&gt;(CFFI cdef, ctypes, Cython .pxd, ...)"]
+    A["Input Source / InputSpec"] --&gt; B
+    B["Backend: parse_unit&lt;br&gt;(ParserBackend protocol)"] --&gt; C
+    C["IR&lt;br&gt;(SourceUnit, Declaration, TypeExpr)"] --&gt; D
+    D["Transformations: transform_unit&lt;br&gt;(Waterfall hook pipeline)"] --&gt; E
+    E["Writer: write_output&lt;br&gt;(WriterBackend protocol)"] --&gt; F
+    F["Output String&lt;br&gt;(CFFI cdef, ctypes, Cython .pxd, Nim, ...)"]
 
-    B -.- B1["e.g., LibclangBackend"]
-    D -.- D1["e.g., CffiWriter, CtypesWriter,&lt;br&gt;CythonWriter, LuaWriter, ..."]</code></pre>
-<p>Each layer is independent. Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.</p>
+    B -.- B1["e.g., LibclangBackend, TreeSitterBackend"]
+    E -.- E1["e.g., CffiWriter, CtypesWriter,&lt;br&gt;CythonWriter, NimWriter, LuaWriter, ..."]</code></pre>
+<p>Each stage is decoupled through the unified hook engine (<code>headerkit.hooks</code>). Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.</p>
 <h2 id="layer-1-backends-parsing">Layer 1: Backends (Parsing)<a class="headerlink" href="#layer-1-backends-parsing" title="Permanent link">&para;</a></h2>
 <p>A backend implements the <a class="autorefs autorefs-internal" title="            ParserBackend" href="../../reference/ir/#headerkit.ir.ParserBackend"><code>ParserBackend</code></a> protocol and converts C/C++ source code into IR.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParserBackend</span>
@@ -1914,7 +2083,7 @@
 
 
   
-      dataclass
+      module-attribute
   " href="../../reference/ir/#headerkit.ir.Header"><code>Header</code></a>. It is designed to be parser-agnostic: any backend that can parse C/C++ can produce the same IR.</p>
 <h3 id="type-expressions">Type Expressions<a class="headerlink" href="#type-expressions" title="Permanent link">&para;</a></h3>
 <p>Type expressions (<code>TypeExpr</code>) represent C types as composable trees:</p>
@@ -2113,35 +2282,48 @@
 </tr>
 </tbody>
 </table>
-<h3 id="the-header-container">The Header Container<a class="headerlink" href="#the-header-container" title="Permanent link">&para;</a></h3>
-<p><a class="autorefs autorefs-internal" title="            Header
+<h3 id="the-sourceunit-container">The SourceUnit Container<a class="headerlink" href="#the-sourceunit-container" title="Permanent link">&para;</a></h3>
+<p><a class="autorefs autorefs-internal" title="            SourceUnit
 
 
   
       dataclass
-  " href="../../reference/ir/#headerkit.ir.Header"><code>Header</code></a> is the top-level container returned by all backends:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Header</span>
+  " href="../../reference/ir/#headerkit.ir.SourceUnit"><code>SourceUnit</code></a> (with backward-compatible alias <a class="autorefs autorefs-internal" title="            Header
+
+
+  
+      module-attribute
+  " href="../../reference/ir/#headerkit.ir.Header"><code>Header</code></a>) is the top-level container returned by all backends:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">SourceUnit</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Header fields:</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">#   path: str                        -- original file path</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># SourceUnit fields:</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">#   path: str                        -- original file path or synthetic name</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1">#   declarations: list[Declaration]  -- all extracted declarations</span>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1">#   included_headers: set[str]       -- basenames of included headers</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1">#   language: str                    -- source language (e.g., "c", "cpp")</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1">#   classification: str              -- classification (e.g., "header", "source")</span>
 </code></pre></div>
 <h2 id="layer-3-writers-output">Layer 3: Writers (Output)<a class="headerlink" href="#layer-3-writers-output" title="Permanent link">&para;</a></h2>
-<p>A writer implements the <a class="autorefs autorefs-internal" title="            WriterBackend" href="../../reference/writers/#headerkit.writers.WriterBackend"><code>WriterBackend</code></a> protocol and converts IR into a string output:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers</span><span class="w"> </span><span class="kn">import</span> <span class="n">WriterBackend</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Header</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">WriterBackend</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">header</span><span class="p">:</span> <span class="n">Header</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="nd">@property</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="nd">@property</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">format_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+<p>Writers convert <a class="autorefs autorefs-internal" title="            SourceUnit
+
+
+  
+      dataclass
+  " href="../../reference/ir/#headerkit.ir.SourceUnit"><code>SourceUnit</code></a> IR into code, definitions, or packages. Concrete writers inherit from <a class="autorefs autorefs-internal" title="            BaseWriter" href="../../reference/writers/#headerkit.writers.BaseWriter"><code>BaseWriter</code></a> (which satisfies the underlying <a class="autorefs autorefs-internal" title="            WriterBackend" href="../../reference/writers/#headerkit.writers.WriterBackend"><code>WriterBackend</code></a> protocol).</p>
+<p><code>BaseWriter</code> unifies single-string rendering (<code>write()</code>) and multi-file package scaffolding (<code>write_layout()</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">SourceUnit</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectLayout</span><span class="p">,</span> <span class="n">ScaffoldOptions</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseWriter</span><span class="p">,</span> <span class="n">WriterOption</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyWriter</span><span class="p">(</span><span class="n">BaseWriter</span><span class="p">):</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"mywriter"</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">format_description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"My custom bindings"</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="c1"># Generate the primary output string</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="o">...</span>
 </code></pre></div>
-<p>Writer-specific options (e.g., <code>exclude_patterns</code> for CFFI, <code>indent</code> for JSON) are constructor parameters on the concrete class, not part of the <code>write()</code> method signature.</p>
+<p>Writers declare their supported layout modes (<code>supported_layouts</code>) and configuration options (<code>supported_options</code>). Writer-specific options are passed to the constructor or via <code>--writer-opt</code>.</p>
 <h3 id="built-in-writers">Built-in Writers<a class="headerlink" href="#built-in-writers" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2149,7 +2331,7 @@
 <th>Writer</th>
 <th>Registry Name</th>
 <th>Output</th>
-<th>Constructor Options</th>
+<th>Primary Options</th>
 </tr>
 </thead>
 <tbody>
@@ -2158,6 +2340,12 @@
 <td><code>cffi</code> (default)</td>
 <td>CFFI <code>cdef</code> strings</td>
 <td><code>exclude_patterns: list[str] \| None</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            CShimWriter" href="../../reference/cshim/#headerkit.writers.cshim.CShimWriter"><code>CshimWriter</code></a></td>
+<td><code>cshim</code></td>
+<td>Pure C-ABI (<code>extern "C"</code>) wrappers for C++</td>
+<td><code>wrapper_header_name: str</code>, <code>catch_exceptions: bool</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            CtypesWriter" href="../../reference/ctypes/#headerkit.writers.ctypes.CtypesWriter"><code>CtypesWriter</code></a></td>
@@ -2175,7 +2363,7 @@
 <td><a class="autorefs autorefs-internal" title="            DiffWriter" href="../../reference/diff/#headerkit.writers.diff.DiffWriter"><code>DiffWriter</code></a></td>
 <td><code>diff</code></td>
 <td>API compatibility diff reports (JSON or Markdown)</td>
-<td><code>baseline: Header \| None</code>, <code>format: str</code></td>
+<td><code>baseline: SourceUnit \| None</code>, <code>format: str</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            JsonWriter" href="../../reference/json/#headerkit.writers.json.JsonWriter"><code>JsonWriter</code></a></td>
@@ -2188,6 +2376,18 @@
 <td><code>lua</code></td>
 <td>LuaJIT FFI bindings</td>
 <td>--</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            MojoWriter" href="../../reference/mojo/#headerkit.writers.mojo.MojoWriter"><code>MojoWriter</code></a></td>
+<td><code>mojo</code></td>
+<td>Idiomatic Mojo FFI bindings (<code>sys.ffi.DLHandle</code>)</td>
+<td><code>lib_name: str</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            NimWriter" href="../../reference/nim/#headerkit.writers.nim.NimWriter"><code>NimWriter</code></a></td>
+<td><code>nim</code></td>
+<td>Native Nim modules with <code>{.importc.}</code> pragmas</td>
+<td><code>header_file: str</code>, <code>cdecl: bool</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            PromptWriter" href="../../reference/prompt/#headerkit.writers.prompt.PromptWriter"><code>PromptWriter</code></a></td>

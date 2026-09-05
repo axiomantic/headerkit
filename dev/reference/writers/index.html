@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://axiomantic.github.io/headerkit/dev/reference/writers/">
       
       
-        <link rel="prev" href="../backends/">
+        <link rel="prev" href="../hooks/">
       
       
         <link rel="next" href="../cffi/">
@@ -767,6 +767,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/nim-python-packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nim to Python Packaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/scaffolding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Scaffolding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1089,6 +1145,62 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../treesitter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tree-sitter Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1163,13 +1275,80 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#protocol" class="md-nav__link">
+  <a href="#base-class-protocol" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Protocol
+        Base Class &amp; Protocol
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.writers.BaseWriter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BaseWriter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" BaseWriter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.BaseWriter.write_layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write_layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.BaseWriter.write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.writers.WriterOption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;WriterOption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" WriterOption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.WriterOption.coerce" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;coerce
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1223,6 +1402,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.WriterBackend.write_layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write_layout
       
     </span>
   </a>
@@ -1292,6 +1482,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.writers.list_writer_layouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;list_writer_layouts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.writers.list_writer_options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;list_writer_options
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1540,6 +1752,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../mojo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mojo Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../nim/" class="md-nav__link">
         
   
@@ -1576,6 +1816,34 @@
     
   
     Prompt Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scaffold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaffolding API
   
 
     
@@ -1690,13 +1958,80 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#protocol" class="md-nav__link">
+  <a href="#base-class-protocol" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Protocol
+        Base Class &amp; Protocol
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.writers.BaseWriter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BaseWriter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" BaseWriter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.BaseWriter.write_layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write_layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.BaseWriter.write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.writers.WriterOption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;WriterOption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" WriterOption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.WriterOption.coerce" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;coerce
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1750,6 +2085,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.WriterBackend.write_layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;write_layout
       
     </span>
   </a>
@@ -1823,6 +2169,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#headerkit.writers.list_writer_layouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;list_writer_layouts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.writers.list_writer_options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;list_writer_options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#headerkit.writers.is_writer_available" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1876,9 +2244,7 @@
 
 
 <h1 id="writers">Writers<a class="headerlink" href="#writers" title="Permanent link">&para;</a></h1>
-<p>Writers convert headerkit <a href="../ir/">IR</a> into various output formats. The
-<a class="autorefs autorefs-internal" title="            WriterBackend" href="#headerkit.writers.WriterBackend"><code>WriterBackend</code></a> protocol defines the interface
-that all writers implement.</p>
+<p>Writers convert HeaderKit <a href="../ir/">IR</a> into various output formats, from single-file binding modules to multi-file package scaffolding. Concrete writers inherit from <a class="autorefs autorefs-internal" title="            BaseWriter" href="#headerkit.writers.BaseWriter"><code>BaseWriter</code></a> (which satisfies the <a class="autorefs autorefs-internal" title="            WriterBackend" href="#headerkit.writers.WriterBackend"><code>WriterBackend</code></a> protocol).</p>
 <p>Writers are accessed through a registry that mirrors the
 <a href="../backends/">backend registry</a>. Use <a class="autorefs autorefs-internal" title="            get_writer" href="#headerkit.writers.get_writer"><code>get_writer()</code></a>
 to obtain an instance and <a class="autorefs autorefs-internal" title="            list_writers" href="#headerkit.writers.list_writers"><code>list_writers()</code></a> to discover
@@ -1929,6 +2295,11 @@ what is available.</p>
 <td>LuaJIT FFI bindings</td>
 </tr>
 <tr>
+<td><a href="../mojo/"><code>mojo</code></a></td>
+<td><code>headerkit.writers.mojo</code></td>
+<td>Idiomatic Mojo FFI bindings with <code>sys.ffi.DLHandle</code> and CShim bridge</td>
+</tr>
+<tr>
 <td><a href="../nim/"><code>nim</code></a></td>
 <td><code>headerkit.writers.nim</code></td>
 <td>Native Nim bindings with C and C++ interop</td>
@@ -1940,8 +2311,166 @@ what is available.</p>
 </tr>
 </tbody>
 </table>
-<h2 id="protocol">Protocol<a class="headerlink" href="#protocol" title="Permanent link">&para;</a></h2>
+<h2 id="base-class-protocol">Base Class &amp; Protocol<a class="headerlink" href="#base-class-protocol" title="Permanent link">&para;</a></h2>
 
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.writers.BaseWriter" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">BaseWriter</span>
+
+
+<a href="#headerkit.writers.BaseWriter" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Base class providing unified layout generation for all output writers.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.BaseWriter.write_layout" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">write_layout</span>
+
+
+<a href="#headerkit.writers.BaseWriter.write_layout" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_layout</span><span class="p">(</span><span class="n">unit</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert parsed unit IR into a complete ProjectLayout.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.BaseWriter.write" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">write</span>
+
+
+<a href="#headerkit.writers.BaseWriter.write" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert parsed header IR to the target output format.</p>
+<p>Delegates to write_layout(layout='file') to satisfy the Zero-Dual-System Rule.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.writers.WriterOption" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">WriterOption</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit.writers.WriterOption" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">WriterOption</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n"><span title="str">str</span></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Specification of a writer-configurable option or parameter.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.WriterOption.coerce" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">coerce</span>
+
+
+<a href="#headerkit.writers.WriterOption.coerce" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">coerce</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Coerce a raw value (e.g. from CLI string) to this option's expected type.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-class">
 
@@ -2083,7 +2612,7 @@ exceptions for valid Header input.</p>
 
 
   
-      dataclass
+      module-attribute
    (headerkit.ir.Header)" href="../ir/#headerkit.ir.Header">Header</a></code>
             </td>
             <td>
@@ -2115,6 +2644,116 @@ exceptions for valid Header input.</p>
             <td>
               <div class="doc-md-description">
                 <p>String representation in the target format.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.WriterBackend.write_layout" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">write_layout</span>
+
+
+<a href="#headerkit.writers.WriterBackend.write_layout" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_layout</span><span class="p">(</span><span class="n">unit</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert parsed unit IR into a complete ProjectLayout.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>unit</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SourceUnit
+
+
+  
+      dataclass
+   (headerkit.ir.SourceUnit)" href="../ir/#headerkit.ir.SourceUnit">SourceUnit</a> | <a class="autorefs autorefs-internal" title="            Header
+
+
+  
+      module-attribute
+   (headerkit.ir.Header)" href="../ir/#headerkit.ir.Header">Header</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Parsed unit IR from a parser backend.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>options</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScaffoldOptions
+
+
+  
+      dataclass
+   (headerkit.scaffold.ScaffoldOptions)" href="../scaffold/#headerkit.scaffold.ScaffoldOptions">ScaffoldOptions</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Scaffolding configuration options.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ProjectLayout
+
+
+  
+      dataclass
+   (headerkit.scaffold.ProjectLayout)" href="../scaffold/#headerkit.scaffold.ProjectLayout">ProjectLayout</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>ProjectLayout containing all generated files.</p>
               </div>
             </td>
           </tr>
@@ -2371,6 +3010,205 @@ for name in list_writers():
 <div class="doc doc-object doc-function">
 
 
+<h2 id="headerkit.writers.list_writer_layouts" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">list_writer_layouts</span>
+
+
+<a href="#headerkit.writers.list_writer_layouts" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">list_writer_layouts</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Return the tuple of layouts supported by the named writer.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>name</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Writer name to inspect.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="str">str</span>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tuple of supported layout names (e.g. <code>("file", "package")</code>).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code>ValueError</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the requested writer is not found.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.writers.list_writer_options" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">list_writer_options</span>
+
+
+<a href="#headerkit.writers.list_writer_options" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">list_writer_options</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Return the tuple of options supported by the named writer.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>name</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Writer name to inspect.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<a class="autorefs autorefs-internal" title="            WriterOption
+
+
+  
+      dataclass
+   (headerkit.writers.base.WriterOption)" href="#headerkit.writers.WriterOption">WriterOption</a>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tuple of WriterOption specifications.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code>ValueError</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the requested writer is not found.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h2 id="headerkit.writers.is_writer_available" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">is_writer_available</span>
 
@@ -2450,7 +3288,7 @@ for name in list_writers():
 
 
 <a href="#headerkit.writers.register_writer" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_writer</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">writer_class</span><span class="p">,</span> <span class="n">is_default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_writer</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">writer_class</span><span class="p">,</span> <span class="n">is_default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n"><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2535,6 +3373,22 @@ If not provided, falls back to the class docstring's first line.</p>
             </td>
             <td>
                   <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>priority</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Execution priority for hook dispatch.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></code>
             </td>
           </tr>
       </tbody>

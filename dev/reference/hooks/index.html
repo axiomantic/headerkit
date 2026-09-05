@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://axiomantic.github.io/headerkit/dev/reference/backends/">
+        <link rel="canonical" href="https://axiomantic.github.io/headerkit/dev/reference/hooks/">
       
       
-        <link rel="prev" href="../ir/">
+        <link rel="prev" href="../treesitter/">
       
       
-        <link rel="next" href="../treesitter/">
+        <link rel="next" href="../writers/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Backends - headerkit</title>
+        <title>Hooks Pipeline - headerkit</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#backends" class="md-skip">
+        <a href="#hooks-pipeline" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Backends
+              Hooks Pipeline
             
           </span>
         </div>
@@ -1117,37 +1117,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backends
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
         
   
   
@@ -1163,198 +1136,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#available-backends" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Available Backends
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#protocol" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Protocol
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#exceptions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exceptions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.LibclangUnavailableError" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LibclangUnavailableError
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#registry-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Registry Functions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.get_backend" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_backend
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" get_backend">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headerkit.backends.get_backend--example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.get_default_backend" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_default_backend
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" get_default_backend">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headerkit.backends.get_default_backend--example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.list_backends" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;list_backends
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" list_backends">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headerkit.backends.list_backends--example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.is_backend_available" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_backend_available
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.register_backend" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;register_backend
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.get_backend_info" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_backend_info
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1392,10 +1173,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../hooks/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks Pipeline
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1411,6 +1219,258 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#priority-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-matching-with-globs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Matching with Globs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backend-and-writer-unification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend and Writer Unification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-stage-pipeline-ingestion-to-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3-Stage Pipeline: Ingestion to Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.Priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Priority
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.PipelineContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;PipelineContext
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookRegistry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookRegistry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.get_matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;snapshot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;hook
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookDispatcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookDispatcher">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher.first_result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher.waterfall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;waterfall
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookCaller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookCaller
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.execute_pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;execute_pipeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1842,10 +1902,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#available-backends" class="md-nav__link">
+  <a href="#priority-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Available Backends
+        Priority Tiers
       
     </span>
   </a>
@@ -1853,10 +1913,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#protocol" class="md-nav__link">
+  <a href="#execution-modes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Protocol
+        Execution Modes
       
     </span>
   </a>
@@ -1864,10 +1924,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#exceptions" class="md-nav__link">
+  <a href="#pattern-matching-with-globs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Exceptions
+        Pattern Matching with Globs
       
     </span>
   </a>
@@ -1875,10 +1935,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#headerkit.backends.LibclangUnavailableError" class="md-nav__link">
+  <a href="#backend-and-writer-unification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LibclangUnavailableError
+        Backend and Writer Unification
       
     </span>
   </a>
@@ -1886,10 +1946,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#registry-functions" class="md-nav__link">
+  <a href="#3-stage-pipeline-ingestion-to-output" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Registry Functions
+        3-Stage Pipeline: Ingestion to Output
       
     </span>
   </a>
@@ -1897,22 +1957,99 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#headerkit.backends.get_backend" class="md-nav__link">
+  <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_backend
+        API Reference
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" get_backend">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.Priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Priority
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.PipelineContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;PipelineContext
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookRegistry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookRegistry">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#headerkit.backends.get_backend--example" class="md-nav__link">
+  <a href="#headerkit.hooks.HookRegistry.register" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.get_matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;snapshot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;clear
       
     </span>
   </a>
@@ -1925,22 +2062,44 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#headerkit.backends.get_default_backend" class="md-nav__link">
+  <a href="#headerkit.hooks.hook" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_default_backend
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;hook
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" get_default_backend">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookDispatcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookDispatcher">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#headerkit.backends.get_default_backend--example" class="md-nav__link">
+  <a href="#headerkit.hooks.HookDispatcher.first_result" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher.waterfall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;waterfall
       
     </span>
   </a>
@@ -1953,38 +2112,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#headerkit.backends.list_backends" class="md-nav__link">
+  <a href="#headerkit.hooks.HookCaller" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;list_backends
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" list_backends">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headerkit.backends.list_backends--example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.is_backend_available" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_backend_available
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookCaller
       
     </span>
   </a>
@@ -1992,21 +2123,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#headerkit.backends.register_backend" class="md-nav__link">
+  <a href="#headerkit.hooks.execute_pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;register_backend
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#headerkit.backends.get_backend_info" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_backend_info
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;execute_pipeline
       
     </span>
   </a>
@@ -2033,69 +2153,110 @@
   
 
 
-<h1 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h1>
-<p>Parser backends convert C/C++ source code into the headerkit
-<a href="../ir/">IR</a>. The <a class="autorefs autorefs-internal" title="            ParserBackend" href="../ir/#headerkit.ir.ParserBackend"><code>ParserBackend</code></a> protocol defines
-the interface that all backends implement.</p>
-<p>Backends are accessed through a registry. Use <a class="autorefs autorefs-internal" title="            get_backend" href="#headerkit.backends.get_backend"><code>get_backend()</code></a>
-to obtain an instance and <a class="autorefs autorefs-internal" title="            list_backends" href="#headerkit.backends.list_backends"><code>list_backends()</code></a> to discover
-what is available.</p>
-<h2 id="available-backends">Available Backends<a class="headerlink" href="#available-backends" title="Permanent link">&para;</a></h2>
+<h1 id="hooks-pipeline">Hooks Pipeline<a class="headerlink" href="#hooks-pipeline" title="Permanent link">&para;</a></h1>
+<p>Headerkit provides a unified, priority-ordered hook pipeline (<code>headerkit.hooks</code>) for intercepting and customizing parsing, IR transformation, and output generation.</p>
+<h2 id="priority-tiers">Priority Tiers<a class="headerlink" href="#priority-tiers" title="Permanent link">&para;</a></h2>
+<p>Hooks execute according to integer priority tiers defined in <a class="autorefs autorefs-internal" title="            Priority" href="#headerkit.hooks.Priority"><code>Priority</code></a>. Higher numeric values execute first:</p>
 <table>
 <thead>
 <tr>
-<th>Backend</th>
-<th>Description</th>
-<th style="text-align: center;">C++ Support</th>
-<th style="text-align: center;">Macro Extraction</th>
-<th style="text-align: center;">Languages</th>
-<th style="text-align: center;">Classifications</th>
+<th>Tier</th>
+<th>Value</th>
+<th>Intended Usage</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>libclang</code></td>
-<td>LLVM clang-based parser</td>
-<td style="text-align: center;">Yes</td>
-<td style="text-align: center;">Yes</td>
-<td style="text-align: center;"><code>c</code>, <code>cpp</code></td>
-<td style="text-align: center;"><code>header</code></td>
+<td><code>Priority.FALLBACK</code></td>
+<td><code>10</code></td>
+<td>Default fallback handlers (e.g. Tree-sitter fallback when system libclang is unavailable)</td>
 </tr>
 <tr>
-<td><code>tree-sitter</code></td>
-<td>Zero-dependency parser using <code>tree-sitter-c</code> and <code>tree-sitter-cpp</code></td>
-<td style="text-align: center;">Yes</td>
-<td style="text-align: center;">No</td>
-<td style="text-align: center;"><code>c</code>, <code>cpp</code></td>
-<td style="text-align: center;"><code>header</code>, <code>source</code></td>
+<td><code>Priority.STANDARD</code></td>
+<td><code>50</code></td>
+<td>Built-in backends and writers</td>
+</tr>
+<tr>
+<td><code>Priority.PROJECT</code></td>
+<td><code>100</code></td>
+<td>Local repository customizations and <code>pyproject.toml</code> extensions</td>
+</tr>
+<tr>
+<td><code>Priority.OVERRIDE</code></td>
+<td><code>1000</code></td>
+<td>Explicit hard overrides that take absolute precedence</td>
 </tr>
 </tbody>
 </table>
-<h2 id="protocol">Protocol<a class="headerlink" href="#protocol" title="Permanent link">&para;</a></h2>
-<p>See <a class="autorefs autorefs-internal" title="            ParserBackend" href="../ir/#headerkit.ir.ParserBackend"><code>ParserBackend</code></a> on the IR Types page for the
-full protocol definition including <code>parse()</code>, <code>name</code>, <code>supports_macros</code>,
-<code>supports_cpp</code>, <code>supported_languages</code>, and <code>supported_classifications</code>.</p>
-<h2 id="exceptions">Exceptions<a class="headerlink" href="#exceptions" title="Permanent link">&para;</a></h2>
+<h2 id="execution-modes">Execution Modes<a class="headerlink" href="#execution-modes" title="Permanent link">&para;</a></h2>
+<p>The <a class="autorefs autorefs-internal" title="            HookDispatcher" href="#headerkit.hooks.HookDispatcher"><code>HookDispatcher</code></a> supports two execution modes:</p>
+<ul>
+<li><strong>First-Result Dispatch</strong> (<code>first_result</code>): Queries matching candidate hooks sorted from highest priority to lowest. The first hook to return a non-<code>None</code> value wins. If a hook returns <code>None</code>, the dispatcher cascades to the next candidate.</li>
+<li><strong>Waterfall Pipeline</strong> (<code>waterfall</code>): Passes an initial value sequentially through all matching hooks in priority order, threading the transformed output through each stage.</li>
+</ul>
+<h2 id="pattern-matching-with-globs">Pattern Matching with Globs<a class="headerlink" href="#pattern-matching-with-globs" title="Permanent link">&para;</a></h2>
+<p>Hooks can filter invocation contexts by specifying attribute matchers:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">hook</span><span class="p">,</span> <span class="n">Priority</span><span class="p">,</span> <span class="n">PipelineContext</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">SourceUnit</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"parse_unit"</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">"tree-sitter"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">STANDARD</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">custom_parser</span><span class="p">(</span><span class="n">code</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SourceUnit</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="o">...</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"write_output"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"ctypes"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">STANDARD</span><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">write_ctypes</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="o">...</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"write_output"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"*"</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s2">"*windows*"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">PROJECT</span><span class="p">)</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="k">def</span><span class="w"> </span><span class="nf">windows_override</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="o">...</span>
+</code></pre></div>
+<h2 id="backend-and-writer-unification">Backend and Writer Unification<a class="headerlink" href="#backend-and-writer-unification" title="Permanent link">&para;</a></h2>
+<p>All parser backends and output writers register into the unified hook pipeline:
+- Backends register at <code>parse_unit</code> and <code>get_backend</code>.
+- Writers register at <code>write_output</code> and <code>get_writer</code>.
+- Calling <code>get_backend()</code> and <code>get_writer()</code> queries the highest-priority matching hook.
+- Custom plugins can override built-in backends or writers by registering hooks at <code>Priority.PROJECT</code> (100) or <code>Priority.OVERRIDE</code> (1000).</p>
+<h2 id="3-stage-pipeline-ingestion-to-output">3-Stage Pipeline: Ingestion to Output<a class="headerlink" href="#3-stage-pipeline-ingestion-to-output" title="Permanent link">&para;</a></h2>
+<p>The pipeline executes in three stages:
+1. <strong><code>parse_unit</code></strong> (<code>first_result</code>): Parses raw source into a <a class="autorefs autorefs-internal" title="            SourceUnit
+
+
+  
+      dataclass
+  " href="../ir/#headerkit.ir.SourceUnit"><code>SourceUnit</code></a> Intermediate Representation.
+2. <strong><code>transform_unit</code></strong> (<code>waterfall</code>): Passes the <code>SourceUnit</code> through sequential AST transformations (such as runtime lifecycle injections, macro expansion, or dialect conversions).
+3. <strong><code>write_output</code></strong> (<code>first_result</code>): Generates code for the requested writer target.</p>
+<p><a class="autorefs autorefs-internal" title="            execute_pipeline" href="#headerkit.hooks.execute_pipeline"><code>execute_pipeline</code></a> automates this three-stage flow:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_pipeline</span><span class="p">,</span> <span class="n">PipelineContext</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSpec</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">InputSpec</span><span class="o">.</span><span class="n">from_path</span><span class="p">(</span><span class="s2">"api.h"</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="s2">"int compute(int x);"</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">ctx</span> <span class="o">=</span> <span class="n">PipelineContext</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"tree-sitter"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"json"</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="s2">"nim"</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">unit</span><span class="p">,</span> <span class="n">output</span> <span class="o">=</span> <span class="n">execute_pipeline</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 
 <div class="doc doc-object doc-class">
 
 
 
-<h2 id="headerkit.backends.LibclangUnavailableError" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">LibclangUnavailableError</span>
+<h2 id="headerkit.hooks.Priority" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Priority</span>
 
 
-<a href="#headerkit.backends.LibclangUnavailableError" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#headerkit.hooks.Priority" class="headerlink" title="Permanent link">&para;</a></h2>
 
 
     <div class="doc doc-contents first">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="RuntimeError">RuntimeError</span></code></p>
+              Bases: <code><span title="enum.IntEnum">IntEnum</span></code></p>
 
 
 
-        <p>Raised when libclang shared library cannot be found or loaded.</p>
+        <p>Execution priority tiers for registered hooks.</p>
+<p>Higher numeric values execute first.</p>
 
 
 
@@ -2104,119 +2265,132 @@ full protocol definition including <code>parse()</code>, <code>name</code>, <cod
 
 
 
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
 
     </div>
 
-</div><h2 id="registry-functions">Registry Functions<a class="headerlink" href="#registry-functions" title="Permanent link">&para;</a></h2>
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.PipelineContext" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">PipelineContext</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit.hooks.PipelineContext" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">PipelineContext</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Contextual metadata passed to hooks during dispatch.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.HookRegistry" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">HookRegistry</span>
+
+
+<a href="#headerkit.hooks.HookRegistry" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">HookRegistry</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Registry maintaining registered hooks organized by hook point.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
 
 
 <div class="doc doc-object doc-function">
 
 
-<h2 id="headerkit.backends.get_backend" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_backend</span>
+<h3 id="headerkit.hooks.HookRegistry.register" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">register</span>
 
 
-<a href="#headerkit.backends.get_backend" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_backend</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<a href="#headerkit.hooks.HookRegistry.register" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n"><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></span><span class="p">,</span> <span class="o">**</span><span class="n">matchers</span><span class="p">)</span>
 </code></pre></div>
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
 
-        <p>Get a parser backend instance.</p>
-<p>Returns a new instance of the requested backend. If no name is provided,
-returns the default backend (libclang).</p>
-<p>::</p>
-<div class="highlight"><pre><span></span><code>from headerkit.backends import get_backend
-
-# Get default backend
-backend = get_backend()
-
-# Get libclang backend
-clang = get_backend("libclang")
-
-# Parse a header
-header = backend.parse(code, "myheader.h")
-</code></pre></div>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>name</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Backend name (e.g., <code>"libclang"</code>),
-or None for the default backend.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="            ParserBackend (headerkit.ir.ParserBackend)" href="../ir/#headerkit.ir.ParserBackend">ParserBackend</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>New instance of the requested backend.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code>ValueError</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If the requested backend is not available.</p>
-<h4 id="headerkit.backends.get_backend--example">Example<a class="headerlink" href="#headerkit.backends.get_backend--example" title="Permanent link">&para;</a></h4>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Register a hook implementation.</p>
 
 
     </div>
@@ -2226,71 +2400,18 @@ or None for the default backend.</p>
 <div class="doc doc-object doc-function">
 
 
-<h2 id="headerkit.backends.get_default_backend" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_default_backend</span>
+<h3 id="headerkit.hooks.HookRegistry.get_matching" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_matching</span>
 
 
-<a href="#headerkit.backends.get_default_backend" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_default_backend</span><span class="p">()</span>
+<a href="#headerkit.hooks.HookRegistry.get_matching" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_matching</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
 </code></pre></div>
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
 
-        <p>Get the name of the default backend.</p>
-<p>Returns the name of the currently configured default backend.</p>
-<p>::</p>
-<div class="highlight"><pre><span></span><code>from headerkit.backends import get_default_backend
-
-default = get_default_backend()
-print(f"Default backend: {default}")
-</code></pre></div>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Backend name (e.g., "libclang").</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code>ValueError</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If no backends are available.</p>
-<h4 id="headerkit.backends.get_default_backend--example">Example<a class="headerlink" href="#headerkit.backends.get_default_backend--example" title="Permanent link">&para;</a></h4>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Return matching hooks sorted by priority descending and specificity descending.</p>
+<p>For ties in priority and specificity, later registered hooks take precedence.</p>
 
 
     </div>
@@ -2300,47 +2421,21 @@ print(f"Default backend: {default}")
 <div class="doc doc-object doc-function">
 
 
-<h2 id="headerkit.backends.list_backends" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">list_backends</span>
+<h3 id="headerkit.hooks.HookRegistry.snapshot" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">snapshot</span>
 
 
-<a href="#headerkit.backends.list_backends" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">list_backends</span><span class="p">()</span>
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.snapshot" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">snapshot</span><span class="p">()</span>
 </code></pre></div>
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
 
-        <p>List names of all registered backends.</p>
-<p>::</p>
-<div class="highlight"><pre><span></span><code>from headerkit.backends import list_backends
-
-for name in list_backends():
-    print(f"Available: {name}")
-</code></pre></div>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of backend names that can be passed to :func:<code>get_backend</code>.</p>
-<h4 id="headerkit.backends.list_backends--example">Example<a class="headerlink" href="#headerkit.backends.list_backends--example" title="Permanent link">&para;</a></h4>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Return a copy of all globally registered hooks.</p>
 
 
     </div>
@@ -2350,76 +2445,21 @@ for name in list_backends():
 <div class="doc doc-object doc-function">
 
 
-<h2 id="headerkit.backends.is_backend_available" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">is_backend_available</span>
+<h3 id="headerkit.hooks.HookRegistry.restore" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">restore</span>
 
 
-<a href="#headerkit.backends.is_backend_available" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_backend_available</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.restore" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">restore</span><span class="p">(</span><span class="n">snapshot</span><span class="p">)</span>
 </code></pre></div>
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
 
-        <p>Check if a backend is available for use.</p>
-<p>For backends that require external libraries (e.g. libclang), this
-performs a real load test -- not just a registry lookup.  The result
-is <strong>not</strong> cached on failure so that a subsequent <code>auto_install()</code>
-can make the library appear.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>name</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Backend name to check.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>True if the backend is registered <strong>and</strong> its underlying
-library is loadable.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Restore global hooks from a snapshot.</p>
 
 
     </div>
@@ -2429,99 +2469,108 @@ library is loadable.</p>
 <div class="doc doc-object doc-function">
 
 
-<h2 id="headerkit.backends.register_backend" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">register_backend</span>
+<h3 id="headerkit.hooks.HookRegistry.clear" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">clear</span>
 
 
-<a href="#headerkit.backends.register_backend" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_backend</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">backend_class</span><span class="p">,</span> <span class="n">is_default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n"><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></span><span class="p">)</span>
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.clear" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">clear</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Clear all globally registered hooks.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.hooks.hook" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">hook</span>
+
+
+<a href="#headerkit.hooks.hook" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">hook</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n"><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">matchers</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
-        <p>Register a parser backend.</p>
-<p>Called by backend modules during import to add themselves to the registry.
-The first registered backend becomes the default unless <code>is_default</code> is
-explicitly set on a later registration.</p>
+        <p>Decorator to register a hook implementation.</p>
 
 
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>name</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Unique name for the backend (e.g., <code>"libclang"</code>).</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>backend_class</code>
-            </td>
-            <td>
-                  <code><span title="type">type</span>[<a class="autorefs autorefs-internal" title="            ParserBackend (headerkit.ir.ParserBackend)" href="../ir/#headerkit.ir.ParserBackend">ParserBackend</a>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Class implementing the :class:<code>~headerkit.ir.ParserBackend</code> protocol.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>is_default</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If True, this becomes the default backend for :func:<code>get_backend</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>priority</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Execution priority for hook dispatch.</p>
-              </div>
-            </td>
-            <td>
-                  <code><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.HookDispatcher" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">HookDispatcher</span>
+
+
+<a href="#headerkit.hooks.HookDispatcher" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">HookDispatcher</span><span class="p">(</span><span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Dispatches calls across registered hooks according to execution mode.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookDispatcher.first_result" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">first_result</span>
+
+
+<a href="#headerkit.hooks.HookDispatcher.first_result" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">first_result</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Execute matching hooks in priority order until one returns a non-None value.</p>
 
 
     </div>
@@ -2531,40 +2580,92 @@ explicitly set on a later registration.</p>
 <div class="doc doc-object doc-function">
 
 
-<h2 id="headerkit.backends.get_backend_info" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">get_backend_info</span>
+<h3 id="headerkit.hooks.HookDispatcher.waterfall" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">waterfall</span>
 
 
-<a href="#headerkit.backends.get_backend_info" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_backend_info</span><span class="p">()</span>
+<a href="#headerkit.hooks.HookDispatcher.waterfall" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">waterfall</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">initial_value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Pass a value sequentially through matching hooks in priority order.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.HookCaller" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">HookCaller</span>
+
+
+<a href="#headerkit.hooks.HookCaller" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">HookCaller</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
-        <p>Get information about all known backends.</p>
 
 
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="list">list</span>[<span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span> | <span title="bool">bool</span>]]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of dicts with name, available, default, and description.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Convenience caller bound to a specific hook point.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.hooks.execute_pipeline" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">execute_pipeline</span>
+
+
+<a href="#headerkit.hooks.execute_pipeline" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">execute_pipeline</span><span class="p">(</span><span class="n">input_item</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dispatcher</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Execute the 3-stage hook pipeline: parse_unit -&gt; transform_unit -&gt; write_output.</p>
 
 
     </div>

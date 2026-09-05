@@ -856,6 +856,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guides/nim-python-packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nim to Python Packaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guides/scaffolding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Scaffolding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1181,6 +1237,62 @@
   
   
     <li class="md-nav__item">
+      <a href="reference/treesitter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tree-sitter Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="reference/writers/" class="md-nav__link">
         
   
@@ -1405,6 +1517,34 @@
   
   
     <li class="md-nav__item">
+      <a href="reference/mojo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mojo Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="reference/nim/" class="md-nav__link">
         
   
@@ -1441,6 +1581,34 @@
     
   
     Prompt Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/scaffold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaffolding API
   
 
     
@@ -1649,10 +1817,10 @@
     B -.- B1["ParserBackend&lt;br&gt;Protocol"]
     D -.- D1["WriterBackend&lt;br&gt;Protocol"]</code></pre>
 <ol>
-<li>A <strong>backend</strong> (e.g., <code>LibclangBackend</code>) parses C/C++ source code and produces an IR <code>Header</code> object containing <code>Declaration</code> nodes.</li>
-<li>A <strong>writer</strong> (e.g., <code>CffiWriter</code>, <code>CtypesWriter</code>, <code>CythonWriter</code>, <code>LuaWriter</code>, <code>JsonWriter</code>, <code>DiffWriter</code>, <code>PromptWriter</code>) consumes the IR and produces output in a target format.</li>
+<li>A <strong>backend</strong> (e.g., <code>LibclangBackend</code>, <code>TreeSitterBackend</code>) parses source code and produces a normalized <code>SourceUnit</code> containing typed declarations.</li>
+<li>A <strong>writer</strong> (inheriting from <code>BaseWriter</code>, such as <code>CtypesWriter</code>, <code>CffiWriter</code>, <code>MojoWriter</code>, <code>NimWriter</code>, <code>CshimWriter</code>, etc.) consumes the IR and produces single-file bindings or scaffolds full multi-file packages.</li>
 </ol>
-<p>Both backends and writers follow simple protocols and are registered in a global registry, so you can add your own without modifying headerkit itself.</p>
+<p>Backends and writers self-register via unified hooks and Python entry points, so you can add new source languages or output formats without modifying HeaderKit itself.</p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>
