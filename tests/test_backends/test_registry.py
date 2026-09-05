@@ -275,3 +275,16 @@ class TestBackendRegistry:
             # Restore the module to avoid polluting other tests.
             if saved_module is not None:
                 sys.modules["headerkit.backends.libclang"] = saved_module
+
+    def test_treesitter_alias_normalization(self):
+        """Backend aliases 'treesitter' and 'tree_sitter' resolve to 'tree-sitter'."""
+        register_backend("tree-sitter", MockBackend)
+        assert is_backend_available("treesitter") is True
+        assert is_backend_available("tree_sitter") is True
+        assert is_backend_available("tree-sitter") is True
+
+        backend1 = get_backend("treesitter")
+        assert backend1.name == "mock"
+
+        backend2 = get_backend("tree_sitter")
+        assert backend2.name == "mock"

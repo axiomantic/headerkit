@@ -282,6 +282,18 @@ class MojoWriter(BaseWriter):
             default="both",
             choices=("both", "tripwire", "unit", "none"),
         ),
+        WriterOption(
+            name="library_name",
+            description="Name of the shared library to load via DLHandle",
+            default="Library",
+            type=str,
+        ),
+        WriterOption(
+            name="emit_classes",
+            description="Emit class wrappers and handle aliases",
+            default=True,
+            type=bool,
+        ),
     )
 
     def __init__(

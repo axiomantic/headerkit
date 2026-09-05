@@ -488,3 +488,31 @@ class TestUnifiedWriterScaffolding:
             assert "ctypes" in layout_file.files[0].content
         finally:
             HookRegistry.restore(snap)
+
+    def test_writer_supported_options_completeness(self) -> None:
+        """Declared supported_options should cover key constructor options."""
+        mojo_opts = {opt.name: opt for opt in list_writer_options("mojo")}
+        assert "library_name" in mojo_opts
+        assert "emit_classes" in mojo_opts
+        assert mojo_opts["emit_classes"].type is bool
+
+        ctypes_opts = {opt.name: opt for opt in list_writer_options("ctypes")}
+        assert "lib_name" in ctypes_opts
+
+        cffi_opts = {opt.name: opt for opt in list_writer_options("cffi")}
+        assert "exclude_patterns" in cffi_opts
+        assert cffi_opts["exclude_patterns"].type is list
+
+        cython_opts = {opt.name: opt for opt in list_writer_options("cython")}
+        assert "stub_cimport_prefix" in cython_opts
+
+        nim_opts = {opt.name: opt for opt in list_writer_options("nim")}
+        assert "header_path" in nim_opts
+
+    def test_writer_option_coercion_boolean_and_list(self) -> None:
+        """Coercion converts string booleans to bool and list options properly."""
+        mojo_coerced = coerce_writer_options("mojo", {"emit_classes": "false"})
+        assert mojo_coerced["emit_classes"] is False
+
+        cffi_coerced = coerce_writer_options("cffi", {"exclude_patterns": ["^__"]})
+        assert cffi_coerced["exclude_patterns"] == ["^__"]

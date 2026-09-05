@@ -233,6 +233,12 @@ class NimWriter(BaseWriter):
             default="both",
             choices=("both", "tripwire", "unit", "none"),
         ),
+        WriterOption(
+            name="header_path",
+            description="Header path to reference in {.header.} pragmas",
+            default=None,
+            type=str,
+        ),
     )
 
     def __init__(self, *, header_path: str | None = None) -> None:

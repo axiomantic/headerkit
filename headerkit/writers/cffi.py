@@ -543,6 +543,24 @@ class CffiWriter(BaseWriter):
             default="both",
             choices=("both", "tripwire", "unit", "none"),
         ),
+        WriterOption(
+            name="exclude_patterns",
+            description="Patterns of symbols to exclude from cdef",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="define_patterns",
+            description="Patterns of preprocessor macros to include in cdef",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="extra_cdef",
+            description="Additional custom cdef strings to append",
+            default=None,
+            type=list,
+        ),
     )
 
     def __init__(

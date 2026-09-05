@@ -42,6 +42,17 @@ _BACKEND_REGISTRY: dict[str, type[ParserBackend]] = {}
 _DEFAULT_BACKEND: str | None = None
 _BACKENDS_LOADED: bool = False  # Track if we've tried to load all backends
 
+_BACKEND_ALIASES: dict[str, str] = {
+    "treesitter": "tree-sitter",
+    "tree_sitter": "tree-sitter",
+}
+
+
+def _normalize_backend_name(name: str) -> str:
+    cleaned = name.strip().lower()
+    return _BACKEND_ALIASES.get(cleaned, cleaned)
+
+
 __all__ = [
     "LibclangUnavailableError",
     "get_backend",
@@ -148,6 +159,7 @@ def is_backend_available(name: str) -> bool:
         library is loadable.
     """
     _ensure_backends_loaded()
+    name = _normalize_backend_name(name)
     if name not in _BACKEND_REGISTRY:
         return False
 
@@ -224,6 +236,8 @@ def get_backend(name: str | None = None) -> ParserBackend:
         if _DEFAULT_BACKEND is None:
             raise ValueError("No backends available")
         name = _DEFAULT_BACKEND
+    else:
+        name = _normalize_backend_name(name)
 
     ctx = PipelineContext(backend=name)
     backend_inst = HookDispatcher().first_result("get_backend", context=ctx)

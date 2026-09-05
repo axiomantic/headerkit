@@ -44,6 +44,14 @@ class WriterOption:
             return float(val)
         if self.type is str:
             return str(val) if not isinstance(val, str) else val
+        if self.type is list:
+            if isinstance(val, list):
+                return val
+            if isinstance(val, (tuple, set)):
+                return list(val)
+            if isinstance(val, str):
+                return [val]
+            return [val]
         return self.type(val)
 
 
@@ -59,7 +67,9 @@ def coerce_writer_options(
     for k, v in options.items():
         if k in specs:
             opt = specs[k]
-            if isinstance(v, list):
+            if opt.type is list:
+                result[k] = opt.coerce(v)
+            elif isinstance(v, list):
                 result[k] = [opt.coerce(elem) for elem in v]
             else:
                 result[k] = opt.coerce(v)

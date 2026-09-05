@@ -44,7 +44,7 @@ from headerkit._resolve import check_output_collisions, resolve_headers, resolve
 from headerkit._slug import build_slug, load_index, lookup_slug
 from headerkit._target import resolve_target
 from headerkit.backends import LibclangUnavailableError, get_backend, is_backend_available
-from headerkit.hooks import HookDispatcher, PipelineContext
+from headerkit.hooks import HookDispatcher, PipelineContext, Priority
 from headerkit.install_libclang import auto_install
 from headerkit.ir import Header, InputSpec, SourceUnit
 from headerkit.writers import get_writer
@@ -357,6 +357,7 @@ def _get_output(
     header_path: Path,
     code: str | None,
     include_dirs: list[str] | None = None,
+    context: PipelineContext | None = None,
 ) -> tuple[str, bool]:
     """Resolve output from cache or by running the writer.
 
@@ -391,7 +392,16 @@ def _get_output(
 
     if output is None:
         _populate_matched_defines(writer_inst, header_path, code, include_dirs=include_dirs)
-        output = writer_inst.write(header)
+        if context is not None:
+            disp = HookDispatcher()
+            override_hooks = [h for h in disp._get_hooks("write_output", context) if h.priority > Priority.STANDARD]
+            for h in override_hooks:
+                res = h.func(header, context=context, **writer_options)
+                if res is not None:
+                    output = res
+                    break
+        if output is None:
+            output = writer_inst.write(header)
 
         if effective_output_cache:
             assert resolved_cache_dir is not None
@@ -692,6 +702,7 @@ def generate(
         header_path=resolved_path,
         code=code,
         include_dirs=include_dirs,
+        context=ctx,
     )
 
     if output_path is not None:

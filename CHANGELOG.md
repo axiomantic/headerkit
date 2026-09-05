@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pipeline and registry wiring: added backend alias normalization (`treesitter` and `tree_sitter` to `tree-sitter`) across `get_backend()` and `is_backend_available()`; wired custom override `@hook("write_output")` execution into `generate()`; executed `transform_unit` hooks during `scaffold()`; forwarded CLI `--writer-opt` values to `ScaffoldOptions`; and completed `supported_options` declarations across Mojo, Ctypes, Cffi, Cython, and Nim writers.
 - `CShimWriter`: rejected non-const `std::string&` and `std::string_view&` references from automatic C-string flattening, avoiding invalid C++ compilation when binding temporary rvalues to mutable references, and preserving opaque handle type safety.
 - `CShimWriter`: fixed base class resolution in multiple inheritance flattening and upcast generation by tracking classes by fully-qualified name and scoped namespace lookup, preventing collisions between identical short class names across namespaces.
 - Writer options type coercion: implemented `WriterOption.coerce` and `coerce_writer_options` in `BaseWriter`, `get_writer()`, and CLI `--writer-opt` parsing, properly coercing string inputs into declared types (e.g. `bool`, `int`, `float`).

@@ -1250,6 +1250,12 @@ class CythonWriter(BaseWriter):
             default="both",
             choices=("both", "tripwire", "unit", "none"),
         ),
+        WriterOption(
+            name="stub_cimport_prefix",
+            description="Package prefix for Cython stub cimports",
+            default="headerkit.stubs",
+            type=str,
+        ),
     )
 
     def __init__(self, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:

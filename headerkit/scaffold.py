@@ -216,6 +216,7 @@ def scaffold(
             ctx = context
 
     dispatcher = HookDispatcher()
+    unit = dispatcher.waterfall("transform_unit", unit, context=ctx)
     result = dispatcher.first_result("scaffold_project", unit, options, context=ctx)
     if isinstance(result, ProjectLayout):
         return result
@@ -251,6 +252,7 @@ def prompt_scaffold_options(
             package_name=pkg_name,
             target_language=target_lang,
             layout=layout,
+            options=dict(opts.options),
             test_type=test_type,
             test_runner=opts.test_runner,
             interactive=True,

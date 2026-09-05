@@ -612,11 +612,17 @@ def main(argv: list[str] | None = None) -> int:
             pkg_name = pkg_name_arg or (Path(spec.output_template).name if spec.output_template else first_path.stem)
             target_dir = Path(spec.output_template) if spec.output_template else Path(pkg_name)
 
+            scaffold_wopts: dict[str, object] = {}
+            if spec.options:
+                for key, values in spec.options.items():
+                    scaffold_wopts[key] = values[0] if len(values) == 1 else values
+
             defaults = ScaffoldOptions(
                 package_name=pkg_name,
                 target_language=spec.name,
                 layout=layout_mode or "package",
                 test_type=test_type,
+                options=scaffold_wopts,
             )
             scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
             project_layout = scaffold(unit, scaffold_opts)

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from headerkit.backends import get_backend, list_backends
@@ -168,3 +171,41 @@ class TestHookRegistryMigration:
     def test_unknown_writer_raises_value_error(self):
         with pytest.raises(ValueError, match="Unknown writer: 'nonexistent'"):
             get_writer("nonexistent")
+
+    def test_project_priority_overrides_generate_output(self, tmp_path: Path):
+        from headerkit._generate import generate
+
+        @hook("write_output", writer="ctypes", priority=Priority.PROJECT)
+        def custom_output(unit: SourceUnit, context: PipelineContext, **kwargs: Any) -> str:
+            _ = (context, kwargs)
+            return f"# CUSTOM HOOK GENERATED {unit.path}"
+
+        header_file = tmp_path / "sample.h"
+        header_file.write_text("int foo(void);")
+        (tmp_path / ".git").mkdir()
+
+        out = generate(
+            header_path=header_file,
+            writer_name="ctypes",
+            no_cache=True,
+        )
+        assert f"# CUSTOM HOOK GENERATED {header_file}" in out
+
+    def test_scaffold_runs_transform_unit_hook(self):
+        from headerkit.scaffold import ScaffoldOptions, scaffold
+
+        @hook("transform_unit", priority=Priority.PROJECT)
+        def add_custom_decl(unit: SourceUnit, context: PipelineContext) -> SourceUnit:
+            _ = context
+            return SourceUnit(
+                path=unit.path,
+                declarations=list(unit.declarations)
+                + [Function(name="scaffold_injected_func", return_type=CType("void"), parameters=[])],
+            )
+
+        unit = SourceUnit(path="test.h", declarations=[])
+        opts = ScaffoldOptions(package_name="testpkg", target_language="ctypes", layout="package")
+        layout = scaffold(unit, opts)
+        tripwire = layout.get_file("tests/test_tripwire.py")
+        assert tripwire is not None
+        assert "scaffold_injected_func" in tripwire.content

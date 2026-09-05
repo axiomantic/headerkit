@@ -420,6 +420,12 @@ class CtypesWriter(BaseWriter):
             default="both",
             choices=("both", "tripwire", "unit", "none"),
         ),
+        WriterOption(
+            name="lib_name",
+            description="Variable name for loaded library instance",
+            default="_lib",
+            type=str,
+        ),
     )
 
     def __init__(self, lib_name: str = "_lib") -> None:
