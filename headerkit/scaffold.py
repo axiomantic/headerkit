@@ -126,17 +126,6 @@ class StdlibScaffolder(BYOScaffolder):
         if hasattr(writer, "write_layout"):
             return writer.write_layout(unit, options)
 
-        if options.layout == "file":
-            return self._scaffold_single_file(unit, options, writer_target)
-
-        target = options.target_language.lower()
-        if target == "nim":
-            return self._scaffold_nim(unit, options)
-        elif target == "mojo":
-            return self._scaffold_mojo(unit, options)
-        elif target in ("ctypes", "cffi", "python"):
-            return self._scaffold_python(unit, options)
-
         return self._scaffold_single_file(unit, options, writer_target)
 
     def _scaffold_single_file(
@@ -153,25 +142,6 @@ class StdlibScaffolder(BYOScaffolder):
         ext = self._EXT_MAP.get(target.lower(), ".txt")
         filename = f"{options.package_name}{ext}"
         return ProjectLayout(files=[OutputFile(path=filename, content=rendered)])
-
-    def _extract_fn_names(self, unit: SourceUnit | Header) -> list[str]:
-        return extract_function_names(unit)
-
-    def _scaffold_nim(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
-        from headerkit.writers import get_writer
-
-        return get_writer("nim").write_layout(unit, options)
-
-    def _scaffold_mojo(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
-        from headerkit.writers import get_writer
-
-        return get_writer("mojo").write_layout(unit, options)
-
-    def _scaffold_python(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> ProjectLayout:
-        from headerkit.writers import get_writer
-
-        target = "cffi" if options.target_language.lower() == "cffi" else "ctypes"
-        return get_writer(target).write_layout(unit, options)
 
 
 @hook("scaffold_project", priority=Priority.STANDARD)

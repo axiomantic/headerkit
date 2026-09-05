@@ -2687,7 +2687,7 @@ class LibclangBackend:
         return header
 
 
-@hook("parse_unit", backend="libclang", language="c*", priority=Priority.STANDARD)
+@hook("parse_unit", backend="libclang", priority=Priority.STANDARD)
 def _libclang_parse_hook(
     code: str,
     filename: str = "input.h",
