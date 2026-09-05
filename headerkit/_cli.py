@@ -19,7 +19,7 @@ from headerkit._config import (
 from headerkit._generate import batch_generate, generate
 from headerkit.backends import _load_backend_plugins
 from headerkit.hooks import _load_hook_plugins
-from headerkit.writers import _load_writer_plugins
+from headerkit.writers import _load_writer_plugins, coerce_writer_options
 
 
 def parse_writer_options(
@@ -29,7 +29,8 @@ def parse_writer_options(
     """Parse ``--writer-opt WRITER:KEY=VALUE`` arguments into a nested dict.
 
     Aggregates duplicate keys into lists and collapses single-element lists
-    to plain strings.
+    to plain strings. Values are coerced according to each writer's
+    ``supported_options`` declarations.
 
     :param raw_opts: Raw ``--writer-opt`` values from argparse.
     :param command_name: Program name for error messages.
@@ -52,7 +53,10 @@ def parse_writer_options(
 
         options_lists.setdefault(writer_name, {}).setdefault(key, []).append(value)
 
-    return {w_name: {k: v[0] if len(v) == 1 else v for k, v in opts.items()} for w_name, opts in options_lists.items()}
+    raw_dict = {
+        w_name: {k: v[0] if len(v) == 1 else v for k, v in opts.items()} for w_name, opts in options_lists.items()
+    }
+    return {w_name: coerce_writer_options(w_name, opts) for w_name, opts in raw_dict.items()}
 
 
 def _env_bool(name: str, *, default: bool = False) -> bool:
@@ -644,7 +648,7 @@ def main(argv: list[str] | None = None) -> int:
                 wopts: dict[str, object] = {}
                 for key, values in spec.options.items():
                     wopts[key] = values[0] if len(values) == 1 else values
-                batch_writer_options[spec.name] = wopts
+                batch_writer_options[spec.name] = coerce_writer_options(spec.name, wopts)
 
         # Build header_overrides from config
         batch_header_overrides: dict[str, dict[str, object]] | None = None
@@ -714,6 +718,7 @@ def main(argv: list[str] | None = None) -> int:
         writer_kwargs: dict[str, object] = {}
         for key, values in spec.options.items():
             writer_kwargs[key] = values[0] if len(values) == 1 else values
+        writer_kwargs = coerce_writer_options(spec.name, writer_kwargs)
 
         if spec.name == "diff" and "baseline" not in writer_kwargs:
             print(

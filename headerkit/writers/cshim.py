@@ -7,6 +7,7 @@ guards and opaque handles (``typedef struct Foo Foo;``).
 
 from __future__ import annotations
 
+import collections
 import re
 import textwrap
 from typing import ClassVar
@@ -97,9 +98,15 @@ def _sanitize_name(name: str, num_params: int | None = None) -> str:
 
 
 def _is_std_string(t: TypeExpr) -> bool:
-    """Check if type expression represents std::string."""
+    """Check if type expression represents by-value or const-ref std::string."""
     if isinstance(t, Reference):
-        t = t.target
+        target = t.target
+        if isinstance(target, CType):
+            if "const" not in target.qualifiers and not target.name.strip().startswith("const "):
+                return False
+            t = target
+        else:
+            return False
     if isinstance(t, CType):
         raw = t.name.strip()
         if raw.startswith("const "):
@@ -109,9 +116,15 @@ def _is_std_string(t: TypeExpr) -> bool:
 
 
 def _is_std_string_view(t: TypeExpr) -> bool:
-    """Check if type expression represents std::string_view."""
+    """Check if type expression represents by-value or const-ref std::string_view."""
     if isinstance(t, Reference):
-        t = t.target
+        target = t.target
+        if isinstance(target, CType):
+            if "const" not in target.qualifiers and not target.name.strip().startswith("const "):
+                return False
+            t = target
+        else:
+            return False
     if isinstance(t, CType):
         raw = t.name.strip()
         if raw.startswith("const "):
@@ -154,9 +167,11 @@ def _type_to_c(t: TypeExpr) -> str:
     elif isinstance(t, Pointer):
         return f"{_type_to_c(t.pointee)}*"
     elif isinstance(t, Reference):
-        # In C-ABI, references become pointers unless mapped to C strings
-        if _is_std_string(t.target) or _is_std_string_view(t.target):
-            return "const char*"
+        # In C-ABI, references become pointers
+        target = t.target
+        if isinstance(target, CType) and (_is_std_string(target) or _is_std_string_view(target)):
+            name = _sanitize_name(target.name)
+            return f"{name}*"
         return f"{_type_to_c(t.target)}*"
     elif isinstance(t, Array):
         size_str = str(t.size) if t.size is not None else ""
@@ -262,12 +277,32 @@ class CShimWriter(BaseWriter):
 
         # 1. Forward declare opaque handles for classes
         classes = [d for d in header.declarations if isinstance(d, Struct) and (d.is_cppclass or d.methods)]
-        classes_by_name: dict[str, Struct] = {}
+        classes_by_full_name: dict[str, Struct] = {}
+        classes_by_short_name: dict[str, list[Struct]] = collections.defaultdict(list)
         for cls in classes:
             if cls.name:
-                classes_by_name[cls.name] = cls
-                if cls.namespace:
-                    classes_by_name[f"{cls.namespace}::{cls.name}"] = cls
+                classes_by_short_name[cls.name].append(cls)
+                full_name = f"{cls.namespace}::{cls.name}" if cls.namespace else cls.name
+                classes_by_full_name[full_name] = cls
+
+        def _resolve_base_class(base_name: str, enclosing_ns: str | None) -> Struct | None:
+            # 1. Exact fully-qualified match
+            if base_name in classes_by_full_name:
+                return classes_by_full_name[base_name]
+            # 2. Enclosing namespace prefix
+            if enclosing_ns:
+                prefixed = f"{enclosing_ns}::{base_name}"
+                if prefixed in classes_by_full_name:
+                    return classes_by_full_name[prefixed]
+            # 3. Unambiguous short name
+            candidates = classes_by_short_name.get(base_name, [])
+            if len(candidates) == 1:
+                return candidates[0]
+            # 4. Ambiguous short name: match same enclosing namespace
+            for cand in candidates:
+                if cand.namespace == enclosing_ns:
+                    return cand
+            return None
 
         if classes:
             lines.append("/* Opaque Handle Types */")
@@ -283,7 +318,7 @@ class CShimWriter(BaseWriter):
             for b in s.bases:
                 if b.access in ("private", "protected"):
                     continue
-                base_cls = classes_by_name.get(b.name)
+                base_cls = _resolve_base_class(b.name, s.namespace)
                 if base_cls:
                     for m in base_cls.methods:
                         if m.access in ("private", "protected"):
@@ -366,9 +401,16 @@ class CShimWriter(BaseWriter):
 
                 # Upcast helpers for base classes
                 for base in cls.bases:
-                    if base.access in ("private", "protected"):
+                    if base.access in ("private", "protected") or not base.name:
                         continue
-                    safe_base = _sanitize_name(base.name)
+                    base_cls = _resolve_base_class(base.name, cls.namespace)
+                    if base_cls and base_cls.name:
+                        base_full_name = (
+                            f"{base_cls.namespace}::{base_cls.name}" if base_cls.namespace else base_cls.name
+                        )
+                    else:
+                        base_full_name = base.name
+                    safe_base = _sanitize_name(base_full_name)
                     upcast_fn = f"{safe_cls_name}_as_{safe_base}"
                     proto = f"{safe_base}_t* {upcast_fn}({safe_cls_name}_t* self);"
                     lines.append(proto)
@@ -377,7 +419,7 @@ class CShimWriter(BaseWriter):
                     upcast_body = textwrap.dedent(f"""\
                         {safe_base}_t* {upcast_fn}({safe_cls_name}_t* self) {{
                             if (!self) return nullptr;
-                            return reinterpret_cast<{safe_base}_t*>(static_cast<{base.name}*>(reinterpret_cast<{cls_full_name}*>(self)));
+                            return reinterpret_cast<{safe_base}_t*>(static_cast<{base_full_name}*>(reinterpret_cast<{cls_full_name}*>(self)));
                         }}
                     """)
                     cpp_lines.append(upcast_body)

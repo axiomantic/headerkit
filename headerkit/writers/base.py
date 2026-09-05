@@ -19,6 +19,54 @@ class WriterOption:
     choices: tuple[str, ...] | None = None
     type: type = str
 
+    def coerce(self, val: Any) -> Any:
+        """Coerce a raw value (e.g. from CLI string) to this option's expected type."""
+        if val is None:
+            return None
+        if self.type is bool:
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                lower = val.strip().lower()
+                if lower in ("true", "1", "yes", "on"):
+                    return True
+                elif lower in ("false", "0", "no", "off"):
+                    return False
+                raise ValueError(f"Cannot coerce {val!r} to bool for option {self.name!r} (expected 'true'/'false')")
+            return bool(val)
+        if self.type is int:
+            if isinstance(val, int) and not isinstance(val, bool):
+                return val
+            return int(val)
+        if self.type is float:
+            if isinstance(val, int | float) and not isinstance(val, bool):
+                return float(val)
+            return float(val)
+        if self.type is str:
+            return str(val) if not isinstance(val, str) else val
+        return self.type(val)
+
+
+def coerce_writer_options(
+    options: dict[str, Any],
+    supported_options: tuple[WriterOption, ...] | list[WriterOption],
+) -> dict[str, Any]:
+    """Coerce option values using the given supported WriterOption specifications."""
+    if not supported_options:
+        return dict(options)
+    specs = {opt.name: opt for opt in supported_options}
+    result: dict[str, Any] = {}
+    for k, v in options.items():
+        if k in specs:
+            opt = specs[k]
+            if isinstance(v, list):
+                result[k] = [opt.coerce(elem) for elem in v]
+            else:
+                result[k] = opt.coerce(v)
+        else:
+            result[k] = v
+    return result
+
 
 class BaseWriter:
     """Base class providing unified layout generation for all output writers."""
@@ -42,6 +90,9 @@ class BaseWriter:
                 f"Writer '{self.name}' does not support layout '{opts.layout}'. "
                 f"Supported layouts: {list(self.supported_layouts)}"
             )
+
+        if self.supported_options and opts.options:
+            opts.options = coerce_writer_options(opts.options, self.supported_options)
 
         if opts.layout == "file":
             return self._write_single_file_layout(unit, opts)

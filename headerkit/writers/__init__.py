@@ -46,12 +46,19 @@ from typing import Any, Protocol, runtime_checkable
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
 from headerkit.ir import Header, SourceUnit
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter, WriterOption
+from headerkit.writers.base import (
+    BaseWriter,
+    WriterOption,
+)
+from headerkit.writers.base import (
+    coerce_writer_options as _coerce_writer_options_helper,
+)
 
 __all__ = [
     "BaseWriter",
     "WriterBackend",
     "WriterOption",
+    "coerce_writer_options",
     "get_default_writer",
     "get_writer",
     "get_writer_info",
@@ -269,6 +276,21 @@ def list_writer_options(name: str) -> tuple[WriterOption, ...]:
     return tuple(opts)
 
 
+def coerce_writer_options(name: str, options: dict[str, Any]) -> dict[str, Any]:
+    """Coerce option values for the named writer using its registered WriterOption definitions.
+
+    :param name: Writer name to look up supported options for.
+    :param options: Dictionary of option name to raw value.
+    :returns: Dictionary with option values coerced to their declared types.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        return dict(options)
+    writer_class = _WRITER_REGISTRY[name]
+    opts = getattr(writer_class, "supported_options", ())
+    return _coerce_writer_options_helper(options, tuple(opts))
+
+
 def get_writer_info() -> list[dict[str, str | bool]]:
     """Get information about all known writers.
 
@@ -320,13 +342,15 @@ def get_writer(name: str | None = None, **kwargs: object) -> WriterBackend:
             raise ValueError("No writers available")
         name = _DEFAULT_WRITER
 
-    ctx = PipelineContext(writer=name, options=dict(kwargs))
-    writer = HookDispatcher().first_result("get_writer", context=ctx, **kwargs)
+    coerced_kwargs = coerce_writer_options(name, dict(kwargs)) if kwargs else kwargs
+
+    ctx = PipelineContext(writer=name, options=dict(coerced_kwargs))
+    writer = HookDispatcher().first_result("get_writer", context=ctx, **coerced_kwargs)
     if isinstance(writer, WriterBackend):
         return writer
 
     if name in _WRITER_REGISTRY:
-        return _WRITER_REGISTRY[name](**kwargs)
+        return _WRITER_REGISTRY[name](**coerced_kwargs)
 
     available = ", ".join(list_writers()) or "(none)"
     raise ValueError(f"Unknown writer: {name!r}. Available: {available}")

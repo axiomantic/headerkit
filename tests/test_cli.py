@@ -19,6 +19,7 @@ from headerkit._cli import (
     _parse_output_specs,
     _parse_writer_specs,
     main,
+    parse_writer_options,
 )
 from headerkit.ir import Header
 
@@ -199,6 +200,14 @@ class TestParseWriterSpecs:
         assert specs[0].options == {}
         captured = capsys.readouterr()
         assert captured.err != "", "Expected a warning on stderr for orphaned --writer-opt"
+
+    def test_parse_writer_options_coerces_types(self) -> None:
+        """parse_writer_options must coerce values according to writer options (BOT-C3)."""
+        opts = parse_writer_options(["json:indent=4", "cshim:catch_exceptions=true"])
+        assert opts == {
+            "json": {"indent": 4},
+            "cshim": {"catch_exceptions": True},
+        }
 
 
 # =============================================================================

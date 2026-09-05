@@ -829,3 +829,61 @@ def test_cshim_private_and_protected_base_inheritance_filtered() -> None:
     # Private base methods and upcasts must NOT be present on Derived
     assert "Machine_as_InternalEngine" not in out
     assert "Machine_internal_step" not in out
+
+
+def test_cshim_non_const_string_ref_not_mapped_to_const_char_ptr() -> None:
+    """Non-const std::string& must not be converted to const char* (BOT-C1)."""
+    fn_mut = Function(
+        name="mutate_str",
+        return_type=CType("void"),
+        parameters=[Parameter("s", Reference(CType("std::string")))],
+    )
+    fn_const = Function(
+        name="read_str",
+        return_type=CType("void"),
+        parameters=[Parameter("s", Reference(CType("const std::string")))],
+    )
+    h = Header(path="str.h", declarations=[fn_mut, fn_const])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Const ref maps to const char*
+    assert "void read_str(const char* s);" in out
+    # Non-const ref does NOT map to const char*, preserving type integrity
+    assert "void mutate_str(const char* s);" not in out
+    assert "std_string* s" in out or "string* s" in out
+
+
+def test_cshim_base_class_namespace_resolution_no_collision() -> None:
+    """Base classes with identical short names in different namespaces must resolve correctly (BOT-C2)."""
+    from headerkit.ir import BaseSpecifier
+
+    base_a = Struct(
+        name="Widget",
+        namespace="gui_a",
+        is_cppclass=True,
+        methods=[Function(name="draw_a", return_type=CType("void"), parameters=[])],
+    )
+    base_b = Struct(
+        name="Widget",
+        namespace="gui_b",
+        is_cppclass=True,
+        methods=[Function(name="draw_b", return_type=CType("void"), parameters=[])],
+    )
+    derived_b = Struct(
+        name="Button",
+        namespace="gui_b",
+        is_cppclass=True,
+        bases=[BaseSpecifier(name="Widget", access="public")],
+        methods=[Function(name="click", return_type=CType("void"), parameters=[])],
+    )
+    h = Header(path="widgets.h", declarations=[base_a, base_b, derived_b])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Button in gui_b must resolve to gui_b::Widget, not gui_a::Widget
+    assert "gui_b_Widget_t* gui_b_Button_as_gui_b_Widget(gui_b_Button_t* self);" in out
+    assert "gui_a_Widget_t* gui_b_Button_as_gui_a_Widget" not in out
+    assert "static_cast<gui_b::Widget*>" in out
+    assert "void gui_b_Button_draw_b(gui_b_Button_t* self);" in out
+    assert "void gui_b_Button_draw_a" not in out

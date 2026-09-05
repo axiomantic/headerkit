@@ -72,6 +72,7 @@ from headerkit.writers import (
     BaseWriter,
     WriterBackend,
     WriterOption,
+    coerce_writer_options,
     get_default_writer,
     get_writer,
     get_writer_info,
@@ -119,6 +120,7 @@ __all__ = [
     "BaseWriter",
     "WriterOption",
     # Writer API
+    "coerce_writer_options",
     "get_default_writer",
     "get_writer",
     "get_writer_info",

@@ -6,7 +6,14 @@ import pytest
 
 from headerkit.ir import CType, Function, Header, Parameter
 from headerkit.scaffold import ProjectLayout, ScaffoldOptions, scaffold
-from headerkit.writers import get_writer, list_writer_layouts, list_writer_options, list_writers
+from headerkit.writers import (
+    WriterOption,
+    coerce_writer_options,
+    get_writer,
+    list_writer_layouts,
+    list_writer_options,
+    list_writers,
+)
 
 
 @pytest.fixture
@@ -314,6 +321,43 @@ class TestUnifiedWriterScaffolding:
 
         with pytest.raises(ValueError, match="Unknown writer: 'unknown_writer'"):
             list_writer_options("unknown_writer")
+
+    def test_writer_option_coercion_types(self) -> None:
+        """WriterOption.coerce must properly cast values according to declared type."""
+        opt_bool = WriterOption("flag", "A boolean flag", default=False, type=bool)
+        assert opt_bool.coerce("true") is True
+        assert opt_bool.coerce("True") is True
+        assert opt_bool.coerce("1") is True
+        assert opt_bool.coerce("yes") is True
+        assert opt_bool.coerce("false") is False
+        assert opt_bool.coerce("0") is False
+        assert opt_bool.coerce("no") is False
+        assert opt_bool.coerce(True) is True
+        with pytest.raises(ValueError, match="Cannot coerce 'invalid' to bool"):
+            opt_bool.coerce("invalid")
+
+        opt_int = WriterOption("count", "An integer count", default=0, type=int)
+        assert opt_int.coerce("10") == 10
+        assert opt_int.coerce(42) == 42
+
+        opt_float = WriterOption("ratio", "A float ratio", default=1.0, type=float)
+        assert opt_float.coerce("3.14") == 3.14
+        assert opt_float.coerce(2.5) == 2.5
+
+    def test_coerce_writer_options_and_get_writer(self) -> None:
+        """coerce_writer_options and get_writer must cast options for registered writers."""
+        coerced_json = coerce_writer_options("json", {"indent": "4"})
+        assert coerced_json == {"indent": 4}
+
+        coerced_cshim = coerce_writer_options("cshim", {"catch_exceptions": "true"})
+        assert coerced_cshim == {"catch_exceptions": True}
+
+        # get_writer must apply coercion to instantiated writers
+        writer_json = get_writer("json", indent="4")
+        assert writer_json._indent == 4
+
+        writer_cshim = get_writer("cshim", catch_exceptions="true")
+        assert writer_cshim.catch_exceptions is True
 
     def test_unsupported_layout_raises_value_error(self, sample_header: Header) -> None:
         """Requesting an unsupported layout must raise ValueError with available choices."""

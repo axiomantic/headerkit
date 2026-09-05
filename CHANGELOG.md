@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `CShimWriter`: rejected non-const `std::string&` and `std::string_view&` references from automatic C-string flattening, avoiding invalid C++ compilation when binding temporary rvalues to mutable references, and preserving opaque handle type safety.
+- `CShimWriter`: fixed base class resolution in multiple inheritance flattening and upcast generation by tracking classes by fully-qualified name and scoped namespace lookup, preventing collisions between identical short class names across namespaces.
+- Writer options type coercion: implemented `WriterOption.coerce` and `coerce_writer_options` in `BaseWriter`, `get_writer()`, and CLI `--writer-opt` parsing, properly coercing string inputs into declared types (e.g. `bool`, `int`, `float`).
 - `CShimWriter`: replaced tautological `assert((void*)fn != NULL)` in generated C test harnesses with cross-platform runtime dynamic symbol resolution (`dlopen`/`dlsym` on POSIX, `GetProcAddress` on Windows) linked against `${CMAKE_DL_LIBS}`, eliminating green-mirage compiler-optimized assertions.
 - `MojoWriter`: generated tripwire tests now compute exact Mojo FFI parameter and return type signatures for each foreign function symbol rather than hardcoding `fn() -> None`.
 - Layout delegation: removed redundant `write()` method overrides in `MojoWriter`, `CShimWriter`, and `NimWriter`, properly inheriting `BaseWriter.write()` delegation to `write_layout(layout="file")` to satisfy the Zero-Dual-System Rule.
