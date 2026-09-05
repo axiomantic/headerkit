@@ -6,9 +6,9 @@
 [![Python](https://img.shields.io/pypi/pyversions/headerkit)](https://pypi.org/project/headerkit/)
 [![License](https://img.shields.io/github/license/axiomantic/headerkit)](https://github.com/axiomantic/headerkit/blob/main/LICENSE)
 
-> **The universal interop & bindings toolkit.**  
-> **C/C++ in → Python (ctypes, CFFI, Cython), Mojo, Nim, LuaJIT, & C shims out.**  
-> **Scaffolds turnkey packages with tests. Easily extended to any source or target language. Great documentation. For humans and LLMs.**
+> **Need sturdy, upgradeable bindings? We got you.**  
+> The universal interop & bindings toolkit: C/C++ in → Python, Mojo, Nim, LuaJIT, & C shims out.  
+> Scaffolds packages, not just files. Easily extended for any input language or output project type. For humans and LLMs.
 
 HeaderKit parses native C and C++ headers into a normalized intermediate representation (IR). From that single IR, it generates foreign language bindings, scaffolds turnkey packages with verification tests, tracks breaking API diffs, and compresses headers for LLM prompt windows.
 
