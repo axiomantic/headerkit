@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-09-05
+
+### Added
+
+- `ParserBackend.parse` and `LibclangBackend.parse` accept a keyword-only `whitelist` parameter naming files whose declarations are retained alongside the main file's. Previously every declaration reaching the translation unit through `#include` was discarded before any caller-side filter could see it, so whitelisting an included header yielded an empty body. Absolute entries are used as-is; relative entries (including a bare basename) resolve against the directory of the parsed file, then `include_dirs`, then the current working directory. The parameter defaults to `None`, so existing backends remain conformant.
+
+### Fixed
+
+- `LibclangBackend`: anonymous struct, union and enum declarations no longer leak clang's internal `struct (unnamed at file:line:col)` spelling into the IR. An anonymous tag is now named after the declarator that uses it (`struct { int a; } v;` becomes `_v_s`), falling back to a per-translation-unit counter slug (`_anon_struct_1`) when nothing references it, so output stays reproducible.
+- `PxdWriter`: function pointer variables emitted an abstract declarator with the name appended (`void (*)(int, char) my_func`), which is not valid Cython. They are now emitted as a named `ctypedef` plus an alias declaration (`ctypedef void (*_my_func_ft)(int a, char b)` / `_my_func_ft my_func`).
+- `LibclangBackend`: a named member whose type is an anonymous struct or union (`struct { int v; int g; } css;`) is no longer flattened into its parent as if it were a C11 anonymous member. Such a member has a declarator, so C11 6.7.2.1p13 does not apply; flattening dropped the member entirely, leaving `outer.css` unreachable, and emitted a bodyless `cdef struct` for its type. The anonymous type now gets its own bodied declaration named for the enclosing record (`_outer_css_s`), so two records may each hold a `css`. Genuine C11 anonymous members (`struct { int b; };` with no declarator) still flatten.
+- `PxdWriter`: a function pointer variable's generated `ctypedef` and its alias declaration are now separated by a blank line, matching how the writer separates every other pair of declarations.
+- `LibclangBackend`: pointers to unprototyped functions (`TypeKind.FUNCTIONNOPROTO`, e.g. `int (*f)()`) were converted to opaque types carrying raw clang spelling instead of function pointers.
+- `LibclangBackend`: function pointer parameter names are recovered from the declaring cursor's `PARM_DECL` children for variables, struct fields and function parameters. Clang's function *type* carries no argument names, so these previously rendered as `(int, char)`.
+- `LibclangBackend` / `PxdWriter`: C11 anonymous nested struct and union members are now captured on `Field.anonymous_struct` and flattened into the enclosing record by the Cython writer, instead of being dropped.
+- `LibclangBackend`: enums declared inside a struct or union body are now emitted as top-level declarations, so fields referring to them no longer name an undeclared type. A named field whose type is an anonymous enum (`enum { X } e;`) is no longer misclassified as a transparent anonymous member.
+- `PxdWriter`: removed the guard that silently discarded any enum whose name contained `(unnamed at`, which deleted top-level anonymous enums entirely.
+- `PxdWriter`: a struct whose every member is filtered out now emits `pass` rather than a suite header with no body, which Cython rejects.
+- `LibclangBackend`: tag-less typedef'd enums (`typedef enum { ... } Name;`) now set `Enum.is_typedef`, so the Cython writer emits `ctypedef enum Name` instead of `cdef enum Name`. The old output made Cython generate `enum Name x;`, which fails to compile against the header with "tentative definition has type 'enum Name' that is never completed". Tagged enums (`typedef enum Tag { ... } Tag;`) keep `cdef enum`, and C++ enums are unaffected.
+- `CffiWriter`: enum/typedef pairs are combined into the tag-less `typedef enum { ... } Name;` form only when the enum really has no tag. A tagged `typedef enum Tag { ... } Tag;` now keeps its `enum Tag` tag instead of having it silently dropped.
+- `LibclangBackend`: `project_prefixes` are matched against absolute, symlink-resolved paths instead of as substrings of clang's raw location spelling. Clang reports included files by their relative include path (e.g. `./foo.h`), so passing an absolute prefix previously never matched.
+- `LibclangBackend`: the redundant self-referential `Typedef` produced alongside a `typedef enum` is now dropped during declaration deduplication, matching the existing `typedef struct` handling.
+- `LibclangBackend`: `const` and `volatile` qualifiers are no longer dropped from pointers, elaborated types, records, enums and typedefs (`char* const`, `const my_struct*`, `const my_union* const`). The deliberate stripping of `_Atomic`, `__restrict` and `_Noreturn` is unchanged.
+- `TreeSitterBackend`: pointee `const` is preserved in every declaration position -- struct and union fields, function parameters, return types, typedefs, global variables and type aliases. `const char*` previously parsed as `char*`, silently dropping the qualifier from generated bindings.
+- `TreeSitterBackend`: pointer-level `const` on a function parameter (`char* const p`) is preserved instead of being discarded.
+- `TreeSitterBackend`: a `whitelist` naming a file other than the one being parsed now raises `UserWarning` instead of being discarded silently, because this backend does not follow `#include` directives and cannot honor one. Entries that all resolve to the parsed file itself are already satisfied and warn nothing; resolution follows the same rule as the libclang backend.
+- `PxdWriter`: synthesized forward declarations now carry the keyword-escape cname (`cdef struct class_ "class"`). Without it the generated C referenced a nonexistent `struct class_`.
+- `PxdWriter`: a record referenced before its definition is emitted now gets a forward declaration, matching the reference output.
+- `PxdWriter`: a keyword-named typedef no longer emits a bogus self-referential `ctypedef with_ with_ "with"`; the circular-typedef check now compares the bare escaped name rather than the cname-annotated spelling.
+- `Pointer.__str__`: qualifiers on the pointer itself are now rendered after the `*` (`int* const`) instead of before the base type (`const int*`), which spelled a const pointer as a pointer to const. Nested pointers render each level's qualifiers at that level, so `Pointer(Pointer(CType("char", ["const"]), ["const"]), ["const"])` is `const char* const* const` rather than `const const const char**`. Pointee qualifiers are unaffected.
+
 ## [0.37.0] - 2026-09-05
 
 ### Added
