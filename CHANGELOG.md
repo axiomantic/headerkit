@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `CShimWriter`: replaced tautological `assert((void*)fn != NULL)` in generated C test harnesses with cross-platform runtime dynamic symbol resolution (`dlopen`/`dlsym` on POSIX, `GetProcAddress` on Windows) linked against `${CMAKE_DL_LIBS}`, eliminating green-mirage compiler-optimized assertions.
+- `MojoWriter`: generated tripwire tests now compute exact Mojo FFI parameter and return type signatures for each foreign function symbol rather than hardcoding `fn() -> None`.
+- Layout delegation: removed redundant `write()` method overrides in `MojoWriter`, `CShimWriter`, and `NimWriter`, properly inheriting `BaseWriter.write()` delegation to `write_layout(layout="file")` to satisfy the Zero-Dual-System Rule.
 - `TreeSitterBackend`: fixed extraction of C variadic function declarations (`variadic_parameter` node type in tree-sitter C grammar), top-level variable declarations (pointers, multi-dimensional arrays, sized primitives, and multiple declarators per statement), struct callback function pointer fields, bitfield widths, and function pointer typedefs.
 - Memory safety in `CShimWriter`: prevented dangling pointer / use-after-free when returning `std::string` by value by managing lifetime via thread-local C-string storage, and fixed `std::string_view` returns to avoid invalid `.c_str()` member invocations.
 - Missing standard headers in `CShimWriter`: added `#include <stddef.h>` to generated C headers when `size_t` is present, and added `#include <vector>`, `<string>`, and `<cstddef>` to generated C++ implementation shims.

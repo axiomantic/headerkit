@@ -555,10 +555,6 @@ class CShimWriter(BaseWriter):
 
         return "\n".join(lines)
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to C-ABI shim source code."""
-        return self._render(header)
-
     def _write_package_layout(
         self,
         unit: SourceUnit | Header,
@@ -613,7 +609,7 @@ class CShimWriter(BaseWriter):
 
                 enable_testing()
                 add_executable(test_{pkg}_cshim tests/test_cshim.c)
-                target_link_libraries(test_{pkg}_cshim PRIVATE {pkg}_cshim)
+                target_link_libraries(test_{pkg}_cshim PRIVATE {pkg}_cshim ${{CMAKE_DL_LIBS}})
                 add_test(NAME test_{pkg}_cshim COMMAND test_{pkg}_cshim)
             """)
         else:
@@ -640,17 +636,37 @@ class CShimWriter(BaseWriter):
         ]
         if test_type != "none":
             checks = (
-                "\n".join(f"    assert((void*){fn} != NULL);" for fn in fn_names[:10])
+                "\n".join(
+                    f'    assert(resolve_symbol("{fn}") != NULL && "Entry point \'{fn}\' missing from native library");'
+                    for fn in fn_names[:10]
+                )
                 if fn_names
                 else '    printf("Shim header included successfully\\n");'
             )
             test_c = textwrap.dedent(f"""\
                 #include <stdio.h>
+                #include <stdlib.h>
                 #include <assert.h>
                 #include "{pkg}_cshim.h"
 
+                #ifdef _WIN32
+                #include <windows.h>
+                static void* resolve_symbol(const char* name) {{
+                    HMODULE mod = GetModuleHandleA("{pkg}_cshim.dll");
+                    if (!mod) mod = GetModuleHandleA(NULL);
+                    return mod ? (void*)GetProcAddress(mod, name) : NULL;
+                }}
+                #else
+                #include <dlfcn.h>
+                static void* resolve_symbol(const char* name) {{
+                    void* handle = dlopen(NULL, RTLD_NOW);
+                    if (!handle) return NULL;
+                    return dlsym(handle, name);
+                }}
+                #endif
+
                 int main(void) {{
-                    printf("Testing {pkg} C-ABI shim...\\n");
+                    printf("Testing {pkg} C-ABI shim symbol resolution...\\n");
                 {checks}
                     return 0;
                 }}

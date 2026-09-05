@@ -28,7 +28,7 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import BaseWriter, WriterOption
 
 MOJO_KEYWORDS: set[str] = {
@@ -218,6 +218,53 @@ def _type_to_mojo(t: TypeExpr) -> str:
         ret_mojo = _type_to_mojo(t.return_type)
         return f"fn({params_str}) -> {ret_mojo}"
     return str(t)
+
+
+def _extract_function_signatures(unit: SourceUnit | Header) -> list[tuple[str, str]]:
+    """Extract symbol names and corresponding Mojo FFI function signatures."""
+    signatures: list[tuple[str, str]] = []
+
+    # 1. Free functions
+    free_fns = [d for d in getattr(unit, "declarations", []) if isinstance(d, Function) and d.name]
+    for fn in free_fns:
+        types_sig = ", ".join(_type_to_mojo(p.type) for p in fn.parameters)
+        ret_mojo = _type_to_mojo(fn.return_type)
+        signatures.append((fn.name, f"fn({types_sig}) -> {ret_mojo}"))
+
+    # 2. C++ Class Functions (constructors, destructors, methods)
+    classes = [d for d in getattr(unit, "declarations", []) if isinstance(d, Struct) and (d.is_cppclass or d.methods)]
+    for cls in classes:
+        if not cls.name:
+            continue
+        cls_full_name = f"{cls.namespace}::{cls.name}" if cls.namespace else cls.name
+        safe_cls_name = _sanitize_name(cls_full_name)
+
+        for idx, ctor in enumerate(cls.constructors):
+            fn_name = f"{safe_cls_name}_create" if idx == 0 else f"{safe_cls_name}_create_{idx}"
+            param_types = [_type_to_mojo(p.type) for p in ctor.parameters]
+            signatures.append((fn_name, f"fn({', '.join(param_types)}) -> UnsafePointer[NoneType]"))
+
+        if cls.destructor or cls.methods:
+            fn_dtor = f"{safe_cls_name}_destroy"
+            signatures.append((fn_dtor, "fn(UnsafePointer[NoneType]) -> None"))
+
+        for method in cls.methods:
+            if method.access in ("private", "protected"):
+                continue
+            m_safe = _sanitize_name(method.name)
+            fn_method_name = f"{safe_cls_name}_{m_safe}"
+            if fn_method_name == f"{safe_cls_name}_destroy":
+                fn_method_name = f"{safe_cls_name}_method_{m_safe}"
+
+            param_types = []
+            if not method.is_static:
+                param_types.append("UnsafePointer[NoneType]")
+            for p in method.parameters:
+                param_types.append(_type_to_mojo(p.type))
+            ret_m = _type_to_mojo(method.return_type)
+            signatures.append((fn_method_name, f"fn({', '.join(param_types)}) -> {ret_m}"))
+
+    return signatures
 
 
 class MojoWriter(BaseWriter):
@@ -533,10 +580,6 @@ class MojoWriter(BaseWriter):
 
         return "\n".join(lines).rstrip() + "\n"
 
-    def write(self, header: Header | SourceUnit) -> str:
-        """Convert header IR to a Mojo FFI binding file."""
-        return self._render(header)
-
     def _write_package_layout(
         self,
         unit: SourceUnit | Header,
@@ -545,7 +588,6 @@ class MojoWriter(BaseWriter):
         pkg = options.package_name
         test_type = options.get_option("test_type", "both")
         bindings_code = self._render(unit)
-        fn_names = extract_function_names(unit)
 
         files: list[OutputFile] = []
 
@@ -569,9 +611,8 @@ class MojoWriter(BaseWriter):
 
         # 4. Tests
         if test_type in ("tripwire", "both"):
-            tw_lines = []
-            for fn in fn_names:
-                tw_lines.append(f'    _ = handle.get_function[fn() -> None]("{fn}")')
+            signatures = _extract_function_signatures(unit)
+            tw_lines = [f'    _ = handle.get_function[{sig}]("{sym}")' for sym, sig in signatures]
             tw_body = "\n".join(tw_lines) if tw_lines else "    # Library opened successfully"
 
             tripwire = textwrap.dedent(f"""\

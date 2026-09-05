@@ -730,10 +730,6 @@ class NimWriter(BaseWriter):
         c_name = _escape_ident(c.name)
         return [f"{c_name}* = {c.value}"]
 
-    def write(self, header: Header | SourceUnit) -> str:
-        """Convert header IR to a Nim binding file."""
-        return self._render(header)
-
     def _write_package_layout(
         self,
         unit: SourceUnit | Header,

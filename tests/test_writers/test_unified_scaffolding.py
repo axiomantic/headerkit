@@ -122,7 +122,7 @@ class TestUnifiedWriterScaffolding:
         test_file = layout.get_file("tests/test_cshim.c")
         assert test_file is not None
         assert '#include "bridge_cshim.h"' in test_file.content
-        assert "assert((void*)multiply != NULL);" in test_file.content
+        assert 'assert(resolve_symbol("multiply") != NULL' in test_file.content
 
     def test_cshim_package_scaffolding_no_tests(self, sample_header: Header) -> None:
         """CShim writer with test_type='none' must omit test artifacts."""
@@ -264,6 +264,7 @@ class TestUnifiedWriterScaffolding:
         assert 'DLHandle("mojokit")' in tw_file.content
         assert "handle.get_function" in tw_file.content
         assert '"multiply"' in tw_file.content
+        assert "fn(Int32, Int32) -> Int32" in tw_file.content
 
         unit_file = layout.get_file("tests/test_mojokit.mojo")
         assert unit_file is not None
