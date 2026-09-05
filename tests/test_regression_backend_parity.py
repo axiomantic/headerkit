@@ -583,15 +583,7 @@ PARITY_CASES = [
             "'ctypedef enum Switch'."
         ),
     ),
-    pytest.param(
-        "typedef int (*cb)(int a, char b);",
-        id="funcptr_typedef_param_names",
-        marks=_xfail(
-            "DEFECT (libclang): function-pointer parameter names are dropped on the typedef "
-            "path -- '(int, char)' vs tree-sitter's '(int a, char b)'. _apply_param_names is "
-            "not reached for typedef'd function pointers."
-        ),
-    ),
+    pytest.param("typedef int (*cb)(int a, char b);", id="funcptr_typedef_param_names"),
     pytest.param(
         "void reg(int (*cb)(int));",
         id="funcptr_parameter",

@@ -290,6 +290,46 @@ class TestFunctionPointerVariables:
         c_source = build(backend, tmp_path, header, pyx)
         assert "my_func(" in c_source
 
+    def test_named_typedef_keeps_parameter_names_and_array_extents(self, backend: Any) -> None:
+        """The struct-member path recovered both; the named-typedef path recovered neither.
+
+        The extent loss is the severe half: a parameter declared ``int c[3][4]``
+        has adjusted type ``int (*)[4]``, so rendering it as ``int`` accepts
+        callers that C rejects.
+        """
+        source = textwrap.dedent("""\
+            typedef void (*cb_t)(int a, char *b, int c[3][4]);
+            struct s { void (*m)(int a, char *b, int c[3][4]); };
+        """)
+        assert render(backend, source) == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                ctypedef void (*cb_t)(int a, char* b, int c[3][4])
+
+                cdef struct s:
+                    void (*m)(int a, char* b, int c[3][4])
+        """)
+
+    @requires_toolchain
+    def test_named_typedef_callback_compiles(self, backend: Any, tmp_path: Path) -> None:
+        header = textwrap.dedent("""\
+            typedef void (*cb_t)(int a, char *b, int c[3][4]);
+            void invoke(cb_t f);
+        """)
+        pyx = textwrap.dedent("""\
+            from m cimport cb_t, invoke
+
+            cdef void handler(int a, char* b, int c[3][4]) noexcept:
+                pass
+
+            cpdef public int exercise():
+                cdef cb_t f = handler
+                invoke(f)
+                return 0
+        """)
+        c_source = build(backend, tmp_path, header, pyx)
+        assert "invoke(" in c_source
+
 
 # ---------------------------------------------------------------------------
 # R3 -- dropped declarations and empty bodies
@@ -416,12 +456,64 @@ class TestDroppedDeclarationsAndEmptyBodies:
         assert render(backend, source) == textwrap.dedent("""\
             cdef extern from "test.h":
 
-                cdef enum _e_e:
+                cdef enum _nested_enum_struct_e_e:
                     X
 
                 cdef struct nested_enum_struct:
-                    _e_e e
+                    _nested_enum_struct_e_e e
         """)
+
+    def test_nested_anonymous_enums_of_two_records_do_not_collide(self, backend: Any) -> None:
+        """An unqualified ``_x_e`` tag made the second record reuse the first's enum.
+
+        Both members were typed ``_x_e``, which is the wrong type for the
+        second, and its enumerators ``C`` and ``D`` were emitted nowhere at all.
+        """
+        source = textwrap.dedent("""\
+            struct outer { enum { A, B } x; struct { int q; } y; };
+            struct other { enum { C, D } x; };
+        """)
+        assert render(backend, source) == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                cdef enum _outer_x_e:
+                    A
+                    B
+
+                cdef struct _outer_y_s:
+                    int q
+
+                cdef struct outer:
+                    _outer_x_e x
+                    _outer_y_s y
+
+                cdef enum _other_x_e:
+                    C
+                    D
+
+                cdef struct other:
+                    _other_x_e x
+        """)
+
+    @requires_toolchain
+    def test_colliding_nested_anonymous_enums_compile(self, backend: Any, tmp_path: Path) -> None:
+        header = textwrap.dedent("""\
+            struct outer { enum { A, B } x; struct { int q; } y; };
+            struct other { enum { C, D } x; };
+        """)
+        pyx = textwrap.dedent("""\
+            from m cimport outer, other, A, B, C, D
+
+            cpdef public int exercise():
+                cdef outer o
+                cdef other t
+                o.x = A
+                o.y.q = 1
+                t.x = D
+                return <int>o.x + <int>t.x + <int>B + <int>C
+        """)
+        c_source = build(backend, tmp_path, header, pyx)
+        assert "exercise" in c_source
 
     def test_struct_whose_fields_are_all_filtered_emits_pass(self, backend: Any) -> None:
         """``struct timespec`` comes from a system header, so it is forward-declared only.
@@ -723,8 +815,16 @@ class TestPointerToFunctionPointerParameters:
                 void reg(void (*pxFunc)(int, char))
         """)
 
-    def test_unnamed_double_pointer_parameter_stays_abstract(self, backend: Any) -> None:
+    def test_named_double_pointer_parameter_inside_a_typedef_keeps_its_name(self, backend: Any) -> None:
+        """The name sits inside the ``(**inner)`` declarator, not after the type."""
         assert render(backend, "typedef int (*cb)(void (**inner)(int), int n);") == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                ctypedef int (*cb)(void (**inner)(int), int n)
+        """)
+
+    def test_unnamed_double_pointer_parameter_stays_abstract(self, backend: Any) -> None:
+        assert render(backend, "typedef int (*cb)(void (**)(int), int);") == textwrap.dedent("""\
             cdef extern from "test.h":
 
                 ctypedef int (*cb)(void (**)(int), int)

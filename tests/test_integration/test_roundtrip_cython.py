@@ -224,14 +224,12 @@ class TestCythonTypedefRoundtrip:
         """)
 
     def test_function_pointer_typedef(self, backend):
-        """Function pointer typedef -- parameter name may be stripped by libclang."""
+        """Function pointer typedef keeps its parameter name."""
         output = parse_and_cython(backend, "typedef void (*Callback)(int status);")
-        # libclang strips parameter names from function pointer typedefs in some versions.
-        # The writer emits the parameter type only ("int") without name ("status").
         assert output == textwrap.dedent("""\
             cdef extern from "test.h":
 
-                ctypedef void (*Callback)(int)
+                ctypedef void (*Callback)(int status)
         """)
 
 

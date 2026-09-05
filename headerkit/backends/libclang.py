@@ -1675,10 +1675,7 @@ class ClangASTConverter:
         suffix = self._anon_tag_suffix(decl.kind)
         if suffix is None:
             return
-        # Only record tags are parent-qualified. A nested anonymous enum's tag
-        # is pinned unqualified by an existing regression test, so widening the
-        # qualification to enums is left out of this change.
-        if qualifier and decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
+        if qualifier and decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.ENUM_DECL):
             declarator = f"{qualifier}_{declarator}"
         self._anon_names.setdefault(self._anon_key(decl), f"_{declarator}{suffix}")
 
@@ -2442,6 +2439,10 @@ class ClangASTConverter:
         standard_underlying_type = self._convert_type(underlying)
         if not standard_underlying_type:
             return
+
+        # A typedef's declarator carries the PARM_DECL children that clang's
+        # FUNCTIONPROTO type omits, exactly as a field or variable declarator does.
+        self._apply_param_names(standard_underlying_type, cursor)
 
         typedef = Typedef(
             name=name,

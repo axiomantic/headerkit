@@ -173,9 +173,9 @@ class TestTypedefRoundtrip:
     def test_function_pointer_typedef(self, backend):
         code = "typedef void (*callback_fn)(int status);"
         cdef = parse_and_convert(backend, code)
-        # libclang does not preserve parameter names in function pointer typedefs;
-        # the parameter name "status" is dropped and only the type "int" is kept.
-        assert cdef == "typedef void (*callback_fn)(int);"
+        # The parameter name comes from the typedef declarator's PARM_DECL children,
+        # which clang's FUNCTIONPROTO type alone does not carry.
+        assert cdef == "typedef void (*callback_fn)(int status);"
 
 
 class TestUnionRoundtrip:
@@ -219,9 +219,8 @@ class TestFunctionPointerTypedefRoundtrip:
     def test_function_pointer_typedef(self, backend):
         code = "typedef int (*comparator_fn)(const void *a, const void *b);"
         cdef = parse_and_convert(backend, code)
-        # libclang does not preserve parameter names in function pointer typedefs;
-        # only the types (const void *) are retained.
-        assert cdef == "typedef int (*comparator_fn)(const void *, const void *);"
+        # Both the qualified pointer types and the declarator's parameter names survive.
+        assert cdef == "typedef int (*comparator_fn)(const void * a, const void * b);"
 
 
 class TestMultipleDeclarations:
