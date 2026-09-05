@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `TreeSitterBackend`: fixed extraction of C variadic function declarations (`variadic_parameter` node type in tree-sitter C grammar), top-level variable declarations (pointers, multi-dimensional arrays, sized primitives, and multiple declarators per statement), struct callback function pointer fields, bitfield widths, and function pointer typedefs.
 - Memory safety in `CShimWriter`: prevented dangling pointer / use-after-free when returning `std::string` by value by managing lifetime via thread-local C-string storage, and fixed `std::string_view` returns to avoid invalid `.c_str()` member invocations.
 - Missing standard headers in `CShimWriter`: added `#include <stddef.h>` to generated C headers when `size_t` is present, and added `#include <vector>`, `<string>`, and `<cstddef>` to generated C++ implementation shims.
 - Constrained `std::vector<T>` parameter flattening in `CShimWriter` to by-value and const references, preventing illegal binding of temporary rvalues to non-const references.

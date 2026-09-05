@@ -15,6 +15,7 @@ from headerkit.ir import (
     EnumValue,
     Field,
     Function,
+    FunctionPointer,
     Header,
     Parameter,
     ParserBackend,
@@ -25,6 +26,7 @@ from headerkit.ir import (
     Struct,
     Typedef,
     TypeExpr,
+    Variable,
 )
 
 logger = logging.getLogger("headerkit.backends.treesitter")
@@ -349,41 +351,77 @@ class TreeSitterBackend:
         namespace: str | None = None,
     ) -> list[Declaration]:
         struct_node = node.child_by_field_name("type")
-        declarator_node = node.child_by_field_name("declarator")
+        declarators = node.children_by_field_name("declarator")
+        if not declarators:
+            single = node.child_by_field_name("declarator")
+            if single:
+                declarators = [single]
 
         if struct_node and struct_node.type in ("struct_specifier", "class_specifier", "union_specifier"):
-            st = self._convert_class_or_struct(struct_node, filename, namespace=namespace)
-            if st:
-                if declarator_node:
-                    st.name = _node_text(declarator_node).strip()
-                st.is_typedef = True
-                return [st]
+            body_node = struct_node.child_by_field_name("body")
+            if body_node:
+                st = self._convert_class_or_struct(struct_node, filename, namespace=namespace)
+                if st:
+                    if len(declarators) == 1:
+                        alias_name, _, _ = self._unwrap_declarator(declarators[0], CType(st.name or ""))
+                        if alias_name:
+                            st.name = alias_name
+                        st.is_typedef = True
+                        return [st]
+                    results: list[Declaration] = [st]
+                    for d in declarators:
+                        alias_name, underlying_type, ident_node = self._unwrap_declarator(d, CType(st.name or ""))
+                        loc_node = ident_node or d
+                        loc = SourceLocation(
+                            file=filename, line=loc_node.start_point[0] + 1, column=loc_node.start_point[1] + 1
+                        )
+                        if alias_name and alias_name != st.name:
+                            results.append(
+                                Typedef(
+                                    name=alias_name, underlying_type=underlying_type, namespace=namespace, location=loc
+                                )
+                            )
+                    return results
 
         if struct_node and struct_node.type == "enum_specifier":
-            en = self._convert_enum(struct_node, filename, namespace=namespace)
-            if en:
-                if declarator_node:
-                    en.name = _node_text(declarator_node).strip()
-                en.is_typedef = True
-                return [en]
+            body_node = struct_node.child_by_field_name("body")
+            if body_node:
+                en = self._convert_enum(struct_node, filename, namespace=namespace)
+                if en:
+                    if len(declarators) == 1:
+                        alias_name, _, _ = self._unwrap_declarator(declarators[0], CType(en.name or ""))
+                        if alias_name:
+                            en.name = alias_name
+                        en.is_typedef = True
+                        return [en]
+                    res_en: list[Declaration] = [en]
+                    for d in declarators:
+                        alias_name, underlying_type, ident_node = self._unwrap_declarator(d, CType(en.name or ""))
+                        loc_node = ident_node or d
+                        loc = SourceLocation(
+                            file=filename, line=loc_node.start_point[0] + 1, column=loc_node.start_point[1] + 1
+                        )
+                        if alias_name and alias_name != en.name:
+                            res_en.append(
+                                Typedef(
+                                    name=alias_name, underlying_type=underlying_type, namespace=namespace, location=loc
+                                )
+                            )
+                    return res_en
 
-        if struct_node and declarator_node:
+        if struct_node and declarators:
             base_type = self._parse_type_expr(struct_node)
-            curr: Node | None = declarator_node
-            while curr and curr.type in (
-                "pointer_declarator",
-                "abstract_pointer_declarator",
-                "reference_declarator",
-            ):
-                if curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                    base_type = Pointer(base_type)
-                elif curr.type == "reference_declarator":
-                    is_rval = any(c.type == "&&" for c in curr.children)
-                    base_type = Reference(base_type, is_rvalue=is_rval)
-                curr = curr.child_by_field_name("declarator")
-            alias_name = _node_text(curr).strip() if curr else _node_text(declarator_node).strip()
-            loc = SourceLocation(file=filename, line=node.start_point[0] + 1, column=node.start_point[1] + 1)
-            return [Typedef(name=alias_name, underlying_type=base_type, namespace=namespace, location=loc)]
+            td_results: list[Declaration] = []
+            for d in declarators:
+                alias_name, underlying_type, ident_node = self._unwrap_declarator(d, base_type)
+                loc_node = ident_node or d
+                loc = SourceLocation(
+                    file=filename, line=loc_node.start_point[0] + 1, column=loc_node.start_point[1] + 1
+                )
+                td_results.append(
+                    Typedef(name=alias_name or "", underlying_type=underlying_type, namespace=namespace, location=loc)
+                )
+            return td_results
 
         return []
 
@@ -422,6 +460,134 @@ class TreeSitterBackend:
 
         return []
 
+    def _is_function_declaration(self, declarator: Node) -> bool:
+        curr: Node | None = declarator
+        while curr and curr.type in (
+            "pointer_declarator",
+            "abstract_pointer_declarator",
+            "reference_declarator",
+        ):
+            child = curr.child_by_field_name("declarator")
+            if not child:
+                for c in curr.children:
+                    if c.type not in ("*", "&", "&&", "type_qualifier", "const", "volatile"):
+                        child = c
+                        break
+            curr = child
+
+        if curr and curr.type == "function_declarator":
+            inner = curr.child_by_field_name("declarator")
+            if inner and inner.type in (
+                "identifier",
+                "field_identifier",
+                "operator_name",
+                "qualified_identifier",
+                "destructor_name",
+            ):
+                return True
+            if inner and inner.type == "parenthesized_declarator":
+                subs = [c for c in inner.children if c.type not in ("(", ")")]
+                if subs and subs[0].type in (
+                    "identifier",
+                    "field_identifier",
+                    "operator_name",
+                    "qualified_identifier",
+                    "destructor_name",
+                ):
+                    return True
+        return False
+
+    def _unwrap_declarator(
+        self,
+        node: Node,
+        curr_type: TypeExpr,
+    ) -> tuple[str | None, TypeExpr, Node | None]:
+        """Unwrap a declarator node, wrapping curr_type and finding the identifier node."""
+        if node.type == "init_declarator":
+            decl = node.child_by_field_name("declarator")
+            if not decl:
+                for c in node.children:
+                    if c.type not in ("=", "initializer_list"):
+                        decl = c
+                        break
+            if decl:
+                return self._unwrap_declarator(decl, curr_type)
+            return None, curr_type, node
+
+        if node.type == "parenthesized_declarator":
+            for c in node.children:
+                if c.type not in ("(", ")"):
+                    return self._unwrap_declarator(c, curr_type)
+            return None, curr_type, node
+
+        if node.type in ("pointer_declarator", "abstract_pointer_declarator"):
+            quals = [
+                _node_text(c).strip()
+                for c in node.children
+                if (c.type == "type_qualifier" or c.type in ("const", "volatile"))
+            ]
+            ptr_type: TypeExpr = Pointer(curr_type, qualifiers=quals)
+            inner_decl = node.child_by_field_name("declarator")
+            if not inner_decl:
+                for c in node.children:
+                    if c.type not in ("*", "type_qualifier", "const", "volatile"):
+                        inner_decl = c
+                        break
+            if inner_decl:
+                return self._unwrap_declarator(inner_decl, ptr_type)
+            return None, ptr_type, node
+
+        if node.type == "reference_declarator":
+            is_rval = any(c.type == "&&" for c in node.children)
+            ref_type: TypeExpr = Reference(curr_type, is_rvalue=is_rval)
+            inner_decl = node.child_by_field_name("declarator")
+            if not inner_decl:
+                for c in node.children:
+                    if c.type not in ("&", "&&"):
+                        inner_decl = c
+                        break
+            if inner_decl:
+                return self._unwrap_declarator(inner_decl, ref_type)
+            return None, ref_type, node
+
+        if node.type == "array_declarator":
+            inner_decl = node.child_by_field_name("declarator")
+            size_node = node.child_by_field_name("size")
+            size: int | str | None = None
+            if size_node:
+                s_text = _node_text(size_node).strip()
+                try:
+                    size = int(s_text, 0)
+                except ValueError:
+                    size = s_text
+            arr_type: TypeExpr = Array(element_type=curr_type, size=size)
+            if inner_decl:
+                return self._unwrap_declarator(inner_decl, arr_type)
+            return None, arr_type, node
+
+        if node.type == "function_declarator":
+            params_node = node.child_by_field_name("parameters")
+            params: list[Parameter] = []
+            is_variadic = False
+            if params_node:
+                for child in params_node.children:
+                    if child.type == "parameter_declaration":
+                        param = self._convert_parameter(child)
+                        if param:
+                            params.append(param)
+                    elif child.type in ("...", "variadic_parameter"):
+                        is_variadic = True
+            fn_type: TypeExpr = FunctionPointer(return_type=curr_type, parameters=params, is_variadic=is_variadic)
+            inner_decl = node.child_by_field_name("declarator")
+            if inner_decl:
+                return self._unwrap_declarator(inner_decl, fn_type)
+            return None, fn_type, node
+
+        if node.type in ("identifier", "field_identifier", "type_identifier", "qualified_identifier"):
+            return _node_text(node).strip(), curr_type, node
+
+        return _node_text(node).strip(), curr_type, node
+
     def _convert_declaration(
         self,
         node: Node,
@@ -432,44 +598,86 @@ class TreeSitterBackend:
         is_cpp: bool = False,
     ) -> list[Declaration]:
         type_node = node.child_by_field_name("type")
-        declarator_node = node.child_by_field_name("declarator")
+        declarators = node.children_by_field_name("declarator")
+        if not declarators:
+            single = node.child_by_field_name("declarator")
+            if single:
+                declarators = [single]
 
-        if (
-            type_node
-            and type_node.type in ("struct_specifier", "class_specifier", "union_specifier")
-            and not declarator_node
-        ):
-            st = self._convert_class_or_struct(
-                type_node,
-                filename,
-                namespace=namespace,
-                template_params=template_params,
-                is_cpp=is_cpp,
-            )
-            return [st] if st else []
+        results: list[Declaration] = []
 
-        if type_node and type_node.type == "enum_specifier" and not declarator_node:
-            en = self._convert_enum(type_node, filename, namespace=namespace)
-            return [en] if en else []
-
-        if declarator_node:
-            pointer_depth = 0
-            curr: Node | None = declarator_node
-            while curr and curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                pointer_depth += 1
-                curr = curr.child_by_field_name("declarator")
-
-            if curr and curr.type == "function_declarator":
-                return self._convert_function_declarator(
+        if type_node and type_node.type in ("struct_specifier", "class_specifier", "union_specifier"):
+            body_node = type_node.child_by_field_name("body")
+            if not declarators or body_node:
+                st = self._convert_class_or_struct(
                     type_node,
-                    curr,
                     filename,
-                    pointer_depth=pointer_depth,
                     namespace=namespace,
                     template_params=template_params,
+                    is_cpp=is_cpp,
                 )
+                if st:
+                    results.append(st)
+            if not declarators:
+                return results
 
-        return []
+        elif type_node and type_node.type == "enum_specifier":
+            body_node = type_node.child_by_field_name("body")
+            if not declarators or body_node:
+                en = self._convert_enum(type_node, filename, namespace=namespace)
+                if en:
+                    results.append(en)
+            if not declarators:
+                return results
+
+        if not declarators:
+            return results
+
+        base_type = self._parse_type_expr(type_node) if type_node else CType("int")
+        is_deprecated = any(
+            "deprecated" in _node_text(c)
+            for c in node.children
+            if c.type in ("attribute_specifier", "attribute_declaration", "ms_declspec_modifier")
+        )
+
+        for decl in declarators:
+            if self._is_function_declaration(decl):
+                pointer_depth = 0
+                curr: Node | None = decl
+                while curr and curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
+                    pointer_depth += 1
+                    curr = curr.child_by_field_name("declarator")
+
+                if curr and curr.type == "function_declarator":
+                    funcs = self._convert_function_declarator(
+                        type_node,
+                        curr,
+                        filename,
+                        pointer_depth=pointer_depth,
+                        namespace=namespace,
+                        template_params=template_params,
+                    )
+                    results.extend(funcs)
+            else:
+                name, var_type, ident_node = self._unwrap_declarator(decl, base_type)
+                if name:
+                    loc_node = ident_node or decl
+                    loc = SourceLocation(
+                        file=filename,
+                        line=loc_node.start_point[0] + 1,
+                        column=loc_node.start_point[1] + 1,
+                    )
+                    results.append(
+                        Variable(
+                            name=name,
+                            type=var_type,
+                            namespace=namespace,
+                            is_deprecated=is_deprecated,
+                            location=loc,
+                        )
+                    )
+
+        return results
 
     def _convert_function_declarator(
         self,
@@ -503,7 +711,7 @@ class TreeSitterBackend:
                     param = self._convert_parameter(child)
                     if param:
                         parameters.append(param)
-                elif child.type == "...":
+                elif child.type in ("...", "variadic_parameter"):
                     is_variadic = True
 
         loc = SourceLocation(
@@ -620,42 +828,45 @@ class TreeSitterBackend:
                             c.type == "storage_class_specifier" and _node_text(c).strip() == "static"
                             for c in child.children
                         )
-                        for sibling in child.children:
-                            if sibling.type in ("field_identifier", "identifier"):
+                        bit_width: int | None = None
+                        for c in child.children:
+                            if c.type == "bitfield_clause":
+                                num_child = c.child_by_field_name("length") or c.child_by_field_name("width")
+                                if not num_child:
+                                    for sub in c.children:
+                                        if sub.type == "number_literal":
+                                            num_child = sub
+                                            break
+                                if num_child:
+                                    try:
+                                        bit_width = int(_node_text(num_child).strip(), 0)
+                                    except ValueError:
+                                        bit_width = None
+
+                        field_decls = child.children_by_field_name("declarator")
+                        if not field_decls:
+                            for sibling in child.children:
+                                if sibling.type in (
+                                    "field_identifier",
+                                    "identifier",
+                                    "pointer_declarator",
+                                    "array_declarator",
+                                    "function_declarator",
+                                ):
+                                    field_decls.append(sibling)
+
+                        for f_decl in field_decls:
+                            f_name, f_type, _ = self._unwrap_declarator(f_decl, base_type)
+                            if f_name or bit_width is not None:
                                 fields.append(
                                     Field(
-                                        name=_node_text(sibling).strip(),
-                                        type=base_type,
+                                        name=f_name or "",
+                                        type=f_type,
+                                        bit_width=bit_width,
                                         access=current_access,
                                         is_static=is_static_field,
                                     )
                                 )
-                            elif sibling.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                                f_type = base_type
-                                sub: Node | None = sibling
-                                while sub and sub.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                                    f_type = Pointer(f_type)
-                                    sub = sub.child_by_field_name("declarator")
-                                if sub:
-                                    fields.append(
-                                        Field(
-                                            name=_node_text(sub).strip(),
-                                            type=f_type,
-                                            access=current_access,
-                                            is_static=is_static_field,
-                                        )
-                                    )
-                            elif sibling.type == "array_declarator":
-                                f_name, f_type = self._parse_array_declarator(sibling, base_type)
-                                if f_name:
-                                    fields.append(
-                                        Field(
-                                            name=f_name,
-                                            type=f_type,
-                                            access=current_access,
-                                            is_static=is_static_field,
-                                        )
-                                    )
 
         is_cppclass = is_class_keyword or bool(methods) or bool(bases) or bool(constructors) or (destructor is not None)
         loc = SourceLocation(file=filename, line=node.start_point[0] + 1, column=node.start_point[1] + 1)
@@ -707,6 +918,10 @@ class TreeSitterBackend:
             curr = next_child
 
         if curr and curr.type == "function_declarator":
+            inner = curr.child_by_field_name("declarator")
+            if inner and inner.type == "parenthesized_declarator":
+                if any(c.type in ("pointer_declarator", "*") for c in inner.children):
+                    return None, None, False, False, False
             return curr, ret_type_node, is_virtual, is_static, is_explicit
 
         return None, None, False, False, False
@@ -788,7 +1003,7 @@ class TreeSitterBackend:
                     param = self._convert_parameter(child)
                     if param:
                         parameters.append(param)
-                elif child.type == "...":
+                elif child.type in ("...", "variadic_parameter"):
                     is_variadic = True
 
         decl_root = child_node.child_by_field_name("declarator") if child_node else None

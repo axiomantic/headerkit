@@ -2,7 +2,20 @@ import pytest
 
 from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.hooks import HookDispatcher, PipelineContext
-from headerkit.ir import BaseSpecifier, CType, Enum, Function, Header, Pointer, Reference, Struct, Typedef
+from headerkit.ir import (
+    Array,
+    BaseSpecifier,
+    CType,
+    Enum,
+    Function,
+    FunctionPointer,
+    Header,
+    Pointer,
+    Reference,
+    Struct,
+    Typedef,
+    Variable,
+)
 from headerkit.writers.cython import CythonWriter
 
 treesitter = pytest.mark.treesitter
@@ -445,3 +458,160 @@ class TestTreeSitterBackend:
         assert isinstance(fn.parameters[1].type, Pointer)
         assert fn.parameters[2].name == "count"
         assert str(fn.parameters[2].type) == "int"
+
+    def test_c_variadic_function_declaration(self):
+        """Verify C variadic function declarations have is_variadic=True."""
+        code = "int printf(const char *format, ...);"
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "stdio.h")
+
+        funcs = [d for d in header.declarations if isinstance(d, Function)]
+        assert len(funcs) == 1
+        fn = funcs[0]
+        assert fn.name == "printf"
+        assert fn.is_variadic is True
+        assert len(fn.parameters) == 1
+        assert fn.parameters[0].name == "format"
+        assert isinstance(fn.parameters[0].type, Pointer)
+
+    def test_global_variables_simple_and_pointer(self):
+        """Verify global variables including pointers and sized types are parsed."""
+        code = """
+        int* ptr;
+        int arr[10];
+        unsigned long count;
+        extern int global_flag;
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "vars.h")
+
+        vars_by_name = {d.name: d for d in header.declarations if isinstance(d, Variable)}
+        assert "ptr" in vars_by_name
+        assert isinstance(vars_by_name["ptr"].type, Pointer)
+        assert str(vars_by_name["ptr"].type.pointee) == "int"
+
+        assert "arr" in vars_by_name
+        assert isinstance(vars_by_name["arr"].type, Array)
+        assert vars_by_name["arr"].type.size == 10
+        assert str(vars_by_name["arr"].type.element_type) == "int"
+
+        assert "count" in vars_by_name
+        assert str(vars_by_name["count"].type) == "unsigned long"
+
+        assert "global_flag" in vars_by_name
+        assert str(vars_by_name["global_flag"].type) == "int"
+
+    def test_multiple_declarators_in_single_declaration(self):
+        """Verify multiple variables declared in a single statement are all captured."""
+        code = "int a, *b, c[5];"
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "multi.h")
+
+        vars_by_name = {d.name: d for d in header.declarations if isinstance(d, Variable)}
+        assert len(vars_by_name) == 3
+
+        assert "a" in vars_by_name
+        assert str(vars_by_name["a"].type) == "int"
+
+        assert "b" in vars_by_name
+        assert isinstance(vars_by_name["b"].type, Pointer)
+        assert str(vars_by_name["b"].type.pointee) == "int"
+
+        assert "c" in vars_by_name
+        assert isinstance(vars_by_name["c"].type, Array)
+        assert vars_by_name["c"].type.size == 5
+
+    def test_array_of_pointers_and_pointer_to_array(self):
+        """Verify complex declarators: array of pointers vs pointer to array."""
+        code = """
+        char *argv[5];
+        char (*row_ptr)[5];
+        int matrix[10][20];
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "arrays.h")
+
+        vars_by_name = {d.name: d for d in header.declarations if isinstance(d, Variable)}
+
+        # argv is Array of 5 Pointers to char
+        argv = vars_by_name["argv"]
+        assert isinstance(argv.type, Array)
+        assert argv.type.size == 5
+        assert isinstance(argv.type.element_type, Pointer)
+        assert str(argv.type.element_type.pointee) == "char"
+
+        # row_ptr is Pointer to Array of 5 chars
+        row_ptr = vars_by_name["row_ptr"]
+        assert isinstance(row_ptr.type, Pointer)
+        assert isinstance(row_ptr.type.pointee, Array)
+        assert row_ptr.type.pointee.size == 5
+        assert str(row_ptr.type.pointee.element_type) == "char"
+
+        # matrix is Array of 10 Arrays of 20 ints
+        matrix = vars_by_name["matrix"]
+        assert isinstance(matrix.type, Array)
+        assert matrix.type.size == 10
+        assert isinstance(matrix.type.element_type, Array)
+        assert matrix.type.element_type.size == 20
+        assert str(matrix.type.element_type.element_type) == "int"
+
+    def test_function_pointer_variable_and_typedef(self):
+        """Verify function pointer variable and typedef parsing."""
+        code = """
+        int (*handler)(int code, double val);
+        typedef void (*callback_t)(const char *msg);
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "callbacks.h")
+
+        vars_by_name = {d.name: d for d in header.declarations if isinstance(d, Variable)}
+        assert "handler" in vars_by_name
+        handler = vars_by_name["handler"]
+        assert isinstance(handler.type, Pointer)
+        assert isinstance(handler.type.pointee, FunctionPointer)
+        fp = handler.type.pointee
+        assert str(fp.return_type) == "int"
+        assert len(fp.parameters) == 2
+        assert fp.parameters[0].name == "code"
+        assert str(fp.parameters[0].type) == "int"
+        assert fp.parameters[1].name == "val"
+        assert str(fp.parameters[1].type) == "double"
+
+        typedefs = {d.name: d for d in header.declarations if isinstance(d, Typedef)}
+        assert "callback_t" in typedefs
+        cb = typedefs["callback_t"]
+        assert isinstance(cb.underlying_type, Pointer)
+        assert isinstance(cb.underlying_type.pointee, FunctionPointer)
+        cb_fp = cb.underlying_type.pointee
+        assert str(cb_fp.return_type) == "void"
+        assert len(cb_fp.parameters) == 1
+        assert cb_fp.parameters[0].name == "msg"
+
+    def test_struct_with_callback_and_bitfield(self):
+        """Verify struct fields handle function pointers and bitfields."""
+        code = """
+        struct Device {
+            int id;
+            int (*read)(void);
+            unsigned int flags : 4;
+        };
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "dev.h")
+
+        structs = [d for d in header.declarations if isinstance(d, Struct)]
+        assert len(structs) == 1
+        st = structs[0]
+        assert len(st.methods) == 0  # read must NOT be classified as a method
+        fields_by_name = {f.name: f for f in st.fields}
+
+        assert "id" in fields_by_name
+        assert str(fields_by_name["id"].type) == "int"
+
+        assert "read" in fields_by_name
+        read_field = fields_by_name["read"]
+        assert isinstance(read_field.type, Pointer)
+        assert isinstance(read_field.type.pointee, FunctionPointer)
+
+        assert "flags" in fields_by_name
+        assert fields_by_name["flags"].bit_width == 4
