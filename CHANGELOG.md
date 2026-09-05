@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-09-05
+
 ### Added
 
 - Enhanced CShim writer (`CShimWriter`) with C++ inheritance flattening: emits upcast helpers (`{Derived}_as_{Base}`) using `static_cast` for proper pointer offset adjustment under multiple/virtual inheritance, and flattens public base class methods directly onto derived opaque handle APIs.
@@ -729,7 +731,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/axiomantic/headerkit/compare/v0.29.0...v0.37.0
 [0.29.0]: https://github.com/axiomantic/headerkit/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/axiomantic/headerkit/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/axiomantic/headerkit/compare/v0.26.0...v0.27.0
