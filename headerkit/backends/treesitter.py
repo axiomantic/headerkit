@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
+import warnings
+from collections.abc import Sequence
 from typing import Any
 
 from headerkit.hooks import PipelineContext, Priority, hook
@@ -31,6 +34,48 @@ from headerkit.ir import (
 
 logger = logging.getLogger("headerkit.backends.treesitter")
 
+
+def _normalize_path(path: str) -> str:
+    """Normalize a file path for platform-agnostic comparison."""
+    return path.replace("\\", "/").lower()
+
+
+def _resolve_path(path: str, search_dirs: Sequence[str] = ()) -> str:
+    """Resolve a path to an absolute, symlink-free, comparison-ready form.
+
+    Mirrors the libclang backend's whitelist resolution rule so both backends
+    agree on what a whitelist entry names: an absolute entry is used as-is, a
+    relative entry (including a bare basename) is tried against each search
+    directory in order, then against the process cwd.
+    """
+    if not os.path.isabs(path):
+        for directory in search_dirs:
+            candidate = os.path.join(directory, path)
+            if os.path.exists(candidate):
+                path = candidate
+                break
+    return _normalize_path(os.path.realpath(os.path.abspath(path)))
+
+
+def _whitelist_names_other_file(whitelist: Sequence[str], filename: str, include_dirs: Sequence[str] | None) -> bool:
+    """True if any whitelist entry resolves to a file other than ``filename``."""
+    parsed_dir = os.path.dirname(os.path.abspath(filename)) or os.getcwd()
+    search_dirs = [parsed_dir]
+    if include_dirs:
+        search_dirs.extend(include_dirs)
+    target = _resolve_path(filename)
+
+    def names_target(entry: str) -> bool:
+        if _resolve_path(entry, search_dirs) == target:
+            return True
+        # This backend parses a string, so the parsed file often does not exist on
+        # disk and the existence-driven search above cannot reach it.  A bare
+        # basename still names the parsed file in that case.
+        return not os.path.isabs(entry) and _resolve_path(os.path.join(parsed_dir, entry)) == target
+
+    return any(not names_target(entry) for entry in whitelist)
+
+
 _HAS_TREESITTER: bool = False
 _HAS_TREESITTER_C: bool = False
 _HAS_TREESITTER_CPP: bool = False
@@ -57,6 +102,9 @@ except ImportError:
     pass
 
 
+_FOLDABLE_TYPE_QUALIFIERS = frozenset({"const", "volatile"})
+
+
 def _node_text(node: Any) -> str:
     if node is None:
         return ""
@@ -66,6 +114,25 @@ def _node_text(node: Any) -> str:
     if isinstance(raw, bytes | bytearray):
         return raw.decode("utf-8")
     return str(raw)
+
+
+def _pointer_qualifiers(node: Node) -> list[str]:
+    """Qualifiers borne by the pointer itself, read off a ``pointer_declarator``.
+
+    In ``char* const p`` the grammar makes ``const`` a child of the
+    ``pointer_declarator``, which is what distinguishes a const pointer from a
+    pointer to const. Only children of that node are read, so a trailing
+    qualifier such as the ``const`` of a C++ ``int f() const`` -- which hangs off
+    the ``function_declarator`` -- can never reach here. Qualifiers the IR does
+    not model (``_Atomic``, ``restrict``) are also ``type_qualifier`` nodes and
+    are dropped, matching :meth:`TreeSitterBackend._qualified_type`.
+    """
+    return [
+        text
+        for child in node.children
+        if child.type in ("type_qualifier", "const", "volatile")
+        and (text := _node_text(child).strip()) in _FOLDABLE_TYPE_QUALIFIERS
+    ]
 
 
 class TreeSitterBackend:
@@ -134,7 +201,34 @@ class TreeSitterBackend:
         recursive_includes: bool = True,
         max_depth: int = 10,
         project_prefixes: tuple[str, ...] | None = None,
+        whitelist: list[str] | None = None,
     ) -> Header:
+        """Parse C/C++ code with tree-sitter and return the IR representation.
+
+        This backend parses exactly the ``code`` string it is given. It does not
+        read the filesystem and does not follow ``#include`` directives, so
+        ``include_dirs``, ``recursive_includes``, ``max_depth``,
+        ``project_prefixes`` and ``whitelist`` have nothing to act on.
+
+        :param whitelist: **Not honored by this backend.** A whitelist selects
+            which included files keep their declarations; since no declaration
+            here can originate from an ``#include``, there is nothing to select.
+            An entry naming a file other than the one being parsed raises
+            :class:`UserWarning` rather than being discarded silently, because
+            such a caller is expecting symbols this backend will never produce.
+            Entries that all resolve to the parsed file itself are already
+            satisfied and warn nothing. Use the libclang backend when whitelist
+            filtering is required.
+        """
+        if whitelist and _whitelist_names_other_file(whitelist, filename, include_dirs):
+            warnings.warn(
+                f"The tree-sitter backend does not follow #include directives, so the "
+                f"whitelist {whitelist!r} cannot be honored and no declarations from "
+                f"those files will appear in the result. Use the libclang backend for "
+                f"whitelist support.",
+                UserWarning,
+                stacklevel=2,
+            )
         if not self.is_available():
             msg = "tree-sitter is not installed. Install with: pip install 'headerkit[treesitter]'"
             raise RuntimeError(msg)
@@ -345,7 +439,7 @@ class TreeSitterBackend:
         type_node = node.child_by_field_name("type")
         if name_node and type_node:
             name = _node_text(name_node).strip()
-            underlying = self._parse_type_expr(type_node)
+            underlying = self._qualified_type(node, type_node, CType("int"))
             loc = SourceLocation(file=filename, line=node.start_point[0] + 1, column=node.start_point[1] + 1)
             return Typedef(name=name, underlying_type=underlying, namespace=namespace, location=loc)
         return None
@@ -391,7 +485,7 @@ class TreeSitterBackend:
                     return results
             else:
                 st_fwd = self._convert_class_or_struct(struct_node, filename, namespace=namespace)
-                base_type = self._parse_type_expr(struct_node)
+                base_type = self._qualified_type(node, struct_node, CType("int"))
                 fwd_results: list[Declaration] = []
                 if st_fwd:
                     fwd_results.append(st_fwd)
@@ -438,7 +532,7 @@ class TreeSitterBackend:
                     return res_en
 
         if struct_node and declarators:
-            base_type = self._parse_type_expr(struct_node)
+            base_type = self._qualified_type(node, struct_node, CType("int"))
             td_results: list[Declaration] = []
             for d in declarators:
                 alias_name, underlying_type, ident_node = self._unwrap_declarator(d, base_type)
@@ -478,7 +572,7 @@ class TreeSitterBackend:
 
             if curr and curr.type == "function_declarator":
                 return self._convert_function_declarator(
-                    type_node,
+                    self._qualified_type(node, type_node, CType("int")),
                     curr,
                     filename,
                     pointer_depth=pointer_depth,
@@ -549,12 +643,7 @@ class TreeSitterBackend:
             return None, curr_type, node
 
         if node.type in ("pointer_declarator", "abstract_pointer_declarator"):
-            quals = [
-                _node_text(c).strip()
-                for c in node.children
-                if (c.type == "type_qualifier" or c.type in ("const", "volatile"))
-            ]
-            ptr_type: TypeExpr = Pointer(curr_type, qualifiers=quals)
+            ptr_type: TypeExpr = Pointer(curr_type, qualifiers=_pointer_qualifiers(node))
             inner_decl = node.child_by_field_name("declarator")
             if not inner_decl:
                 for c in node.children:
@@ -661,7 +750,7 @@ class TreeSitterBackend:
         if not declarators:
             return results
 
-        base_type = self._parse_type_expr(type_node) if type_node else CType("int")
+        base_type = self._qualified_type(node, type_node, CType("int"))
         is_deprecated = any(
             "deprecated" in _node_text(c)
             for c in node.children
@@ -678,7 +767,7 @@ class TreeSitterBackend:
 
                 if curr and curr.type == "function_declarator":
                     funcs = self._convert_function_declarator(
-                        type_node,
+                        base_type,
                         curr,
                         filename,
                         pointer_depth=pointer_depth,
@@ -709,7 +798,7 @@ class TreeSitterBackend:
 
     def _convert_function_declarator(
         self,
-        type_node: Node | None,
+        base_type: TypeExpr,
         declarator_node: Node,
         filename: str,
         *,
@@ -717,7 +806,7 @@ class TreeSitterBackend:
         namespace: str | None = None,
         template_params: list[str] | None = None,
     ) -> list[Declaration]:
-        ret_type: TypeExpr = self._parse_type_expr(type_node) if type_node else CType("int")
+        ret_type: TypeExpr = base_type
         for _ in range(pointer_depth):
             ret_type = Pointer(ret_type)
         ident_node = declarator_node.child_by_field_name("declarator")
@@ -841,11 +930,11 @@ class TreeSitterBackend:
                     continue
 
                 if child.type in ("field_declaration", "declaration"):
-                    func_decl, ret_type_node, is_virt, is_stat, is_expl = self._find_function_declarator(child)
+                    func_decl, ret_base_type, is_virt, is_stat, is_expl = self._find_function_declarator(child)
                     if func_decl:
                         fn = self._convert_method_declarator(
                             func_decl,
-                            ret_type_node,
+                            ret_base_type,
                             filename,
                             class_name=name,
                             access=current_access,
@@ -857,13 +946,13 @@ class TreeSitterBackend:
                         if fn:
                             if fn.name.startswith("~") or (name and fn.name == f"~{name}"):
                                 destructor = fn
-                            elif name and fn.name == name and ret_type_node is None:
+                            elif name and fn.name == name and ret_base_type is None:
                                 constructors.append(fn)
                             else:
                                 methods.append(fn)
                     else:
                         f_type_node = child.child_by_field_name("type")
-                        base_type = self._parse_type_expr(f_type_node) if f_type_node else CType("int")
+                        base_type = self._qualified_type(child, f_type_node, CType("int"))
                         is_static_field = any(
                             c.type == "storage_class_specifier" and _node_text(c).strip() == "static"
                             for c in child.children
@@ -925,13 +1014,14 @@ class TreeSitterBackend:
             location=loc,
         )
 
-    def _find_function_declarator(self, node: Node) -> tuple[Node | None, Node | None, bool, bool, bool]:
+    def _find_function_declarator(self, node: Node) -> tuple[Node | None, TypeExpr | None, bool, bool, bool]:
         is_virtual = any(c.type == "virtual" for c in node.children)
         is_static = any(
             c.type == "storage_class_specifier" and _node_text(c).strip() == "static" for c in node.children
         )
         is_explicit = any(c.type in ("explicit", "explicit_function_specifier") for c in node.children)
-        ret_type_node = node.child_by_field_name("type")
+        type_node = node.child_by_field_name("type")
+        ret_type = self._qualified_type(node, type_node, CType("void")) if type_node else None
 
         decl = node.child_by_field_name("declarator")
         if not decl:
@@ -962,12 +1052,13 @@ class TreeSitterBackend:
             if inner and inner.type == "parenthesized_declarator":
                 if any(c.type in ("pointer_declarator", "*") for c in inner.children):
                     return None, None, False, False, False
-            return curr, ret_type_node, is_virtual, is_static, is_explicit
+            return curr, ret_type, is_virtual, is_static, is_explicit
 
         return None, None, False, False, False
 
-    def _extract_return_type(self, type_node: Node | None, declarator_root: Node | None) -> TypeExpr:
-        base_type: TypeExpr = self._parse_type_expr(type_node) if type_node else CType("void")
+    def _extract_return_type(self, base_type: TypeExpr | None, declarator_root: Node | None) -> TypeExpr:
+        if base_type is None:
+            base_type = CType("void")
         if not declarator_root:
             return base_type
 
@@ -1002,7 +1093,7 @@ class TreeSitterBackend:
     def _convert_method_declarator(
         self,
         func_decl: Node,
-        ret_type_node: Node | None,
+        ret_base_type: TypeExpr | None,
         filename: str,
         *,
         class_name: str | None = None,
@@ -1052,7 +1143,7 @@ class TreeSitterBackend:
                 if c.type in ("reference_declarator", "pointer_declarator", "function_declarator"):
                     decl_root = c
                     break
-        ret_type = self._extract_return_type(ret_type_node, decl_root)
+        ret_type = self._extract_return_type(ret_base_type, decl_root)
 
         loc = SourceLocation(
             file=filename,
@@ -1078,7 +1169,7 @@ class TreeSitterBackend:
         p_type_node = node.child_by_field_name("type")
         p_decl_node = node.child_by_field_name("declarator")
 
-        p_type: TypeExpr = self._parse_type_expr(p_type_node) if p_type_node else CType("void")
+        p_type: TypeExpr = self._qualified_type(node, p_type_node, CType("void"))
         p_name: str | None = None
 
         if p_decl_node:
@@ -1089,7 +1180,7 @@ class TreeSitterBackend:
                 "reference_declarator",
             ):
                 if curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                    p_type = Pointer(p_type)
+                    p_type = Pointer(p_type, qualifiers=_pointer_qualifiers(curr))
                 elif curr.type == "reference_declarator":
                     is_rval = any(c.type == "&&" for c in curr.children)
                     p_type = Reference(p_type, is_rvalue=is_rval)
@@ -1163,6 +1254,30 @@ class TreeSitterBackend:
             return CType("int")
         text = _node_text(node).strip()
         return self._parse_type_str(text)
+
+    def _qualified_type(self, decl_node: Node, type_node: Node | None, default: TypeExpr) -> TypeExpr:
+        """Parse a declaration's base type, folding in its leading type qualifiers.
+
+        The C grammar attaches a declaration's leading `const`/`volatile` as
+        `type_qualifier` siblings of the `type` field rather than inside it, so
+        reading the `type` field alone loses them. Qualifiers positioned after
+        the type node are excluded: those belong to the declarator, as in a C++
+        `int f() const` member function, and folding one into the return type
+        would be wrong. Qualifiers the IR does not model (`_Atomic`,
+        `_Noreturn`) are dropped here, matching the Cython writer.
+        """
+        if type_node is None:
+            return default
+        quals = [
+            text
+            for child in decl_node.children
+            if child.type == "type_qualifier"
+            and child.start_byte < type_node.start_byte
+            and (text := _node_text(child).strip()) in _FOLDABLE_TYPE_QUALIFIERS
+        ]
+        if not quals:
+            return self._parse_type_expr(type_node)
+        return self._parse_type_str(" ".join([*quals, _node_text(type_node).strip()]))
 
     def _parse_type_str(self, text: str) -> TypeExpr:
         text = text.strip()

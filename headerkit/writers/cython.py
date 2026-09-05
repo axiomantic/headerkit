@@ -36,6 +36,7 @@ from headerkit.ir import (
     CType,
     Declaration,
     Enum,
+    Field,
     Function,
     FunctionPointer,
     Header,
@@ -249,6 +250,52 @@ class PxdWriter:
 
         return names
 
+    def _referenced_type_names(self, decl: Declaration) -> set[str]:
+        """All type names a declaration references in its signature or fields."""
+        names: set[str] = set()
+        if isinstance(decl, Function):
+            names.update(self._extract_type_names(decl.return_type))
+            for param in decl.parameters:
+                names.update(self._extract_type_names(param.type))
+        elif isinstance(decl, Struct):
+            for fld in decl.fields:
+                names.update(self._extract_type_names(fld.type))
+            for method in decl.methods:
+                names.update(self._extract_type_names(method.return_type))
+                for param in method.parameters:
+                    names.update(self._extract_type_names(param.type))
+        elif isinstance(decl, Typedef):
+            names.update(self._extract_type_names(decl.underlying_type))
+        elif isinstance(decl, Variable):
+            names.update(self._extract_type_names(decl.type))
+        return names
+
+    def _early_reference_forwards(self, decls: list[Declaration]) -> list[tuple[str, str]]:
+        """Record types used before their definition is emitted.
+
+        The topological sort deliberately creates no edge from a function to a
+        record it only names through a pointer, so a definition can land after
+        its first use. Cython accepts that, but the reference output declares
+        the tag up front; these are the ``(kind, name)`` pairs to forward.
+        """
+        definitions: dict[str, tuple[int, str]] = {}
+        for i, decl in enumerate(decls):
+            if not isinstance(decl, Struct) or not decl.name or decl.is_typedef:
+                continue
+            if not decl.fields and not decl.methods:
+                continue
+            if get_stub_module_for_type(decl.name):
+                continue
+            definitions.setdefault(decl.name, (i, "union" if decl.is_union else "struct"))
+
+        needed: dict[str, str] = {}
+        for i, decl in enumerate(decls):
+            for type_name in self._referenced_type_names(decl):
+                entry = definitions.get(type_name)
+                if entry is not None and i < entry[0]:
+                    needed[type_name] = entry[1]
+        return sorted(needed.items())
+
     def _is_value_type_usage(self, typ: TypeExpr, type_name: str) -> bool:
         """Check if a type is used as a value type (not through a pointer)."""
         if isinstance(typ, CType):
@@ -327,9 +374,21 @@ class PxdWriter:
             if namespace is None:
                 forward_decls: list[str] = []
                 for struct_name in sorted(self.undeclared_structs):
-                    forward_decls.append(f"{self.INDENT}cdef struct {struct_name}")
+                    escaped = self._escape_name(struct_name, include_c_name=True)
+                    forward_decls.append(f"{self.INDENT}cdef struct {escaped}")
                 for union_name in sorted(self.undeclared_unions):
-                    forward_decls.append(f"{self.INDENT}cdef union {union_name}")
+                    escaped = self._escape_name(union_name, include_c_name=True)
+                    forward_decls.append(f"{self.INDENT}cdef union {escaped}")
+                if not cycle_indices:
+                    # The cycle path emits its own Phase 1 forwards; only the
+                    # acyclic path needs these, and never for a name already
+                    # forwarded above.
+                    already = self.undeclared_structs | self.undeclared_unions
+                    for type_name, kind in self._early_reference_forwards(decls):
+                        if type_name in already:
+                            continue
+                        escaped = self._escape_name(type_name, include_c_name=True)
+                        forward_decls.append(f"{self.INDENT}cdef {kind} {escaped}")
                 if forward_decls:
                     lines.append("")
                     lines.extend(forward_decls)
@@ -375,7 +434,7 @@ class PxdWriter:
                 if decl.is_typedef:
                     continue
                 kind = "union" if decl.is_union else "struct"
-                name = self._escape_name(decl.name, include_c_name=False)
+                name = self._escape_name(decl.name, include_c_name=True)
                 forward_struct_decls.append(f"{self.INDENT}cdef {kind} {name}")
         if forward_struct_decls:
             lines.append("")
@@ -748,43 +807,10 @@ class PxdWriter:
             lines.append(f"{keyword} {kind} {name}")
             return lines
 
+        header_index = len(lines)
         lines.append(f"{keyword} {kind} {name}:")
 
-        for fld in struct.fields:
-            # Skip anonymous struct/union fields
-            if fld.is_anonymous_transparent or not fld.name:
-                continue
-            if isinstance(fld.type, CType) and ("(unnamed" in fld.type.name or "(anonymous" in fld.type.name):
-                continue
-
-            # Skip fields using incomplete types as values
-            if self._is_incomplete_value_type(fld.type):
-                continue
-
-            field_name = self._escape_name(fld.name, include_c_name=True)
-
-            # Bitfield comment (Cython doesn't support bitfields)
-            bit_comment = ""
-            if fld.bit_width is not None:
-                bit_comment = f"  # bitfield: {fld.bit_width} bits"
-
-            if isinstance(fld.type, FunctionPointer):
-                if self._is_nested_func_ptr(fld.type):
-                    lines.append(f"{self.INDENT}void* {field_name}{bit_comment}")
-                else:
-                    lines.append(f"{self.INDENT}{self._format_func_ptr(fld.type, field_name)}{bit_comment}")
-            elif isinstance(fld.type, Pointer) and isinstance(fld.type.pointee, FunctionPointer):
-                if self._is_nested_func_ptr(fld.type.pointee):
-                    lines.append(f"{self.INDENT}void* {field_name}{bit_comment}")
-                else:
-                    lines.append(f"{self.INDENT}{self._format_func_ptr(fld.type.pointee, field_name)}{bit_comment}")
-            elif isinstance(fld.type, Array):
-                field_type = self._format_type(fld.type)
-                dims = self._format_array_dims(fld.type)
-                lines.append(f"{self.INDENT}{field_type} {field_name}{dims}{bit_comment}")
-            else:
-                field_type = self._format_type(fld.type)
-                lines.append(f"{self.INDENT}{field_type} {field_name}{bit_comment}")
+        lines.extend(self._write_fields(struct.fields))
 
         # Constructors (cppclass)
         for ctor in struct.constructors:
@@ -829,6 +855,61 @@ class PxdWriter:
         self._current_inner_typedefs = {}
         self._unsupported_inner_typedefs = set()
 
+        # A suite header with no body is a syntax error in Cython. This can
+        # happen whenever every member is filtered out, so the guard stays even
+        # when no current filter produces it.
+        if len(lines) == header_index + 1:
+            lines.append(f"{self.INDENT}pass")
+
+        return lines
+
+    def _write_fields(self, fields: list[Field]) -> list[str]:
+        """Render struct/union members, flattening C11 anonymous members.
+
+        An anonymous nested struct or union has no name of its own, so its
+        members belong to the enclosing record. Emitting them at the same
+        indentation is what makes ``outer.b`` resolve, matching C semantics.
+        """
+        lines: list[str] = []
+
+        for fld in fields:
+            if fld.anonymous_struct is not None:
+                lines.extend(self._write_fields(fld.anonymous_struct.fields))
+                continue
+
+            # Skip anonymous struct/union fields carrying no nested definition
+            if fld.is_anonymous_transparent or not fld.name:
+                continue
+
+            # Skip fields using incomplete types as values
+            if self._is_incomplete_value_type(fld.type):
+                continue
+
+            field_name = self._escape_name(fld.name, include_c_name=True)
+
+            # Bitfield comment (Cython doesn't support bitfields)
+            bit_comment = ""
+            if fld.bit_width is not None:
+                bit_comment = f"  # bitfield: {fld.bit_width} bits"
+
+            if isinstance(fld.type, FunctionPointer):
+                if self._is_nested_func_ptr(fld.type):
+                    lines.append(f"{self.INDENT}void* {field_name}{bit_comment}")
+                else:
+                    lines.append(f"{self.INDENT}{self._format_func_ptr(fld.type, field_name)}{bit_comment}")
+            elif isinstance(fld.type, Pointer) and isinstance(fld.type.pointee, FunctionPointer):
+                if self._is_nested_func_ptr(fld.type.pointee):
+                    lines.append(f"{self.INDENT}void* {field_name}{bit_comment}")
+                else:
+                    lines.append(f"{self.INDENT}{self._format_func_ptr(fld.type.pointee, field_name)}{bit_comment}")
+            elif isinstance(fld.type, Array):
+                field_type = self._format_type(fld.type)
+                dims = self._format_array_dims(fld.type)
+                lines.append(f"{self.INDENT}{field_type} {field_name}{dims}{bit_comment}")
+            else:
+                field_type = self._format_type(fld.type)
+                lines.append(f"{self.INDENT}{field_type} {field_name}{bit_comment}")
+
         return lines
 
     # -----------------------------------------------------------------
@@ -837,9 +918,6 @@ class PxdWriter:
 
     def _write_enum(self, enum: Enum) -> list[str]:
         """Write an enum declaration."""
-        if enum.name and "(unnamed at" in enum.name:
-            return []
-
         name = self._escape_name(enum.name, include_c_name=True)
 
         keyword = "ctypedef" if enum.is_typedef else "cdef"
@@ -900,12 +978,15 @@ class PxdWriter:
 
         underlying = self._format_type(typedef.underlying_type)
 
-        # Skip circular typedefs
-        if (
-            underlying == name
-            or underlying == f"struct {name}"
-            or underlying == f"union {name}"
-            or underlying == f"enum {name}"
+        # Skip circular typedefs. ``name`` carries the C-name annotation for
+        # keyword-escaped typedefs (``with_ "with"``), which ``_format_type``
+        # never produces, so the comparison uses the bare escaped spelling.
+        bare_name = self._escape_name(typedef.name)
+        if underlying in (
+            bare_name,
+            f"struct {bare_name}",
+            f"union {bare_name}",
+            f"enum {bare_name}",
         ):
             return []
 
@@ -930,14 +1011,32 @@ class PxdWriter:
 
     def _write_variable(self, var: Variable) -> list[str]:
         """Write a variable declaration."""
-        var_type = self._format_type(var.type)
         name = self._escape_name(var.name, include_c_name=True)
+
+        func_ptr = self._as_func_ptr(var.type)
+        if func_ptr is not None:
+            # _format_type yields the *abstract* declarator ``void (*)(int)``,
+            # which cannot take a name suffix. Emit a named typedef and declare
+            # the variable through it.
+            typedef_name = f"_{var.name}_ft"
+            return [*self._write_func_ptr_typedef(typedef_name, func_ptr), "", f"{typedef_name} {name}"]
+
+        var_type = self._format_type(var.type)
 
         if isinstance(var.type, Array):
             dims = self._format_array_dims(var.type)
             name = f"{name}{dims}"
 
         return [f"{var_type} {name}"]
+
+    @staticmethod
+    def _as_func_ptr(typ: TypeExpr) -> FunctionPointer | None:
+        """Return the FunctionPointer a type denotes, whether or not it is wrapped in a Pointer."""
+        if isinstance(typ, FunctionPointer):
+            return typ
+        if isinstance(typ, Pointer) and isinstance(typ.pointee, FunctionPointer):
+            return typ.pointee
+        return None
 
     # -----------------------------------------------------------------
     # Constant
@@ -994,9 +1093,15 @@ class PxdWriter:
         if name in C_TO_CYTHON_TYPE_MAP:
             name = C_TO_CYTHON_TYPE_MAP[name]
 
-        # Strip C++ namespace prefixes
-        while "::" in name:
-            name = re.sub(r"\b\w+::", "", name)
+        # Strip C++ namespace prefixes. Iterate to a fixpoint rather than until
+        # "::" disappears: a dependent name such as "types::remove_reference<T>::type"
+        # retains a ">::" that no \w+:: match can consume, so the latter condition
+        # never becomes false and the loop spins forever.
+        while True:
+            stripped = re.sub(r"\b\w+::", "", name)
+            if stripped == name:
+                break
+            name = stripped
 
         # Resolve inner typedefs
         if self._current_inner_typedefs and name in self._current_inner_typedefs:
@@ -1052,13 +1157,14 @@ class PxdWriter:
         if isinstance(ptr.pointee, FunctionPointer):
             return self._format_func_ptr_as_ptr(ptr.pointee, ptr.qualifiers)
 
-        if isinstance(ptr.pointee, Pointer) and isinstance(ptr.pointee.pointee, FunctionPointer):
-            fp = ptr.pointee.pointee
+        unwrapped = self._unwrap_func_ptr(ptr.pointee)
+        if unwrapped is not None:
+            fp, inner_stars = unwrapped
             return_type = self._format_type(fp.return_type)
             params = self._format_params(fp.parameters, fp.is_variadic)
             if not params:
                 params = "void"
-            result = f"{return_type} (**)({params})"
+            result = f"{return_type} ({'*' * (inner_stars + 1)})({params})"
             if ptr.qualifiers:
                 quals = " ".join(ptr.qualifiers)
                 result = f"{result} {quals}"
@@ -1095,13 +1201,32 @@ class PxdWriter:
             return True
         return isinstance(fp.return_type, Pointer) and isinstance(fp.return_type.pointee, FunctionPointer)
 
-    def _format_func_ptr(self, fp: FunctionPointer, name: str | None = None) -> str:
+    @staticmethod
+    def _unwrap_func_ptr(typ: TypeExpr) -> tuple[FunctionPointer, int] | None:
+        """Unwrap a pointer chain that bottoms out in a function pointer.
+
+        A bare :class:`FunctionPointer` and a ``Pointer`` wrapping one both mean
+        a single-star declarator, so the star count is the pointer depth floored
+        at one.
+
+        :returns: The function pointer and the number of stars its declarator
+            needs, or ``None`` if ``typ`` is not a function pointer.
+        """
+        stars = 0
+        current = typ
+        while isinstance(current, Pointer):
+            stars += 1
+            current = current.pointee
+        if isinstance(current, FunctionPointer):
+            return current, max(stars, 1)
+        return None
+
+    def _format_func_ptr(self, fp: FunctionPointer, name: str | None = None, stars: int = 1) -> str:
         """Format a FunctionPointer type."""
         return_type = self._format_type(fp.return_type)
         params = self._format_params(fp.parameters, fp.is_variadic)
-        if name:
-            return f"{return_type} (*{name})({params})"
-        return f"{return_type} (*)({params})"
+        declarator = "*" * stars + (name or "")
+        return f"{return_type} ({declarator})({params})"
 
     def _format_func_ptr_as_ptr(self, fp: FunctionPointer, ptr_quals: list[str]) -> str:
         """Format a pointer to function pointer."""
@@ -1119,10 +1244,10 @@ class PxdWriter:
         for param in params:
             if param.name:
                 name = self._escape_name(param.name)
-                if isinstance(param.type, FunctionPointer):
-                    parts.append(self._format_func_ptr(param.type, name))
-                elif isinstance(param.type, Pointer) and isinstance(param.type.pointee, FunctionPointer):
-                    parts.append(self._format_func_ptr(param.type.pointee, name))
+                unwrapped = self._unwrap_func_ptr(param.type)
+                if unwrapped is not None:
+                    fp, stars = unwrapped
+                    parts.append(self._format_func_ptr(fp, name, stars))
                 elif isinstance(param.type, Array):
                     param_type = self._format_type(param.type)
                     dims = self._format_array_dims(param.type)

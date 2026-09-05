@@ -164,8 +164,10 @@ class Pointer:
     qualifiers: list[str] = field(default_factory=list)
 
     def __str__(self) -> str:
-        quals = f"{' '.join(self.qualifiers)} " if self.qualifiers else ""
-        return f"{quals}{self.pointee}*"
+        # Qualifiers on the pointer itself follow the ``*`` in C spelling;
+        # qualifiers on the pointee are rendered by the pointee's own __str__.
+        quals = f" {' '.join(self.qualifiers)}" if self.qualifiers else ""
+        return f"{self.pointee}*{quals}"
 
 
 @dataclass
@@ -928,6 +930,7 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
         recursive_includes: bool = True,
         max_depth: int = 10,
         project_prefixes: tuple[str, ...] | None = None,
+        whitelist: list[str] | None = None,
     ) -> Header:
         """Parse C/C++ code and return the IR representation.
 
@@ -943,6 +946,11 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
             recursively parse included project headers.
         :param max_depth: Maximum recursion depth for include processing.
         :param project_prefixes: Path prefixes to treat as project headers.
+        :param whitelist: Files whose declarations are retained alongside the
+            main file's. Absolute entries are used as-is; relative entries
+            (including a bare basename) resolve against the parsed file's
+            directory, then ``include_dirs``, then the current working
+            directory. ``None`` keeps only the main file's declarations.
         :returns: Parsed header containing all extracted declarations.
         :raises RuntimeError: If parsing fails due to syntax errors.
         """
