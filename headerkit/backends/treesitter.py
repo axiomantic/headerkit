@@ -94,6 +94,10 @@ class TreeSitterBackend:
     def supports_cpp(self) -> bool:
         return _HAS_TREESITTER_CPP
 
+    def __init__(self) -> None:
+        self._defined_records: set[str] = set()
+        self._forward_records: set[str] = set()
+
     def is_available(self) -> bool:
         return _HAS_TREESITTER and (_HAS_TREESITTER_C or _HAS_TREESITTER_CPP)
 
@@ -152,6 +156,9 @@ class TreeSitterBackend:
 
         parser = Parser(language)
         tree = parser.parse(code.encode("utf-8"))
+
+        self._defined_records = set()
+        self._forward_records = set()
 
         declarations: list[Declaration] = []
         for child in tree.root_node.children:
@@ -382,6 +389,27 @@ class TreeSitterBackend:
                                 )
                             )
                     return results
+            else:
+                st_fwd = self._convert_class_or_struct(struct_node, filename, namespace=namespace)
+                base_type = self._parse_type_expr(struct_node)
+                fwd_results: list[Declaration] = []
+                if st_fwd:
+                    fwd_results.append(st_fwd)
+                for d in declarators:
+                    alias_name, underlying_type, ident_node = self._unwrap_declarator(d, base_type)
+                    loc_node = ident_node or d
+                    loc = SourceLocation(
+                        file=filename, line=loc_node.start_point[0] + 1, column=loc_node.start_point[1] + 1
+                    )
+                    fwd_results.append(
+                        Typedef(
+                            name=alias_name or "",
+                            underlying_type=underlying_type,
+                            namespace=namespace,
+                            location=loc,
+                        )
+                    )
+                return fwd_results
 
         if struct_node and struct_node.type == "enum_specifier":
             body_node = struct_node.child_by_field_name("body")
@@ -746,6 +774,18 @@ class TreeSitterBackend:
 
         is_class_keyword = node.type == "class_specifier" or any(c.type == "class" for c in node.children)
         is_union = node.type == "union_specifier" or any(c.type == "union" for c in node.children)
+
+        if name:
+            record_kind = "union" if is_union else ("class" if is_class_keyword else "struct")
+            key = f"{record_kind}:{namespace}::{name}" if namespace else f"{record_kind}:{name}"
+            if body_node is None:
+                if key in self._defined_records or key in self._forward_records:
+                    return None
+                self._forward_records.add(key)
+            else:
+                if key in self._defined_records:
+                    return None
+                self._defined_records.add(key)
 
         bases: list[BaseSpecifier] = []
         base_clause = None

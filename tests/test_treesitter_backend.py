@@ -615,3 +615,33 @@ class TestTreeSitterBackend:
 
         assert "flags" in fields_by_name
         assert fields_by_name["flags"].bit_width == 4
+
+    def test_opaque_struct_typedef_and_deduplication(self):
+        """Opaque struct inside typedefs emits Struct and Typedef, avoiding duplicate structs."""
+        code = """
+        typedef struct db_connection db;
+        typedef struct db_connection *db_ptr;
+        typedef struct db_statement db_stmt;
+        """
+        backend = TreeSitterBackend()
+        header = backend.parse(code, "db.h")
+
+        struct_names = [d.name for d in header.declarations if isinstance(d, Struct)]
+        typedef_names = [d.name for d in header.declarations if isinstance(d, Typedef)]
+
+        assert struct_names == ["db_connection", "db_statement"]
+        assert typedef_names == ["db", "db_ptr", "db_stmt"]
+
+        # Struct followed by typedef must not re-emit duplicate struct
+        code2 = """
+        struct MyStruct { int a; };
+        typedef struct MyStruct MyStructAlias;
+        """
+        header2 = backend.parse(code2, "mystruct.h")
+        structs2 = [d for d in header2.declarations if isinstance(d, Struct)]
+        typedefs2 = [d for d in header2.declarations if isinstance(d, Typedef)]
+        assert len(structs2) == 1
+        assert structs2[0].name == "MyStruct"
+        assert len(structs2[0].fields) == 1
+        assert len(typedefs2) == 1
+        assert typedefs2[0].name == "MyStructAlias"
