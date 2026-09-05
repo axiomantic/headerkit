@@ -1093,9 +1093,15 @@ class PxdWriter:
         if name in C_TO_CYTHON_TYPE_MAP:
             name = C_TO_CYTHON_TYPE_MAP[name]
 
-        # Strip C++ namespace prefixes
-        while "::" in name:
-            name = re.sub(r"\b\w+::", "", name)
+        # Strip C++ namespace prefixes. Iterate to a fixpoint rather than until
+        # "::" disappears: a dependent name such as "types::remove_reference<T>::type"
+        # retains a ">::" that no \w+:: match can consume, so the latter condition
+        # never becomes false and the loop spins forever.
+        while True:
+            stripped = re.sub(r"\b\w+::", "", name)
+            if stripped == name:
+                break
+            name = stripped
 
         # Resolve inner typedefs
         if self._current_inner_typedefs and name in self._current_inner_typedefs:
