@@ -73,7 +73,10 @@ python_version = "3.10"
 strict = true
 
 [[tool.mypy.overrides]]
-module = "headerkit._config"
+module = [
+    "headerkit._config",
+    "headerkit.backends.treesitter",
+]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
@@ -82,6 +85,8 @@ module = [
     "tree_sitter.*",
     "tree_sitter_c",
     "tree_sitter_c.*",
+    "tree_sitter_cpp",
+    "tree_sitter_cpp.*",
 ]
 ignore_missing_imports = true
 
