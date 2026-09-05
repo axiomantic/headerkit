@@ -47,7 +47,7 @@ class WriterOption:
         if self.type is list:
             if isinstance(val, list):
                 return val
-            if isinstance(val, (tuple, set)):
+            if isinstance(val, tuple | set):
                 return list(val)
             if isinstance(val, str):
                 return [val]
