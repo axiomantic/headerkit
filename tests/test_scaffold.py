@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +58,8 @@ class TestProjectLayout:
         assert (tmp_path / "README.md").read_text(encoding="utf-8") == "# My Lib"
         assert (tmp_path / "src/lib.py").read_text(encoding="utf-8") == "def foo(): pass"
         assert (tmp_path / "bin/run.sh").exists()
-        assert (tmp_path / "bin/run.sh").stat().st_mode & 0o111
+        if sys.platform != "win32":
+            assert (tmp_path / "bin/run.sh").stat().st_mode & 0o111
 
     def test_get_file(self) -> None:
         layout = ProjectLayout(
