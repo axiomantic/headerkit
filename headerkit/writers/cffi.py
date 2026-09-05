@@ -10,7 +10,9 @@ The IR types come from ``headerkit.ir`` and represent parsed C headers.
 from __future__ import annotations
 
 import re
+import textwrap
 from collections.abc import Sequence
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -24,11 +26,14 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # Maps bare tag names to their kind ("struct", "union", "enum").
 # Populated by header_to_cffi before emitting declarations.
@@ -494,7 +499,7 @@ def _enum_to_cffi_as_typedef(decl: Enum) -> str | None:
     return "\n".join(lines)
 
 
-class CffiWriter:
+class CffiWriter(BaseWriter):
     """Writer that generates CFFI cdef strings from headerkit IR.
 
     Options
@@ -526,7 +531,37 @@ class CffiWriter:
         cdef_string = writer.write(header)
     """
 
+    name: str = "cffi"
+    format_description: str = "CFFI cdef declarations for ffibuilder.cdef()"
     default_output_pattern: str = "{dir}/{stem}.cdef.txt"
+    default_extension: str = ".py"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+        WriterOption(
+            name="exclude_patterns",
+            description="Patterns of symbols to exclude from cdef",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="define_patterns",
+            description="Patterns of preprocessor macros to include in cdef",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="extra_cdef",
+            description="Additional custom cdef strings to append",
+            default=None,
+            type=list,
+        ),
+    )
 
     def __init__(
         self,
@@ -539,8 +574,8 @@ class CffiWriter:
         self.extra_cdef = extra_cdef
         self._matched_defines: list[str] | None = None
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to CFFI cdef string."""
+    def _render(self, unit: SourceUnit | Header) -> str:
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         output = header_to_cffi(header, exclude_patterns=self._exclude_patterns)
 
         # Append #define lines for names matched by generate()
@@ -555,13 +590,111 @@ class CffiWriter:
 
         return output
 
-    @property
-    def name(self) -> str:
-        return "cffi"
+    def write(self, header: Header) -> str:
+        """Convert header IR to CFFI cdef string."""
+        return self._render(header)
 
-    @property
-    def format_description(self) -> str:
-        return "CFFI cdef declarations for ffibuilder.cdef()"
+    def _write_package_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
+        cdef_code = self._render(unit)
+        fn_names = extract_function_names(unit)
+
+        pyproject = textwrap.dedent(f"""\
+            [build-system]
+            requires = ["setuptools>=61.0", "cffi>=1.15.0"]
+            build-backend = "setuptools.build_meta"
+
+            [project]
+            name = "{pkg}"
+            version = "0.1.0"
+            description = "Python CFFI bindings for {pkg}"
+            requires-python = ">=3.9"
+            dependencies = ["cffi>=1.15.0"]
+
+            [tool.setuptools.packages.find]
+            where = ["src"]
+        """)
+
+        build_ffi = textwrap.dedent(f"""\
+            from cffi import FFI
+
+            ffibuilder = FFI()
+
+            CDEF = \"\"\"{cdef_code}\"\"\"
+            ffibuilder.cdef(CDEF)
+            ffibuilder.set_source("_{pkg}_cffi", None)
+
+            if __name__ == "__main__":
+                ffibuilder.compile(verbose=True)
+        """)
+
+        init_py = textwrap.dedent(f"""\
+            \"\"\"{pkg} package initialization.\"\"\"
+            from {pkg}._bindings import ffi, lib
+
+            __all__ = ["ffi", "lib"]
+        """)
+
+        bindings_py = textwrap.dedent(f"""\
+            from cffi import FFI
+
+            ffi = FFI()
+            CDEF = \"\"\"{cdef_code}\"\"\"
+            ffi.cdef(CDEF)
+
+            lib = None
+            try:
+                lib = ffi.dlopen("{pkg}")
+            except OSError:
+                pass
+        """)
+
+        files = [
+            OutputFile(path="pyproject.toml", content=pyproject),
+            OutputFile(path="build_ffi.py", content=build_ffi),
+            OutputFile(path=f"src/{pkg}/__init__.py", content=init_py),
+            OutputFile(path=f"src/{pkg}/_bindings.py", content=bindings_py),
+        ]
+
+        if test_type in ("both", "tripwire"):
+            tw_fn_checks = (
+                "\n".join(
+                    f'    assert hasattr(lib, "{name}"), "Symbol {name} missing from C library"'
+                    for name in fn_names[:10]
+                )
+                or '    assert lib is not None, "Library failed to load"'
+            )
+            tripwire = textwrap.dedent(f"""\
+                import pytest
+
+                @pytest.mark.tripwire
+                def test_cffi_library_tripwire():
+                    \"\"\"Tripwire: verify binary load and C symbols.\"\"\"
+                    from {pkg}._bindings import lib
+                    if lib is None:
+                        pytest.fail("C library '{pkg}' could not be loaded via CFFI")
+                {tw_fn_checks}
+            """)
+            files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
+
+        if test_type in ("both", "unit"):
+            unit_test = textwrap.dedent(f"""\
+                from cffi import FFI
+                from {pkg} import ffi
+
+                def test_{pkg}_ffi_defined():
+                    \"\"\"Verify FFI instance configuration.\"\"\"
+                    assert isinstance(ffi, FFI)
+                    assert hasattr(ffi, "cdef")
+            """)
+            files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
+
+        return ProjectLayout(files=files)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping cache metadata in C-style comments."""

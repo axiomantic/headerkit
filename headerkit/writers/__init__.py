@@ -40,16 +40,31 @@ Example
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+import inspect
+from typing import Any, Protocol, runtime_checkable
 
-from headerkit.ir import Header
+from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
+from headerkit.ir import Header, SourceUnit
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers.base import (
+    BaseWriter,
+    WriterOption,
+)
+from headerkit.writers.base import (
+    coerce_writer_options as _coerce_writer_options_helper,
+)
 
 __all__ = [
+    "BaseWriter",
     "WriterBackend",
+    "WriterOption",
+    "coerce_writer_options",
     "get_default_writer",
     "get_writer",
     "get_writer_info",
     "is_writer_available",
+    "list_writer_layouts",
+    "list_writer_options",
     "list_writers",
     "register_writer",
 ]
@@ -93,6 +108,19 @@ class WriterBackend(Protocol):
         """
         ...
 
+    def write_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions | None = None,
+    ) -> ProjectLayout:
+        """Convert parsed unit IR into a complete ProjectLayout.
+
+        :param unit: Parsed unit IR from a parser backend.
+        :param options: Scaffolding configuration options.
+        :returns: ProjectLayout containing all generated files.
+        """
+        ...
+
     @property
     def name(self) -> str:
         """Human-readable name of this writer (e.g., ``"cffi"``)."""
@@ -121,6 +149,7 @@ def register_writer(
     writer_class: type[WriterBackend],
     is_default: bool = False,
     description: str | None = None,
+    priority: int = Priority.STANDARD,
 ) -> None:
     """Register an output writer.
 
@@ -133,6 +162,7 @@ def register_writer(
     :param is_default: If True, this writer becomes the default.
     :param description: Optional short description for :func:`get_writer_info`.
         If not provided, falls back to the class docstring's first line.
+    :param priority: Execution priority for hook dispatch.
     """
     global _DEFAULT_WRITER  # pylint: disable=global-statement
     if name in _WRITER_REGISTRY:
@@ -144,6 +174,42 @@ def register_writer(
         _WRITER_DESCRIPTIONS[name] = writer_class.__doc__.strip().split("\n")[0]
     if is_default or _DEFAULT_WRITER is None:
         _DEFAULT_WRITER = name
+
+    def _get_hook(context: PipelineContext | None = None, **kwargs: Any) -> WriterBackend:
+        opts = (context.options if context and context.options else {}) | kwargs
+        return writer_class(**opts)
+
+    def _write_hook(unit: SourceUnit, context: PipelineContext | None = None, **kwargs: Any) -> str | None:
+        opts = (context.options if context and context.options else {}) | kwargs
+        return writer_class(**opts).write(unit)
+
+    def _scaffold_hook(
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+        context: PipelineContext | None = None,
+        **kwargs: Any,
+    ) -> ProjectLayout | None:
+        sig = inspect.signature(writer_class.__init__)
+        has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        combined = (context.options if context and context.options else {}) | kwargs
+        if has_var_keyword:
+            inst = writer_class(**combined)
+        else:
+            valid_keys = set(sig.parameters.keys()) - {"self"}
+            init_kwargs = {k: v for k, v in combined.items() if k in valid_keys}
+            inst = writer_class(**init_kwargs)
+
+        supported = getattr(inst, "supported_layouts", ("file",))
+        if options.layout not in supported:
+            return None
+        if hasattr(inst, "write_layout"):
+            return inst.write_layout(unit, options)
+        ext = getattr(inst, "default_extension", ".txt")
+        return ProjectLayout(files=[OutputFile(path=f"{options.package_name}{ext}", content=inst.write(unit))])
+
+    HookRegistry.register_global("get_writer", _get_hook, priority=priority, writer=name)
+    HookRegistry.register_global("write_output", _write_hook, priority=priority, writer=name)
+    HookRegistry.register_global("scaffold_project", _scaffold_hook, priority=priority, writer=name, target=name)
 
 
 def list_writers() -> list[str]:
@@ -161,7 +227,13 @@ def list_writers() -> list[str]:
             print(f"Available: {name}")
     """
     _ensure_writers_loaded()
-    return list(_WRITER_REGISTRY.keys())
+    names = set(_WRITER_REGISTRY.keys())
+    for impl in HookRegistry.snapshot():
+        if impl.point in ("get_writer", "write_output") and "writer" in impl.matchers:
+            w_name = impl.matchers["writer"]
+            if "*" not in w_name and "?" not in w_name:
+                names.add(w_name)
+    return sorted(names)
 
 
 def is_writer_available(name: str) -> bool:
@@ -172,6 +244,51 @@ def is_writer_available(name: str) -> bool:
     """
     _ensure_writers_loaded()
     return name in _WRITER_REGISTRY
+
+
+def list_writer_layouts(name: str) -> tuple[str, ...]:
+    """Return the tuple of layouts supported by the named writer.
+
+    :param name: Writer name to inspect.
+    :returns: Tuple of supported layout names (e.g. ``("file", "package")``).
+    :raises ValueError: If the requested writer is not found.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        raise ValueError(f"Unknown writer: {name!r}. Available: {', '.join(list_writers())}")
+    writer_class = _WRITER_REGISTRY[name]
+    layouts = getattr(writer_class, "supported_layouts", ("file",))
+    return tuple(layouts)
+
+
+def list_writer_options(name: str) -> tuple[WriterOption, ...]:
+    """Return the tuple of options supported by the named writer.
+
+    :param name: Writer name to inspect.
+    :returns: Tuple of WriterOption specifications.
+    :raises ValueError: If the requested writer is not found.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        raise ValueError(f"Unknown writer: {name!r}. Available: {', '.join(list_writers())}")
+    writer_class = _WRITER_REGISTRY[name]
+    opts = getattr(writer_class, "supported_options", ())
+    return tuple(opts)
+
+
+def coerce_writer_options(name: str, options: dict[str, Any]) -> dict[str, Any]:
+    """Coerce option values for the named writer using its registered WriterOption definitions.
+
+    :param name: Writer name to look up supported options for.
+    :param options: Dictionary of option name to raw value.
+    :returns: Dictionary with option values coerced to their declared types.
+    """
+    _ensure_writers_loaded()
+    if name not in _WRITER_REGISTRY:
+        return dict(options)
+    writer_class = _WRITER_REGISTRY[name]
+    opts = getattr(writer_class, "supported_options", ())
+    return _coerce_writer_options_helper(options, tuple(opts))
 
 
 def get_writer_info() -> list[dict[str, str | bool]]:
@@ -224,12 +341,19 @@ def get_writer(name: str | None = None, **kwargs: object) -> WriterBackend:
         if _DEFAULT_WRITER is None:
             raise ValueError("No writers available")
         name = _DEFAULT_WRITER
-    if name not in _WRITER_REGISTRY:
-        available = ", ".join(_WRITER_REGISTRY.keys()) or "(none)"
-        raise ValueError(f"Unknown writer: {name!r}. Available: {available}")
-    # Protocol doesn't constrain __init__, so mypy strict can't verify
-    # that **kwargs match the concrete writer's constructor signature.
-    return _WRITER_REGISTRY[name](**kwargs)
+
+    coerced_kwargs = coerce_writer_options(name, dict(kwargs)) if kwargs else kwargs
+
+    ctx = PipelineContext(writer=name, options=dict(coerced_kwargs))
+    writer = HookDispatcher().first_result("get_writer", context=ctx, **coerced_kwargs)
+    if isinstance(writer, WriterBackend):
+        return writer
+
+    if name in _WRITER_REGISTRY:
+        return _WRITER_REGISTRY[name](**coerced_kwargs)
+
+    available = ", ".join(list_writers()) or "(none)"
+    raise ValueError(f"Unknown writer: {name!r}. Available: {available}")
 
 
 def get_default_writer() -> str:
@@ -273,6 +397,7 @@ def _ensure_writers_loaded() -> None:
     import headerkit.writers.diff  # noqa: F401
     import headerkit.writers.json  # noqa: F401
     import headerkit.writers.lua  # noqa: F401
+    import headerkit.writers.mojo  # noqa: F401
     import headerkit.writers.nim  # noqa: F401
     import headerkit.writers.prompt  # noqa: F401
 

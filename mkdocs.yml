@@ -85,6 +85,8 @@ nav:
     - Using CFFI Writer: guides/cffi.md
     - Writing Custom Backends: guides/custom-backends.md
     - Writing Custom Writers: guides/custom-writers.md
+    - Nim to Python Packaging: guides/nim-python-packaging.md
+    - Project Scaffolding: guides/scaffolding.md
   - Tutorials:
     - PXD Writer (Cython): tutorials/pxd-writer.md
     - ctypes Writer: tutorials/ctypes-writer.md
@@ -94,6 +96,8 @@ nav:
     - Overview: reference/index.md
     - IR Types: reference/ir.md
     - Backends: reference/backends.md
+    - Tree-sitter Backend: reference/treesitter.md
+    - Hooks Pipeline: reference/hooks.md
     - Writers: reference/writers.md
     - CFFI Writer: reference/cffi.md
     - CShim Writer: reference/cshim.md
@@ -102,8 +106,10 @@ nav:
     - Diff Writer: reference/diff.md
     - JSON Writer: reference/json.md
     - Lua Writer: reference/lua.md
+    - Mojo Writer: reference/mojo.md
     - Nim Writer: reference/nim.md
     - Prompt Writer: reference/prompt.md
+    - Scaffolding API: reference/scaffold.md
     - Generate Pipeline: reference/generate.md
     - Install Libclang CLI: reference/install-libclang.md
 

@@ -18,7 +18,8 @@ from headerkit._config import (
 )
 from headerkit._generate import batch_generate, generate
 from headerkit.backends import _load_backend_plugins
-from headerkit.writers import _load_writer_plugins
+from headerkit.hooks import _load_hook_plugins
+from headerkit.writers import _load_writer_plugins, coerce_writer_options
 
 
 def parse_writer_options(
@@ -28,7 +29,8 @@ def parse_writer_options(
     """Parse ``--writer-opt WRITER:KEY=VALUE`` arguments into a nested dict.
 
     Aggregates duplicate keys into lists and collapses single-element lists
-    to plain strings.
+    to plain strings. Values are coerced according to each writer's
+    ``supported_options`` declarations.
 
     :param raw_opts: Raw ``--writer-opt`` values from argparse.
     :param command_name: Program name for error messages.
@@ -51,7 +53,10 @@ def parse_writer_options(
 
         options_lists.setdefault(writer_name, {}).setdefault(key, []).append(value)
 
-    return {w_name: {k: v[0] if len(v) == 1 else v for k, v in opts.items()} for w_name, opts in options_lists.items()}
+    raw_dict = {
+        w_name: {k: v[0] if len(v) == 1 else v for k, v in opts.items()} for w_name, opts in options_lists.items()
+    }
+    return {w_name: coerce_writer_options(w_name, opts) for w_name, opts in raw_dict.items()}
 
 
 def _env_bool(name: str, *, default: bool = False) -> bool:
@@ -141,6 +146,34 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Writer option",
     )
     parser.add_argument(
+        "--layout",
+        dest="layout",
+        choices=["file", "package", "project", "wheel", "scikit-build", "cmake"],
+        default=None,
+        help="Layout mode for output (default: file, or package if directory output)",
+    )
+    parser.add_argument(
+        "--package-name",
+        "--pkg",
+        dest="package_name",
+        default=None,
+        help="Package name when scaffolding a package layout",
+    )
+    parser.add_argument(
+        "--test-type",
+        dest="test_type",
+        choices=["both", "tripwire", "unit", "none"],
+        default="both",
+        help="Type of test stubs to generate when scaffolding (default: both)",
+    )
+    parser.add_argument(
+        "--no-input",
+        dest="no_input",
+        action="store_true",
+        default=False,
+        help="Disable interactive prompting in terminal",
+    )
+    parser.add_argument(
         "--config",
         dest="config",
         metavar="PATH",
@@ -195,12 +228,36 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--runtime",
+        dest="runtime",
+        metavar="NAME",
+        default=None,
+        help="Target runtime environment (e.g., nim, mojo). Env: HEADERKIT_RUNTIME",
+    )
+    parser.add_argument(
+        "--language",
+        dest="language",
+        metavar="LANG",
+        default=None,
+        help="Input source language (e.g., c, cpp). Env: HEADERKIT_LANGUAGE",
+    )
+    parser.add_argument(
+        "--classification",
+        dest="classification",
+        metavar="KIND",
+        default=None,
+        help="Input classification (e.g., header, source). Env: HEADERKIT_CLASSIFICATION",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {importlib.metadata.version('headerkit')}",
     )
     parser.set_defaults(
         backend="libclang",
+        runtime=None,
+        language=None,
+        classification=None,
         include_dirs=[],
         defines=[],
         backend_args=[],
@@ -352,15 +409,16 @@ def _merge_config_writer_opts(
     return specs
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns exit code (0 = success, 1 = error)."""
+    raw_args = sys.argv[1:] if argv is None else argv
     # Subcommand dispatch: `headerkit install-libclang [args]`
-    if len(sys.argv) > 1 and sys.argv[1] == "install-libclang":
+    if raw_args and raw_args[0] == "install-libclang":
         from headerkit.install_libclang import main as _install_main
 
-        return _install_main(sys.argv[2:])
+        return _install_main(raw_args[1:])
 
-    if len(sys.argv) > 1 and sys.argv[1] == "cache":
+    if raw_args and raw_args[0] == "cache":
         from headerkit._cache_cli import (
             cache_clear_main,
             cache_populate_main,
@@ -368,7 +426,7 @@ def main() -> int:
             cache_status_main,
         )
 
-        sub_argv = sys.argv[2:]
+        sub_argv = raw_args[1:]
         if sub_argv and sub_argv[0] == "status":
             return cache_status_main(sub_argv[1:])
         if sub_argv and sub_argv[0] == "clear":
@@ -383,10 +441,10 @@ def main() -> int:
         )
         return 1
 
-    if len(sys.argv) > 1 and sys.argv[1] == "store":
+    if raw_args and raw_args[0] == "store":
         from headerkit._cache_cli import store_merge_main
 
-        sub_argv = sys.argv[2:]
+        sub_argv = raw_args[1:]
         if sub_argv and sub_argv[0] == "merge":
             return store_merge_main(sub_argv[1:])
         print(
@@ -396,7 +454,7 @@ def main() -> int:
         return 1
 
     parser = _build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(raw_args)
 
     # Reject mutually exclusive flags
     if args.no_config and args.config is not None:
@@ -464,8 +522,13 @@ def main() -> int:
     # Load plugins (F3/F7: no --plugins flag; config.plugins loaded here)
     _load_backend_plugins()
     _load_writer_plugins()
+    _load_hook_plugins()
     if config is not None and config.plugins:
         _load_explicit_plugins(config.plugins)
+
+    resolved_runtime = getattr(args, "runtime", None) or os.environ.get("HEADERKIT_RUNTIME")
+    resolved_language = getattr(args, "language", None) or os.environ.get("HEADERKIT_LANGUAGE")
+    resolved_classification = getattr(args, "classification", None) or os.environ.get("HEADERKIT_CLASSIFICATION")
 
     # Parse writer specs
     try:
@@ -519,6 +582,57 @@ def main() -> int:
         merged_output_templates.update(config.output)
     merged_output_templates.update(output_templates)
 
+    # Check for package / project layout scaffolding
+    layout_mode = getattr(args, "layout", None)
+    pkg_name_arg = getattr(args, "package_name", None)
+    test_type = getattr(args, "test_type", "both")
+    no_input = getattr(args, "no_input", False)
+
+    if (layout_mode is not None and layout_mode != "file") or (layout_mode is None and pkg_name_arg is not None):
+        from headerkit.backends import get_backend
+        from headerkit.scaffold import ScaffoldOptions, prompt_scaffold_options, scaffold
+
+        backend = get_backend(backend_name)
+        backend_args_list = _parse_defines(defines) + backend_args
+
+        if not input_files:
+            print("Error: no input files provided for scaffolding", file=sys.stderr)
+            return 1
+
+        first_path = Path(input_files[0]).resolve()
+        unit = backend.parse(
+            first_path.read_text(encoding="utf-8"),
+            str(first_path),
+            include_dirs or None,
+            backend_args_list or None,
+            project_prefixes=(str(first_path.parent),),
+        )
+
+        for spec in specs:
+            pkg_name = pkg_name_arg or (Path(spec.output_template).name if spec.output_template else first_path.stem)
+            target_dir = Path(spec.output_template) if spec.output_template else Path(pkg_name)
+
+            scaffold_wopts: dict[str, object] = {}
+            if spec.options:
+                for key, values in spec.options.items():
+                    scaffold_wopts[key] = values[0] if len(values) == 1 else values
+
+            defaults = ScaffoldOptions(
+                package_name=pkg_name,
+                target_language=spec.name,
+                layout=layout_mode or "package",
+                test_type=test_type,
+                options=scaffold_wopts,
+            )
+            scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
+            project_layout = scaffold(unit, scaffold_opts)
+            written = project_layout.write_to_disk(target_dir)
+            print(
+                f"headerkit: scaffolded {len(written)} files into {target_dir}",
+                file=sys.stderr,
+            )
+        return 0
+
     # Determine whether to use batch_generate() or direct generate()
     # Use direct generate() only for: single explicit file, single writer, no output template
     writer_names = [s.name for s in specs]
@@ -540,7 +654,7 @@ def main() -> int:
                 wopts: dict[str, object] = {}
                 for key, values in spec.options.items():
                     wopts[key] = values[0] if len(values) == 1 else values
-                batch_writer_options[spec.name] = wopts
+                batch_writer_options[spec.name] = coerce_writer_options(spec.name, wopts)
 
         # Build header_overrides from config
         batch_header_overrides: dict[str, dict[str, object]] | None = None
@@ -555,6 +669,9 @@ def main() -> int:
                 exclude_patterns=exclude_pats or None,
                 writers=writer_names,
                 backend_name=backend_name,
+                runtime=resolved_runtime,
+                language=resolved_language,
+                classification=resolved_classification,
                 include_dirs=include_dirs or None,
                 defines=defines or None,
                 extra_args=extra_args_list or None,
@@ -592,7 +709,14 @@ def main() -> int:
             return 1
 
     # Build umbrella
-    code, filename, project_prefixes = _build_umbrella(input_files)
+    project_prefixes: tuple[str, ...]
+    if len(input_files) == 1 and backend_name != "libclang":
+        p = Path(input_files[0]).resolve()
+        code = None
+        filename = str(p)
+        project_prefixes = (str(p.parent),)
+    else:
+        code, filename, project_prefixes = _build_umbrella(input_files)
 
     # Generate outputs via cache-aware pipeline
     extra_args = _parse_defines(defines) + backend_args
@@ -600,6 +724,7 @@ def main() -> int:
         writer_kwargs: dict[str, object] = {}
         for key, values in spec.options.items():
             writer_kwargs[key] = values[0] if len(values) == 1 else values
+        writer_kwargs = coerce_writer_options(spec.name, writer_kwargs)
 
         if spec.name == "diff" and "baseline" not in writer_kwargs:
             print(
@@ -614,6 +739,9 @@ def main() -> int:
                 writer_name=spec.name,
                 code=code,
                 backend_name=backend_name,
+                runtime=resolved_runtime,
+                language=resolved_language,
+                classification=resolved_classification,
                 include_dirs=include_dirs or None,
                 extra_args=extra_args or None,
                 writer_options=writer_kwargs or None,

@@ -550,3 +550,340 @@ def test_write_cshim_convenience_function() -> None:
     h = Header(path="hello.h", declarations=[fn])
     out = write_cshim(h)
     assert "void hello(void);" in out
+
+
+def test_cshim_inheritance_flattening_and_upcast() -> None:
+    """Test inheritance flattening: upcast helper and flattened inherited methods."""
+    from headerkit.ir import BaseSpecifier
+
+    shape = Struct(
+        name="Shape",
+        is_cppclass=True,
+        methods=[
+            Function(name="area", return_type=CType("double"), parameters=[]),
+        ],
+    )
+    circle = Struct(
+        name="Circle",
+        is_cppclass=True,
+        bases=[BaseSpecifier(name="Shape", access="public")],
+        constructors=[
+            Function(
+                name="Circle",
+                return_type=CType("void"),
+                parameters=[Parameter("radius", CType("double"))],
+            )
+        ],
+        methods=[
+            Function(name="radius", return_type=CType("double"), parameters=[]),
+        ],
+    )
+    h = Header(path="geometry.h", declarations=[shape, circle])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # 1. Upcast helper prototype and implementation
+    assert "Shape_t* Circle_as_Shape(Circle_t* self);" in out
+    assert "return reinterpret_cast<Shape_t*>(static_cast<Shape*>(reinterpret_cast<Circle*>(self)));" in out
+
+    # 2. Inherited method flattened onto Circle
+    assert "double Circle_area(Circle_t* self);" in out
+    assert "reinterpret_cast<Circle*>(self)->area();" in out
+
+    # 3. Native method on Circle
+    assert "double Circle_radius(Circle_t* self);" in out
+
+
+def test_cshim_multiple_inheritance_upcasts() -> None:
+    """Test upcasts for multiple inheritance adjust pointer offsets via static_cast."""
+    from headerkit.ir import BaseSpecifier
+
+    audio = Struct(
+        name="AudioDevice",
+        is_cppclass=True,
+        methods=[Function(name="play", return_type=CType("void"), parameters=[])],
+    )
+    video = Struct(
+        name="VideoDevice",
+        is_cppclass=True,
+        methods=[Function(name="render", return_type=CType("void"), parameters=[])],
+    )
+    media = Struct(
+        name="MediaDevice",
+        is_cppclass=True,
+        bases=[
+            BaseSpecifier(name="AudioDevice", access="public"),
+            BaseSpecifier(name="VideoDevice", access="public"),
+        ],
+        methods=[Function(name="sync", return_type=CType("void"), parameters=[])],
+    )
+    h = Header(path="media.h", declarations=[audio, video, media])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "AudioDevice_t* MediaDevice_as_AudioDevice(MediaDevice_t* self);" in out
+    assert "VideoDevice_t* MediaDevice_as_VideoDevice(MediaDevice_t* self);" in out
+    assert "static_cast<AudioDevice*>(reinterpret_cast<MediaDevice*>(self))" in out
+    assert "static_cast<VideoDevice*>(reinterpret_cast<MediaDevice*>(self))" in out
+
+    # Both inherited methods flattened onto MediaDevice
+    assert "void MediaDevice_play(MediaDevice_t* self);" in out
+    assert "void MediaDevice_render(MediaDevice_t* self);" in out
+
+
+def test_cshim_std_string_mapping() -> None:
+    """Test std::string parameter and return type flattening with thread-local safe storage."""
+    cls = Struct(
+        name="Greeter",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="set_name",
+                return_type=CType("void"),
+                parameters=[Parameter("name", CType("std::string"))],
+            ),
+            Function(
+                name="get_name",
+                return_type=CType("std::string"),
+                parameters=[],
+            ),
+        ],
+    )
+    h = Header(path="greeter.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # In C prototype: std::string parameter becomes const char*
+    assert "void Greeter_set_name(Greeter_t* self, const char* name);" in out
+    # In C prototype: std::string return becomes const char*
+    assert "const char* Greeter_get_name(Greeter_t* self);" in out
+    # C++ implementation passes name and returns thread-local safe string
+    assert "reinterpret_cast<Greeter*>(self)->set_name(name);" in out
+    assert "thread_local std::string _ret_str;" in out
+    assert "_ret_str = reinterpret_cast<Greeter*>(self)->get_name();" in out
+    assert "return _ret_str.c_str();" in out
+    assert "#include <string>" in out
+
+
+def test_cshim_std_string_view_mapping() -> None:
+    """Test std::string_view parameter and return without invalid .c_str() calls."""
+    cls = Struct(
+        name="Viewer",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="show_view",
+                return_type=CType("void"),
+                parameters=[Parameter("view", CType("std::string_view"))],
+            ),
+            Function(
+                name="get_view",
+                return_type=CType("std::string_view"),
+                parameters=[],
+            ),
+        ],
+    )
+    h = Header(path="viewer.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "void Viewer_show_view(Viewer_t* self, const char* view);" in out
+    assert "const char* Viewer_get_view(Viewer_t* self);" in out
+    assert "auto _view = reinterpret_cast<Viewer*>(self)->get_view();" in out
+    assert "_ret_str.assign(_view.data(), _view.size());" in out
+    assert ".c_str()" not in out.split("get_view")[1].split("return")[0]
+
+
+def test_cshim_std_vector_parameter_flattening() -> None:
+    """Test std::vector<T> parameter flattening to (const T* data, size_t count)."""
+    cls = Struct(
+        name="Accumulator",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="add_values",
+                return_type=CType("int"),
+                parameters=[Parameter("values", CType("std::vector<int>"))],
+            ),
+        ],
+    )
+    h = Header(path="acc.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # In C header: #include <stddef.h> must be present for size_t
+    assert "#include <stddef.h>" in out
+    assert "int Accumulator_add_values(Accumulator_t* self, const int* values_data, size_t values_count);" in out
+    assert "std::vector<int>(values_data, values_data + values_count)" in out
+    assert "#include <vector>" in out
+    assert "#include <cstddef>" in out
+
+
+def test_cshim_non_const_vector_reference_not_flattened() -> None:
+    """Mutable std::vector<T>& reference parameters must not be flattened to const temporary arrays."""
+    cls = Struct(
+        name="Mutator",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="fill_values",
+                return_type=CType("void"),
+                parameters=[Parameter("out", Reference(CType("std::vector<int>")))],
+            ),
+        ],
+    )
+    h = Header(path="mut.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Must NOT flatten to const int* out_data, size_t out_count
+    assert "out_data" not in out
+    assert "out_count" not in out
+
+
+def test_cshim_method_overload_disambiguation() -> None:
+    """Overloaded member methods must be disambiguated with numeric index suffixes."""
+    cls = Struct(
+        name="Calculator",
+        is_cppclass=True,
+        methods=[
+            Function(
+                name="compute",
+                return_type=CType("int"),
+                parameters=[Parameter("x", CType("int"))],
+            ),
+            Function(
+                name="compute",
+                return_type=CType("double"),
+                parameters=[Parameter("x", CType("double"))],
+            ),
+        ],
+    )
+    h = Header(path="calc.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "int Calculator_compute(Calculator_t* self, int x);" in out
+    assert "double Calculator_compute_1(Calculator_t* self, double x);" in out
+
+
+def test_cshim_conversion_and_unary_operators() -> None:
+    """Test conversion operators (operator bool, operator int) and unary operators."""
+    cls = Struct(
+        name="ValueWrapper",
+        is_cppclass=True,
+        methods=[
+            Function(name="operator bool", return_type=CType("bool"), parameters=[]),
+            Function(name="operator int", return_type=CType("int"), parameters=[]),
+            Function(name="operator*", return_type=CType("int"), parameters=[]),  # unary deref
+            Function(name="operator-", return_type=CType("int"), parameters=[]),  # unary neg
+        ],
+    )
+    h = Header(path="wrapper.h", declarations=[cls])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    assert "bool ValueWrapper_to_bool(ValueWrapper_t* self);" in out
+    assert "int ValueWrapper_to_int(ValueWrapper_t* self);" in out
+    assert "int ValueWrapper_deref(ValueWrapper_t* self);" in out
+    assert "int ValueWrapper_neg(ValueWrapper_t* self);" in out
+
+
+def test_cshim_private_and_protected_base_inheritance_filtered() -> None:
+    """Private and protected base class methods and upcast bridges must not be exposed."""
+    from headerkit.ir import BaseSpecifier
+
+    base_priv = Struct(
+        name="InternalEngine",
+        is_cppclass=True,
+        methods=[
+            Function(name="internal_step", return_type=CType("void"), parameters=[]),
+        ],
+    )
+    base_pub = Struct(
+        name="PublicInterface",
+        is_cppclass=True,
+        methods=[
+            Function(name="public_step", return_type=CType("void"), parameters=[]),
+        ],
+    )
+    derived = Struct(
+        name="Machine",
+        is_cppclass=True,
+        bases=[
+            BaseSpecifier(name="InternalEngine", access="private"),
+            BaseSpecifier(name="PublicInterface", access="public"),
+        ],
+        methods=[
+            Function(name="run", return_type=CType("void"), parameters=[]),
+        ],
+    )
+    h = Header(path="machine.h", declarations=[base_priv, base_pub, derived])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Public base methods and upcasts must be present
+    assert "PublicInterface_t* Machine_as_PublicInterface(Machine_t* self);" in out
+    assert "void Machine_public_step(Machine_t* self);" in out
+
+    # Private base methods and upcasts must NOT be present on Derived
+    assert "Machine_as_InternalEngine" not in out
+    assert "Machine_internal_step" not in out
+
+
+def test_cshim_non_const_string_ref_not_mapped_to_const_char_ptr() -> None:
+    """Non-const std::string& must not be converted to const char* (BOT-C1)."""
+    fn_mut = Function(
+        name="mutate_str",
+        return_type=CType("void"),
+        parameters=[Parameter("s", Reference(CType("std::string")))],
+    )
+    fn_const = Function(
+        name="read_str",
+        return_type=CType("void"),
+        parameters=[Parameter("s", Reference(CType("const std::string")))],
+    )
+    h = Header(path="str.h", declarations=[fn_mut, fn_const])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Const ref maps to const char*
+    assert "void read_str(const char* s);" in out
+    # Non-const ref does NOT map to const char*, preserving type integrity
+    assert "void mutate_str(const char* s);" not in out
+    assert "std_string* s" in out or "string* s" in out
+
+
+def test_cshim_base_class_namespace_resolution_no_collision() -> None:
+    """Base classes with identical short names in different namespaces must resolve correctly (BOT-C2)."""
+    from headerkit.ir import BaseSpecifier
+
+    base_a = Struct(
+        name="Widget",
+        namespace="gui_a",
+        is_cppclass=True,
+        methods=[Function(name="draw_a", return_type=CType("void"), parameters=[])],
+    )
+    base_b = Struct(
+        name="Widget",
+        namespace="gui_b",
+        is_cppclass=True,
+        methods=[Function(name="draw_b", return_type=CType("void"), parameters=[])],
+    )
+    derived_b = Struct(
+        name="Button",
+        namespace="gui_b",
+        is_cppclass=True,
+        bases=[BaseSpecifier(name="Widget", access="public")],
+        methods=[Function(name="click", return_type=CType("void"), parameters=[])],
+    )
+    h = Header(path="widgets.h", declarations=[base_a, base_b, derived_b])
+    writer = CShimWriter()
+    out = writer.write(h)
+
+    # Button in gui_b must resolve to gui_b::Widget, not gui_a::Widget
+    assert "gui_b_Widget_t* gui_b_Button_as_gui_b_Widget(gui_b_Button_t* self);" in out
+    assert "gui_a_Widget_t* gui_b_Button_as_gui_a_Widget" not in out
+    assert "static_cast<gui_b::Widget*>" in out
+    assert "void gui_b_Button_draw_b(gui_b_Button_t* self);" in out
+    assert "void gui_b_Button_draw_a" not in out

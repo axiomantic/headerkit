@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-09-05
+
+### Added
+
+- Enhanced CShim writer (`CShimWriter`) with C++ inheritance flattening: emits upcast helpers (`{Derived}_as_{Base}`) using `static_cast` for proper pointer offset adjustment under multiple/virtual inheritance, and flattens public base class methods directly onto derived opaque handle APIs.
+- Standard library container mappings in `CShimWriter`: `std::string` and `std::string_view` mapped to `const char*` with thread-safe C-string conversion; `std::vector<T>` parameters mapped to flat `(const T* data, size_t count)` C-ABI arrays and reconstructed into C++ vectors.
+- Expanded operator mappings in `CShimWriter`: added conversion/cast operators (`operator bool`, `operator int`, etc. mapped to `to_bool`, `to_int`) and unary operator disambiguation (`operator*` to `deref`, `operator-` to `neg`, `operator+` to `pos`).
+
+### Fixed
+
+- Pipeline and registry wiring: added backend alias normalization (`treesitter` and `tree_sitter` to `tree-sitter`) across `get_backend()` and `is_backend_available()`; wired custom override `@hook("write_output")` execution into `generate()`; executed `transform_unit` hooks during `scaffold()`; forwarded CLI `--writer-opt` values to `ScaffoldOptions`; and completed `supported_options` declarations across Mojo, Ctypes, Cffi, Cython, and Nim writers.
+- `CShimWriter`: rejected non-const `std::string&` and `std::string_view&` references from automatic C-string flattening, avoiding invalid C++ compilation when binding temporary rvalues to mutable references, and preserving opaque handle type safety.
+- `CShimWriter`: fixed base class resolution in multiple inheritance flattening and upcast generation by tracking classes by fully-qualified name and scoped namespace lookup, preventing collisions between identical short class names across namespaces.
+- Writer options type coercion: implemented `WriterOption.coerce` and `coerce_writer_options` in `BaseWriter`, `get_writer()`, and CLI `--writer-opt` parsing, properly coercing string inputs into declared types (e.g. `bool`, `int`, `float`).
+- `CShimWriter`: replaced tautological `assert((void*)fn != NULL)` in generated C test harnesses with cross-platform runtime dynamic symbol resolution (`dlopen`/`dlsym` on POSIX, `GetProcAddress` on Windows) linked against `${CMAKE_DL_LIBS}`, eliminating green-mirage compiler-optimized assertions.
+- `MojoWriter`: generated tripwire tests now compute exact Mojo FFI parameter and return type signatures for each foreign function symbol rather than hardcoding `fn() -> None`.
+- Layout delegation: removed redundant `write()` method overrides in `MojoWriter`, `CShimWriter`, and `NimWriter`, properly inheriting `BaseWriter.write()` delegation to `write_layout(layout="file")` to satisfy the Zero-Dual-System Rule.
+- `TreeSitterBackend`: fixed extraction of C variadic function declarations (`variadic_parameter` node type in tree-sitter C grammar), top-level variable declarations (pointers, multi-dimensional arrays, sized primitives, and multiple declarators per statement), struct callback function pointer fields, bitfield widths, and function pointer typedefs.
+- Memory safety in `CShimWriter`: prevented dangling pointer / use-after-free when returning `std::string` by value by managing lifetime via thread-local C-string storage, and fixed `std::string_view` returns to avoid invalid `.c_str()` member invocations.
+- Missing standard headers in `CShimWriter`: added `#include <stddef.h>` to generated C headers when `size_t` is present, and added `#include <vector>`, `<string>`, and `<cstddef>` to generated C++ implementation shims.
+- Constrained `std::vector<T>` parameter flattening in `CShimWriter` to by-value and const references, preventing illegal binding of temporary rvalues to non-const references.
+- Disambiguated overloaded C++ methods and free functions in `CShimWriter` with numeric suffixes rather than silently skipping subsequent overloads.
+- Expanded cross-compilation compiler binary pattern matching in `headerkit._target` to support version-suffixed binaries (`gcc-12`, `gcc-14.2.0`), Windows `.exe`, and dotted target components (`darwin21.4`).
+- Upgraded generated unit test stubs in `headerkit.packaging.nim` to assert function parameter counts and signatures via `inspect.signature` instead of shallow callable checks.
+- Nim scikit-build wheel packaging template and build helpers (`headerkit.packaging.nim`, `generate_nim_cmake`, `generate_nim_pyproject`, `generate_nim_python_wrapper`, `generate_nim_source`, `generate_nim_wheel_layout`): end-to-end scaffolding for compiling Nim modules into distributable binary Python wheels via `scikit-build-core` with deterministic `--mm:orc` ARC runtime memory management, multi-platform library naming across Linux/macOS/Windows, idempotent `NimMain()` initialization, ctypes function wrappers, and non-tautological tripwires.
+- Added `wheel` and `scikit-build` layout modes to `NimWriter` (`headerkit header.h -w nim --layout wheel`) with CLI support for compiling and packaging Nim-based native extensions into binary wheels.
+- Structured `TargetTriple` dataclass and parsing (`headerkit.TargetTriple`, `parse_triple`): parses 3- and 4-component triples as well as 2-component shorthands (`x86_64-linux`, `aarch64-darwin`, `win64`, `wasm32-wasi`, `arm-none-eabi`) into structured target models with platform predicates (`is_windows`, `is_darwin`, `is_linux`, `is_musl`, `is_wasm`, `is_embedded`) and architecture-aware `pointer_width` (8 for 64-bit, 4 for 32-bit, 2 for 16-bit).
+- Cross-compilation toolchain auto-detection (`detect_cross_compiler_target`): automatically detects active cross-compilation targets from `CARGO_BUILD_TARGET`, `LLVM_TARGET_TRIPLE`, `CROSS_COMPILE`, and `CC`/`CXX` cross-compiler binary prefixes (e.g. `aarch64-linux-gnu-gcc`) in `resolve_target()`.
+- C++ Tree-Sitter parser backend: enhanced `TreeSitterBackend` with `tree-sitter-cpp` support, enabling zero-system-dependency parsing of C++ headers (.hpp, .hh, .hxx, .cpptest) and `-x c++` inputs.
+- C++ AST extraction in Tree-Sitter: support for extracting C++ classes (`cppclass`), member access specifiers (`public`, `protected`, `private`), constructors, virtual/pure-virtual methods (`= 0`), static methods, const-qualified methods, destructors, base inheritance (`BaseSpecifier`), nested namespaces, class/function templates, using-declaration type aliases, reference types (`&` and `&&`), and operator overloads.
+- Added `tree-sitter-cpp>=0.23` to `treesitter` optional dependency extra.
+
+- Pipeline context layout filtering: added `layout` attribute to `PipelineContext` enabling hooks to match and filter on requested layout strategies (e.g. `@hook("scaffold_project", layout="package")`), with automatic fallback when a layout is unsupported by a specific writer.
+- End-to-end roundtrip integration test coverage for all 10 writers: added `test_roundtrip_cshim.py`, `test_roundtrip_mojo.py`, and `test_roundtrip_nim.py` completing full `libclang` C/C++ AST-to-binding roundtrip verification across the entire writer surface.
+- Writer-defined layouts and options introspection: added `WriterOption` dataclass and `supported_layouts` / `supported_options` attributes on `BaseWriter` and all 10 concrete writers, enabling writers to declare layouts (e.g. `file`, `package`, `project`, `cmake`) and configurable arguments (`test_type`, `catch_exceptions`, `indent`, `verbosity`). Added public discovery functions `list_writer_layouts(name)` and `list_writer_options(name)` with layout validation in `BaseWriter.write_layout()`.
+- Unified output writer scaffolding architecture: all 10 writers (`ctypes`, `cffi`, `cython`, `luajit/lua`, `nim`, `mojo`, `cshim`, `json`, `diff`, `prompt`) inherit from `BaseWriter` and implement `write_layout(unit, options) -> ProjectLayout`, unifying single-file generation and multi-file package scaffolding under a single layout engine.
+- Automatic scaffolder hook registration: `register_writer()` registers the `@hook("scaffold_project", writer=name, target=name)` hook, allowing all writers to transparently serve as scaffolding engines.
+- Extended package scaffolding templates for Cython (`.pxd`, `.pyx`, `pyproject.toml`, tripwire), CFFI (`build_ffi.py`, `_bindings.py`, `pyproject.toml`, tripwire), CShim (`CMakeLists.txt`, headers, bridge source, test harness), and LuaJIT (rockspec, Lua source, tripwire).
+- Legacy `writer.write(header)` backward-compatibility facade natively delegating to `write_layout(layout="file")`.
+- Polyglot project and extension scaffolding engine (`headerkit.scaffold`): unified layout architecture where single-file bindings and full packages are driven by a single output model (`OutputFile`, `ProjectLayout`, `ScaffoldOptions`, `scaffold()`).
+- Built-in zero-dependency standard library scaffolder (`StdlibScaffolder`) generating complete turnkey packages with build metadata and test suites for Nim (`.nimble`, `nim.cfg`), Mojo (`mojoproject.toml`), and Python (`pyproject.toml`).
+- Pluggable `BYOScaffolder` protocol and `scaffold_project` hook integration for third-party template engines (e.g. Copier, Cookiecutter) with custom precedence.
+- Dual test stub generation: automated side-by-side failing tripwires (`pytest-tripwire`, `nim-tripwire`) for C ABI symbol/library verification and unit test skeletons.
+- TTY-aware dynamic wizard (`prompt_scaffold_options`) auto-detecting terminal status to guide users through package setup interactively, with graceful `--no-input` fallback.
+- CLI options: `--layout` (`file`, `package`, `project`), `--package-name` / `--pkg`, `--test-type` (`both`, `tripwire`, `unit`, `none`), and `--no-input`.
+- Executable Copier BYOScaffolder showcase example (`examples/scaffolding/copier_scaffolder.py`).
+- Comprehensive scaffolding guide (`docs/guides/scaffolding.md`) and API reference (`docs/reference/scaffold.md`).
+- Mojo FFI binding writer (`headerkit.writers.mojo`): generates idiomatic Modular Mojo bindings using `sys.ffi.DLHandle` and C-ABI flat shims, mapping C types, structs, enums, typedefs, constants, and high-level C++ class wrapper structs.
+- Mojo writer reference documentation (`docs/reference/mojo.md`).
+- C source definition parsing: enhanced `TreeSitterBackend` to extract non-static function definitions and declarations from `.c` source files.
+
+### Removed
+
+- Removed regex-based `RustBackend`, `ZigBackend`, and `NimBackend` source extractors. Regular-expression parsing of context-free languages is strictly prohibited; proper grammar-based AST extractors (via Tree-sitter grammars) are scheduled on the roadmap.
+
+### Fixed
+
+- Eliminated completion bias, hollow scaffolding, and tautological test generation across all writer packages:
+  - `CShimWriter`: emit complete C-ABI function prototypes and opaque struct handles into `include/{pkg}_cshim.h` instead of hollow placeholders; updated C test harness to `#include` the generated header and assert non-null symbol pointers.
+  - `CythonWriter`: replaced tautological `assert pkg is not None` with module inspection and package structure assertions.
+  - `CffiWriter`: replaced vacuous assertions with FFI instance type and configuration checks.
+  - `CtypesWriter`: replaced vacuous assertions with exported symbol `hasattr` checks and module verification.
+  - `NimWriter`: replaced `check true` and echo tripwires with real `dynlib.loadLib` and `symAddr` symbol resolution and `check declared(...)` assertions.
+  - `MojoWriter`: replaced `assert_true(True)` with `DLHandle.get_function` symbol verification and struct type assertions.
+  - `LuaWriter`: replaced print stubs with `ffi.load` and symbol table verification.
+  - `TreeSitterBackend`: fixed preprocessor conditional traversal to skip mutually exclusive `#elif`/`#else` branches when visiting `#if`/`#ifdef`, preventing duplicate or conflicting symbol extraction. Fixed `-x c` and `-std=c*` CLI override handling.
+- `headerkit.backends.treesitter`: lightweight, zero-system-dependency parser backend using `tree-sitter-c` for parsing C headers without requiring system LLVM or `libclang`. Added support for nested preprocessor blocks (`#ifndef`, `#ifdef __cplusplus`) and pointer-return function prototypes.
+- Comprehensive guide for Nim to Python packaging and deterministic memory management (`docs/guides/nim-python-packaging.md`) using `--mm:orc` and `scikit-build-core`.
+- Real-world working example (`examples/nim_bridge/`) demonstrating compiled Nim library, Headerkit ctypes bindings, and binary wheel distribution.
+- `treesitter` optional dependency extra in `pyproject.toml` (`pip install "headerkit[treesitter]"`).
+- `headerkit.hooks` module implementing a unified hook architecture with priority tiers (`FALLBACK`, `STANDARD`, `PROJECT`, `OVERRIDE`), glob pattern matching, and `first_result` / `waterfall` dispatch modes.
+- Exported hook symbols (`Priority`, `PipelineContext`, `HookImpl`, `HookRegistry`, `hook`, `HookDispatcher`, `HookCaller`, `execute_pipeline`) in top-level `headerkit` namespace.
+- Core IR evolution: renamed `Header` to `SourceUnit` with `Header = SourceUnit` backward-compatibility alias, and added `InputSpec` for polyglot input classification.
+- Unified backend and writer registry: migrated all 9 built-in writers and parser backends into `HookRegistry`, with `get_backend()` and `get_writer()` delegating to `HookDispatcher`.
+- Enhanced `TreeSitterBackend` with recursive preprocessor block extraction, pointer return parsing, and void parameter handling.
+- `execute_pipeline`: automated 3-stage execution pipeline (`parse_unit` -> `transform_unit` -> `write_output`) with context threading.
+- Polyglot generator trunk migration: `generate()`, `generate_all()`, and `batch_generate()` accept `InputSpec` directly and route parsing through `parse_unit` and AST transformations through `transform_unit`.
+- Added `runtime`, `language`, and `classification` parameters to `generate()`, `generate_all()`, `batch_generate()`, and `PipelineContext`.
+- CLI `--runtime`, `--language`, and `--classification` options and corresponding `HEADERKIT_RUNTIME`, `HEADERKIT_LANGUAGE`, `HEADERKIT_CLASSIFICATION` environment variable overrides.
+- `_load_hook_plugins()` for discovery and dynamic loading of third-party hook plugins via `headerkit.hooks` entry points.
+- Cheap static capability discovery: `supported_languages` and `supported_classifications` declared on `ParserBackend` protocol, `TreeSitterBackend`, and `LibclangBackend`.
+- Project `ROADMAP.md` defining strategic pillars and horizons (Now, Next, Later) for language integrations (Nim, Mojo), packaging templates, a unified priority/glob hook pipeline, polyglot input classification, `SourceUnit` IR evolution, and documentation sweeps.
+
+### Changed
+
+- Bumped `actions/checkout` to v7, `actions/cache` to v6, and `actions/setup-python` to v7 in GitHub Actions CI workflows.
+
 ## [0.29.0] - 2026-09-03
 
 ### Added
@@ -644,7 +731,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/axiomantic/headerkit/compare/v0.29.0...v0.37.0
 [0.29.0]: https://github.com/axiomantic/headerkit/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/axiomantic/headerkit/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/axiomantic/headerkit/compare/v0.26.0...v0.27.0

@@ -26,7 +26,9 @@ Example
 from __future__ import annotations
 
 import re
+import textwrap
 from collections import defaultdict
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -40,17 +42,21 @@ from headerkit.ir import (
     Parameter,
     Pointer,
     Reference,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers._cython_keywords import keywords
 from headerkit.writers._cython_types import (
+    LIBCPP_TYPES,
     get_cython_module_for_type,
     get_libcpp_module_for_type,
     get_stub_module_for_type,
 )
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # Type qualifiers that Cython doesn't support -- strip from output
 UNSUPPORTED_TYPE_QUALIFIERS: set[str] = {
@@ -491,6 +497,8 @@ class PxdWriter:
         for decl in self.header.declarations:
             if isinstance(decl, Struct):
                 if decl.name:
+                    if getattr(decl, "namespace", None) == "std" and decl.name in LIBCPP_TYPES:
+                        continue
                     if decl.is_union:
                         self.known_unions.add(decl.name)
                     else:
@@ -1219,7 +1227,7 @@ def write_pxd(header: Header, *, stub_cimport_prefix: str | None = "headerkit.st
 # =====================================================================
 
 
-class CythonWriter:
+class CythonWriter(BaseWriter):
     """Writer that converts Header IR into Cython .pxd declarations.
 
     Example::
@@ -1230,25 +1238,110 @@ class CythonWriter:
         pxd_string = writer.write(header)
     """
 
+    name: str = "cython"
+    format_description: str = "Cython .pxd declarations for C/C++ interop"
     default_output_pattern: str = "{dir}/{stem}.pxd"
+    default_extension: str = ".pxd"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+        WriterOption(
+            name="stub_cimport_prefix",
+            description="Package prefix for Cython stub cimports",
+            default="headerkit.stubs",
+            type=str,
+        ),
+    )
 
     def __init__(self, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to Cython .pxd string."""
+    def _render(self, unit: SourceUnit | Header) -> str:
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         writer = PxdWriter(header, stub_cimport_prefix=self.stub_cimport_prefix)
         return writer.write()
 
-    @property
-    def name(self) -> str:
-        """Human-readable writer name."""
-        return "cython"
+    def write(self, header: Header) -> str:
+        """Convert header IR to Cython .pxd string."""
+        return self._render(header)
 
-    @property
-    def format_description(self) -> str:
-        """Short description of the output format."""
-        return "Cython .pxd declarations for C/C++ interop"
+    def _write_package_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
+        pxd_code = self._render(unit)
+
+        pyproject = textwrap.dedent(f"""\
+            [build-system]
+            requires = ["setuptools>=61.0", "Cython>=3.0"]
+            build-backend = "setuptools.build_meta"
+
+            [project]
+            name = "{pkg}"
+            version = "0.1.0"
+            description = "Cython bindings for {pkg}"
+            requires-python = ">=3.9"
+
+            [tool.setuptools.packages.find]
+            where = ["src"]
+        """)
+
+        init_py = textwrap.dedent(f"""\
+            \"\"\"{pkg} package initialization.\"\"\"
+            from {pkg} import {pkg}
+
+            __all__ = ["{pkg}"]
+        """)
+
+        pyx_code = textwrap.dedent(f"""\
+            # cython: language_level=3
+            cimport {pkg}.{pkg} as c_{pkg}
+
+            # High-level Python wrappers can be exposed here
+        """)
+
+        files = [
+            OutputFile(path="pyproject.toml", content=pyproject),
+            OutputFile(path=f"src/{pkg}/__init__.py", content=init_py),
+            OutputFile(path=f"src/{pkg}/{pkg}.pxd", content=pxd_code),
+            OutputFile(path=f"src/{pkg}/{pkg}.pyx", content=pyx_code),
+        ]
+
+        if test_type in ("both", "tripwire"):
+            tripwire = textwrap.dedent(f"""\
+                import pytest
+
+                @pytest.mark.tripwire
+                def test_cython_tripwire():
+                    \"\"\"Tripwire: verify cython wrapper import.\"\"\"
+                    try:
+                        import {pkg}
+                    except ImportError:
+                        pytest.fail("Failed to import cython wrapper module '{pkg}'")
+            """)
+            files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
+
+        if test_type in ("both", "unit"):
+            unit_test = textwrap.dedent(f"""\
+                import inspect
+                import {pkg}
+
+                def test_{pkg}_package_structure():
+                    \"\"\"Verify package import and module structure.\"\"\"
+                    assert inspect.ismodule({pkg})
+                    assert hasattr({pkg}, "{pkg}")
+            """)
+            files.append(OutputFile(path="tests/test_wrapper.py", content=unit_test))
+
+        return ProjectLayout(files=files)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Cython comments."""

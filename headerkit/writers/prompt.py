@@ -9,6 +9,7 @@ verbose.
 from __future__ import annotations
 
 import json
+from typing import ClassVar
 
 from headerkit.ir import (
     Array,
@@ -22,11 +23,14 @@ from headerkit.ir import (
     Header,
     Parameter,
     Pointer,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # =============================================================================
 # Type formatting helpers
@@ -419,7 +423,7 @@ def _header_to_verbose(header: Header) -> str:
 # =============================================================================
 
 
-class PromptWriter:
+class PromptWriter(BaseWriter):
     """Writer that produces token-optimized output for LLM context.
 
     Three verbosity tiers control the output density:
@@ -444,16 +448,46 @@ class PromptWriter:
         output = writer.write(header)
     """
 
+    name: str = "prompt"
+    format_description: str = "Token-optimized output for LLM context"
     default_output_pattern: str = "{dir}/{stem}_prompt.txt"
+    default_extension: str = ".txt"
     cache_output: bool = False
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="verbosity",
+            description="Output verbosity tier",
+            default="compact",
+            choices=("compact", "standard", "verbose"),
+        ),
+    )
 
     def __init__(self, verbosity: str = "compact") -> None:
         if verbosity not in ("compact", "standard", "verbose"):
             raise ValueError(f"Unknown verbosity: {verbosity!r}. Use 'compact', 'standard', or 'verbose'.")
         self._verbosity = verbosity
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to token-optimized string."""
+    def _write_single_file_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        verbosity = options.get_option("verbosity", self._verbosity)
+        if verbosity not in ("compact", "standard", "verbose"):
+            raise ValueError(f"Unknown verbosity: {verbosity!r}. Use 'compact', 'standard', or 'verbose'.")
+        header = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)
+        if verbosity == "compact":
+            content = _header_to_compact(header)
+        elif verbosity == "standard":
+            content = _header_to_standard(header)
+        else:
+            content = _header_to_verbose(header)
+        filename = f"{options.package_name}{self.default_extension}"
+        return ProjectLayout(files=[OutputFile(path=filename, content=content)])
+
+    def _render(self, unit: SourceUnit | Header) -> str:
+        header = unit if isinstance(unit, Header) else Header(path=unit.path, declarations=unit.declarations)
         if self._verbosity == "compact":
             return _header_to_compact(header)
         elif self._verbosity == "standard":
@@ -461,15 +495,9 @@ class PromptWriter:
         else:
             return _header_to_verbose(header)
 
-    @property
-    def name(self) -> str:
-        """Human-readable name of this writer."""
-        return "prompt"
-
-    @property
-    def format_description(self) -> str:
-        """Short description of the output format."""
-        return "Token-optimized output for LLM context"
+    def write(self, header: Header | SourceUnit) -> str:
+        """Convert header IR to token-optimized string."""
+        return self._render(header)
 
 
 # Uses bottom-of-module self-registration pattern.

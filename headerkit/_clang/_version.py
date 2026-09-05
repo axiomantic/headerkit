@@ -4,11 +4,11 @@ Detection strategy (in order):
 1. CIR_CLANG_VERSION env var (explicit user override)
 2. llvm-config --version (tries versioned names like llvm-config-18)
 3. pkg-config --modversion clang (reliable on Linux with libclang-dev)
-4. clang -dM -E -x c /dev/null to get __clang_major__ (tries clang-18 etc.)
-5. Windows registry HKLM\\SOFTWARE\\LLVM\\LLVM (win32 only)
-6. Windows Program Files scan (win32 only)
-7. /usr/lib/llvm-{N}/ directory presence (Debian/Ubuntu, Linux only)
-8. Homebrew llvm prefix (macOS only, for non-PATH brew installs)
+4. Homebrew llvm prefix (macOS only, checked before Apple clang)
+5. clang -dM -E -x c /dev/null to get __clang_major__ (tries clang-18 etc.)
+6. Windows registry HKLM\\SOFTWARE\\LLVM\\LLVM (win32 only)
+7. Windows Program Files scan (win32 only)
+8. /usr/lib/llvm-{N}/ directory presence (Debian/Ubuntu, Linux only)
 9. Return None if all methods fail
 """
 
@@ -47,28 +47,28 @@ def detect_llvm_version() -> str | None:
     if version is not None:
         return version
 
-    # Strategy 4: clang -dM -E to get __clang_major__
+    # Strategy 4: Homebrew llvm prefix (macOS, checked before Apple clang)
+    version = _try_homebrew_llvm()
+    if version is not None:
+        return version
+
+    # Strategy 5: clang -dM -E to get __clang_major__
     version = _try_clang_preprocessor()
     if version is not None:
         return version
 
-    # Strategy 5: Windows registry (win32 only)
+    # Strategy 6: Windows registry (win32 only)
     version = _try_windows_registry()
     if version is not None:
         return version
 
-    # Strategy 6: Windows Program Files (win32 only)
+    # Strategy 7: Windows Program Files (win32 only)
     version = _try_windows_program_files()
     if version is not None:
         return version
 
-    # Strategy 7: /usr/lib/llvm-{N}/ directories (Linux)
+    # Strategy 8: /usr/lib/llvm-{N}/ directories (Linux)
     version = _try_llvm_dir()
-    if version is not None:
-        return version
-
-    # Strategy 8: Homebrew llvm prefix (macOS)
-    version = _try_homebrew_llvm()
     if version is not None:
         return version
 

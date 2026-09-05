@@ -63,17 +63,20 @@ class MockWriterWithDocstring:
 def reset_writer_registry() -> Generator[None, None, None]:
     """Save and restore global writer registry state around each test."""
     import headerkit.writers as w
+    from headerkit.hooks import HookRegistry
 
     saved_registry = dict(w._WRITER_REGISTRY)
     saved_descriptions = dict(w._WRITER_DESCRIPTIONS)
     saved_default = w._DEFAULT_WRITER
     saved_loaded = w._WRITERS_LOADED
+    saved_hooks = HookRegistry.snapshot()
 
     # Clear state for isolated tests
     w._WRITER_REGISTRY.clear()
     w._WRITER_DESCRIPTIONS.clear()
     w._DEFAULT_WRITER = None
     w._WRITERS_LOADED = False
+    HookRegistry.clear()
 
     yield
 
@@ -84,6 +87,7 @@ def reset_writer_registry() -> Generator[None, None, None]:
     w._WRITER_DESCRIPTIONS.update(saved_descriptions)
     w._DEFAULT_WRITER = saved_default
     w._WRITERS_LOADED = saved_loaded
+    HookRegistry.restore(saved_hooks)
 
 
 class TestWriterRegistry:

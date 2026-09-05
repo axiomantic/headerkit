@@ -2,6 +2,11 @@ name: Tests
 
 on:
   workflow_call:
+    inputs:
+      full-matrix:
+        type: boolean
+        default: false
+        description: "Run full Python version matrix (all versions) instead of boundary versions"
 
 jobs:
   test:
@@ -11,15 +16,15 @@ jobs:
       fail-fast: true
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ${{ fromJSON(inputs.full-matrix && '["3.10", "3.11", "3.12", "3.13", "3.14"]' || '["3.10", "3.14"]') }}
         include:
           - os: macos-latest
             python-version: "3.14"
           - os: windows-latest
             python-version: "3.14"
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -28,7 +33,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
       - name: Install libclang (macOS)
         if: runner.os == 'macOS'
-        run: brew install llvm
+        run: |
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
       - name: Verify LLVM (Windows)
         if: runner.os == 'Windows'
         shell: bash
@@ -37,9 +44,9 @@ jobs:
           which clang || true
       - name: Install package
         shell: bash
-        run: pip install -e '.[test]'
+        run: pip install -e '.[test,treesitter]'
       - name: Cache test header downloads
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/headerkit-test-headers
           key: test-headers-v2

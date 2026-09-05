@@ -29,7 +29,7 @@ jobs:
           app-id: ${{ vars.AXIOMANTIC_APP_ID }}
           private-key: ${{ secrets.AXIOMANTIC_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
 
@@ -81,7 +81,7 @@ jobs:
             echo "TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: steps.detect.outputs.missing != ''
         with:
           python-version: "3.12"

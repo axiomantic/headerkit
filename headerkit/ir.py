@@ -768,35 +768,102 @@ Declaration = Union[Enum, Struct, Function, Typedef, Variable, Constant]
 
 
 # =============================================================================
-# Header Container
+# Input Specification & SourceUnit Container
 # =============================================================================
 
 
+@dataclass(frozen=True)
+class InputSpec:
+    """Specification of an input source unit, its language, and classification.
+
+    :param path: Path to the source file or virtual file.
+    :param language: Language identifier (e.g. 'c', 'cpp', 'nim', 'rust', 'zig').
+    :param classification: Classification ('header', 'source', 'interface', 'idl').
+    :param content: Optional raw string content.
+    """
+
+    path: str
+    language: str = "c"
+    classification: str = "header"
+    content: str | None = None
+
+    @classmethod
+    def from_path(
+        cls,
+        path: str,
+        language: str | None = None,
+        classification: str | None = None,
+        content: str | None = None,
+    ) -> InputSpec:
+        """Infer language and classification from a file path extension."""
+        deduced_lang = language
+        deduced_class = classification
+
+        if deduced_lang is None or deduced_class is None:
+            lower = path.lower()
+            if lower.endswith((".h",)):
+                deduced_lang = deduced_lang or "c"
+                deduced_class = deduced_class or "header"
+            elif lower.endswith((".hpp", ".hxx", ".hh", ".h++")):
+                deduced_lang = deduced_lang or "cpp"
+                deduced_class = deduced_class or "header"
+            elif lower.endswith((".c",)):
+                deduced_lang = deduced_lang or "c"
+                deduced_class = deduced_class or "source"
+            elif lower.endswith((".cpp", ".cxx", ".cc", ".c++")):
+                deduced_lang = deduced_lang or "cpp"
+                deduced_class = deduced_class or "source"
+            elif lower.endswith((".nim",)):
+                deduced_lang = deduced_lang or "nim"
+                deduced_class = deduced_class or "source"
+            elif lower.endswith((".rs",)):
+                deduced_lang = deduced_lang or "rust"
+                deduced_class = deduced_class or "interface"
+            elif lower.endswith((".zig",)):
+                deduced_lang = deduced_lang or "zig"
+                deduced_class = deduced_class or "source"
+            elif lower.endswith((".idl",)):
+                deduced_lang = deduced_lang or "idl"
+                deduced_class = deduced_class or "interface"
+            else:
+                deduced_lang = deduced_lang or "c"
+                deduced_class = deduced_class or "header"
+
+        return cls(
+            path=path,
+            language=deduced_lang,
+            classification=deduced_class,
+            content=content,
+        )
+
+
 @dataclass
-class Header:
-    """Container for a parsed C/C++ header file.
+class SourceUnit:
+    """Container for a parsed source or interface unit.
 
     This is the top-level result returned by all parser backends.
-    It contains the file path and all extracted declarations.
+    It contains the file path, extracted declarations, and input metadata.
 
-    :param path: Path to the original header file.
+    :param path: Path to the original source file.
     :param declarations: List of extracted declarations (structs, functions, etc.).
-    :param included_headers: Set of header file basenames included by this header
+    :param included_headers: Set of header file basenames included by this unit
                              (populated by libclang backend only).
+    :param language: Language identifier (e.g. 'c', 'cpp', 'nim', 'rust').
+    :param classification: Source classification (e.g. 'header', 'source', 'interface').
 
     Example
     -------
     ::
 
         from headerkit.backends import get_backend
-        from headerkit.ir import Struct, Function
+        from headerkit.ir import Struct, Function, SourceUnit
 
         backend = get_backend()
-        header = backend.parse(code, "myheader.h")
+        unit = backend.parse(code, "myheader.h")
 
-        print(f"Parsed {len(header.declarations)} declarations from {header.path}")
+        print(f"Parsed {len(unit.declarations)} declarations from {unit.path}")
 
-        for decl in header.declarations:
+        for decl in unit.declarations:
             if isinstance(decl, Function):
                 print(f"  Function: {decl.name}")
     """
@@ -804,9 +871,15 @@ class Header:
     path: str
     declarations: list[Declaration] = field(default_factory=list)
     included_headers: set[str] = field(default_factory=set)
+    language: str = "c"
+    classification: str = "header"
 
     def __str__(self) -> str:
-        return f"Header({self.path}, {len(self.declarations)} declarations)"
+        return f"SourceUnit({self.path}, {len(self.declarations)} declarations)"
+
+
+# Backward-compatibility alias during IR evolution
+Header = SourceUnit
 
 
 # =============================================================================
@@ -888,4 +961,14 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
     @property
     def supports_cpp(self) -> bool:
         """Whether this backend can parse C++ code."""
+        ...
+
+    @property
+    def supported_languages(self) -> frozenset[str]:
+        """Set of source languages supported by this backend (e.g., ``frozenset({"c", "cpp"})``)."""
+        ...
+
+    @property
+    def supported_classifications(self) -> frozenset[str]:
+        """Set of input classifications supported by this backend (e.g., ``frozenset({"header", "source"})``)."""
         ...

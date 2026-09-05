@@ -1,22 +1,23 @@
 # Architecture Overview
 
-headerkit is organized around a three-layer pipeline: **backends** parse C/C++ headers, producing an **IR** (Intermediate Representation), which **writers** consume to generate output.
+headerkit is organized around a unified, hook-driven pipeline: **backends** parse source units into an **IR** (Intermediate Representation) rooted at `SourceUnit`, optional **transform hooks** apply AST mutations or dialect adaptations, and **writers** consume the IR to generate target output.
 
 ## The Pipeline
 
 ```mermaid
 graph TD
-    A["C/C++ Source Code"] --> B
-    B["Backend<br>(ParserBackend protocol)"] --> C
-    C["IR<br>(Header, Declaration, TypeExpr)"] --> D
-    D["Writer<br>(WriterBackend protocol)"] --> E
-    E["Output String<br>(CFFI cdef, ctypes, Cython .pxd, ...)"]
+    A["Input Source / InputSpec"] --> B
+    B["Backend: parse_unit<br>(ParserBackend protocol)"] --> C
+    C["IR<br>(SourceUnit, Declaration, TypeExpr)"] --> D
+    D["Transformations: transform_unit<br>(Waterfall hook pipeline)"] --> E
+    E["Writer: write_output<br>(WriterBackend protocol)"] --> F
+    F["Output String<br>(CFFI cdef, ctypes, Cython .pxd, Nim, ...)"]
 
-    B -.- B1["e.g., LibclangBackend"]
-    D -.- D1["e.g., CffiWriter, CtypesWriter,<br>CythonWriter, LuaWriter, ..."]
+    B -.- B1["e.g., LibclangBackend, TreeSitterBackend"]
+    E -.- E1["e.g., CffiWriter, CtypesWriter,<br>CythonWriter, NimWriter, LuaWriter, ..."]
 ```
 
-Each layer is independent. Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.
+Each stage is decoupled through the unified hook engine (`headerkit.hooks`). Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.
 
 ## Layer 1: Backends (Parsing)
 
@@ -202,49 +203,56 @@ classDiagram
 | [`Variable`][headerkit.ir.Variable] | Global/extern variables |
 | [`Constant`][headerkit.ir.Constant] | `#define` macros and `const` values |
 
-### The Header Container
+### The SourceUnit Container
 
-[`Header`][headerkit.ir.Header] is the top-level container returned by all backends:
+[`SourceUnit`][headerkit.ir.SourceUnit] (with backward-compatible alias [`Header`][headerkit.ir.Header]) is the top-level container returned by all backends:
 
 ```python
-from headerkit.ir import Header
+from headerkit.ir import SourceUnit
 
-# Header fields:
-#   path: str                        -- original file path
+# SourceUnit fields:
+#   path: str                        -- original file path or synthetic name
 #   declarations: list[Declaration]  -- all extracted declarations
 #   included_headers: set[str]       -- basenames of included headers
+#   language: str                    -- source language (e.g., "c", "cpp")
+#   classification: str              -- classification (e.g., "header", "source")
 ```
 
 ## Layer 3: Writers (Output)
 
-A writer implements the [`WriterBackend`][headerkit.writers.WriterBackend] protocol and converts IR into a string output:
+Writers convert [`SourceUnit`][headerkit.ir.SourceUnit] IR into code, definitions, or packages. Concrete writers inherit from [`BaseWriter`][headerkit.writers.BaseWriter] (which satisfies the underlying [`WriterBackend`][headerkit.writers.WriterBackend] protocol).
+
+`BaseWriter` unifies single-string rendering (`write()`) and multi-file package scaffolding (`write_layout()`):
 
 ```python
-from headerkit.writers import WriterBackend
-from headerkit.ir import Header
+from headerkit.ir import SourceUnit
+from headerkit.scaffold import ProjectLayout, ScaffoldOptions
+from headerkit.writers import BaseWriter, WriterOption
 
-class WriterBackend(Protocol):
-    def write(self, header: Header) -> str: ...
+class MyWriter(BaseWriter):
+    name: str = "mywriter"
+    format_description: str = "My custom bindings"
 
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def format_description(self) -> str: ...
+    def _render(self, unit: SourceUnit) -> str:
+        # Generate the primary output string
+        ...
 ```
 
-Writer-specific options (e.g., `exclude_patterns` for CFFI, `indent` for JSON) are constructor parameters on the concrete class, not part of the `write()` method signature.
+Writers declare their supported layout modes (`supported_layouts`) and configuration options (`supported_options`). Writer-specific options are passed to the constructor or via `--writer-opt`.
 
 ### Built-in Writers
 
-| Writer | Registry Name | Output | Constructor Options |
-|--------|--------------|--------|-------------------|
+| Writer | Registry Name | Output | Primary Options |
+|---|---|---|---|
 | [`CffiWriter`][headerkit.writers.cffi.CffiWriter] | `cffi` (default) | CFFI `cdef` strings | `exclude_patterns: list[str] \| None` |
+| [`CshimWriter`][headerkit.writers.cshim.CShimWriter] | `cshim` | Pure C-ABI (`extern "C"`) wrappers for C++ | `wrapper_header_name: str`, `catch_exceptions: bool` |
 | [`CtypesWriter`][headerkit.writers.ctypes.CtypesWriter] | `ctypes` | Python ctypes binding modules | `lib_name: str` |
 | [`CythonWriter`][headerkit.writers.cython.CythonWriter] | `cython` | Cython `.pxd` declarations | -- |
-| [`DiffWriter`][headerkit.writers.diff.DiffWriter] | `diff` | API compatibility diff reports (JSON or Markdown) | `baseline: Header \| None`, `format: str` |
+| [`DiffWriter`][headerkit.writers.diff.DiffWriter] | `diff` | API compatibility diff reports (JSON or Markdown) | `baseline: SourceUnit \| None`, `format: str` |
 | [`JsonWriter`][headerkit.writers.json.JsonWriter] | `json` | JSON serialization of IR | `indent: int \| None` |
 | [`LuaWriter`][headerkit.writers.lua.LuaWriter] | `lua` | LuaJIT FFI bindings | -- |
+| [`MojoWriter`][headerkit.writers.mojo.MojoWriter] | `mojo` | Idiomatic Mojo FFI bindings (`sys.ffi.DLHandle`) | `lib_name: str` |
+| [`NimWriter`][headerkit.writers.nim.NimWriter] | `nim` | Native Nim modules with `{.importc.}` pragmas | `header_file: str`, `cdecl: bool` |
 | [`PromptWriter`][headerkit.writers.prompt.PromptWriter] | `prompt` | Token-optimized output for LLM context | `verbosity: str` |
 
 ### Writer Registry

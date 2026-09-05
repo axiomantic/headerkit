@@ -18,6 +18,12 @@ class TestGetCindex:
 
         headerkit._clang._cached_cindex = None
 
+    def teardown_method(self):
+        """Reset the cached module after each test to prevent test pollution."""
+        import headerkit._clang
+
+        headerkit._clang._cached_cindex = None
+
     def test_returns_module_with_config_class(self):
         """get_cindex should return a module containing a Config class."""
         cindex = get_cindex()

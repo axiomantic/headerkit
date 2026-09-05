@@ -1,8 +1,6 @@
 # Writers
 
-Writers convert headerkit [IR](ir.md) into various output formats. The
-[`WriterBackend`][headerkit.writers.WriterBackend] protocol defines the interface
-that all writers implement.
+Writers convert HeaderKit [IR](ir.md) into various output formats, from single-file binding modules to multi-file package scaffolding. Concrete writers inherit from [`BaseWriter`][headerkit.writers.BaseWriter] (which satisfies the [`WriterBackend`][headerkit.writers.WriterBackend] protocol).
 
 Writers are accessed through a registry that mirrors the
 [backend registry](backends.md). Use [`get_writer()`][headerkit.writers.get_writer]
@@ -20,10 +18,19 @@ what is available.
 | [`diff`](diff.md) | `headerkit.writers.diff` | API compatibility reports (JSON/Markdown) |
 | [`json`](json.md) | `headerkit.writers.json` | JSON serialization for inspection and tooling |
 | [`lua`](lua.md) | `headerkit.writers.lua` | LuaJIT FFI bindings |
+| [`mojo`](mojo.md) | `headerkit.writers.mojo` | Idiomatic Mojo FFI bindings with `sys.ffi.DLHandle` and CShim bridge |
 | [`nim`](nim.md) | `headerkit.writers.nim` | Native Nim bindings with C and C++ interop |
 | [`prompt`](prompt.md) | `headerkit.writers.prompt` | Token-optimized LLM context (compact/standard/verbose) |
 
-## Protocol
+## Base Class & Protocol
+
+::: headerkit.writers.BaseWriter
+    options:
+      show_source: false
+
+::: headerkit.writers.WriterOption
+    options:
+      show_source: false
 
 ::: headerkit.writers.WriterBackend
     options:
@@ -40,6 +47,14 @@ what is available.
       show_source: false
 
 ::: headerkit.writers.list_writers
+    options:
+      show_source: false
+
+::: headerkit.writers.list_writer_layouts
+    options:
+      show_source: false
+
+::: headerkit.writers.list_writer_options
     options:
       show_source: false
 

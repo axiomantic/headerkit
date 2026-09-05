@@ -80,9 +80,10 @@ headerkit resolves the target triple via config precedence:
 1. **Explicit `target` kwarg** to `generate()` (highest priority)
 2. **`HEADERKIT_TARGET` environment variable**
 3. **`[tool.headerkit] target`** in pyproject.toml
-4. **Auto-detection** via `detect_process_triple()`
+4. **Cross-compilation environment detection**: auto-detects target from `CARGO_BUILD_TARGET`, `LLVM_TARGET_TRIPLE`, `CROSS_COMPILE`, or cross-compiler prefixes in `CC`/`CXX` (e.g. `aarch64-linux-gnu-gcc`)
+5. **Host auto-detection** via `detect_process_triple()`
 
-The auto-detection uses one signal per platform:
+The host auto-detection uses one signal per platform:
 
 - **POSIX** (Linux, macOS, BSDs): `sysconfig.get_config_var('HOST_GNU_TYPE')`
   -- the `--host` value from autoconf, baked into the Python build at compile
@@ -91,8 +92,9 @@ The auto-detection uses one signal per platform:
 - **Windows**: `sysconfig.get_platform()` -- returns `win-amd64`, `win32`, or
   `win-arm64`. Mapped to LLVM-style triples (e.g., `x86_64-pc-windows-msvc`).
 
-For cross-compilation, set `--target`, `HEADERKIT_TARGET`, or
-`[tool.headerkit] target` explicitly rather than relying on auto-detection.
+For cross-compilation, headerkit accepts full triples or convenient 2-component
+shorthands (`x86_64-linux`, `aarch64-darwin`, `win64`, `wasm32-wasi`) and automatically
+parses them into structured `TargetTriple` representations.
 
 ### Why HOST_GNU_TYPE?
 
@@ -136,9 +138,10 @@ auto-detection works without special hooks or configuration.
 - Inserts `unknown` vendor for 3-component triples missing it:
   `x86_64-linux-gnu` -> `x86_64-unknown-linux-gnu`
 
-Architecture names are used as-is. If you specify `--target arm64-apple-darwin`
-and auto-detect would produce `aarch64-apple-darwin`, those are different
-cache keys. This is intentional: `--target` means "use this exact triple."
+Architecture names are preserved where platform-canonical: for Apple targets,
+`arm64-apple-darwin` preserves `arm64` as standard in the Apple ecosystem.
+For Linux and ELF targets, `arm64` is normalized to LLVM's canonical `aarch64`
+(e.g., `arm64-unknown-linux-gnu` -> `aarch64-unknown-linux-gnu`).
 
 ### What flows where
 
@@ -184,6 +187,33 @@ headerkit mylib.h -w cffi
 
 The cache will store entries keyed by target triple, so the same machine can
 build for multiple targets and each gets its own cache entry.
+
+## Structured `TargetTriple` API
+
+headerkit exports a structured `TargetTriple` dataclass for inspecting target properties:
+
+```python
+from headerkit import TargetTriple, parse_triple
+
+triple = parse_triple("x86_64-linux")
+assert triple.arch == "x86_64"
+assert triple.os == "linux"
+assert triple.env == "gnu"
+assert triple.is_linux is True
+assert triple.pointer_width == 8
+assert str(triple) == "x86_64-unknown-linux-gnu"
+
+# Embedded bare-metal targets
+embedded = parse_triple("arm-none-eabi")
+assert embedded.is_embedded is True
+assert embedded.pointer_width == 4
+```
+
+Available properties on `TargetTriple`:
+- `arch`, `vendor`, `os`, `env`: raw components.
+- `pointer_width`: pointer size in bytes (8, 4, 2) based on architecture.
+- `is_64_bit` / `is_32_bit`: architecture word size predicates.
+- `is_windows`, `is_darwin`, `is_linux`, `is_musl`, `is_wasm`, `is_embedded`: target platform predicates.
 
 ## Limitations and future work
 

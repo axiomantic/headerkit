@@ -10,15 +10,16 @@ what is available.
 
 ## Available Backends
 
-| Backend | Description | C++ Support | Macro Extraction |
-|---------|-------------|:-----------:|:----------------:|
-| `libclang` | LLVM clang-based parser | Yes | Yes |
+| Backend | Description | C++ Support | Macro Extraction | Languages | Classifications |
+|---------|-------------|:-----------:|:----------------:|:---------:|:---------------:|
+| `libclang` | LLVM clang-based parser | Yes | Yes | `c`, `cpp` | `header` |
+| `tree-sitter` | Zero-dependency parser using `tree-sitter-c` and `tree-sitter-cpp` | Yes | No | `c`, `cpp` | `header`, `source` |
 
 ## Protocol
 
 See [`ParserBackend`][headerkit.ir.ParserBackend] on the IR Types page for the
-full protocol definition including `parse()`, `name`, `supports_macros`, and
-`supports_cpp`.
+full protocol definition including `parse()`, `name`, `supports_macros`,
+`supports_cpp`, `supported_languages`, and `supported_classifications`.
 
 ## Exceptions
 

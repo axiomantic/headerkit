@@ -10,6 +10,9 @@ The IR types come from ``headerkit.ir`` and represent parsed C headers.
 
 from __future__ import annotations
 
+import textwrap
+from typing import ClassVar
+
 from headerkit.ir import (
     Array,
     Constant,
@@ -20,11 +23,14 @@ from headerkit.ir import (
     FunctionPointer,
     Header,
     Pointer,
+    SourceUnit,
     Struct,
     Typedef,
     TypeExpr,
     Variable,
 )
+from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
+from headerkit.writers.base import BaseWriter, WriterOption
 
 # Maps C type names to their ctypes equivalents.
 CTYPES_TYPE_MAP: dict[str, str] = {
@@ -377,7 +383,7 @@ def header_to_ctypes(header: Header, lib_name: str = "_lib") -> str:
     return "\n".join(output_lines)
 
 
-class CtypesWriter:
+class CtypesWriter(BaseWriter):
     """Writer that generates Python ctypes binding modules from headerkit IR.
 
     Options
@@ -402,22 +408,115 @@ class CtypesWriter:
         source = writer.write(header)
     """
 
+    name: str = "ctypes"
+    format_description: str = "Python ctypes bindings"
     default_output_pattern: str = "{dir}/{stem}_ctypes.py"
+    default_extension: str = ".py"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
+        WriterOption(
+            name="test_type",
+            description="Type of test stubs to generate",
+            default="both",
+            choices=("both", "tripwire", "unit", "none"),
+        ),
+        WriterOption(
+            name="lib_name",
+            description="Variable name for loaded library instance",
+            default="_lib",
+            type=str,
+        ),
+    )
 
     def __init__(self, lib_name: str = "_lib") -> None:
         self._lib_name = lib_name
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to Python ctypes binding source code."""
+    def _render(self, unit: SourceUnit | Header) -> str:
+        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         return header_to_ctypes(header, lib_name=self._lib_name)
 
-    @property
-    def name(self) -> str:
-        return "ctypes"
+    def write(self, header: Header) -> str:
+        """Convert header IR to Python ctypes binding source code."""
+        return self._render(header)
 
-    @property
-    def format_description(self) -> str:
-        return "Python ctypes bindings"
+    def _write_package_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        pkg = options.package_name
+        test_type = options.get_option("test_type", "both")
+        bindings_code = self._render(unit)
+        fn_names = extract_function_names(unit)
+
+        pyproject = textwrap.dedent(f"""\
+            [build-system]
+            requires = ["setuptools>=61.0"]
+            build-backend = "setuptools.build_meta"
+
+            [project]
+            name = "{pkg}"
+            version = "0.1.0"
+            description = "Python ctypes bindings for {pkg}"
+            requires-python = ">=3.9"
+
+            [tool.setuptools.packages.find]
+            where = ["src"]
+        """)
+
+        init_py = textwrap.dedent(f"""\
+            \"\"\"{pkg} package initialization.\"\"\"
+            from {pkg}._bindings import *
+
+            __version__ = "0.1.0"
+        """)
+
+        files = [
+            OutputFile(path="pyproject.toml", content=pyproject),
+            OutputFile(path=f"src/{pkg}/__init__.py", content=init_py),
+            OutputFile(path=f"src/{pkg}/_bindings.py", content=bindings_code),
+        ]
+
+        if test_type in ("both", "tripwire"):
+            tw_fn_checks = (
+                "\n".join(
+                    f'    assert hasattr(_bindings, "{name}"), "Symbol {name} missing from ctypes bindings"'
+                    for name in fn_names[:10]
+                )
+                or "    assert _bindings is not None"
+            )
+            tripwire = textwrap.dedent(f"""\
+                import pytest
+                from {pkg} import _bindings
+
+                @pytest.mark.tripwire
+                def test_ctypes_tripwire():
+                    \"\"\"Tripwire: verify binary load and C symbols.\"\"\"
+                {tw_fn_checks}
+            """)
+            files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
+
+        if test_type in ("both", "unit"):
+            unit_fn_checks = (
+                "\n".join(
+                    f'    assert hasattr(_bindings, "{name}"), "Expected declaration \'{name}\' in _bindings"'
+                    for name in fn_names[:10]
+                )
+                if fn_names
+                else "    assert inspect.ismodule(_bindings)"
+            )
+            unit_test = textwrap.dedent(f"""\
+                import inspect
+                from {pkg} import _bindings
+
+                def test_{pkg}_declarations():
+                    \"\"\"Verify generated bindings module exports declarations.\"\"\"
+                    assert inspect.ismodule(_bindings)
+                {unit_fn_checks}
+            """)
+            files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
+
+        return ProjectLayout(files=files)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Python comments."""

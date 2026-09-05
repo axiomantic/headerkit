@@ -44,10 +44,12 @@ from headerkit._resolve import check_output_collisions, resolve_headers, resolve
 from headerkit._slug import build_slug, load_index, lookup_slug
 from headerkit._target import resolve_target
 from headerkit.backends import LibclangUnavailableError, get_backend, is_backend_available
+from headerkit.hooks import HookDispatcher, PipelineContext, Priority
 from headerkit.install_libclang import auto_install
-from headerkit.ir import Header
+from headerkit.ir import Header, InputSpec, SourceUnit
 from headerkit.writers import get_writer
 
+_HK_GET_BACKEND = get_backend
 logger = logging.getLogger("headerkit.cache")
 
 
@@ -194,7 +196,8 @@ def _get_ir(
     use_ir_cache: bool,
     project_prefixes: tuple[str, ...] | None,
     target: str,
-) -> tuple[Header, str, str, bool]:
+    context: PipelineContext | None = None,
+) -> tuple[SourceUnit, str, str, bool]:
     """Resolve IR from cache or by parsing with the backend.
 
     :returns: (header, ir_cache_key, ir_slug, ir_from_cache)
@@ -217,7 +220,7 @@ def _get_ir(
         target=target,
     )
 
-    header: Header | None = None
+    header: SourceUnit | None = None
     ir_from_cache = False
 
     if use_ir_cache:
@@ -232,7 +235,6 @@ def _get_ir(
                     ir_from_cache = True
 
     if header is None:
-        backend = get_backend(backend_name)
         parse_code = code if code is not None else header_path.read_text(encoding="utf-8")
         all_args: list[str] = ["-target", target]
         for d in parsed_args.defines:
@@ -240,13 +242,27 @@ def _get_ir(
         for inc in parsed_args.includes:
             all_args.append(f"-I{inc}")
         all_args.extend(parsed_args.other_args)
-        header = backend.parse(
-            parse_code,
-            str(header_path),
-            [],
-            all_args,
-            project_prefixes=project_prefixes,
-        )
+
+        disp = HookDispatcher()
+        if get_backend is _HK_GET_BACKEND and context is not None:
+            header = disp.first_result(
+                "parse_unit",
+                parse_code,
+                str(header_path),
+                extra_args=all_args,
+                project_prefixes=project_prefixes,
+                context=context,
+            )
+
+        if header is None:
+            backend = get_backend(backend_name)
+            header = backend.parse(
+                parse_code,
+                str(header_path),
+                [],
+                all_args,
+                project_prefixes=project_prefixes,
+            )
 
         if use_ir_cache:
             assert resolved_cache_dir is not None
@@ -341,6 +357,7 @@ def _get_output(
     header_path: Path,
     code: str | None,
     include_dirs: list[str] | None = None,
+    context: PipelineContext | None = None,
 ) -> tuple[str, bool]:
     """Resolve output from cache or by running the writer.
 
@@ -375,7 +392,16 @@ def _get_output(
 
     if output is None:
         _populate_matched_defines(writer_inst, header_path, code, include_dirs=include_dirs)
-        output = writer_inst.write(header)
+        if context is not None:
+            disp = HookDispatcher()
+            override_hooks = [h for h in disp._get_hooks("write_output", context) if h.priority > Priority.STANDARD]
+            for h in override_hooks:
+                res = h.func(header, context=context, **writer_options)
+                if res is not None:
+                    output = res
+                    break
+        if output is None:
+            output = writer_inst.write(header)
 
         if effective_output_cache:
             assert resolved_cache_dir is not None
@@ -494,11 +520,14 @@ def _try_output_cache_fallback(
 
 
 def generate(
-    header_path: str | Path,
+    header_path: str | Path | InputSpec,
     writer_name: str | None = None,
     *,
     code: str | None = None,
     backend_name: str | None = None,
+    runtime: str | None = None,
+    language: str | None = None,
+    classification: str | None = None,
     include_dirs: list[str] | None = None,
     defines: list[str] | None = None,
     extra_args: list[str] | None = None,
@@ -518,12 +547,14 @@ def generate(
     Uses the two-layer cache: first checks IR cache, then output cache.
     Falls back to parsing with the backend if IR cache misses.
 
-    :param header_path: Path to the C/C++ header file (used for cache key
-        even when *code* is provided).
+    :param header_path: Path to the header file or an InputSpec.
     :param writer_name: Writer to use (default: "json").
     :param code: Raw code string. When provided, this content is parsed
         instead of reading *header_path* from disk.
     :param backend_name: Backend to use (default: "libclang").
+    :param runtime: Target runtime environment (e.g. "nim", "mojo").
+    :param language: Input source language (e.g. "c", "cpp").
+    :param classification: Input classification (e.g. "header", "source").
     :param include_dirs: Include directories for parsing.
     :param defines: Preprocessor defines (without -D prefix).
     :param extra_args: Additional backend args.
@@ -546,9 +577,25 @@ def generate(
     :returns: Generated output string.
     :raises FileNotFoundError: If header_path does not exist and code is not provided.
     """
-    header_path = Path(header_path)
-    if code is None and not header_path.exists():
-        raise FileNotFoundError(f"Header file not found: {header_path}")
+    if isinstance(header_path, InputSpec):
+        spec = InputSpec(
+            path=header_path.path,
+            language=language if language is not None else header_path.language,
+            classification=classification if classification is not None else header_path.classification,
+            content=code if code is not None else header_path.content,
+        )
+    else:
+        spec = InputSpec.from_path(
+            str(header_path),
+            language=language,
+            classification=classification,
+            content=code,
+        )
+
+    resolved_path = Path(spec.path)
+    code = code if code is not None else spec.content
+    if code is None and not resolved_path.exists():
+        raise FileNotFoundError(f"Header file not found: {resolved_path}")
 
     backend_name = backend_name or "libclang"
     writer_name = writer_name or "json"
@@ -565,20 +612,30 @@ def generate(
             resolved_cache_dir = Path(store_dir)
             resolved_cache_dir.mkdir(parents=True, exist_ok=True)
         else:
-            resolved_cache_dir = find_cache_dir(header_path.parent)
+            resolved_cache_dir = find_cache_dir(resolved_path.parent)
 
     parsed_args = parse_extra_args(extra_args, include_dirs, defines)
-    project_root = _find_project_root(header_path.parent)
+    project_root = _find_project_root(resolved_path.parent)
 
     resolved_target = resolve_target(target=target, project_root=project_root)
 
     use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
     use_output_cache = not no_cache and not no_output_cache and resolved_cache_dir is not None
 
-    def _resolve_ir() -> tuple[Header, str, str, bool]:
+    ctx = PipelineContext(
+        backend=backend_name,
+        writer=writer_name,
+        target=resolved_target,
+        language=spec.language,
+        classification=spec.classification,
+        runtime=runtime,
+        options=writer_options,
+    )
+
+    def _resolve_ir() -> tuple[SourceUnit, str, str, bool]:
         return _get_ir(
             backend_name=backend_name,
-            header_path=header_path,
+            header_path=resolved_path,
             project_root=project_root,
             parsed_args=parsed_args,
             code=code,
@@ -586,6 +643,7 @@ def generate(
             use_ir_cache=use_ir_cache,
             project_prefixes=project_prefixes,
             target=resolved_target,
+            context=ctx,
         )
 
     # For libclang, check availability before parsing to enable the
@@ -598,7 +656,7 @@ def generate(
             cached_output = _try_output_cache_fallback(
                 cache_dir=resolved_cache_dir,
                 backend_name=backend_name,
-                header_path=header_path,
+                header_path=resolved_path,
                 parsed_args=parsed_args,
                 project_root=project_root,
                 writer_name=writer_name,
@@ -630,6 +688,9 @@ def generate(
 
     header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
 
+    disp = HookDispatcher()
+    header = disp.waterfall("transform_unit", header, context=ctx)
+
     output, output_from_cache = _get_output(
         header=header,
         writer_name=writer_name,
@@ -638,9 +699,10 @@ def generate(
         ir_slug=ir_slug,
         resolved_cache_dir=resolved_cache_dir,
         use_output_cache=use_output_cache,
-        header_path=header_path,
+        header_path=resolved_path,
         code=code,
         include_dirs=include_dirs,
+        context=ctx,
     )
 
     if output_path is not None:
@@ -653,10 +715,13 @@ def generate(
 
 
 def generate_all(
-    header_path: str | Path,
+    header_path: str | Path | InputSpec,
     writers: list[str] | None = None,
     *,
     backend_name: str | None = None,
+    runtime: str | None = None,
+    language: str | None = None,
+    classification: str | None = None,
     include_dirs: list[str] | None = None,
     defines: list[str] | None = None,
     extra_args: list[str] | None = None,
@@ -675,9 +740,12 @@ def generate_all(
     Parses the header once (or loads from IR cache), then runs each
     writer (or loads from output cache).
 
-    :param header_path: Path to the C/C++ header file.
+    :param header_path: Path to the header file or an InputSpec.
     :param writers: List of writer names. Default: ["json"].
     :param backend_name: Backend to use (default: "libclang").
+    :param runtime: Target runtime environment (e.g. "nim", "mojo").
+    :param language: Input source language (e.g. "c", "cpp").
+    :param classification: Input classification (e.g. "header", "source").
     :param include_dirs: Include directories for parsing.
     :param defines: Preprocessor defines (without -D prefix).
     :param extra_args: Additional backend args.
@@ -701,13 +769,14 @@ def generate_all(
     writer_options = writer_options or {}
     output_paths = output_paths or {}
 
+    path_str = header_path.path if isinstance(header_path, InputSpec) else str(header_path)
     results: list[GenerateResult] = []
     for wname in writers:
         wopts = writer_options.get(wname, {})
         opath: str | Path | None = output_paths.get(wname)
         if opath is None and output_dir is not None:
             ext = _WRITER_EXTENSIONS.get(wname, ".txt")
-            stem = Path(header_path).stem
+            stem = Path(path_str).stem
             opath = Path(output_dir) / f"{stem}{ext}"
 
         meta: dict[str, object] = {}
@@ -715,6 +784,9 @@ def generate_all(
             header_path=header_path,
             writer_name=wname,
             backend_name=backend_name,
+            runtime=runtime,
+            language=language,
+            classification=classification,
             include_dirs=include_dirs,
             defines=defines,
             extra_args=extra_args,
@@ -823,6 +895,9 @@ def batch_generate(
     exclude_patterns: list[str] | None = None,
     writers: list[str] | None = None,
     backend_name: str | None = None,
+    runtime: str | None = None,
+    language: str | None = None,
+    classification: str | None = None,
     include_dirs: list[str] | None = None,
     defines: list[str] | None = None,
     extra_args: list[str] | None = None,
@@ -847,6 +922,9 @@ def batch_generate(
     :param exclude_patterns: Glob patterns for paths to exclude.
     :param writers: List of writer names. Default: ["json"].
     :param backend_name: Backend to use (default: "libclang").
+    :param runtime: Target runtime environment (e.g. "nim", "mojo").
+    :param language: Input source language (e.g. "c", "cpp").
+    :param classification: Input classification (e.g. "header", "source").
     :param include_dirs: Include directories for parsing.
     :param defines: Preprocessor defines (without -D prefix).
     :param extra_args: Additional backend args.
@@ -948,6 +1026,9 @@ def batch_generate(
                 writer_name=writer_name,
                 code=None,
                 backend_name=overrides.backend,
+                runtime=runtime,
+                language=language,
+                classification=classification,
                 include_dirs=([str(d) for d in overrides.include_dirs] if overrides.include_dirs is not None else None),
                 defines=([str(d) for d in overrides.defines] if overrides.defines is not None else None),
                 extra_args=([str(a) for a in overrides.extra_args] if overrides.extra_args is not None else None),

@@ -3,20 +3,16 @@ name: Test install_libclang
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'mkdocs.yml'
-      - 'LICENSE'
-      - '.gitignore'
+    paths:
+      - 'headerkit/install_libclang.py'
+      - 'tests/test_install_libclang.py'
+      - '.github/workflows/test-install-libclang.yml'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'mkdocs.yml'
-      - 'LICENSE'
-      - '.gitignore'
+    paths:
+      - 'headerkit/install_libclang.py'
+      - 'tests/test_install_libclang.py'
+      - '.github/workflows/test-install-libclang.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,8 +27,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: 'pip'

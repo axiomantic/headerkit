@@ -7,7 +7,15 @@ All IR types are Python dataclasses defined in the `headerkit.ir` module.
 
 ## Container
 
-The top-level object returned by all parser backends.
+The top-level object returned by all parser backends. `Header` is maintained as a backward-compatible alias for `SourceUnit`.
+
+::: headerkit.ir.SourceUnit
+    options:
+      show_source: false
+
+::: headerkit.ir.InputSpec
+    options:
+      show_source: false
 
 ::: headerkit.ir.Header
     options:
