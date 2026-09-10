@@ -91,6 +91,9 @@ class TestNimTypedefRoundtrip:
         assert "uint32_custom* = cuint" in output
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestNimCppBuildConfiguration:
     """Prove a scaffolded C++ package compiles, links and runs.
 
@@ -374,6 +377,9 @@ C_COMPILE_SHAPES: list[tuple[str, str, str, str]] = [
 ]
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestCppShapesNeedTheCppBackend:
     """Compile-gate the decision instead of asserting on the text of nim.cfg.
 
@@ -426,6 +432,9 @@ class TestCppShapesNeedTheCppBackend:
         )
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestTripwireHonesty:
     """A tripwire must never report success for a property it did not check."""
 
@@ -517,6 +526,9 @@ class TestTripwireHonesty:
         assert built.returncode == 0, f"a private method broke the generated package:\n{built.stdout}\n{built.stderr}"
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestPathsWithSpaces:
     """An include or library path containing a space must survive Nim's config parsing."""
 
@@ -552,6 +564,9 @@ class TestPathsWithSpaces:
         assert "value=13" in built.stdout, built.stdout
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestCShapesStayOnTheCBackend:
     """A C header misread as C++ links against mangled names and fails.
 
@@ -602,6 +617,9 @@ class TestCShapesStayOnTheCBackend:
         assert "value=" in built.stdout, built.stdout
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestInconclusiveTripwireReasons:
     """The reason a tripwire is inconclusive must reach the reader."""
 
@@ -656,6 +674,9 @@ def nim_backend_name(request: pytest.FixtureRequest) -> str:
     return name
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestEnumWidthMatchesTheCompiler:
     """`{.size.}` is compared against `sizeof` measured by the C++ compiler itself.
 
@@ -709,6 +730,9 @@ class TestEnumWidthMatchesTheCompiler:
         )
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestIntegerSignednessSurvivesBothBackends:
     """A value that reads differently when signedness is lost, checked by running it.
 
@@ -781,6 +805,9 @@ class TestIntegerSignednessSurvivesBothBackends:
         assert "u32=4294967295" in built.stdout, built.stdout
 
 
+# A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
+# budget is not written for: the Windows runner drives MinGW and exceeded it.
+@pytest.mark.timeout(300)
 class TestAdditionalBasesAreReported:
     """Nim has one base per object, so the others must be named rather than dropped."""
 
