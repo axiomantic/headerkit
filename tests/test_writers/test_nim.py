@@ -893,3 +893,79 @@ class TestGeneratedPathsSurviveNimStringLiterals:
             Header(path="/usr/include/shape.h", declarations=[Function(name="f", return_type=CType("void"))])
         )
         assert 'header: "/usr/include/shape.h"' in out, out
+
+
+class TestEnumWidthProvenance:
+    """A width the parser did not establish must not be presented as one it did."""
+
+    def test_known_underlying_type_sets_the_size(self) -> None:
+        out = write_nim(
+            Header(
+                path="e.hpp",
+                declarations=[
+                    Enum(name="E", values=[EnumValue("a", 0)], underlying_type="long long", underlying_type_known=True)
+                ],
+            ),
+            header_path="e.hpp",
+        )
+        assert "size: sizeof(clonglong)" in out, out
+        assert "UNSUPPORTED" not in out, out
+
+    def test_absent_underlying_type_is_cint_without_a_diagnostic(self) -> None:
+        """A header that declares none leaves a C enum int-compatible; that is not a guess."""
+        out = write_nim(
+            Header(
+                path="e.h",
+                declarations=[
+                    Enum(name="E", values=[EnumValue("a", 0)], underlying_type=None, underlying_type_known=True)
+                ],
+            ),
+            header_path="e.h",
+        )
+        assert "size: sizeof(cint)" in out, out
+        assert "UNSUPPORTED" not in out, out
+
+    def test_unestablished_underlying_type_says_the_width_is_assumed(self) -> None:
+        """`known=False` means the parser may have missed a clause that is there.
+
+        tree-sitter's C grammar has no production for `enum E : long long`, so in a
+        `.h` the width is unknown and `sizeof(cint)` is four bytes whatever the
+        header said. Emitting it silently is the failure mode; saying so is not.
+        """
+        out = write_nim(
+            Header(
+                path="e.h",
+                declarations=[
+                    Enum(name="E", values=[EnumValue("a", 0)], underlying_type=None, underlying_type_known=False)
+                ],
+            ),
+            header_path="e.h",
+        )
+        assert "size: sizeof(cint)" in out, out
+        assert "UNSUPPORTED: the underlying type of 'E' was not established" in out, out
+
+
+class TestCvQualifiersDoNotReachTheLookup:
+    """`const` describes mutability, not the type, so it must not join the name."""
+
+    @pytest.mark.parametrize(
+        ("qualifiers", "expected"),
+        [
+            (["unsigned"], "cuint"),
+            (["const", "unsigned"], "cuint"),
+            (["unsigned", "const"], "cuint"),
+            (["const"], "cint"),
+            (["volatile", "unsigned"], "cuint"),
+            (["restrict", "unsigned"], "cuint"),
+        ],
+    )
+    def test_cv_qualifiers_are_dropped_before_the_primitive_lookup(self, qualifiers: list[str], expected: str) -> None:
+        """`const unsigned int` is not a distinct primitive; `unsigned int` is."""
+        out = write_nim(
+            Header(
+                path="t.h",
+                declarations=[Typedef(name="alias", underlying_type=CType("int", qualifiers=qualifiers))],
+            ),
+            header_path="t.h",
+        )
+        assert f"alias* = {expected}" in out, out

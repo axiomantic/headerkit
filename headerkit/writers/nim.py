@@ -15,12 +15,13 @@ Features
 from __future__ import annotations
 
 import textwrap
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path, PureWindowsPath
 from typing import ClassVar
 
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Enum,
@@ -287,6 +288,17 @@ _CPP_HELPER_REQUIRES: dict[str, tuple[str, ...]] = {"WeakPtr": ("SharedPtr",)}
 
 #: Tag keywords that mark a name as a C record or enumeration rather than a C++ one.
 _C_TAG_PREFIXES: tuple[str, ...] = ("struct ", "union ", "enum ")
+
+
+#: Qualifiers that describe *mutability* rather than the type itself. They never
+#: form part of a primitive's spelling, so they are dropped before the lookup.
+_CV_QUALIFIERS: frozenset[str] = frozenset({"const", "volatile", "restrict"})
+
+
+def _qualified_type_name(name: str, qualifiers: Sequence[str]) -> str:
+    """Re-join type-level qualifiers with ``name``, dropping cv-qualifiers."""
+    type_level = [q for q in qualifiers if q not in _CV_QUALIFIERS]
+    return " ".join([*type_level, name]) if type_level else name
 
 
 def _nim_string_path(path: str) -> str:
@@ -738,6 +750,17 @@ class NimWriter(BaseWriter):
             if "::" in name:
                 name = name.replace("::", "_")
 
+            # A type-level qualifier is part of the type's name, and the two
+            # backends disagree about where it lives: libclang folds it into the
+            # name (`unsigned char`), tree-sitter keeps it in `qualifiers`
+            # (`char` + `["unsigned"]`). Looking at the name alone therefore
+            # rendered `unsigned int` as `cint` under tree-sitter -- the same
+            # header, two different signednesses. The qualified spelling is tried
+            # first and the bare name second, so this is correct under either
+            # backend, and stays correct once the IR canonicalises on one of them.
+            qualified = _qualified_type_name(name, t.qualifiers)
+            if qualified in C_TO_NIM_PRIMITIVES:
+                return C_TO_NIM_PRIMITIVES[qualified]
             if name in C_TO_NIM_PRIMITIVES:
                 return C_TO_NIM_PRIMITIVES[name]
             return _escape_ident(name)
@@ -809,15 +832,22 @@ class NimWriter(BaseWriter):
 
         pragma_str = f" {{.{', '.join(pragma_parts)}.}}" if pragma_parts else ""
 
-        # Inheritance
+        # Inheritance. Nim objects have one base, so a class with several keeps
+        # its first and the rest are reported rather than dropped: the binding
+        # describes the header, and a reader who cannot see that `Timer` is gone
+        # will look for its members on this type and not find them.
         base_str = ""
+        base_notes: list[str] = []
         if s.bases:
-            # Single primary base in Nim object inheritance
-            base_str = f" of {self._format_type(CType(s.bases[0].name))}"
+            primary = s.bases[0]
+            base_str = f" of {self._format_type(CType(primary.name))}"
+            base_notes.extend(self._describe_base(s, primary, dropped=False))
+            for extra in s.bases[1:]:
+                base_notes.extend(self._describe_base(s, extra, dropped=True))
         elif known_base_classes and s.name in known_base_classes:
             base_str = " of RootObj"
 
-        lines = [f"{t_name}*{pragma_str} = object{base_str}"]
+        lines = [*base_notes, f"{t_name}*{pragma_str} = object{base_str}"]
 
         if not s.fields:
             lines[0] += ""
@@ -955,6 +985,67 @@ class NimWriter(BaseWriter):
 
         return ["", f"proc {proc_name}*{t_params}({', '.join(params)}): {ret_type} {{.{pragma}.}}"]
 
+    @staticmethod
+    def _describe_base(s: Struct, base: BaseSpecifier, *, dropped: bool) -> list[str]:
+        """Report what a base contributes that the emitted declaration cannot say.
+
+        Nim has neither multiple inheritance nor access specifiers nor virtual
+        bases, so three properties the header states have nowhere to go in the
+        declaration itself. Silence would make them look absent rather than
+        inexpressible.
+        """
+        traits = []
+        if base.access and base.access != "public":
+            traits.append(base.access)
+        if base.is_virtual:
+            traits.append("virtual")
+        described = f"{' '.join(traits)} {base.name}" if traits else base.name
+        if dropped:
+            return [
+                f"# UNSUPPORTED: base '{described}' of '{s.name}' is not emitted; "
+                f"Nim objects have a single base and '{s.bases[0].name}' takes it"
+            ]
+        if traits:
+            return [f"# NOTE: base '{described}' of '{s.name}' is emitted as a plain Nim base"]
+        return []
+
+    def _enum_size_type(self, e: Enum) -> str:
+        """The Nim type whose ``sizeof`` is the enum's width.
+
+        ``{.size.}`` decides how many bytes every value of this enum occupies as
+        it crosses the ABI, so a wrong answer is a wrong layout rather than a
+        cosmetic difference. A fixed underlying type gives it exactly: `enum class
+        A : unsigned char` is one byte and `: long long` is eight, where a
+        hardcoded `cint` claims four for both.
+
+        ``cint`` remains the answer when there is no underlying type to read, which
+        covers two situations the width cannot distinguish: a header that declares
+        none, leaving an unscoped C enum int-compatible, and a parser that failed to
+        see a clause that is there. They differ in whether the answer is *known*,
+        not in what it is, so that distinction is carried by
+        :meth:`_enum_width_notes` rather than by a second branch here.
+        """
+        if not e.underlying_type:
+            return "cint"
+        return self._format_type(CType(e.underlying_type))
+
+    @staticmethod
+    def _enum_width_notes(e: Enum) -> list[str]:
+        """Report a width the parser could not establish, rather than claiming one.
+
+        ``underlying_type_known=False`` means the parser may have *missed* a clause
+        that is there -- tree-sitter's C grammar has no production for
+        ``enum E : long long``, so in a ``.h`` it parses as an ``ERROR`` node and the
+        type comes back ``None``. The emitted ``sizeof(cint)`` is a guess in that
+        case, and it is four bytes wide whatever the header actually said.
+        """
+        if e.underlying_type_known:
+            return []
+        return [
+            f"# UNSUPPORTED: the underlying type of '{e.name}' was not established by the "
+            f"parser, so its width is assumed to be that of cint; verify it against the header"
+        ]
+
     def _write_enum(self, e: Enum, header_file: str, func_names: set[str] | None = None) -> tuple[list[str], list[str]]:
         """Render an Enum declaration, returning (type_lines, const_lines)."""
         name = e.name or ""
@@ -976,7 +1067,11 @@ class NimWriter(BaseWriter):
         e_name = _escape_ident(nim_name)
 
         spelling = _c_type_spelling(name, e.is_typedef, "enum")
-        lines = [f'{e_name}* {{.size: sizeof(cint), importc: "{spelling}", header: "{header_file}".}} = enum']
+        size_type = self._enum_size_type(e)
+        lines = [
+            *self._enum_width_notes(e),
+            f'{e_name}* {{.size: sizeof({size_type}), importc: "{spelling}", header: "{header_file}".}} = enum',
+        ]
         for v in e.values:
             v_name = _escape_ident(v.name)
             if v.value is not None:

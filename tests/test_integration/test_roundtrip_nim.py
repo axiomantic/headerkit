@@ -8,12 +8,19 @@ from pathlib import Path
 
 import pytest
 
-from headerkit.backends import is_backend_available
+from headerkit.backends import get_backend, is_backend_available
 from headerkit.scaffold import ScaffoldOptions
 from headerkit.writers import get_writer
 from headerkit.writers.nim import unit_requires_cpp, write_nim
 from tests.native_build import position_independent_flags
-from tests.skip_policy import CC_INSTALL, CXX_INSTALL, NIM_INSTALL, require_program
+from tests.skip_policy import (
+    BACKEND_INSTALL,
+    CC_INSTALL,
+    CXX_INSTALL,
+    NIM_INSTALL,
+    missing_toolchain,
+    require_program,
+)
 
 pytestmark = pytest.mark.skipif(
     not is_backend_available("libclang"),
@@ -633,3 +640,238 @@ class TestInconclusiveTripwireReasons:
         tripwire = next(f.content for f in layout.files if f.path == "tests/test_tripwire.nim")
         assert "exits 0" in tripwire, tripwire
         assert "Do not treat it as link verification" in tripwire, tripwire
+
+
+#: Both parser backends, so a writer fix is proven against the IR each produces
+#: rather than against the one that happened to be convenient.
+NIM_BACKENDS = ("libclang", "tree-sitter")
+
+
+@pytest.fixture(params=NIM_BACKENDS)
+def nim_backend_name(request: pytest.FixtureRequest) -> str:
+    """Run the gate once per installed parser backend."""
+    name = str(request.param)
+    if not is_backend_available(name):
+        missing_toolchain(f"the {name} backend is not available", BACKEND_INSTALL[name])
+    return name
+
+
+class TestEnumWidthMatchesTheCompiler:
+    """`{.size.}` is compared against `sizeof` measured by the C++ compiler itself.
+
+    The pragma decides how many bytes every value of the enum occupies crossing the
+    ABI, so asserting on the emitted text would only re-state the writer's opinion.
+    These build a C++ probe, ask it, build the Nim package, ask it, and compare.
+    """
+
+    #: One per width class. `int` is the case the old hardcoded `cint` got right,
+    #: and is kept so the fix is shown not to have moved it.
+    UNDERLYING_TYPES = ("unsigned char", "short", "int", "long long")
+
+    @pytest.mark.parametrize("underlying", UNDERLYING_TYPES)
+    def test_emitted_size_equals_the_compilers_sizeof(
+        self, nim_backend_name: str, tmp_path: Path, underlying: str
+    ) -> None:
+        nim_bin = require_program("nim", install=NIM_INSTALL)
+        cxx_bin = require_program("c++", "g++", "clang++", install=CXX_INSTALL)
+        run = TestNimCppBuildConfiguration._run
+
+        header_code = f"#pragma once\nenum class Mode : {underlying} {{ Off = 0, On = 1 }};\n"
+        native = tmp_path / "native"
+        native.mkdir()
+        (native / "mode.hpp").write_text(header_code)
+        (native / "probe.cpp").write_text(
+            '#include "mode.hpp"\n#include <cstdio>\nint main(){printf("%zu\\n", sizeof(Mode));return 0;}\n'
+        )
+        built = run([cxx_bin, "probe.cpp", "-o", "probe"], native)
+        assert built.returncode == 0, built.stderr
+        probe = run([str(native / "probe")], native)
+        assert probe.returncode == 0, probe.stderr
+        cxx_sizeof = int(probe.stdout.strip())
+
+        unit = get_backend(nim_backend_name).parse(header_code, str(native / "mode.hpp"))
+        pkg_dir = tmp_path / "pkg"
+        get_writer("nim").write_layout(
+            unit,
+            ScaffoldOptions(package_name="modelib", target_language="nim", layout="package"),
+        ).write_to_disk(pkg_dir)
+        (pkg_dir / "tests" / "consumer.nim").write_text('import modelib\necho "size=", sizeof(Mode)\n')
+        nim_built = run(
+            [nim_bin, "c", "-r", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", "tests/consumer.nim"], pkg_dir
+        )
+        assert nim_built.returncode == 0, f"{nim_built.stdout}\n{nim_built.stderr}"
+        nim_sizeof = int(nim_built.stdout.split("size=")[1].split()[0])
+
+        assert nim_sizeof == cxx_sizeof, (
+            f"enum Mode : {underlying} is {cxx_sizeof} byte(s) to the C++ compiler and "
+            f"{nim_sizeof} to the generated binding; every value of it crosses the ABI at "
+            f"the wrong width"
+        )
+
+
+class TestIntegerSignednessSurvivesBothBackends:
+    """A value that reads differently when signedness is lost, checked by running it.
+
+    The two backends spell a multi-word integer differently -- libclang folds the
+    qualifier into the name, tree-sitter keeps it in `qualifiers` -- so a writer
+    reading the name alone rendered `unsigned char` as a *signed* Nim type under one
+    of them. 255 then reads back as -1, which no assertion on the emitted text
+    would notice.
+    """
+
+    HEADER = textwrap.dedent("""\
+        #pragma once
+        typedef unsigned char u8;
+        typedef unsigned short u16;
+        typedef unsigned int u32;
+
+        u8 biggest_u8(void);
+        u16 biggest_u16(void);
+        u32 biggest_u32(void);
+    """)
+
+    SOURCE = textwrap.dedent("""\
+        #include "widths.h"
+        u8 biggest_u8(void) { return 255u; }
+        u16 biggest_u16(void) { return 65535u; }
+        u32 biggest_u32(void) { return 4294967295u; }
+    """)
+
+    def test_unsigned_values_survive_the_round_trip(self, nim_backend_name: str, tmp_path: Path) -> None:
+        nim_bin = require_program("nim", install=NIM_INSTALL)
+        cc_bin = require_program("cc", "gcc", "clang", install=CC_INSTALL)
+        run = TestNimCppBuildConfiguration._run
+
+        native = tmp_path / "native"
+        native.mkdir()
+        (native / "widths.h").write_text(self.HEADER)
+        (native / "widths.c").write_text(self.SOURCE)
+        assert (
+            run(
+                [cc_bin, "-x", "c", *position_independent_flags(), "-c", "widths.c", "-o", "widths.o"], native
+            ).returncode
+            == 0
+        )
+        assert run([_archiver(), "rcs", "libwidths.a", "widths.o"], native).returncode == 0
+
+        unit = get_backend(nim_backend_name).parse(self.HEADER, str(native / "widths.h"))
+        pkg_dir = tmp_path / "pkg"
+        get_writer("nim").write_layout(
+            unit,
+            ScaffoldOptions(
+                package_name="widths",
+                target_language="nim",
+                layout="package",
+                options={"library": "widths", "library_dirs": str(native)},
+            ),
+        ).write_to_disk(pkg_dir)
+        (pkg_dir / "tests" / "consumer.nim").write_text(
+            textwrap.dedent("""\
+                import widths
+                echo "u8=", biggest_u8()
+                echo "u16=", biggest_u16()
+                echo "u32=", biggest_u32()
+            """)
+        )
+        built = run([nim_bin, "c", "-r", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", "tests/consumer.nim"], pkg_dir)
+        assert built.returncode == 0, f"{built.stdout}\n{built.stderr}"
+        # Signed renderings give -1, -1 and -1 respectively.
+        assert "u8=255" in built.stdout, built.stdout
+        assert "u16=65535" in built.stdout, built.stdout
+        assert "u32=4294967295" in built.stdout, built.stdout
+
+
+class TestAdditionalBasesAreReported:
+    """Nim has one base per object, so the others must be named rather than dropped."""
+
+    HEADER = textwrap.dedent("""\
+        #pragma once
+        struct Component { int cx; };
+        struct Timer { int ty; };
+        struct Logger { int lz; };
+        class Editor : public Component, public virtual Timer, private Logger {
+        public:
+            Editor();
+            int total() const;
+        };
+    """)
+
+    SOURCE = textwrap.dedent("""\
+        #include "editor.hpp"
+        Editor::Editor() { cx = 1; ty = 2; lz = 4; }
+        int Editor::total() const { return cx + ty + lz; }
+    """)
+
+    def _scaffold(self, nim_backend_name: str, tmp_path: Path) -> tuple[Path, str]:
+        cxx_bin = require_program("c++", "g++", "clang++", install=CXX_INSTALL)
+        run = TestNimCppBuildConfiguration._run
+        native = tmp_path / "native"
+        native.mkdir()
+        (native / "editor.hpp").write_text(self.HEADER)
+        (native / "editor.cpp").write_text(self.SOURCE)
+        assert (
+            run([cxx_bin, *position_independent_flags(), "-c", "editor.cpp", "-o", "editor.o"], native).returncode == 0
+        )
+        assert run([_archiver(), "rcs", "libeditor.a", "editor.o"], native).returncode == 0
+
+        unit = get_backend(nim_backend_name).parse(self.HEADER, str(native / "editor.hpp"))
+        editor = next(d for d in unit.declarations if getattr(d, "name", None) == "Editor")
+        assert len(editor.bases) == 3, f"the fixture must carry three bases, got {editor.bases}"
+
+        pkg_dir = tmp_path / "pkg"
+        get_writer("nim").write_layout(
+            unit,
+            ScaffoldOptions(
+                package_name="editorlib",
+                target_language="nim",
+                layout="package",
+                options={"library": "editor", "library_dirs": str(native)},
+            ),
+        ).write_to_disk(pkg_dir)
+        return pkg_dir, (pkg_dir / "src" / "editorlib" / "bindings.nim").read_text()
+
+    def test_dropped_bases_are_named_in_the_bindings(self, nim_backend_name: str, tmp_path: Path) -> None:
+        """A reader who cannot see that `Timer` is gone looks for its members here."""
+        _pkg_dir, bindings = self._scaffold(nim_backend_name, tmp_path)
+        assert "= object of Component" in bindings, bindings
+        assert "UNSUPPORTED: base 'virtual Timer' of 'Editor'" in bindings, bindings
+        assert "UNSUPPORTED: base 'private Logger' of 'Editor'" in bindings, bindings
+
+    def test_the_bindings_compile_as_far_as_the_type(self, nim_backend_name: str, tmp_path: Path) -> None:
+        """The diagnostics are comments, so they must not break the build."""
+        nim_bin = require_program("nim", install=NIM_INSTALL)
+        pkg_dir, _bindings = self._scaffold(nim_backend_name, tmp_path)
+        (pkg_dir / "tests" / "consumer.nim").write_text("import editorlib\ndiscard sizeof(Editor)\n")
+        built = TestNimCppBuildConfiguration._run(
+            [nim_bin, "c", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", "tests/consumer.nim"], pkg_dir
+        )
+        assert built.returncode == 0, f"{built.stdout}\n{built.stderr}"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "pre-existing: an importcpp object emitted with `of` is inheritable, so Nim "
+            "emits RTTI (`m_type`) accesses that the C++ class does not have. Not specific "
+            "to multiple bases and not introduced here -- a single-base class fails "
+            "identically on main. Instantiating any such binding gives "
+            "`error: no member named 'm_type'`. Fixing it is the subclassing/vtable work, "
+            "which is deliberately not in this change."
+        ),
+    )
+    def test_an_instance_of_an_inheriting_class_builds(self, nim_backend_name: str, tmp_path: Path) -> None:
+        """Pins the defect that stops a C++ inheritance binding being usable at all.
+
+        `sizeof` above passes because it needs no instance. The moment one exists,
+        Nim reaches for the RTTI field. This is strict, so the day the writer stops
+        emitting `of` for an importcpp type, this test goes red and gets deleted.
+        """
+        nim_bin = require_program("nim", install=NIM_INSTALL)
+        pkg_dir, _bindings = self._scaffold(nim_backend_name, tmp_path)
+        (pkg_dir / "tests" / "consumer.nim").write_text(
+            'import editorlib\nvar e = constructEditor()\necho "total=", e.total()\n'
+        )
+        built = TestNimCppBuildConfiguration._run(
+            [nim_bin, "c", "-r", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", "tests/consumer.nim"], pkg_dir
+        )
+        assert built.returncode == 0, f"{built.stdout}\n{built.stderr}"
+        assert "total=7" in built.stdout, built.stdout
