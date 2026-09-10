@@ -118,7 +118,22 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
 
 ### 🟡 Next (Planned Initiatives)
 
-#### 1. Unified Hook-Based Pipeline Architecture
+#### 1. Typed IR Contract & Conformance Declarations for Plugin Interoperability
+- **Concept**: The IR is the contract where a backend and a writer meet, and a contract needs a specific shape for exactly the reason a type does. Today the IR neither *types the surface* it describes nor requires anyone to declare what they populate or require. A third-party backend paired with a third-party writer will produce output; whether that output is correct rests on fields nothing declares and nothing checks.
+- **The Common Defect**: The items below were each diagnosed separately. All are one shape -- a fact the source states, which the IR either cannot express or does not oblige anyone to populate, and whose absence is indistinguishable from "not applicable":
+  - `Function.calling_convention` is declared in the IR (`ir.py:335`, `:707`) and read by writers across the tree (`ctypes`, `cython`, `nim`, `lua`, `json`, `diff`), yet no backend ever assigns it. The `None` default reads as "default convention", so a `__stdcall` function is silently emitted `cdecl`.
+  - `SourceUnit.language` defaults to `"c"`; both backends compute the answer internally and every production construction discards it. Measured: a C++ translation unit parsed by either backend still reports `language='c'`.
+  - `Field.access` is populated by both backends and honoured by the `cshim` and `mojo` writers, while `nim` and `cython` ignore it entirely.
+  - `extern "C"` blocks are dropped wholesale by the libclang backend, with no diagnostic. Measured on a header declaring one function inside an `extern "C"` block and one outside: libclang returns only the outer function while the tree-sitter backend returns both. The two backends disagree on the same input and nothing reports it.
+- **Scope & Targets**:
+  - **Type the surface, not merely the name**: A free C function, a C-ABI function, a C++ member function requiring a `this` pointer, a virtual requiring vtable dispatch, and a template requiring instantiation each demand a different binding strategy, and a writer that cannot tell them apart emits wrong code. The `nim` writer's C++ inheritance output is unusable today because an `importcpp` object emitted with `of` (`writers/nim.py:534-536`) is inheritable, so Nim emits RTTI accesses the C++ class does not have -- an object-model question decided with no typed information to decide it on.
+  - **Linkage**: Record whether a declaration carries C or C++ linkage. The IR has no field for it -- no `linkage`, `extern_c`, `mangled`, `symbol_name`, or `abi` -- and the only mention anywhere is a tree-sitter grammar node (`backends/treesitter.py:581`) whose result reaches nothing.
+  - **Symbol identity, both names**: A C++ member's source name (`juce::String::length`) and its linker symbol are different strings, and a writer needs both -- the source name to generate readable bindings, the mangled symbol to actually bind. Under C linkage the two coincide; under C++ linkage they do not, and nothing in the IR says which case applies.
+  - **Close the closed sets**: `ir.py` uses no `Literal` type anywhere, so `access: str | None` accepts `"pubic"` as readily as `"public"`. Closed value sets become `Literal` or `enum` types, and illegal states become unrepresentable rather than merely undocumented.
+  - **Conformance declarations**: Backends declare the surface they can type and the IR fields they populate; writers declare the fields they require; the pipeline **refuses** a pairing whose requirements are unmet, naming the offending field. Neither `backends/__init__.py` nor `writers/__init__.py` carries any capability or conformance declaration today.
+- **Why Refusal Is the Default**: The alternative to refusing is a binding that compiles, links, and calls the wrong thing. This is the project's own principle -- a mechanism whose failure is indistinguishable from its absence is not a mechanism -- applied to the plugin boundary.
+
+#### 2. Unified Hook-Based Pipeline Architecture
 - **Concept**: Refactor Headerkit so that the plugin and backend systems *are* the hook system, rather than stacking hooks on top of rigid legacy registries.
 - **Mechanism**:
   - **Single Pipeline Lifecycle**:
@@ -148,7 +163,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - **Glob Pattern Matching**:
     - Match on backend names (`backend="tree-sitter*"`), target triples (`target="*windows*"`), writer names (`writer="ctypes*"`), and languages (`language="c*"`).
 
-#### 2. Polyglot Input & Classification System (Core IR Renaming)
+#### 3. Polyglot Input & Classification System (Core IR Renaming)
 - **Concept**: Headerkit is not limited to C/C++ headers. It can extract interface surfaces, declarations, and metadata from any language supported by AST or Tree-sitter parsers.
 - **Core IR Evolution (`Header` $\rightarrow$ `SourceUnit` / `InterfaceUnit`)**:
   - Direct rename of the core `Header` container class to `SourceUnit` (or `InterfaceUnit`) across the core IR for the next major release, clarifying that it represents any compilation unit, interface, or source file.
@@ -159,7 +174,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - Backends separate **cheap static declarations** (`supported_languages`, `supported_classifications`) from **dynamic availability probes** (`is_available()`).
   - Probing for a language like `rust` immediately matches `TreeSitterBackend` without ever touching `libclang`, eliminating spurious warnings, disk searches, or auto-install prompts.
 
-#### 3. Tree-sitter Parser Backend (`headerkit.backends.treesitter`)
+#### 4. Tree-sitter Parser Backend (`headerkit.backends.treesitter`)
 - **Concept**: Provide a lightweight, zero-system-dependency parser backend for C headers and polyglot sources that works out of the box without requiring LLVM or `libclang` installed on the host.
 - **User Experience (Zero libclang requirement)**:
   - Users who select the Tree-sitter backend (`--backend tree-sitter`) or install the optional extra (`pip install "headerkit[treesitter]"`) require **no system LLVM, no Xcode command line tools, and no shared library discovery** (`libclang.so`/`.dylib`/`.dll`).
@@ -170,7 +185,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - Map concrete syntax tree nodes into normalized Headerkit IR (`Struct`, `Function`, `Typedef`, `Enum`, `CType`).
   - Lightweight preprocessor handling for macro and `#define` constant extraction where feasible.
 
-#### 4. Nim $\rightarrow$ C Header $\rightarrow$ Python Bridge
+#### 5. Nim $\rightarrow$ C Header $\rightarrow$ Python Bridge
 - **Concept**: Enable writing high-performance modules in Nim and consuming them natively in Python with zero hand-written FFI boilerplate.
 - **Mechanism**:
   - Ingest C headers generated by Nim (`nim c --app:lib --header:mylib.h ...`).
@@ -180,27 +195,27 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
     - Align with Nim's `--mm:orc` (deterministic ARC + cycle collector) so Python object lifecycles can tie cleanly into Nim destructors via wrapper finalizers (`__del__` / capsule destructors) without GC deadlock.
     - Safe cross-thread invocation: emit `setupForeignThreadGc()` / `tearDownForeignThreadGc()` guards for calls originating from Python threads, ensuring compatibility with multi-threaded runtimes and Python 3.13+ free-threading (PEP 703).
 
-#### 5. Scikit-build / Wheel Packaging Template
+#### 6. Scikit-build / Wheel Packaging Template
 - **Concept**: Provide end-to-end packaging infrastructure for compiling Nim-based Python extensions into distributable binary wheels.
 - **Mechanism**:
   - Build-backend helper / template (leveraging `scikit-build-core` or standard PEP 517 hooks).
   - Automate calling `nim c`, linking necessary runtime libraries, exporting C symbols, and tagging platform wheels correctly across Linux, macOS, and Windows.
 
-#### 6. Mojo C++ Interoperability Bridge (CShim + Mojo FFI)
+#### 7. Mojo C++ Interoperability Bridge (CShim + Mojo FFI)
 - **Concept**: Open C++ ecosystems to Modular's Mojo without requiring manual C wrapper maintenance.
 - **Mechanism**:
   - Mojo natively supports standard C calling conventions (`sys.ffi.DLHandle`), but cannot directly bind complex C++ classes, templates, or mangled symbols.
   - Leverage Headerkit's `cshim` writer to generate an `extern "C"` flat ABI shim for C++ headers.
   - Concurrently emit corresponding Mojo struct definitions and `sys.ffi` wrapper calls to consume the shimmed library cleanly in Mojo code.
 
-#### 7. Comprehensive Documentation Sweep & Verification
+#### 8. Comprehensive Documentation Sweep & Verification
 - **Concept**: With foundational architectural changes (hooks, polyglot inputs, IR renaming), ensure that documentation and real-world examples never lag behind implementation.
 - **Plan**:
   - Author dedicated documentation guides for the unified hook system, custom hook registration, priority ordering, and glob matching.
   - Full documentation sweep to fact-check all existing tutorials, guides, and API references against new behaviors.
   - Update all example projects and tests to adopt the new `SourceUnit` conventions.
 
-#### 8. Polyglot Project & Extension Scaffolding (Unified Layouts & BYOScaffolder)
+#### 9. Polyglot Project & Extension Scaffolding (Unified Layouts & BYOScaffolder)
 - **Concept**: Expand beyond standalone binding files into full, idiomatic polyglot project structures with automated test suites and failing TDD/tripwire stubs, unified under a single layout model.
 - **Architectural Tenets**:
   - **Unified Output Model ("A Single File is Just a Project of One File")**:
@@ -223,7 +238,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
     - Dedicated scaffolding guide (`docs/guides/scaffolding.md`) covering package topologies, BYOScaffolder plugin development, and Copier integration examples.
     - Full update across all writer documentation and tutorials to present the unified layout mechanism as the standard way to generate projects and bindings.
 
-#### 9. Grammar-Based Polyglot Source AST Extraction (Rust, Zig, Nim)
+#### 10. Grammar-Based Polyglot Source AST Extraction (Rust, Zig, Nim)
 - **Concept**: Extract C-ABI interface surfaces (`extern "C"` functions, `#[repr(C)]` structs/enums, exported types) directly from foreign source code (Rust `.rs`, Zig `.zig`, Nim `.nim`) into normalized `SourceUnit` IR.
 - **Strict Grammar Invariant (Zero Regex Rule)**:
   - Context-free and structured programming languages *cannot* be parsed with regular expressions. Hand-rolled regex tokenizers and regex AST extractors are strictly forbidden across the project.
@@ -237,6 +252,10 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
 
 ### 🔵 Later (Exploratory / Research)
 
+- **Lua Runtime Coverage Beyond LuaJIT (Lua C API Writer)**:
+  - The `lua` writer emits LuaJIT FFI `ffi.cdef` blocks exclusively (`headerkit/writers/lua.py`, registered under the name `lua` with the description "LuaJIT FFI bindings"). A user on PUC-Rio Lua 5.1-5.4 therefore selects `lua`, receives FFI code, and finds their interpreter has no FFI at all. The writer's name claims a language while it delivers one implementation of that language.
+  - Add a Lua C API writer emitting a genuine loadable C extension module (`luaopen_*`), portable across PUC-Rio Lua 5.1-5.4 and LuaJIT, rather than depending on a runtime FFI only one implementation provides. Make the target runtime explicit in writer naming so the selection is not itself a guess.
+  - **Proving case**: generate Lua bindings for a Zig library, composing the `tree-sitter-zig` extraction described under *Grammar-Based Polyglot Source AST Extraction* (Next, item 10) with the Lua C API writer. This pairing earns its place because neither side is C, making it the first real test of whether the IR is a language-neutral interop contract or a C-shaped pipe with extra writers attached.
 - **Two-Way Python Acceleration (Mojo $\leftrightarrow$ Python)**:
   - Use Headerkit to generate the interface layer between Python and Mojo-compiled shared objects (`.so` / `.dylib` / `.dll`), creating seamless ctypes/cffi wrappers for fast Mojo acceleration in existing Python codebases.
 - **Native Mojo Writer Backend (`headerkit.writers.mojo`)**:
