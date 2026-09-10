@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 from headerkit.ir import (
     Array,
     BaseSpecifier,
@@ -22,6 +24,15 @@ from headerkit.ir import (
     Variable,
 )
 from headerkit.writers.json import header_to_json, header_to_json_dict
+
+
+def _default_of(f: dataclasses.Field[object]) -> object:
+    """The dataclass default for ``f``, or a sentinel for a required field."""
+    if f.default is not dataclasses.MISSING:
+        return f.default
+    if f.default_factory is not dataclasses.MISSING:
+        return f.default_factory()
+    return object()
 
 
 def _round_trip(header: Header) -> Header:
@@ -464,3 +475,135 @@ class TestTriStateFieldsSurviveTheRoundTrip:
         )
         restored = _round_trip_json_str(header)
         assert restored.declarations[0].underlying_type_known is False
+
+
+class TestEveryIrFieldSurvivesTheRoundTrip:
+    """The invariant this module's docstring claims, asserted rather than stated.
+
+    ``json_to_header(header_to_json_dict(h)) == h`` was prose, and prose fails
+    silently. Executed on a real parse of either backend it was False: the
+    serializer never wrote ``Field.is_padding``, ``Struct.nested_records``,
+    ``Enum.is_scoped``, ``Enum.namespace`` or ``Enum.cpp_name``, so a cache hit
+    returned a different IR than the parse that filled it.
+    """
+
+    @staticmethod
+    def _maximal_header() -> Header:
+        """A header exercising every field this serializer is meant to carry.
+
+        Values are chosen to differ from the dataclass default, because a field
+        left at its default round-trips whether or not it is written -- which is
+        exactly how five of them stayed broken.
+        """
+        loc = SourceLocation(file="h.h", line=3, column=9)
+        inner = Struct("Inner", [Field("q", CType("int"))])
+        method = Function("m", CType("void"), [Parameter("p", CType("int"))], location=loc)
+        return Header(
+            "h.h",
+            [
+                Struct(
+                    "S",
+                    methods=[method],
+                    constructors=[method],
+                    destructor=method,
+                    conversions=[method],
+                    vtable_entries=[method],
+                    attributes=["deprecated"],
+                    is_abstract=True,
+                    is_deprecated=True,
+                    fields=[
+                        Field("a", CType("const unsigned int", qualifiers=["const"], is_elaborated=True), bit_width=4),
+                        Field("", CType("unsigned int"), bit_width=3, is_padding=True),
+                        Field("st", CType("int"), is_static=True, access="private"),
+                        Field("an", CType("int"), anonymous_struct=inner, is_anonymous_transparent=True),
+                    ],
+                    is_typedef=True,
+                    is_cppclass=True,
+                    namespace="ns",
+                    template_params=["T"],
+                    cpp_name="ns::S",
+                    is_packed=True,
+                    notes=["n1"],
+                    inner_typedefs={"A": "int"},
+                    nested_records=[inner],
+                    bases=[BaseSpecifier("B", access="protected", is_virtual=True)],
+                    alignment=16,
+                    location=loc,
+                ),
+                Enum(
+                    "E",
+                    [EnumValue("X", 1)],
+                    is_scoped=True,
+                    underlying_type="int",
+                    underlying_type_known=False,
+                    is_typedef=True,
+                    namespace="ns",
+                    cpp_name="ns::E",
+                    location=loc,
+                ),
+            ],
+        )
+
+    def test_a_maximal_header_round_trips_unchanged(self) -> None:
+        header = self._maximal_header()
+        assert _round_trip(header) == header
+
+    def test_every_dataclass_field_is_written_or_declared_unwritten(self) -> None:
+        """Closes the class, not the five instances.
+
+        A field the serializer never writes is invisible to the round trip
+        whenever the fixture happens to leave it at its default, and invisible
+        to the IR fingerprint too -- that hashes the dataclasses, which know
+        nothing about what gets serialized. This walks the objects beside the
+        dicts they produced and fails on any field absent from both the output
+        and the allowlist below, so a newly added field has to be handled
+        rather than silently dropped.
+        """
+        #: Fields deliberately not serialized, each with the reason it is safe.
+        unwritten: dict[str, set[str]] = {
+            # Reconstructed from the "kind" discriminator on the way back in.
+            "Struct": {"is_union"},
+        }
+        header = self._maximal_header()
+        data = header_to_json_dict(header)
+
+        seen: dict[str, tuple[set[str], object]] = {}
+
+        def walk(obj: object, d: object) -> None:
+            if not dataclasses.is_dataclass(obj) or not isinstance(d, dict):
+                return
+            name = type(obj).__name__
+            keys, _ = seen.setdefault(name, (set(), obj))
+            keys.update(d)
+            seen[name] = (keys, obj)
+            for f in dataclasses.fields(obj):
+                value = getattr(obj, f.name)
+                rendered = d.get(f.name)
+                if isinstance(value, list) and isinstance(rendered, list):
+                    for item, sub in zip(value, rendered, strict=False):
+                        walk(item, sub)
+                else:
+                    walk(value, rendered)
+
+        for decl, rendered in zip(header.declarations, data["declarations"], strict=False):
+            walk(decl, rendered)
+
+        # Only a field carrying a *non-default* value is required to appear:
+        # the serializer omits defaults by design, so demanding a key for one
+        # would assert the format rather than the invariant. Which is why the
+        # fixture above sets every field away from its default.
+        missing: dict[str, list[str]] = {}
+        for name, (keys, obj) in seen.items():
+            gap = sorted(
+                f.name
+                for f in dataclasses.fields(type(obj))
+                if f.name not in keys
+                and f.name not in unwritten.get(name, set())
+                and getattr(obj, f.name) != _default_of(f)
+            )
+            if gap:
+                missing[name] = gap
+        assert not missing, (
+            f"these IR fields are never written by the serializer: {missing}. A cache hit will "
+            "return the dataclass default for each of them instead of what the parser reported."
+        )

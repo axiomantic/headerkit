@@ -340,10 +340,20 @@ def type_to_ctypes(t: TypeExpr, types: _TypeTable = _EMPTY_TYPES) -> str:
             non_cv = [q for q in t.qualifiers if q not in ("const", "volatile", "restrict")]
             if non_cv:
                 qualified_name = " ".join(non_cv) + " " + t.name
-                if qualified_name in CTYPES_TYPE_MAP:
-                    return CTYPES_TYPE_MAP[qualified_name]
-        if base_name in CTYPES_TYPE_MAP:
-            return CTYPES_TYPE_MAP[base_name]
+                # Normalised because the backends spell one declared type two
+                # ways: tree-sitter keeps the source tokens, so ``unsigned long
+                # int`` stays whole, while libclang canonicalises it to
+                # ``unsigned long``. Unnormalised, the map missed the first and
+                # the raw C spelling fell through into the generated module --
+                # ``("m", long int)``, a SyntaxError. The normaliser is
+                # idempotent, so this stays correct once the IR canonicalises
+                # these spellings itself.
+                for candidate in (qualified_name, _normalised_c_integer(qualified_name)):
+                    if candidate in CTYPES_TYPE_MAP:
+                        return CTYPES_TYPE_MAP[candidate]
+        for candidate in (base_name, _normalised_c_integer(base_name)):
+            if candidate in CTYPES_TYPE_MAP:
+                return CTYPES_TYPE_MAP[candidate]
 
         # The header's own tables come *after* the builtin map, never before it.
         # A tag and an ordinary identifier are separate namespaces in C, so
@@ -2163,7 +2173,12 @@ def _scalar_typedef_names(header: Header) -> dict[str, str]:
         underlying = d.underlying_type
         non_cv = [q for q in underlying.qualifiers if q not in ("const", "volatile", "restrict")]
         qualified = " ".join([*non_cv, underlying.name]) if non_cv else underlying.name
-        ctype = CTYPES_TYPE_MAP.get(qualified) or CTYPES_TYPE_MAP.get(underlying.name)
+        ctype = (
+            CTYPES_TYPE_MAP.get(qualified)
+            or CTYPES_TYPE_MAP.get(_normalised_c_integer(qualified))
+            or CTYPES_TYPE_MAP.get(underlying.name)
+            or CTYPES_TYPE_MAP.get(_normalised_c_integer(underlying.name))
+        )
         if ctype is not None and ctype != "None":
             scalars[d.name] = ctype
     return scalars
