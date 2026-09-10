@@ -1566,8 +1566,22 @@ def test_a_multi_word_integer_spelling_resolves_on_both_backends(backend_name: s
     exec(compile(code, "<generated>", "exec"), namespace)
     cls = namespace["S"]
 
-    assert ctypes.sizeof(cls) == 32
-    assert (cls.m.offset, cls.n.offset, cls.o.offset, cls.p.offset) == (0, 8, 16, 24)
+    # Compared against a record built from the ctypes scalars these spellings
+    # denote, rather than against byte counts: ``unsigned long`` is 8 bytes
+    # under LP64 and 4 under Windows' LLP64, so a pinned 32 asserts the
+    # platform rather than the writer. This asserts the *type choice*, which is
+    # what the defect got wrong, and is correct on every platform.
+    class Reference(ctypes.Structure):
+        _fields_ = (
+            ("m", ctypes.c_ulong),
+            ("n", ctypes.c_ushort),
+            ("o", ctypes.c_longlong),
+            ("p", ctypes.c_byte),
+        )
+
+    assert ctypes.sizeof(cls) == ctypes.sizeof(Reference)
+    for name in ("m", "n", "o", "p"):
+        assert getattr(cls, name).offset == getattr(Reference, name).offset, name
     # A scalar typedef renders as a comment and binds no module-level name, so
     # the offsets above are where the resolution is observable. The field lines
     # are checked too: the defect put a raw C spelling in one of them.
