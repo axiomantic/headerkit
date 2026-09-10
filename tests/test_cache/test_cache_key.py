@@ -244,21 +244,37 @@ class TestComputeOutputCacheKey:
 class TestIrSchemaVersion:
     """Tests for IR schema version changes."""
 
-    #: sha256 over ``{dataclass name: sorted field names}`` for every dataclass
-    #: in ``headerkit.ir``. Recorded, not computed at import, so that a change to
-    #: the IR has to be acknowledged here rather than silently absorbed.
-    IR_SHAPE_FINGERPRINT = "11f0711273afba27"
+    #: sha256 over ``{dataclass name: [(field name, default)]}`` for every
+    #: dataclass in ``headerkit.ir``. Recorded, not computed at import, so that
+    #: a change to the IR has to be acknowledged here rather than silently
+    #: absorbed.
+    IR_SHAPE_FINGERPRINT = "45acb3d81467ef04"
 
     @staticmethod
     def _ir_shape_fingerprint() -> str:
-        """Fingerprint the IR dataclasses by name and field names.
+        """Fingerprint the IR dataclasses by field name **and default**.
 
         Field *order* is deliberately not included: reordering does not change
         what a serialised document contains or how it reads back. Adding,
         removing or renaming a field does, and each of those moves the hash.
+
+        The default is included because it is what an *absent* key deserialises
+        to. Changing a default silently changes what every document written
+        before the change reads back as, which is the same failure as adding a
+        field -- and a name-only fingerprint could not see it. Verified: with
+        names alone, flipping ``Enum.underlying_type_known`` from ``True`` to
+        ``False`` left the hash unmoved.
         """
+
+        def default_of(f: dataclasses.Field[object]) -> str:
+            if f.default is not dataclasses.MISSING:
+                return repr(f.default)
+            if f.default_factory is not dataclasses.MISSING:
+                return f"factory:{f.default_factory()!r}"
+            return "<required>"
+
         shape = {
-            name: sorted(f.name for f in dataclasses.fields(obj))
+            name: sorted((f.name, default_of(f)) for f in dataclasses.fields(obj))
             for name, obj in sorted(vars(ir).items())
             if dataclasses.is_dataclass(obj) and isinstance(obj, type) and obj.__module__ == ir.__name__
         }

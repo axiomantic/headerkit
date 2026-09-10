@@ -2,11 +2,14 @@
 
 This is the inverse of headerkit.writers.json serialization.
 The primary invariant: json_to_header(header_to_json_dict(h)) == h
-for any Header h.
+for any Header h. It is asserted, not merely stated, by
+``TestEveryIrFieldSurvivesTheRoundTrip`` -- a claim in a docstring fails
+silently, and this one was false for five fields the serializer never wrote.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Callable
 from typing import Any
@@ -36,6 +39,24 @@ from headerkit.ir import (
 # =========================================================================
 # Type Deserializers
 # =========================================================================
+
+
+def _default(cls: type, name: str) -> Any:
+    """The dataclass's own default for ``name``.
+
+    A key the serializer omits is a key whose value equalled the default, so
+    absence has to be read back as *that* default and no other. Spelling the
+    value again as a literal here lets the two drift: change the dataclass and
+    every document written before the change silently deserializes to something
+    the writer would never have produced. Reading it from the dataclass makes
+    that impossible rather than merely unlikely.
+    """
+    field = next(f for f in dataclasses.fields(cls) if f.name == name)
+    if field.default is not dataclasses.MISSING:
+        return field.default
+    if field.default_factory is not dataclasses.MISSING:  # pragma: no cover - none today
+        return field.default_factory()
+    raise ValueError(f"{cls.__name__}.{name} has no default, so absence cannot be read")
 
 
 def _dict_to_ctype(d: dict[str, Any]) -> CType:
@@ -113,8 +134,8 @@ def _dict_to_parameter(d: dict[str, Any]) -> Parameter:
 def _dict_to_base(d: dict[str, Any]) -> BaseSpecifier:
     return BaseSpecifier(
         name=d["name"],
-        access=d.get("access", "public"),
-        is_virtual=d.get("is_virtual", False),
+        access=d.get("access", _default(BaseSpecifier, "access")),
+        is_virtual=d.get("is_virtual", _default(BaseSpecifier, "is_virtual")),
     )
 
 
@@ -124,9 +145,10 @@ def _dict_to_field(d: dict[str, Any]) -> Field:
         type=_dict_to_type(d["type"]),
         bit_width=d.get("bit_width"),
         anonymous_struct=(_dict_to_struct(d["anonymous_struct"]) if "anonymous_struct" in d else None),
-        is_anonymous_transparent=d.get("is_anonymous_transparent", False),
-        access=d.get("access"),
-        is_static=d.get("is_static", False),
+        is_padding=d.get("is_padding", _default(Field, "is_padding")),
+        is_anonymous_transparent=d.get("is_anonymous_transparent", _default(Field, "is_anonymous_transparent")),
+        access=d.get("access", _default(Field, "access")),
+        is_static=d.get("is_static", _default(Field, "is_static")),
     )
 
 
@@ -158,12 +180,13 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         is_union=d.get("kind") == "union",
         is_cppclass=d.get("is_cppclass", False),
         is_typedef=d.get("is_typedef", False),
-        is_packed=d.get("is_packed", False),
+        is_packed=d.get("is_packed", _default(Struct, "is_packed")),
         namespace=d.get("namespace"),
         template_params=d.get("template_params", []),
         cpp_name=d.get("cpp_name"),
         notes=d.get("notes", []),
         inner_typedefs=d.get("inner_typedefs", {}),
+        nested_records=[_dict_to_struct(r) for r in d.get("nested_records", [])],
         bases=[_dict_to_base(b) for b in d.get("bases", [])],
         is_abstract=d.get("is_abstract", False),
         constructors=([_dict_to_function(c) for c in d["constructors"]] if "constructors" in d else []),
@@ -184,7 +207,10 @@ def _dict_to_enum(d: dict[str, Any]) -> Enum:
         is_typedef=d.get("is_typedef", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         underlying_type=d.get("underlying_type"),
-        underlying_type_known=d.get("underlying_type_known", True),
+        underlying_type_known=d.get("underlying_type_known", _default(Enum, "underlying_type_known")),
+        is_scoped=d.get("is_scoped", _default(Enum, "is_scoped")),
+        namespace=d.get("namespace"),
+        cpp_name=d.get("cpp_name"),
     )
 
 
