@@ -8,7 +8,7 @@ Keep `CHANGELOG.md` up to date using [Keep a Changelog](https://keepachangelog.c
 
 ## Versioning
 
-Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the version in `pyproject.toml` whenever creating a branch that changes shipped code. A branch touching only `AGENTS.md`, `README.md`, `ROADMAP.md`, or `docs/` does not bump, and does not release:
+Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the version in `pyproject.toml` whenever creating a branch that changes shipped code. A branch touching only documentation -- anything under `docs/`, plus `mkdocs.yml` and any root-level `*.md` -- does not bump, and does not release. That is the same set `ci.yml` ignores, so the rule and the pipeline stay in step as files are added:
 
 - **Major** (X.0.0): Breaking changes to public API
 - **Minor** (0.X.0): New features, new public API surface
@@ -47,7 +47,7 @@ The section above forbids recovering structure from source text with a regex, be
 
 This is absolute rather than a default because a C or C++ header is *formally specified*. Every property a writer needs is stated in the grammar or derivable from it, exactly; there is no noise to smooth over and no sampling error to tolerate. A guess is therefore never the best answer available -- it is a refusal to go and get an answer that already exists. When a writer reaches for one, the question was asked in the wrong place: at the writer, where only a shadow of the fact survives, instead of at the backend, where the fact was in hand and thrown away. "It works on most headers" is a sentence about weather, not about a parser.
 
-Two checks decide any concrete case.
+The checks below decide any concrete case.
 
 **Before writing a predicate over a name**, ask whether two declarations that must produce different bindings can reach it spelled identically. In C and C++ the answer is yes far more often than it looks: tags and ordinary identifiers occupy separate namespaces, `using namespace` erases qualification, typedefs rename anonymous records, and a macro can expand two different declarations onto one spelling before a backend ever sees them. Where the answer is yes, **no refinement of that predicate can ever be correct**, because the distinguishing information is absent from its input. Stop and go record the fact at the backend.
 
@@ -55,7 +55,7 @@ Two checks decide any concrete case.
 
 When the fact genuinely is unavailable, refuse loudly and specifically. Unknown must be a distinct state from every real answer, and it must never resolve to a default that happens to look plausible.
 
-The instances below are what these two checks cost this codebase before anyone applied them, each one a pull request and several review rounds:
+The instances below are what these checks cost this codebase before anyone applied them, each one a pull request and several review rounds:
 
 - `Enum.underlying_type` / `Enum.underlying_type_known` (fixed). The ctypes writer sized an enum from its enumerator values, and `enum E : unsigned char` came out four bytes against a real one. Two rounds refined the predicate first -- `is_scoped`, which was never the property that mattered, then an enumerator-range test that an empty enumerator list made vacuously true -- before the two fields were added.
 - `CType.is_elaborated` (fixed). The writer could not tell `struct Gauge` from a bare `Gauge`. C keeps tags and ordinary identifiers in separate namespaces, so both are legal in one unit and name different types; tree-sitter strips the aggregate keyword, so before the flag existed the two *names* arrived identical and neither could be resolved. Both backends now record the flag while the keyword is still in hand -- the tree-sitter backend reads it off the token list before that list is stripped, precisely because afterwards it is unrecoverable -- and the writer branches on it. The distinction has to be recorded at the parser or not at all.
@@ -67,7 +67,7 @@ The lesson each teaches: **a default that cannot be distinguished from "nobody r
 Corollaries:
 
 - **Two independent predicates for one fact will drift, silently** (still open). Derive one from the other, or both from a single recorded value. The ctypes writer already carries two normalisations of "does this name already mean something else" -- `_typedef_aliases_its_own_tag` strips a `struct `/`union ` prefix to compare a typedef against its target, while `_enum_type_names` withholds by unprefixed name -- and the disagreement mapped a type onto a helper whose declaration had been withheld.
-- **Model nothing the real engine can be asked** (fixed). A model of an allocator or a layout algorithm is a second implementation, and it drifts from the first. Two independent axes make a writer-side bit-field model untenable, and they are separate hazards. By **platform**: ctypes selects among System V, AAPCS64 and MSVC layout rules, and any writer-side model encodes exactly one -- the same declaration is laid out at three different sizes across them. By **interpreter version**: off Windows, the ctypes layout engine changed in 3.14, so a model calibrated against an earlier interpreter is silently wrong on a later one. The writer now builds the record and reads back what the engine actually did rather than predicting it.
+- **Model nothing the real engine can be asked** (fixed). A model of an allocator or a layout algorithm is a second implementation, and it drifts from the first. Independent axes make a writer-side bit-field model untenable, and they are separate hazards. By **platform**: ctypes selects among System V, AAPCS64 and MSVC layout rules, and any writer-side model encodes exactly one -- the same declaration is laid out at three different sizes across them. By **interpreter version**: off Windows, the ctypes layout engine changed in 3.14, so a model calibrated against an earlier interpreter is silently wrong on a later one. The writer now builds the record and reads back what the engine actually did rather than predicting it.
 
 ## Anti-completion bias & anti-green-mirage discipline
 
