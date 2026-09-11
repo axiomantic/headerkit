@@ -34,7 +34,7 @@ from headerkit._rename import (
     rename_cache_fingerprint,
 )
 from headerkit.hooks import HookRegistry, PipelineContext, Priority
-from headerkit.ir import CType, Enum, EnumValue, Field, Function, Header, Parameter, Struct
+from headerkit.ir import CType, Enum, EnumValue, Field, Function, Header, Parameter, Struct, Typedef
 from headerkit.writers.nim import (
     _escape_ident,
     nim_ident_identity,
@@ -54,8 +54,8 @@ def clean_hooks():
     HookRegistry.restore(saved)
 
 
-def nim_check(source: str, tmp_path: Path, stem: str = "generated") -> None:
-    """Run the real ``nim check`` over *source*; fail with its diagnostics.
+def _run_nim_check(source: str, tmp_path: Path, stem: str) -> subprocess.CompletedProcess[str]:
+    """Run the real ``nim check`` over *source* and return the result.
 
     ``nim`` not being installed is a failure, not a skip: this is the only gate
     in the suite that can tell a legal identifier from an illegal one, and a
@@ -64,14 +64,33 @@ def nim_check(source: str, tmp_path: Path, stem: str = "generated") -> None:
     nim_bin = require_program("nim", install=NIM_INSTALL)
     module = tmp_path / f"{stem}.nim"
     module.write_text(source, encoding="utf-8")
-    result = subprocess.run(
+    return subprocess.run(
         [nim_bin, "check", "--hints:off", "--colors:off", str(module)],
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def nim_check(source: str, tmp_path: Path, stem: str = "generated") -> None:
+    """Fail with the compiler's diagnostics unless *source* is a module Nim accepts."""
+    result = _run_nim_check(source, tmp_path, stem)
     if result.returncode != 0:
         pytest.fail(f"nim check rejected the generated module:\n{source}\n---\n{result.stdout}\n{result.stderr}")
+
+
+def nim_check_rejects(source: str, tmp_path: Path, stem: str, expect: str) -> None:
+    """Fail unless the real compiler rejects *source* for the stated reason.
+
+    The reason is checked, not the exit status alone: a module rejected for an
+    unrelated error -- a typo in a fixture, an import that does not resolve -- is
+    a red run that says nothing about the defect being pinned, and reads
+    identically to one that does.
+    """
+    result = _run_nim_check(source, tmp_path, stem)
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"nim check ACCEPTED a module expected to be rejected:\n{source}\n---\n{combined}"
+    assert expect in combined, f"nim check rejected the module, but not for {expect!r}:\n{source}\n---\n{combined}"
 
 
 class TestNimIdentifierGrammar:
@@ -175,8 +194,6 @@ class TestCollisionsRaise:
 
     def test_a_tagged_typedef_of_the_same_name_is_not_a_collision(self) -> None:
         """``typedef enum E E;`` names one entity twice, not two symbols."""
-        from headerkit.ir import Typedef
-
         header = Header(
             path="tagged.h",
             declarations=[
@@ -187,12 +204,29 @@ class TestCollisionsRaise:
         assert "E*" in write_nim(header, header_path="tagged.h")
 
 
-@pytest.mark.allow("subprocess")
-@pytest.mark.timeout(300)
+#: A record and a free function whose *members* collide under Nim's identity
+#: rules. Module scope is clean in both: ``Holder`` and ``go`` are the only
+#: module-level names, so nothing headerkit checks today has anything to say.
+_FIELD_COLLISION_HEADER = Header(
+    path="fields.h",
+    declarations=[Struct(name="Holder", fields=[Field("fooBar", CType("int")), Field("foo_bar", CType("int"))])],
+)
+_PARAM_COLLISION_HEADER = Header(
+    path="params.h",
+    declarations=[
+        Function(
+            name="go",
+            return_type=CType("void"),
+            parameters=[Parameter("fooBar", CType("int")), Parameter("foo_bar", CType("int"))],
+        )
+    ],
+)
+
+
 @pytest.mark.allow("subprocess")
 @pytest.mark.timeout(300)
 class TestFieldAndParamCollisionsAreNotDetectedYet:
-    """Strict xfails pinning a known gap, so it turns red when it is closed.
+    """Paired pins on a known gap: closing it must turn exactly one of each pair red.
 
     Collision checking covers the module-level namespace only. Nim rejects a
     colliding field or parameter just as firmly -- measured on Nim 2.2.10, an
@@ -200,44 +234,49 @@ class TestFieldAndParamCollisionsAreNotDetectedYet:
     'foo_bar'``, and so is a proc taking both -- so these headers produce a
     module the compiler refuses, with no diagnostic from headerkit.
 
-    Each case asserts the END STATE, not the defect: the generated module
-    compiles. They fail today and will pass once per-record and per-proc symbol
-    identity arrives with the IR contract work, at which point ``strict=True``
-    turns the xfail into a failure and these become ordinary tests.
+    Each case is pinned TWICE, and the two pins disagree about the future on
+    purpose:
+
+    * a strict xfail asserting the END STATE, which is the **refusal** headerkit
+      already performs at module scope. A single pin asserting "the module
+      compiles" was wrong about the likely fix: that fix makes ``write_nim``
+      raise, the test still fails, ``strict=True`` still reports xfail, and the
+      pin stays green through the very change it was written to catch.
+    * an ordinary test recording what is measured TODAY -- headerkit emits, and
+      the real compiler refuses what it emitted. It goes red the moment
+      ``write_nim`` starts refusing, whatever the xfail does.
+
+    One of each pair must flip. There is no state of the code in which both stay
+    green, which is the property a single pin could not have.
     """
 
     @pytest.mark.xfail(
         strict=True,
         reason="field-level collisions are not detected yet; needs per-record identity from the IR contract work",
     )
-    def test_two_fields_of_one_record_colliding_under_nim_identity(self, tmp_path: Path) -> None:
-        header = Header(
-            path="fields.h",
-            declarations=[
-                Struct(
-                    name="Holder",
-                    fields=[Field("fooBar", CType("int")), Field("foo_bar", CType("int"))],
-                )
-            ],
-        )
-        nim_check(write_nim(header, header_path="fields.h"), tmp_path, stem="fields")
+    def test_field_collision_is_refused(self) -> None:
+        """The end state: headerkit refuses, as it does for a module-scope collision."""
+        with pytest.raises(SymbolCollisionError):
+            write_nim(_FIELD_COLLISION_HEADER, header_path="fields.h")
+
+    def test_field_collision_is_emitted_and_the_compiler_refuses_it(self, tmp_path: Path) -> None:
+        """Today's measured behaviour, and the pin that goes red when the refusal lands."""
+        source = write_nim(_FIELD_COLLISION_HEADER, header_path="fields.h")
+        nim_check_rejects(source, tmp_path, stem="fields", expect="attempt to redefine")
 
     @pytest.mark.xfail(
         strict=True,
         reason="parameter-level collisions are not detected yet; needs per-proc identity from the IR contract work",
     )
-    def test_two_parameters_of_one_proc_colliding_under_nim_identity(self, tmp_path: Path) -> None:
-        header = Header(
-            path="params.h",
-            declarations=[
-                Function(
-                    name="go",
-                    return_type=CType("void"),
-                    parameters=[Parameter("fooBar", CType("int")), Parameter("foo_bar", CType("int"))],
-                )
-            ],
-        )
-        nim_check(write_nim(header, header_path="params.h"), tmp_path, stem="params")
+    def test_param_collision_is_refused(self) -> None:
+        """The end state: headerkit refuses, as it does for a module-scope collision."""
+        with pytest.raises(SymbolCollisionError):
+            write_nim(_PARAM_COLLISION_HEADER, header_path="params.h")
+
+    def test_param_collision_is_emitted_and_the_compiler_refuses_it(self, tmp_path: Path) -> None:
+        """Today's measured behaviour, and the pin that goes red when the refusal lands."""
+        source = write_nim(_PARAM_COLLISION_HEADER, header_path="params.h")
+        nim_check_rejects(source, tmp_path, stem="params", expect="attempt to redefine")
 
 
 class TestResolveCollisionHook:
@@ -533,3 +572,204 @@ class TestRenameEntersTheCacheKey:
 
         index = json.loads((store / "output" / "nim" / "index.json").read_text(encoding="utf-8"))
         assert len(index) == 2, f"expected a cache MISS to add a second entry, index holds {list(index)}"
+
+
+#: The declarative collision policies that resolve rather than refuse. The
+#: ``suffix_header_stem`` policy is not among them here: these symbols come from
+#: one header, so appending its stem to both resolves nothing and the re-check
+#: correctly refuses -- which `TestResolveCollisionHook` already pins.
+_RESOLVING_POLICIES = ("prefer_shortest", "prefer_longest", "prefer_first_declared")
+
+
+@pytest.mark.allow("subprocess")
+@pytest.mark.timeout(300)
+class TestResolvedCollisionsReachTheEmitter:
+    """A resolved collision must reach the emitter as TWO identifiers.
+
+    The resolution was computed correctly and then thrown away: the writer's name
+    map was keyed by source name, and two colliding symbols share a source name
+    by definition, so the second entry overwrote the first and both declarations
+    were emitted under the same identifier. Every declarative policy was affected
+    and none of them said anything -- the injectivity check ran over a mapping
+    keyed by symbol, where the answer was still correct.
+
+    Only the compiler can arbitrate this. An assertion on the emitted text sees
+    two plausible declarations; ``nim check`` sees ``redefinition``.
+    """
+
+    @staticmethod
+    def enum_and_function_header() -> Header:
+        """``enum status {...}`` beside ``int status(void)``: legal C, one Nim identifier."""
+        return Header(
+            path="collide.h",
+            declarations=[
+                Enum(name="status", values=[EnumValue("STATUS_OK", 0)]),
+                Function(name="status", return_type=CType("int")),
+            ],
+        )
+
+    @pytest.mark.parametrize("policy", _RESOLVING_POLICIES)
+    def test_a_resolved_collision_compiles(self, policy: str, clean_hooks: None, tmp_path: Path) -> None:
+        register_config_hooks(RenameConfig(collision_policy=policy), writer="nim")
+        source = write_nim(self.enum_and_function_header(), header_path="collide.h")
+        nim_check(source, tmp_path, stem=f"resolved_{policy}")
+
+    @pytest.mark.parametrize("policy", _RESOLVING_POLICIES)
+    def test_the_two_declarations_are_spelled_differently(self, policy: str, clean_hooks: None) -> None:
+        """The compile gate above is the arbiter; this names what it is arbitrating."""
+        register_config_hooks(RenameConfig(collision_policy=policy), writer="nim")
+        source = write_nim(self.enum_and_function_header(), header_path="collide.h")
+        type_name = next(line.split("*")[0].strip() for line in source.splitlines() if "= enum" in line)
+        proc_name = next(
+            line.split("*")[0].removeprefix("proc ").strip() for line in source.splitlines() if "proc " in line
+        )
+        assert nim_ident_identity(type_name) != nim_ident_identity(proc_name), source
+
+    def test_references_to_a_resolved_type_follow_it(self, clean_hooks: None, tmp_path: Path) -> None:
+        """A use of the renamed enum must name the identifier the declaration got."""
+        register_config_hooks(RenameConfig(collision_policy="prefer_shortest"), writer="nim")
+        header = Header(
+            path="collide.h",
+            declarations=[
+                Enum(name="status", values=[EnumValue("STATUS_OK", 0)]),
+                Function(name="status", return_type=CType("int")),
+                Function(name="report", return_type=CType("void"), parameters=[Parameter("s", CType("status"))]),
+            ],
+        )
+        nim_check(write_nim(header, header_path="collide.h"), tmp_path, stem="resolved_reference")
+
+
+@pytest.mark.allow("subprocess")
+@pytest.mark.timeout(300)
+class TestATypedefIsOnlyTheTagsAliasWhenItAliasesTheTag:
+    """``typedef int status;`` beside ``enum status`` is two entities, not one.
+
+    The dedup that exists for the ``typedef struct foo foo;`` idiom keyed on the
+    bare fact that a typedef and a tag shared a name, so it swallowed this pair
+    too: ``status*`` was emitted twice and ``nim check`` reported
+    ``redefinition of 'status'``. Both the docstring of ``MODULE_SCOPE_KINDS``
+    and the collision error itself told the reader the only undetected gap was at
+    field and parameter level.
+    """
+
+    @staticmethod
+    def enum_and_unrelated_typedef() -> Header:
+        return Header(
+            path="two.h",
+            declarations=[
+                Enum(name="status", values=[EnumValue("STATUS_OK", 0)]),
+                Typedef(name="status", underlying_type=CType("int")),
+            ],
+        )
+
+    def test_it_is_refused_under_the_default_policy(self) -> None:
+        with pytest.raises(SymbolCollisionError) as excinfo:
+            write_nim(self.enum_and_unrelated_typedef(), header_path="two.h")
+        assert "'status' (enum)" in str(excinfo.value)
+        assert "'status' (typedef)" in str(excinfo.value)
+
+    def test_the_tagged_typedef_idiom_is_still_one_entity(self, tmp_path: Path) -> None:
+        """The negative control: narrowing the clause must not start refusing this."""
+        header = Header(
+            path="tagged.h",
+            declarations=[
+                Enum(name="E", values=[EnumValue("X", 0)], is_typedef=True),
+                Typedef(name="E", underlying_type=CType("enum E")),
+            ],
+        )
+        source = write_nim(header, header_path="tagged.h")
+        assert "E*" in source
+        nim_check(source, tmp_path, stem="tagged")
+
+
+@pytest.mark.allow("subprocess")
+@pytest.mark.timeout(300)
+class TestWriterSynthesizedNamesAreHeldToTheSameFloor:
+    """``CppString`` and ``constructFoo`` are emitted names too.
+
+    They are produced by the renderer rather than by the rename waterfall, so
+    nothing validated them and nothing checked them against the identifiers the
+    naming pass had already assigned.
+    """
+
+    def test_a_cpp_helper_colliding_with_a_declared_type_is_refused(self) -> None:
+        """``Cpp_String`` and ``CppString`` are one identifier to Nim."""
+        header = Header(
+            path="clash.hpp",
+            language="cpp",
+            declarations=[
+                Struct(name="Cpp_String", fields=[Field("n", CType("int"))], is_cppclass=True),
+                Struct(name="Holder", fields=[Field("s", CType("string"))], is_cppclass=True),
+            ],
+        )
+        with pytest.raises(RenameError) as excinfo:
+            write_nim(header, header_path="clash.hpp")
+        assert "Cpp_String" in str(excinfo.value)
+
+    def test_a_constructor_is_named_from_the_renamed_type(self, tmp_path: Path) -> None:
+        """Composed from the source spelling this emitted ``constructmy__type``."""
+        header = Header(
+            path="ctor.hpp",
+            language="cpp",
+            declarations=[
+                Struct(
+                    name="my__type",
+                    is_cppclass=True,
+                    constructors=[Function(name="my__type", return_type=CType("void"))],
+                )
+            ],
+        )
+        source = write_nim(header, header_path="ctor.hpp")
+        assert "constructmy_type" in source, source
+        nim_check(source, tmp_path, stem="ctor")
+
+
+class TestTheGrammarFloorIsNotBypassableByConfiguration:
+    """A ``PROJECT`` renamer is what a ``[rename]`` section registers.
+
+    ``validate_nim_ident`` returned early for anything in backticks, so a renamer
+    answering with a backticked payload had arbitrary text emitted straight into
+    the generated module -- past the validator whose stated purpose is that no
+    configuration can reach around it.
+    """
+
+    #: Closes the `importc` pragma, ends the line, and opens a declaration of its
+    #: own. This is the payload, verbatim, that the early return admitted.
+    INJECTION = '`evil".}\n\nproc pwned*() {.importc: "pwned", header: "x.h".}\nvar x* = `'
+
+    def test_the_payload_is_refused_rather_than_emitted(self, clean_hooks: None) -> None:
+        def injecting_renamer(name: str, **_: object) -> str:  # noqa: ARG001
+            return self.INJECTION
+
+        HookRegistry.register_global("rename_symbol", injecting_renamer, priority=Priority.PROJECT, writer="nim")
+        header = Header(path="x.h", declarations=[Function(name="ok", return_type=CType("void"))])
+        with pytest.raises(RenameError) as excinfo:
+            write_nim(header, header_path="x.h")
+        assert "between backticks" in str(excinfo.value)
+
+    def test_the_payload_never_reaches_the_output(self, clean_hooks: None) -> None:
+        """The refusal is what matters; this states what would otherwise be emitted."""
+
+        def injecting_renamer(name: str, **_: object) -> str:  # noqa: ARG001
+            return self.INJECTION
+
+        HookRegistry.register_global("rename_symbol", injecting_renamer, priority=Priority.PROJECT, writer="nim")
+        header = Header(path="x.h", declarations=[Function(name="ok", return_type=CType("void"))])
+        try:
+            source = write_nim(header, header_path="x.h")
+        except RenameError:
+            return
+        pytest.fail(f"the injected declaration was emitted instead of refused:\n{source}")
+
+    def test_a_legitimate_backticked_keyword_still_passes(self) -> None:
+        """The negative control: the floor must not have closed on what it exists to allow."""
+        for legal in ("`type`", "`+`", "`==`", "`[]`", "`shl=`"):
+            validate_nim_ident(legal)
+
+    @pytest.mark.parametrize(
+        "payload",
+        ['`a".}b`', "`a\nb`", "`foo bar`", "`a;b`", "``", "`a`b`"],
+    )
+    def test_backtick_content_outside_the_floor_is_refused(self, payload: str) -> None:
+        with pytest.raises(RenameError):
+            validate_nim_ident(payload)

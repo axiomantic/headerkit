@@ -359,12 +359,18 @@ CPP_COMPILE_SHAPES: list[tuple[str, str, str]] = [
 #: C shapes whose generated package must build under the C backend it was given.
 #: The `string`/`vector` names are the ones a spelling-only test misreads as C++;
 #: compiled as C++ their functions come back mangled and the link fails.
-C_COMPILE_SHAPES: list[tuple[str, str, str, str]] = [
+#:
+#: Each shape names the exact line its consumer must print. The value is what
+#: proves the call crossed the ABI intact: a by-value struct passed under the
+#: wrong layout still prints ``value=``, so asserting the prefix alone would pass
+#: on precisely the corruption this gate exists to catch.
+C_COMPILE_SHAPES: list[tuple[str, str, str, str, str]] = [
     (
         "c typedef named vector",
         "typedef struct { int n; } vector;\nint vlen(vector s);",
         "int vlen(vector s) { return s.n; }",
         'var s: vector\ns.n = 5\necho "value=", vlen(s)',
+        "value=5",
     ),
     (
         "c record tagged string",
@@ -373,6 +379,22 @@ C_COMPILE_SHAPES: list[tuple[str, str, str, str]] = [
         # Module-qualified: a C record named `string` collides with Nim's builtin.
         # That collision belongs to the writer and is not what this gate measures.
         'var s: clib.string\ns.n = 7\necho "value=", slen(s)',
+        "value=7",
+    ),
+    (
+        # The shape that made the whole language field necessary. `string` here is
+        # an ordinary C typedef of `char`, and it reaches the writer as the
+        # byte-identical `CType(name="string")` that `std::string` does -- so a
+        # renderer deciding from the spelling binds it as `std::string`, emits
+        # `importcpp` and `header: "<string>"` into a package whose nim.cfg
+        # correctly selected the C backend, and the package cannot be built at all.
+        # Nothing in the emitted text says so; only a real build against a real C
+        # library does.
+        "c typedef aliasing a primitive named string",
+        "typedef char string;\nint first(string *s);",
+        "int first(string *s) { return (int)s[0]; }",
+        "var c: clib.string = 'A'\necho \"value=\", first(addr c)",
+        "value=65",
     ),
 ]
 
@@ -439,11 +461,14 @@ class TestTripwireHonesty:
     """A tripwire must never report success for a property it did not check."""
 
     def test_template_only_unit_does_not_report_a_verified_link(self, backend, tmp_path: Path) -> None:
-        """No library, no -l flag, no linkable symbol: the only honest result is skipped.
+        """No library, no -l flag, no linkable symbol: the only honest result is a failure.
 
         Before this was fixed the same package printed
         ``[OK] every bound entry point compiles and links`` -- a pass asserting
-        ``check declared(<pkg>)``, which is true by construction.
+        ``check declared(<pkg>)``, which is true by construction. Reporting
+        *skipped* replaced it and was not enough: a skip is not a failure to
+        ``std/unittest``, so the run still exited 0, and the exit status is the
+        only thing a build tool reads.
         """
         nim_bin, _cxx = TestNimCppBuildConfiguration._require_toolchain()
         code = "template <typename T> T identity(T v);\n"
@@ -463,11 +488,17 @@ class TestTripwireHonesty:
         built = TestNimCppBuildConfiguration._run(
             [nim_bin, "c", "-r", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", "tests/test_tripwire.nim"], pkg_dir
         )
-        assert built.returncode == 0, f"the tripwire must still build:\n{built.stdout}\n{built.stderr}"
+        # `[Suite]` is printed by the built binary, so it is what proves the
+        # tripwire still COMPILES and RUNS -- the exit status cannot say so any
+        # more, now that a successful build is expected to end in a failed test.
+        assert "[Suite]" in built.stdout, f"the tripwire must still build and run:\n{built.stdout}\n{built.stderr}"
         assert "[OK]" not in built.stdout, (
             "the tripwire reported success with no library present and nothing linkable bound:\n" + built.stdout
         )
-        assert "[SKIPPED]" in built.stdout, f"expected a visible skip, got:\n{built.stdout}"
+        assert "[FAILED]" in built.stdout, f"expected a visible failure, got:\n{built.stdout}"
+        assert built.returncode != 0, (
+            "the tripwire exited 0 having established no linkage, which is what a verified one does:\n" + built.stdout
+        )
 
     def test_private_method_does_not_break_the_generated_package(self, backend, tmp_path: Path) -> None:
         """A probe may not reference a private member: that is a compile error, not a link one.
@@ -577,11 +608,11 @@ class TestCShapesStayOnTheCBackend:
     """
 
     @pytest.mark.parametrize(
-        ("code", "impl", "consumer"),
-        [pytest.param(c, i, u, id=label) for label, c, i, u in C_COMPILE_SHAPES],
+        ("code", "impl", "consumer", "expected"),
+        [pytest.param(c, i, u, e, id=label) for label, c, i, u, e in C_COMPILE_SHAPES],
     )
     def test_c_shape_builds_and_calls_through(
-        self, backend, tmp_path: Path, code: str, impl: str, consumer: str
+        self, backend, tmp_path: Path, code: str, impl: str, consumer: str, expected: str
     ) -> None:
         nim_bin, _cxx = TestNimCppBuildConfiguration._require_toolchain()
         cc_bin = require_program("cc", "gcc", "clang", install=CC_INSTALL)
@@ -614,17 +645,28 @@ class TestCShapesStayOnTheCBackend:
         (pkg_dir / "tests" / "consumer.nim").write_text(f"import clib\n{consumer}\n")
         built = run([nim_bin, "c", "-r", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", "tests/consumer.nim"], pkg_dir)
         assert built.returncode == 0, f"the C package did not build or link:\n{built.stdout}\n{built.stderr}"
-        assert "value=" in built.stdout, built.stdout
+        assert expected in built.stdout, (
+            f"the call did not come back with {expected!r}; a by-value struct laid out wrongly still "
+            f"prints the prefix:\n{built.stdout}"
+        )
 
 
 # A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
 # budget is not written for: the Windows runner drives MinGW and exceeded it.
 @pytest.mark.timeout(300)
-class TestInconclusiveTripwireReasons:
-    """The reason a tripwire is inconclusive must reach the reader."""
+class TestInconclusiveTripwireFailsLoudly:
+    """A tripwire that established no linkage must say so in the exit status.
 
-    def test_reasons_are_printed_not_merely_written(self, backend, tmp_path: Path) -> None:
-        """`checkpoint` prints only on failure, so on a skip it is dead text."""
+    It used to call ``skip()``. ``std/unittest`` counts failures only, so the
+    generated file exited 0 and a caller reading that status -- ``nimble test``,
+    a CI step, a person -- could not tell "the entry points link" from "nobody
+    checked whether they link". The tripwire invariant in ``AGENTS.md`` forbids
+    exactly that: a tripwire that passes without establishing linkage is a green
+    mirage, and the carve-out other generated suites have does not reach here
+    because its distinguishing property is failing loudly.
+    """
+
+    def test_it_fails_and_the_reasons_reach_the_reader(self, backend, tmp_path: Path) -> None:
         nim_bin, _cxx = TestNimCppBuildConfiguration._require_toolchain()
         code = "template <typename T> T identity(T v);\n"
         header = tmp_path / "tmpl.hpp"
@@ -638,26 +680,24 @@ class TestInconclusiveTripwireReasons:
         built = TestNimCppBuildConfiguration._run(
             [nim_bin, "c", "-r", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", "tests/test_tripwire.nim"], pkg_dir
         )
-        # Both reasons, separately: one surviving echo would otherwise satisfy a
-        # single substring assertion while the other stayed dead text.
+        # The exit status is the whole point: it is the only thing a build tool
+        # reads, and it is what a skip left indistinguishable from a pass.
+        assert built.returncode != 0, (
+            "the inconclusive tripwire exited 0, which is what a verified one does:\n" + built.stdout + built.stderr
+        )
+        assert "[FAILED]" in built.stdout, built.stdout
+        # Each reason separately: one surviving echo would otherwise satisfy a
+        # single substring assertion while the others stayed dead text.
         assert "no non-generic entry point and no complete class is bound" in built.stdout, (
             "the first reason never reached the reader:\n" + built.stdout
         )
         assert "nothing here establishes that the native library links" in built.stdout, (
             "the second reason never reached the reader:\n" + built.stdout
         )
-        assert built.stdout.count("TRIPWIRE INCONCLUSIVE") == 2, built.stdout
-
-    def test_generated_file_warns_that_it_exits_zero(self, backend, tmp_path: Path) -> None:
-        """std/unittest counts failures only, so a skipped tripwire exits 0."""
-        code = "template <typename T> T identity(T v);\n"
-        layout = get_writer("nim").write_layout(
-            backend.parse(code, str(tmp_path / "tmpl.hpp")),
-            ScaffoldOptions(package_name="tmpllib", target_language="nim", layout="package"),
+        assert "failing rather than exiting 0" in built.stdout, (
+            "the reason the run is red never reached the reader:\n" + built.stdout
         )
-        tripwire = next(f.content for f in layout.files if f.path == "tests/test_tripwire.nim")
-        assert "exits 0" in tripwire, tripwire
-        assert "Do not treat it as link verification" in tripwire, tripwire
+        assert built.stdout.count("TRIPWIRE INCONCLUSIVE") == 3, built.stdout
 
 
 #: Both parser backends, so a writer fix is proven against the IR each produces

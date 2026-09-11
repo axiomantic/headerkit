@@ -620,12 +620,18 @@ def main(argv: list[str] | None = None) -> int:
                 for key, values in spec.options.items():
                     scaffold_wopts[key] = values[0] if len(values) == 1 else values
 
+            # The include paths and defines the parse was given, carried to the
+            # writer so a generated build configuration can state the flags the
+            # header was actually parsed with. Without this the fields existed and
+            # the writer read them, but nothing outside the tests ever filled them:
+            # a package scaffolded with `-I`/`-D` was generated with neither.
             defaults = ScaffoldOptions(
                 package_name=pkg_name,
                 target_language=spec.name,
                 layout=layout_mode or "package",
                 test_type=test_type,
                 options=scaffold_wopts,
+                extra_context={"include_dirs": list(include_dirs), "defines": list(defines)},
             )
             scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
             project_layout = scaffold(unit, scaffold_opts)

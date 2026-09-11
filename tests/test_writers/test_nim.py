@@ -885,7 +885,15 @@ class TestGeneratedPathsSurviveNimStringLiterals:
         assert 'header: "C:/Users/runneradmin/AppData/Local/Temp/pkg/shape.hpp"' in out, out
 
     def test_cfg_flag_path_has_no_backslash(self) -> None:
-        assert "\\\\" not in _cfg_path_flag("-I", self.WINDOWS_PATH)
+        """The separators must be gone; the two escaping the inner quotes must remain.
+
+        Asserted against the whole rendered flag. The previous form tested for two
+        *consecutive* backslashes, which no path on any platform produces, so it
+        passed with the normalisation patched out -- while its two siblings here
+        went red under exactly that mutation.
+        """
+        rendered = _cfg_path_flag("-I", self.WINDOWS_PATH)
+        assert rendered == '"-I\\"C:/Users/runneradmin/AppData/Local/Temp/pkg/shape.hpp\\""', rendered
 
     def test_posix_paths_are_untouched(self) -> None:
         """The normalisation must be a no-op where there is nothing to normalise."""
@@ -969,3 +977,77 @@ class TestCvQualifiersDoNotReachTheLookup:
             header_path="t.h",
         )
         assert f"alias* = {expected}" in out, out
+
+
+class TestTheRendererReadsTheUnitsLanguage:
+    """``_type_name_requires_cpp`` decided correctly and the renderer ignored it.
+
+    The predicate was given the unit's recorded language and tested both ways.
+    The renderer beside it kept mapping a bare ``string`` to ``CppString``
+    unconditionally, and asked ``_function_requires_cpp`` with its
+    ``unit_is_cpp=True`` default rather than with the unit's answer -- so a pure C
+    header declaring ``typedef char string;`` produced ``importcpp:
+    "std::string"`` and ``header: "<string>"`` inside a package whose ``nim.cfg``
+    correctly did *not* select the C++ backend. Consuming it against a real C
+    library fails with ``fatal error: 'string' file not found``; the package is
+    unusable, and every assertion anyone had written about the emitted text
+    passed.
+    """
+
+    @staticmethod
+    def header(language: str) -> Header:
+        return Header(
+            path="unit.h",
+            language=language,
+            declarations=[
+                Typedef(name="string", underlying_type=CType("char")),
+                Function(
+                    name="take",
+                    return_type=CType("int"),
+                    parameters=[Parameter("s", Pointer(CType("string")))],
+                ),
+            ],
+        )
+
+    def test_a_c_unit_binds_string_as_the_c_typedef_it_is(self) -> None:
+        out = write_nim(self.header("c"), header_path="unit.h")
+        assert "CppString" not in out, out
+        assert "std::string" not in out, out
+        assert 'importc: "take"' in out, out
+        assert "string* = cchar" in out, out
+
+    def test_a_cpp_unit_still_binds_string_as_std_string(self) -> None:
+        """The negative control: the C++ path must be untouched by the gate."""
+        out = write_nim(
+            Header(
+                path="unit.hpp",
+                language="cpp",
+                declarations=[
+                    Function(
+                        name="take",
+                        return_type=CType("int"),
+                        parameters=[Parameter("s", Pointer(CType("string")))],
+                    )
+                ],
+            ),
+            header_path="unit.hpp",
+        )
+        assert 'CppString* {.importcpp: "std::string", header: "<string>".} = object' in out, out
+        assert "ptr CppString" in out, out
+        assert 'importcpp: "take(@)"' in out, out
+
+    def test_the_pragma_and_the_backend_selection_agree(self) -> None:
+        """One fact, read twice, must not give two answers.
+
+        ``nim.cfg`` omitting ``--backend:cpp`` while the bindings carry
+        ``importcpp`` is the exact contradiction that shipped: neither half is
+        wrong on its own and the package cannot be built.
+        """
+        layout = get_writer("nim").write_layout(
+            self.header("c"),
+            ScaffoldOptions(package_name="unit", target_language="nim", layout="package"),
+        )
+        cfg = next(f.content for f in layout.files if f.path == "nim.cfg")
+        bindings = next(f.content for f in layout.files if f.path.endswith("unit.nim"))
+        assert "--backend:cpp" not in cfg, cfg
+        assert "importcpp" not in bindings, bindings
