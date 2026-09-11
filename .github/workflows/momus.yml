@@ -1,8 +1,10 @@
 name: Momus
 
+# The automatic review on pull-request-open is gone: an LLM review of every
+# opened pull request is a per-push cost like any other. The two human-initiated
+# paths stay -- an /ai-review comment and a manual dispatch -- because both are
+# already someone deciding to spend it.
 on:
-  pull_request:
-    types: [opened]
   issue_comment:
     types: [created]
   workflow_dispatch:

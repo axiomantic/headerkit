@@ -1,17 +1,14 @@
 name: Test install_libclang
 
+# Manual, like every other workflow that spends matrix time:
+#
+#     gh workflow run "Test install_libclang" --ref <branch>
+#
+# Dispatch it when a branch touches headerkit/install_libclang.py or
+# tests/test_install_libclang.py -- the paths filter that used to decide that
+# is gone with the triggers it filtered, so the judgement is yours now.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'headerkit/install_libclang.py'
-      - 'tests/test_install_libclang.py'
-      - '.github/workflows/test-install-libclang.yml'
-  pull_request:
-    paths:
-      - 'headerkit/install_libclang.py'
-      - 'tests/test_install_libclang.py'
-      - '.github/workflows/test-install-libclang.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

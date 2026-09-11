@@ -1,0 +1,14 @@
+# The documentation-only path set. One pattern per line; blank lines and lines
+# beginning with '#' are ignored.
+#
+# This file is the single definition. A branch touching nothing outside these
+# paths does not bump the version in pyproject.toml and does not release, per
+# the Versioning section of AGENTS.md -- which points here rather than
+# restating the set, because three independent spellings of "docs-only" had
+# already drifted apart once.
+#
+# Patterns follow GitHub Actions path-filter glob rules, which scripts/docs_only.py
+# implements: '*' matches within one path segment, '**' crosses segments.
+docs/**
+mkdocs.yml
+*.md
