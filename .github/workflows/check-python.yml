@@ -1,20 +1,18 @@
 # Check for Python version support updates
 #
-# Runs weekly to detect:
+# Detects:
 # - New stable Python releases that should be added to the test matrix
 # - Python versions reaching end-of-life that should be dropped
 #
 # Creates GitHub issues when action is needed.
 #
-# Manual trigger:
-#   Go to Actions -> Check Python Versions -> Run workflow
+#   gh workflow run "Check Python Versions"
 
 name: Check Python Versions
 
+# Manual. The weekly cron is gone with the rest of the automatic triggers.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 10 * * 1'  # Weekly on Monday
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

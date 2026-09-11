@@ -1,23 +1,28 @@
 name: Documentation
 
+# The tag trigger stays: publishing versioned documentation for a release is
+# release automation, in the same chain as auto-tag.yml and release.yml, and
+# breaking it to save a run that happens once per release is a bad trade.
+#
+# The push-to-main trigger is gone -- that one fired on every merge that touched
+# docs/, mkdocs.yml or headerkit/, which is most of them. Deploy the dev docs by
+# hand instead; the dispatch inputs now default to exactly that:
+#
+#     gh workflow run Documentation --ref main
 on:
   push:
-    branches: [main]
-    paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - 'headerkit/**'
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to deploy (e.g., 0.3)'
-        required: true
+        description: "Version to deploy (e.g. 0.3), or 'dev' for the development docs"
+        required: false
+        default: 'dev'
       set_latest:
         description: 'Set as latest?'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: docs-deploy
@@ -65,11 +70,6 @@ jobs:
       - name: Set default version
         if: startsWith(github.ref, 'refs/tags/v')
         run: mike set-default --push latest
-
-      - name: Deploy dev docs (main push)
-        if: github.ref == 'refs/heads/main'
-        run: |
-          mike deploy --push dev
 
       - name: Deploy versioned docs (manual)
         if: github.event_name == 'workflow_dispatch'

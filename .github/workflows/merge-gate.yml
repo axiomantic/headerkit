@@ -1,0 +1,139 @@
+name: Merge gate
+
+# The only workflow in this repository that triggers by itself.
+#
+# Every other workflow is on `workflow_dispatch`, because a four-OS test matrix
+# on every push costs money and starves the contended macOS runner that other
+# pull requests are queued behind. Manual CI has one failure mode, and this
+# workflow exists for it: a pull request nobody dispatched shows an empty checks
+# list, and an empty checks list is the same colour as a clean one. This job
+# makes "nobody ran it" red, so it cannot be mistaken for "it passed".
+#
+# It does no real work -- one API query and a diff -- so it is affordable to run
+# on every pull request, which is exactly what the expensive workflows are not.
+
+on:
+  pull_request:
+  # Re-evaluate when a dispatched CI run finishes, so a pull request goes green
+  # on its own rather than waiting for someone to press "re-run" on this job.
+  # Takes effect once this file is on the default branch; until then, re-run
+  # this check by hand after CI finishes.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # Deliberately not run on pushes to main. No dispatch ever targets a merge
+  # commit, so this job would be permanently red there -- and a check that is
+  # always red trains people to ignore it on the pull requests where it is
+  # load-bearing, which is the argument this repository already made about
+  # check-release-prep's false warnings.
+  ci-status:
+    name: CI ran and passed for this commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The gate's own code comes from the commit under review, so a change to
+      # it is visible in the diff it is judging rather than hidden on main.
+      - uses: actions/checkout@v7
+      - name: Require a successful CI run for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/require_ci_run.sh \
+            "${{ github.repository }}" \
+            "${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}"
+
+  release-prep:
+    name: Release prep
+    # A stack of pull requests is one release. The parent carries the version
+    # bump and the changelog entry; a child stacked on it correctly carries
+    # neither. Only the pull request into the default branch has a defined
+    # answer to "is this release ready".
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify the change
+        id: classify
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          if ! git rev-parse --verify --quiet "origin/$BASE_REF^{commit}" >/dev/null; then
+            echo "::error::Base ref origin/$BASE_REF is not present in this checkout; cannot compare against the base."
+            exit 1
+          fi
+
+          git diff "origin/$BASE_REF...HEAD" --name-only > /tmp/changed-files.txt
+          echo "Changed files:"
+          sed 's/^/  /' /tmp/changed-files.txt
+
+          # The docs-only set is read from .github/docs-only-paths.txt, which is
+          # its single definition. AGENTS.md's Versioning rule points at that
+          # file rather than restating it.
+          if python3 scripts/docs_only.py < /tmp/changed-files.txt; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check version bump
+        if: steps.classify.outputs.docs_only == 'false'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          BASE_VERSION=$(git show "origin/$BASE_REF:pyproject.toml" | grep '^version' | sed 's/version = "\(.*\)"/\1/') \
+            || { echo "::error::No version line in pyproject.toml at origin/$BASE_REF"; exit 1; }
+          PR_VERSION=$(grep '^version' pyproject.toml | sed 's/version = "\(.*\)"/\1/') \
+            || { echo "::error::No version line in pyproject.toml on this branch"; exit 1; }
+
+          if [ "$BASE_VERSION" = "$PR_VERSION" ]; then
+            echo "::warning::Version in pyproject.toml ($PR_VERSION) has not changed. This branch changes shipped code, so per the Versioning rule in AGENTS.md it should bump before merging."
+          else
+            echo "Version bumped: $BASE_VERSION -> $PR_VERSION"
+          fi
+
+      - name: Check changelog
+        if: steps.classify.outputs.docs_only == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Matched without a pipe: grep -q closes the pipe on its first match,
+          # and on a diff exceeding the 64K pipe buffer the writer then takes
+          # SIGPIPE, which pipefail reports as a failed match.
+          case $'\n'"$(cat /tmp/changed-files.txt)"$'\n' in
+            *$'\nCHANGELOG.md\n'*)
+              echo "CHANGELOG.md has been updated."
+              ;;
+            *)
+              echo "::warning::CHANGELOG.md has not been modified. If this PR includes user-facing changes, add a changelog entry before merging."
+              ;;
+          esac
+
+      - name: Documentation-only change
+        if: steps.classify.outputs.docs_only == 'true'
+        run: |
+          echo "Every changed path is in the documentation-only set (.github/docs-only-paths.txt)."
+          echo "No version bump and no changelog entry are required; see the Versioning rule in AGENTS.md."

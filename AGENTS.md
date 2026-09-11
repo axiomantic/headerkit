@@ -8,11 +8,28 @@ Keep `CHANGELOG.md` up to date using [Keep a Changelog](https://keepachangelog.c
 
 ## Versioning
 
-Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the version in `pyproject.toml` whenever creating a branch that changes shipped code. A branch touching only documentation -- anything under `docs/`, plus `mkdocs.yml` and any root-level `*.md` -- does not bump, and does not release. That is the same set `ci.yml` ignores, so the rule and the pipeline stay in step as files are added:
+Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the version in `pyproject.toml` whenever creating a branch that changes shipped code. A branch touching only documentation does not bump, and does not release.
+
+"Documentation-only" has exactly one definition, and it is deliberately not written here. `.github/docs-only-paths.txt` holds the pattern list, `scripts/docs_only.py` matches changed paths against it, and the `release-prep` job in `merge-gate.yml` classifies every pull request by running that script -- the rule and the pipeline cannot drift apart because they are the same file. Three independent spellings of this set used to exist, in this section, in `ci.yml`'s `paths-ignore`, and in the release-prep check, and they already disagreed. Restating the paths in prose is what allows that, so this rule names the file instead.
+
+A branch that changes neither shipped code nor documentation still bumps; CI configuration under `.github/` is the common case, and it is not in the docs-only set.
 
 - **Major** (X.0.0): Breaking changes to public API
 - **Minor** (0.X.0): New features, new public API surface
-- **Patch** (0.0.X): Bug fixes, internal refactors, and documentation shipped alongside a code change
+- **Patch** (0.0.X): Bug fixes, internal refactors, CI and repository plumbing, and documentation shipped alongside a code change
+
+## Continuous integration is manual
+
+Nothing runs CI for you. `ci.yml`, `test-install-libclang.yml`, `check-llvm.yml` and `check-python.yml` are `workflow_dispatch`-only, because a four-OS matrix on every push costs money and starves the contended macOS runner other pull requests are queued behind.
+
+Dispatch a run against the branch under review, and do it before asking for a merge:
+
+```bash
+gh workflow run CI --ref <branch>                      # boundary Python versions
+gh workflow run CI --ref <branch> -f full-matrix=true  # every Python version
+```
+
+The `Merge gate` workflow is the one exception that triggers by itself. It reports **failure** unless a `ci.yml` run succeeded for the pull request's exact head SHA, so a branch nobody dispatched is red rather than blank. It keys on the SHA, so pushing a new commit turns it red again and a green run on an earlier commit does not carry over. `CONTRIBUTING.md` carries the full procedure.
 
 ## Vendored clang bindings
 
