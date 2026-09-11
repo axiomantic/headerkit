@@ -596,3 +596,156 @@ class TestNimWriter:
                 cwd=example_file.parent,
             )
             assert result.returncode == 0, f"Failed to compile {example_file.name}:\n{result.stderr}\n{result.stdout}"
+
+
+class TestNimAccessSpecifierFiltering:
+    """Private and protected members must never be emitted by NimWriter.
+
+    Emitting private or protected C++ members causes downstream C++ compiler errors
+    because Nim importcpp procs/accessors attempt to access inaccessible C++ symbols.
+    """
+
+    def test_private_and_protected_members_are_excluded(self) -> None:
+        struct = Struct(
+            name="Widget",
+            is_cppclass=True,
+            fields=[
+                Field(name="public_val", type=CType("int"), access="public"),
+                Field(name="secret_val", type=CType("int"), access="private"),
+                Field(name="protected_val", type=CType("int"), access="protected"),
+            ],
+            methods=[
+                Function(name="public_method", return_type=CType("void"), access="public"),
+                Function(name="secret_method", return_type=CType("void"), access="private"),
+                Function(name="protected_method", return_type=CType("void"), access="protected"),
+            ],
+            constructors=[
+                Function(name="Widget", return_type=CType("void"), access="public"),
+                Function(
+                    name="Widget",
+                    return_type=CType("void"),
+                    access="private",
+                    parameters=[Parameter(name="secret", type=CType("int"))],
+                ),
+            ],
+            bases=[
+                BaseSpecifier(name="PublicBase", access="public"),
+                BaseSpecifier(name="SecretBase", access="private"),
+            ],
+        )
+        h = Header(path="widget.hpp", declarations=[struct])
+        out = write_nim(h, header_path="widget.hpp")
+
+        # Public members must be emitted
+        assert "public_val*: cint" in out
+        assert "public_method*" in out
+        assert "proc constructWidget*()" in out
+        assert "of PublicBase" in out
+
+        # Private and protected members must be absent
+        assert "secret_val" not in out
+        assert "protected_val" not in out
+        assert "secret_method" not in out
+        assert "protected_method" not in out
+        assert "SecretBase" not in out
+        assert "constructWidget*(secret:" not in out
+
+    def test_assignment_operator_does_not_crash_lexer(self) -> None:
+        """operator= must not be emitted as backticked '=' which the Nim lexer rejects."""
+        struct = Struct(
+            name="Value",
+            is_cppclass=True,
+            methods=[
+                Function(
+                    name="operator=",
+                    return_type=CType("Value"),
+                    access="public",
+                    parameters=[Parameter(name="other", type=CType("Value"))],
+                ),
+            ],
+        )
+        h = Header(path="val.hpp", declarations=[struct])
+        out = write_nim(h, header_path="val.hpp")
+        assert "`=`" not in out
+
+    @pytest.mark.allow("subprocess")
+    def test_nim_cpp_class_access_filtering_compiles(self, tmp_path) -> None:
+        """Verify that emitted Nim bindings for a C++ class with private members compile and execute."""
+        import subprocess
+
+        from headerkit.backends.libclang import LibclangBackend
+
+        nim_bin = require_program("nim", install=NIM_INSTALL)
+
+        header_content = textwrap.dedent("""\
+            #pragma once
+            class Counter {
+            public:
+                Counter();
+                void increment();
+                int get_count() const;
+            private:
+                int count;
+                void reset_internal();
+            };
+        """)
+        header_file = tmp_path / "counter.hpp"
+        header_file.write_text(header_content)
+
+        cpp_impl = textwrap.dedent("""\
+            #include "counter.hpp"
+            Counter::Counter() : count(0) {}
+            void Counter::increment() { count++; }
+            int Counter::get_count() const { return count; }
+            void Counter::reset_internal() { count = 0; }
+        """)
+        (tmp_path / "counter.cpp").write_text(cpp_impl)
+
+        backend = LibclangBackend()
+        unit = backend.parse(header_content, str(header_file), extra_args=["-x", "c++", "-std=c++17"])
+        nim_code = write_nim(unit, header_path="counter.hpp")
+
+        # Must have public methods, must NOT have private members
+        assert "increment*" in nim_code
+        assert "get_count*" in nim_code
+        assert "reset_internal" not in nim_code
+        assert "count*:" not in nim_code
+
+        # Write a Nim test harness that calls the public API
+        nim_harness = (
+            '{.compile: "counter.cpp".}\n'
+            f"{nim_code}\n"
+            "var c = constructCounter()\n"
+            "c.increment()\n"
+            "doAssert c.get_count() == 1\n"
+        )
+        nim_file = tmp_path / "test_counter.nim"
+        nim_file.write_text(nim_harness)
+
+        # Compile and run with nim cpp
+        res = subprocess.run(
+            [nim_bin, "cpp", "-r", "--hints:off", f"--outdir:{tmp_path}", str(nim_file)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+        )
+        assert res.returncode == 0, f"Compilation failed:\n{res.stderr}\n{res.stdout}"
+
+        # Negative control: verify that attempting to call a private member fails C++ compilation
+        bad_harness = (
+            '{.compile: "counter.cpp".}\n'
+            f"{nim_code}\n"
+            'proc reset_internal*(this: var Counter) {.importcpp: "#.reset_internal()", header: "counter.hpp".}\n'
+            "var c = constructCounter()\n"
+            "c.reset_internal()\n"
+        )
+        bad_file = tmp_path / "bad_counter.nim"
+        bad_file.write_text(bad_harness)
+        bad_res = subprocess.run(
+            [nim_bin, "cpp", "--hints:off", f"--outdir:{tmp_path}", str(bad_file)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+        )
+        assert bad_res.returncode != 0
+        assert "private" in bad_res.stderr.lower() or "error" in bad_res.stderr.lower()

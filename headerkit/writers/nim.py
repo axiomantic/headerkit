@@ -180,7 +180,7 @@ CPP_OPERATOR_MAP: dict[str, str] = {
     "operator^=": "`^=`",
     "operator<<=": "`shl=`",
     "operator>>=": "`shr=`",
-    "operator=": "`=`",
+    "operator=": "assign",
     "operator%": "`%`",
     "operator&": "`&`",
     "operator|": "`|`",
@@ -530,17 +530,20 @@ class NimWriter(BaseWriter):
         # Inheritance
         base_str = ""
         if s.bases:
-            # Single primary base in Nim object inheritance
-            base_str = f" of {self._format_type(CType(s.bases[0].name))}"
+            # Single primary base in Nim object inheritance (skip private/protected bases)
+            public_bases = [b for b in s.bases if b.access not in ("private", "protected")]
+            if public_bases and public_bases[0].name:
+                base_str = f" of {self._format_type(CType(public_bases[0].name))}"
         elif known_base_classes and s.name in known_base_classes:
             base_str = " of RootObj"
 
         lines = [f"{t_name}*{pragma_str} = object{base_str}"]
 
-        if not s.fields:
+        visible_fields = [f for f in s.fields if f.access not in ("private", "protected")]
+        if not visible_fields:
             lines[0] += ""
         else:
-            for f in s.fields:
+            for f in visible_fields:
                 f_name = _escape_ident(f.name)
                 f_type = self._format_type(f.type)
                 lines.append(f"  {f_name}*: {f_type}")
@@ -548,17 +551,21 @@ class NimWriter(BaseWriter):
         # Methods / Constructors / Iterators attached to struct
         methods_lines: list[str] = []
         for m in s.methods:
+            if m.access in ("private", "protected"):
+                continue
             methods_lines.extend(self._write_method(s, m, header_file))
 
         for ctor in s.constructors:
+            if ctor.access in ("private", "protected"):
+                continue
             methods_lines.extend(self._write_constructor(s, ctor, header_file))
 
-        if s.destructor:
+        if s.destructor and s.destructor.access not in ("private", "protected"):
             methods_lines.extend(self._write_destructor(s, s.destructor, header_file))
 
         # Iterators helper if begin()/end() are available
-        has_begin = any(m.name == "begin" for m in s.methods)
-        has_end = any(m.name == "end" for m in s.methods)
+        has_begin = any(m.name == "begin" for m in s.methods if m.access not in ("private", "protected"))
+        has_end = any(m.name == "end" for m in s.methods if m.access not in ("private", "protected"))
         if has_begin and has_end:
             if s.template_params:
                 struct_type = (
@@ -724,6 +731,8 @@ class NimWriter(BaseWriter):
 
     def _write_function(self, f: Function, header_file: str) -> list[str]:
         """Render a function declaration."""
+        if f.access in ("private", "protected"):
+            return []
         f_name = _escape_ident(f.name)
         params: list[str] = []
         for i, p in enumerate(f.parameters):

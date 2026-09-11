@@ -2987,7 +2987,7 @@ class ClangASTConverter:
     def _process_function(self, cursor: Any) -> None:
         """Process a function or function template declaration."""
         name = cursor.spelling
-        if not name:
+        if not name or name.startswith("<deduction guide"):
             return
 
         # Skip if already processed (distinguish function templates from standard functions and overloads)
@@ -3057,7 +3057,7 @@ class ClangASTConverter:
     ) -> Function | None:
         """Convert a C++ method, constructor, destructor, or conversion function to a Function IR node."""
         name = cursor.spelling
-        if not name:
+        if not name or name.startswith("<deduction guide"):
             return None
 
         template_params: list[str] = []
