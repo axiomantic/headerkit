@@ -45,9 +45,17 @@ The section above forbids recovering structure from source text with a regex, be
 
 **A writer must never decide from a type spelling. If the IR cannot answer the question, the fix is to record the fact in the IR, not to write a cleverer predicate.**
 
-The general diagnostic and the oscillation tell are stated once, in the operator's `~/AGENTS.md` section "No Heuristics in Formally-Specified Domains". They are not restated here; a second copy of a normative rule is the drift this section's first corollary forbids. What follows is what those rules cost *this* codebase.
+This is absolute rather than a default because a C or C++ header is *formally specified*. Every property a writer needs is stated in the grammar or derivable from it, exactly; there is no noise to smooth over and no sampling error to tolerate. A guess is therefore never the best answer available -- it is a refusal to go and get an answer that already exists. When a writer reaches for one, the question was asked in the wrong place: at the writer, where only a shadow of the fact survives, instead of at the backend, where the fact was in hand and thrown away. "It works on most headers" is a sentence about weather, not about a parser.
 
-Instances, each of which cost a pull request and several review rounds:
+Two checks decide any concrete case.
+
+**Before writing a predicate over a name**, ask whether two declarations that must produce different bindings can reach it spelled identically. In C and C++ the answer is yes far more often than it looks: tags and ordinary identifiers occupy separate namespaces, `using namespace` erases qualification, typedefs rename anonymous records, and a macro can expand two different declarations onto one spelling before a backend ever sees them. Where the answer is yes, **no refinement of that predicate can ever be correct**, because the distinguishing information is absent from its input. Stop and go record the fact at the backend.
+
+**While maintaining an existing predicate**, treat a second correction in the opposite direction as a verdict. One widened because it missed cases and then narrowed because it caught too many is not mistuned -- **it is answering a question its input cannot express.** A third round is how the wrong answer becomes permanent, because by then the tests have been shaped around the predicate's blind spots.
+
+When the fact genuinely is unavailable, refuse loudly and specifically. Unknown must be a distinct state from every real answer, and it must never resolve to a default that happens to look plausible.
+
+The instances below are what these two checks cost this codebase before anyone applied them, each one a pull request and several review rounds:
 
 - `Enum.underlying_type` / `Enum.underlying_type_known` (fixed). The ctypes writer sized an enum from its enumerator values, and `enum E : unsigned char` came out four bytes against a real one. Two rounds refined the predicate first -- `is_scoped`, which was never the property that mattered, then an enumerator-range test that an empty enumerator list made vacuously true -- before the two fields were added.
 - `CType.is_elaborated` (fixed). The writer could not tell `struct Gauge` from a bare `Gauge`. C keeps tags and ordinary identifiers in separate namespaces, so both are legal in one unit and name different types; tree-sitter strips the aggregate keyword, so before the flag existed the two *names* arrived identical and neither could be resolved. Both backends now record the flag while the keyword is still in hand -- the tree-sitter backend reads it off the token list before that list is stripped, precisely because afterwards it is unrecoverable -- and the writer branches on it. The distinction has to be recorded at the parser or not at all.
