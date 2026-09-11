@@ -3,9 +3,11 @@ name: Check LLVM Releases
 # Detect new stable LLVM major versions that aren't yet vendored in headerkit/_clang/.
 # Automatically vendor if possible, falling back to opening an issue for failures.
 
+# Manual. The weekly cron is gone with the rest of the automatic triggers; a
+# new LLVM release is not urgent enough to spend a scheduled run on.
+#
+#     gh workflow run "Check LLVM Releases"
 on:
-  schedule:
-    - cron: "0 10 * * 1" # Mondays at 10 AM UTC
   workflow_dispatch:
 
 concurrency:

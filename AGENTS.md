@@ -8,11 +8,28 @@ Keep `CHANGELOG.md` up to date using [Keep a Changelog](https://keepachangelog.c
 
 ## Versioning
 
-Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the version in `pyproject.toml` whenever creating a branch:
+Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Bump the version in `pyproject.toml` whenever creating a branch that changes shipped code. A branch touching only documentation does not bump, and does not release.
+
+"Documentation-only" has exactly one definition, and it is deliberately not written here. `.github/docs-only-paths.txt` holds the pattern list, `scripts/docs_only.py` matches changed paths against it, and the `release-prep` job in `merge-gate.yml` classifies every pull request by running that script -- the rule and the pipeline cannot drift apart because they are the same file. Three independent spellings of this set used to exist, in this section, in `ci.yml`'s `paths-ignore`, and in the release-prep check, and they already disagreed. Restating the paths in prose is what allows that, so this rule names the file instead.
+
+A branch that changes neither shipped code nor documentation still bumps; CI configuration under `.github/` is the common case, and it is not in the docs-only set.
 
 - **Major** (X.0.0): Breaking changes to public API
 - **Minor** (0.X.0): New features, new public API surface
-- **Patch** (0.0.X): Bug fixes, documentation-only changes, internal refactors
+- **Patch** (0.0.X): Bug fixes, internal refactors, CI and repository plumbing, and documentation shipped alongside a code change
+
+## Continuous integration is manual
+
+Nothing runs CI for you. `ci.yml`, `test-install-libclang.yml`, `check-llvm.yml` and `check-python.yml` are `workflow_dispatch`-only, because a four-OS matrix on every push costs money and starves the contended macOS runner other pull requests are queued behind.
+
+Dispatch a run against the branch under review, and do it before asking for a merge:
+
+```bash
+gh workflow run CI --ref <branch>                      # boundary Python versions
+gh workflow run CI --ref <branch> -f full-matrix=true  # every Python version
+```
+
+The `Merge gate` workflow is the one exception that triggers by itself. It reports **failure** unless a `ci.yml` run succeeded for the pull request's exact head SHA, so a branch nobody dispatched is red rather than blank. It keys on the SHA, so pushing a new commit turns it red again and a green run on an earlier commit does not carry over. `CONTRIBUTING.md` carries the full procedure.
 
 ## Vendored clang bindings
 
@@ -38,6 +55,36 @@ All parser backends and AST extractors in HeaderKit **MUST** use formal parser g
 - **Formal compiler / AST bindings** provided by the language ecosystem.
 
 Any code introducing regex-based AST extraction, source scanning, or signature scraping will be rejected immediately.
+
+## Strict prohibition against deciding from a type spelling (WRITERS DO NOT GUESS)
+
+The section above forbids recovering structure from source text with a regex, because a regular language cannot parse a context-free one. This section forbids the same error one layer later, after the parse has succeeded: the writer holds a real IR, and decides by pattern-matching a **name string** anyway. That rule governs *extraction*; this one governs *decision*. They are the same principle and are sited together for that reason.
+
+**A writer must never decide from a type spelling. If the IR cannot answer the question, the fix is to record the fact in the IR, not to write a cleverer predicate.**
+
+This is absolute rather than a default because a C or C++ header is *formally specified*. Every property a writer needs is stated in the grammar or derivable from it, exactly; there is no noise to smooth over and no sampling error to tolerate. A guess is therefore never the best answer available -- it is a refusal to go and get an answer that already exists. When a writer reaches for one, the question was asked in the wrong place: at the writer, where only a shadow of the fact survives, instead of at the backend, where the fact was in hand and thrown away. "It works on most headers" is a sentence about weather, not about a parser.
+
+The checks below decide any concrete case.
+
+**Before writing a predicate over a name**, ask whether two declarations that must produce different bindings can reach it spelled identically. In C and C++ the answer is yes far more often than it looks: tags and ordinary identifiers occupy separate namespaces, `using namespace` erases qualification, typedefs rename anonymous records, and a macro can expand two different declarations onto one spelling before a backend ever sees them. Where the answer is yes, **no refinement of that predicate can ever be correct**, because the distinguishing information is absent from its input. Stop and go record the fact at the backend.
+
+**While maintaining an existing predicate**, treat a second correction in the opposite direction as a verdict. One widened because it missed cases and then narrowed because it caught too many is not mistuned -- **it is answering a question its input cannot express.** A third round is how the wrong answer becomes permanent, because by then the tests have been shaped around the predicate's blind spots.
+
+When the fact genuinely is unavailable, refuse loudly and specifically. Unknown must be a distinct state from every real answer, and it must never resolve to a default that happens to look plausible.
+
+The instances below are what these checks cost this codebase before anyone applied them, each one a pull request and several review rounds:
+
+- `Enum.underlying_type` / `Enum.underlying_type_known` (fixed). The ctypes writer sized an enum from its enumerator values, and `enum E : unsigned char` came out four bytes against a real one. Two rounds refined the predicate first -- `is_scoped`, which was never the property that mattered, then an enumerator-range test that an empty enumerator list made vacuously true -- before the two fields were added.
+- `CType.is_elaborated` (fixed). The writer could not tell `struct Gauge` from a bare `Gauge`. C keeps tags and ordinary identifiers in separate namespaces, so both are legal in one unit and name different types; tree-sitter strips the aggregate keyword, so before the flag existed the two *names* arrived identical and neither could be resolved. Both backends now record the flag while the keyword is still in hand -- the tree-sitter backend reads it off the token list before that list is stripped, precisely because afterwards it is unrecoverable -- and the writer branches on it. The distinction has to be recorded at the parser or not at all.
+- `SourceUnit.language` (still open). The field exists, defaults to `"c"`, and is **never populated** -- while both backends compute the answer internally (`_is_cpp_mode`, `_detect_cplus`) and discard it at the `Header(...)` that returns. The measurement forecloses "just write a better heuristic": under `LibclangBackend`, `void f(std::string s);` in a `.hpp` and `typedef struct { int x; } string; void f(string s);` in a `.h` both reach a writer as `CType(name='string', qualifiers=[], is_elaborated=False)`, byte-identical, and both units report `language='c'`. Under `TreeSitterBackend` the same collision needs only `using namespace std;`.
+- Tri-state flattening downstream (fixed, and mechanically pinned). A recorded "unknown" is worth only what the whole path preserves. `underlying_type_known` was collapsed to its `True` default by the JSON serialiser, and again by a cache entry written before the field existed, turning a refusal back into a wrong width through a door the writer cannot watch. `_IR_SCHEMA_VERSION` in `_cache_key.py` exists for exactly this and must move whenever an IR field is added.
+
+The lesson each teaches: **a default that cannot be distinguished from "nobody recorded this" is a bug.** Unknown needs its own state, every serialiser and cache on the path must carry that state, and a consumer facing it refuses rather than resolves.
+
+Corollaries:
+
+- **Two independent predicates for one fact will drift, silently** (still open). Derive one from the other, or both from a single recorded value. The ctypes writer already carries two normalisations of "does this name already mean something else" -- `_typedef_aliases_its_own_tag` strips a `struct `/`union ` prefix to compare a typedef against its target, while `_enum_type_names` withholds by unprefixed name -- and the disagreement mapped a type onto a helper whose declaration had been withheld.
+- **Model nothing the real engine can be asked** (fixed). A model of an allocator or a layout algorithm is a second implementation, and it drifts from the first. Independent axes make a writer-side bit-field model untenable, and they are separate hazards. By **platform**: ctypes selects among System V, AAPCS64 and MSVC layout rules, and any writer-side model encodes exactly one -- the same declaration is laid out at three different sizes across them. By **interpreter version**: off Windows, the ctypes layout engine changed in 3.14, so a model calibrated against an earlier interpreter is silently wrong on a later one. The writer now builds the record and reads back what the engine actually did rather than predicting it.
 
 ## Anti-completion bias & anti-green-mirage discipline
 

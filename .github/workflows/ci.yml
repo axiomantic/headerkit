@@ -1,21 +1,24 @@
 name: CI
 
+# Manual. A four-OS matrix on every push costs money and starves the contended
+# macOS runner other pull requests are waiting on, so nothing dispatches this
+# but a person:
+#
+#     gh workflow run CI --ref <branch>
+#
+# The merge gate turns "nobody dispatched it" red, so a pull request cannot
+# reach merge looking green on a run that never happened. See CONTRIBUTING.md.
+#
+# The paths-ignore lists that used to sit here are gone with the triggers they
+# filtered. The documentation-only set they spelled out survives as
+# .github/docs-only-paths.txt, which is now its single definition.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'mkdocs.yml'
-      - 'LICENSE'
-      - '.gitignore'
-  pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'mkdocs.yml'
-      - 'LICENSE'
-      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      full-matrix:
+        description: "Run the full Python version matrix instead of the boundary versions"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,4 +53,4 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
     with:
-      full-matrix: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      full-matrix: ${{ inputs.full-matrix }}
