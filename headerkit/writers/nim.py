@@ -226,7 +226,11 @@ def _c_type_spelling(name: str, is_typedef: bool, tag_keyword: str) -> str:
 
 
 def _escape_ident(name: str) -> str:
-    """Escape Nim keywords, operators, and invalid identifier characters."""
+    """Escape Nim keywords, operators, and invalid identifier characters.
+
+    In Nim, identifiers cannot begin or end with underscores, nor contain
+    consecutive underscores ('__').
+    """
     if not name:
         return "anon"
     if name in CPP_OPERATOR_MAP:
@@ -234,13 +238,40 @@ def _escape_ident(name: str) -> str:
     if "::" in name:
         name = name.replace("::", "_")
 
-    # In Nim, identifiers cannot begin or end with underscores, nor contain consecutive underscores.
-    # We replace leading underscores with 'u_' and trailing with '_u' to avoid collision between e.g. FOO and _FOO.
-    clean = name
+    num_leading = len(name) - len(name.lstrip("_"))
+    num_trailing = len(name) - len(name.rstrip("_"))
+    if num_leading == len(name):
+        return f"u{num_leading}"
+
+    core = name[num_leading : len(name) - num_trailing]
+    while "__" in core:
+        core = core.replace("__", "_")
+
+    if num_leading == 1:
+        prefix = "u_"
+    elif num_leading == 2:
+        prefix = "uu_"
+    elif num_leading > 2:
+        prefix = f"u{num_leading}_"
+    else:
+        prefix = ""
+
+    if num_trailing == 1:
+        suffix = "_u"
+    elif num_trailing == 2:
+        suffix = "_uu"
+    elif num_trailing > 2:
+        suffix = f"_u{num_trailing}"
+    else:
+        suffix = ""
+
+    clean = prefix + core + suffix
+    while "__" in clean:
+        clean = clean.replace("__", "_")
     if clean.startswith("_"):
-        clean = "u" + clean
+        clean = "u" + clean.lstrip("_")
     if clean.endswith("_"):
-        clean = clean + "u"
+        clean = clean.rstrip("_") + "u"
 
     if clean in NIM_KEYWORDS:
         return f"`{clean}`"
@@ -503,8 +534,7 @@ class NimWriter(BaseWriter):
         t_name = _escape_ident(name)
 
         # Generics
-        if s.template_params:
-            t_name = f"{t_name}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+        gen_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]" if s.template_params else ""
 
         pragma_parts: list[str] = []
         is_cpp = s.is_cppclass or bool(s.methods or s.bases or s.constructors or s.destructor)
@@ -537,7 +567,7 @@ class NimWriter(BaseWriter):
         elif known_base_classes and s.name in known_base_classes:
             base_str = " of RootObj"
 
-        lines = [f"{t_name}*{pragma_str} = object{base_str}"]
+        lines = [f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
 
         visible_fields = [f for f in s.fields if f.access not in ("private", "protected")]
         if not visible_fields:
