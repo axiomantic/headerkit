@@ -16,9 +16,19 @@ from __future__ import annotations
 
 import textwrap
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path, PureWindowsPath
 from typing import ClassVar
 
+from headerkit._rename import (
+    MODULE_SCOPE_KINDS,
+    RenameError,
+    Symbol,
+    collapse_underscores,
+    dispatch_rename,
+    enforce_injectivity,
+)
+from headerkit.hooks import HookRegistry, PipelineContext, Priority
 from headerkit.ir import (
     Array,
     BaseSpecifier,
@@ -240,15 +250,85 @@ def _escape_ident(name: str) -> str:
 
     # In Nim, identifiers cannot begin or end with underscores, nor contain consecutive underscores.
     # We replace leading underscores with 'u_' and trailing with '_u' to avoid collision between e.g. FOO and _FOO.
+    #
+    # The run collapse is last on purpose. The prefix and suffix steps can each
+    # create a run that was not in the source (`_a` -> `u_a` is fine, but `__sig`
+    # -> `u__sig` is not), so collapsing before them would leave exactly the
+    # tokens the Nim lexer rejects: `u__sig` is `invalid token: trailing
+    # underscore` at the interior pair, not at either end.
     clean = name
     if clean.startswith("_"):
         clean = "u" + clean
     if clean.endswith("_"):
         clean = clean + "u"
+    clean = collapse_underscores(clean)
 
     if clean in NIM_KEYWORDS:
         return f"`{clean}`"
     return clean
+
+
+def nim_ident_identity(name: str) -> str:
+    """Return Nim's identity spelling for *name* -- what the compiler compares.
+
+    Nim considers two identifiers the same when their first characters match
+    exactly and the rest match after removing underscores and folding case. So
+    ``foo_bar`` and ``fooBar`` are one identifier and redefining across them is a
+    compile error, while ``Foo_bar`` and ``fooBar`` are two.
+
+    Equality on the emitted spelling is therefore the wrong test for a name
+    collision, and equality on the *source* spelling is the wrong test twice
+    over. This is the function every collision check in this writer runs under.
+    """
+    bare = name.strip("`")
+    if not bare:
+        return bare
+    return bare[0] + bare[1:].replace("_", "").lower()
+
+
+def validate_nim_ident(name: str) -> None:
+    """Raise unless *name* is something the Nim lexer will accept.
+
+    :raises RenameError: if *name* is not a legal Nim identifier.
+    """
+    bare = name.strip("`")
+    if not bare:
+        raise RenameError("the empty string is not a Nim identifier")
+    if name.startswith("`") and name.endswith("`"):
+        # A backtick-quoted name is how Nim spells a keyword or an operator as an
+        # identifier -- ``\`type\```, ``\`+\``` -- and the grammar below does not
+        # apply inside the quotes.
+        return
+    if bare in NIM_KEYWORDS:
+        raise RenameError(f"{name!r} is a Nim keyword; it must be quoted with backticks to be used as an identifier")
+    if not (bare[0].isalpha() or bare[0] == "_"):
+        raise RenameError(f"{name!r} is not a legal Nim identifier: it must start with a letter")
+    if bare.startswith("_") or bare.endswith("_"):
+        raise RenameError(f"{name!r} is not a legal Nim identifier: it may not begin or end with an underscore")
+    if "__" in bare:
+        raise RenameError(f"{name!r} is not a legal Nim identifier: it may not contain consecutive underscores")
+    if not all(ch.isalnum() or ch == "_" for ch in bare):
+        raise RenameError(f"{name!r} is not a legal Nim identifier: only letters, digits and underscores are allowed")
+
+
+def nim_legality_renamer(name: str, *, context: PipelineContext, kind: str, **_: object) -> str:  # noqa: ARG001
+    """The ``rename_symbol`` implementation that enforces Nim's own grammar.
+
+    Registered at :attr:`~headerkit.hooks.Priority.FALLBACK`, which is the whole
+    point of the tier choice: the waterfall runs highest priority first, so every
+    project renamer at ``PROJECT`` has already had the name by the time this sees
+    it. Whatever a project renames a symbol to must still survive Nim's lexer,
+    and no configuration can bypass that floor.
+    """
+    return _escape_ident(name)
+
+
+HookRegistry.register_global(
+    "rename_symbol",
+    nim_legality_renamer,
+    priority=Priority.FALLBACK,
+    writer="nim",
+)
 
 
 #: The Nim declaration, and any companion procs, for each C++ helper type
@@ -600,9 +680,107 @@ class NimWriter(BaseWriter):
         ),
     )
 
-    def __init__(self, *, header_path: str | None = None) -> None:
+    def __init__(self, *, header_path: str | None = None, context: PipelineContext | None = None) -> None:
         self.header_path = header_path
         self._used_helpers: set[str] = set()
+        # ``writer="nim"`` is what makes this writer's own legality renamer
+        # match; a caller-supplied context is honoured otherwise so a rename can
+        # be scoped to a backend, a target or a layout like any other hook.
+        self._context = context or PipelineContext(writer="nim")
+        if self._context.writer != "nim":
+            self._context = replace(self._context, writer="nim")
+        self._name_map: dict[str, str] = {}
+
+    def _ident(self, name: str, *, kind: str) -> str:
+        """Return the Nim identifier for the source symbol *name* of *kind*.
+
+        Module-scope names resolved by the naming pass are looked up rather than
+        re-derived, so a declaration and every reference to it agree by
+        construction instead of by two code paths happening to compute the same
+        string. Anything else -- parameters, fields, types declared in headers
+        this unit only references -- goes through the same ``rename_symbol``
+        waterfall on the spot.
+
+        The result is validated against Nim's grammar whichever path produced it.
+        A missing legality renamer would otherwise return the source spelling
+        untouched and emit source the Nim lexer rejects, with no diagnostic here.
+        """
+        mapped = self._name_map.get(name) if kind in MODULE_SCOPE_KINDS else None
+        if mapped is not None:
+            return mapped
+        out = dispatch_rename(name, kind=kind, context=self._context)
+        validate_nim_ident(out)
+        return out
+
+    @staticmethod
+    def _declaration_kind(decl: object) -> str | None:
+        """Map an IR declaration to its :data:`~headerkit._rename.RENAME_KINDS` kind."""
+        if isinstance(decl, Struct):
+            return "union" if decl.is_union else "struct"
+        if isinstance(decl, Enum):
+            return "enum"
+        if isinstance(decl, Typedef):
+            return "typedef"
+        if isinstance(decl, Function):
+            return "function"
+        if isinstance(decl, Constant):
+            return "macro"
+        if isinstance(decl, Variable):
+            return "function"
+        return None
+
+    def _build_name_map(self, header: Header | SourceUnit) -> dict[str, str]:
+        """Rename every module-scope symbol, then prove the result is injective.
+
+        Renaming is not injective and neither is C-to-Nim spelling: ``__sig`` and
+        ``_sig`` collapse under underscore repair, and ``fooBar`` and ``foo_bar``
+        are one identifier to Nim however they were spelled in the header. This
+        pass is where that is caught -- under Nim's identity function, not under
+        ``==`` -- and where the ``resolve_collision`` hook is offered the decision.
+        """
+        assigned: dict[Symbol, str] = {}
+        source_of: dict[Symbol, str] = {}
+        taken: dict[str, str] = {}
+        index = 0
+
+        def take(name: str, kind: str, location: object) -> None:
+            nonlocal index
+            if not name or "(anonymous" in name or "(unnamed" in name:
+                return
+            previous = taken.get(name)
+            if previous is not None and (previous == kind or "typedef" in (previous, kind)):
+                # One entity spelled twice in the IR, not two symbols competing
+                # for one identifier: an opaque record and its definition, or the
+                # C idiom `typedef struct foo foo;` which the emitter already
+                # collapses to a single type. Counting it as a collision would
+                # reject every tagged typedef'd enum in existence.
+                return
+            taken[name] = kind
+            file = getattr(location, "file", "") or ""
+            sym = Symbol(index=index, name=name, kind=kind, header=str(file))
+            index += 1
+            assigned[sym] = dispatch_rename(name, kind=kind, context=self._context)
+            source_of[sym] = name
+
+        for decl in header.declarations:
+            kind = self._declaration_kind(decl)
+            if kind is None:
+                continue
+            take(getattr(decl, "name", "") or "", kind, getattr(decl, "location", None))
+            if isinstance(decl, Enum):
+                for value in decl.values:
+                    take(value.name, "enumerator", getattr(decl, "location", None))
+
+        for name in assigned.values():
+            validate_nim_ident(name)
+
+        resolved = enforce_injectivity(
+            assigned,
+            identity=nim_ident_identity,
+            context=self._context,
+            validate=validate_nim_ident,
+        )
+        return {source_of[sym]: ident for sym, ident in sorted(resolved.items())}
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Nim comments."""
@@ -623,8 +801,10 @@ class NimWriter(BaseWriter):
         lines.append("# Generated by headerkit")
         lines.append("")
 
-        # Collect function names and type names upfront for collision detection
-        func_names: set[str] = {decl.name for decl in header.declarations if isinstance(decl, Function) and decl.name}
+        # Every module-scope name is renamed and checked for collisions before a
+        # single line is emitted, so a rejected unit is rejected whole rather
+        # than half-written.
+        self._name_map = self._build_name_map(header)
         known_base_classes: set[str] = {
             b.name.replace("::", "_") for decl in header.declarations if isinstance(decl, Struct) for b in decl.bases
         }
@@ -656,7 +836,7 @@ class NimWriter(BaseWriter):
                     types_section.extend(t_lines)
                     procs_section.extend(m_lines)
             elif isinstance(decl, Enum):
-                t_lines, c_lines = self._write_enum(decl, header_file, func_names)
+                t_lines, c_lines = self._write_enum(decl, header_file)
                 types_section.extend(t_lines)
                 consts_section.extend(c_lines)
             elif isinstance(decl, Typedef):
@@ -763,7 +943,7 @@ class NimWriter(BaseWriter):
                 return C_TO_NIM_PRIMITIVES[qualified]
             if name in C_TO_NIM_PRIMITIVES:
                 return C_TO_NIM_PRIMITIVES[name]
-            return _escape_ident(name)
+            return self._ident(name, kind="struct")
 
         elif isinstance(t, Pointer):
             if isinstance(t.pointee, CType) and t.pointee.name == "void":
@@ -791,7 +971,7 @@ class NimWriter(BaseWriter):
         elif isinstance(t, FunctionPointer):
             ret = self._format_type(t.return_type)
             params = [
-                f"{_escape_ident(p.name or f'a{i}')}: {self._format_type(p.type, in_param=True)}"
+                f"{self._ident(p.name or f'a{i}', kind='param')}: {self._format_type(p.type, in_param=True)}"
                 for i, p in enumerate(t.parameters)
             ]
             params_str = f"({', '.join(params)})" if params else "()"
@@ -805,7 +985,7 @@ class NimWriter(BaseWriter):
     ) -> tuple[list[str], list[str]]:
         """Render a Struct or class as a Nim type declaration and its methods."""
         name = s.name or "AnonObject"
-        t_name = _escape_ident(name)
+        t_name = self._ident(name, kind="union" if s.is_union else "struct")
 
         # Generics
         if s.template_params:
@@ -853,7 +1033,7 @@ class NimWriter(BaseWriter):
             lines[0] += ""
         else:
             for f in s.fields:
-                f_name = _escape_ident(f.name)
+                f_name = self._ident(f.name, kind="field")
                 f_type = self._format_type(f.type)
                 lines.append(f"  {f_name}*: {f_type}")
 
@@ -873,9 +1053,7 @@ class NimWriter(BaseWriter):
         has_end = any(m.name == "end" for m in s.methods)
         if has_begin and has_end:
             if s.template_params:
-                struct_type = (
-                    f"{_escape_ident(s.name or 'Self')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
-                )
+                struct_type = f"{self._ident(s.name or 'Self', kind='struct')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
                 t_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
             else:
                 struct_type = self._format_type(CType(s.name or "Self"))
@@ -898,14 +1076,12 @@ class NimWriter(BaseWriter):
 
     def _write_method(self, s: Struct, m: Function, header_file: str) -> list[str]:
         """Render a C++ member method or operator in Nim."""
-        m_name = _escape_ident(m.name)
+        m_name = self._ident(m.name, kind="function")
         params: list[str] = []
 
         # 'this' parameter
         if s.template_params:
-            struct_type = (
-                f"{_escape_ident(s.name or 'Self')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
-            )
+            struct_type = f"{self._ident(s.name or 'Self', kind='struct')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
         else:
             struct_type = self._format_type(CType(s.name or "Self"))
 
@@ -916,7 +1092,7 @@ class NimWriter(BaseWriter):
                 params.append(f"this: var {struct_type}")
 
         for i, p in enumerate(m.parameters):
-            p_name = _escape_ident(p.name or f"a{i}")
+            p_name = self._ident(p.name or f"a{i}", kind="param")
             p_type = self._format_type(p.type, in_param=True)
             default_str = f" = {p.default_value}" if p.default_value else ""
             params.append(f"{p_name}: {p_type}{default_str}")
@@ -951,7 +1127,9 @@ class NimWriter(BaseWriter):
         """Render a C++ destructor as a Nim destroy proc."""
         s_name = s.name or "Object"
         if s.template_params:
-            struct_type = f"{_escape_ident(s_name)}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            struct_type = (
+                f"{self._ident(s_name, kind='struct')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            )
             t_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
         else:
             struct_type = self._format_type(CType(s_name))
@@ -966,13 +1144,15 @@ class NimWriter(BaseWriter):
         params: list[str] = []
 
         for i, p in enumerate(ctor.parameters):
-            p_name = _escape_ident(p.name or f"a{i}")
+            p_name = self._ident(p.name or f"a{i}", kind="param")
             p_type = self._format_type(p.type, in_param=True)
             default_str = f" = {p.default_value}" if p.default_value else ""
             params.append(f"{p_name}: {p_type}{default_str}")
 
         if s.template_params:
-            ret_type = f"{_escape_ident(s_name)}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            ret_type = (
+                f"{self._ident(s_name, kind='struct')}[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
+            )
             t_params = f"[{', '.join(_escape_ident(tp) for tp in s.template_params)}]"
             t_args = ", ".join(f"'*{i}" for i in range(len(s.template_params)))
             cpp_pattern = f"{s_name}<{t_args}>(@)"
@@ -1046,7 +1226,7 @@ class NimWriter(BaseWriter):
             f"parser, so its width is assumed to be that of cint; verify it against the header"
         ]
 
-    def _write_enum(self, e: Enum, header_file: str, func_names: set[str] | None = None) -> tuple[list[str], list[str]]:
+    def _write_enum(self, e: Enum, header_file: str) -> tuple[list[str], list[str]]:
         """Render an Enum declaration, returning (type_lines, const_lines)."""
         name = e.name or ""
         is_anonymous = not name or "(unnamed" in name or "(anonymous" in name or name.startswith("enum (")
@@ -1055,16 +1235,14 @@ class NimWriter(BaseWriter):
             # Emit anonymous enum values as constants
             const_lines: list[str] = []
             for v in e.values:
-                v_name = _escape_ident(v.name)
+                v_name = self._ident(v.name, kind="enumerator")
                 if v.value is not None:
                     const_lines.append(f"{v_name}* = {v.value}")
                 else:
                     const_lines.append(f"{v_name}* = 0")
             return [], const_lines
 
-        # Disambiguate if enum name collides with a function
-        nim_name = f"{name}_enum" if func_names and name in func_names else name
-        e_name = _escape_ident(nim_name)
+        e_name = self._ident(name, kind="enum")
 
         spelling = _c_type_spelling(name, e.is_typedef, "enum")
         size_type = self._enum_size_type(e)
@@ -1073,7 +1251,7 @@ class NimWriter(BaseWriter):
             f'{e_name}* {{.size: sizeof({size_type}), importc: "{spelling}", header: "{header_file}".}} = enum',
         ]
         for v in e.values:
-            v_name = _escape_ident(v.name)
+            v_name = self._ident(v.name, kind="enumerator")
             if v.value is not None:
                 lines.append(f"  {v_name} = {v.value}")
             else:
@@ -1095,16 +1273,16 @@ class NimWriter(BaseWriter):
             if clean == t.name:
                 return []
 
-        t_name = _escape_ident(t.name)
+        t_name = self._ident(t.name, kind="typedef")
         underlying = self._format_type(t.underlying_type)
         return [f"{t_name}* = {underlying}"]
 
     def _write_function(self, f: Function, header_file: str) -> list[str]:
         """Render a function declaration."""
-        f_name = _escape_ident(f.name)
+        f_name = self._ident(f.name, kind="function")
         params: list[str] = []
         for i, p in enumerate(f.parameters):
-            p_name = _escape_ident(p.name or f"a{i}")
+            p_name = self._ident(p.name or f"a{i}", kind="param")
             p_type = self._format_type(p.type, in_param=True)
             default_str = f" = {p.default_value}" if p.default_value else ""
             params.append(f"{p_name}: {p_type}{default_str}")
@@ -1133,7 +1311,7 @@ class NimWriter(BaseWriter):
 
     def _write_variable(self, v: Variable, header_file: str) -> list[str]:
         """Render an extern global variable."""
-        v_name = _escape_ident(v.name)
+        v_name = self._ident(v.name, kind="function")
         v_type = self._format_type(v.type)
         return [f'var {v_name}* {{.importc: "{v.name}", header: "{header_file}".}}: {v_type}']
 
@@ -1141,7 +1319,7 @@ class NimWriter(BaseWriter):
         """Render a constant."""
         if c.value is None:
             return []
-        c_name = _escape_ident(c.name)
+        c_name = self._ident(c.name, kind="macro")
         return [f"{c_name}* = {c.value}"]
 
     @staticmethod
@@ -1255,6 +1433,8 @@ class NimWriter(BaseWriter):
 
     def _collect_link_probes(self, unit: SourceUnit | Header) -> tuple[list[str], list[str], list[str]]:
         """Return the probe definitions, their call sites, and the complete C++ types."""
+        if not self._name_map:
+            self._name_map = self._build_name_map(unit)
         probes: list[str] = []
         calls: list[str] = []
         complete_types: list[str] = []
@@ -1267,15 +1447,15 @@ class NimWriter(BaseWriter):
 
         for decl in unit.declarations:
             if isinstance(decl, Function) and not decl.template_params and not decl.is_variadic and decl.name:
-                add(_escape_ident(decl.name), None, decl.parameters, self._format_type(decl.return_type))
+                add(self._ident(decl.name, kind="function"), None, decl.parameters, self._format_type(decl.return_type))
             elif isinstance(decl, Struct) and _struct_requires_cpp(decl) and decl.name and not decl.template_params:
-                struct_type = _escape_ident(decl.name)
+                struct_type = self._ident(decl.name, kind="struct")
                 complete_types.append(struct_type)
                 for m in decl.methods:
                     if not self._is_probeable(m):
                         continue
                     self_type = None if m.is_static else struct_type
-                    add(_escape_ident(m.name), self_type, m.parameters, self._format_type(m.return_type))
+                    add(self._ident(m.name, kind="function"), self_type, m.parameters, self._format_type(m.return_type))
                 for ctor in decl.constructors:
                     if not self._is_probeable(ctor):
                         continue

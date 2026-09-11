@@ -17,6 +17,7 @@ from headerkit._config import (
     merge_config,
 )
 from headerkit._generate import batch_generate, generate
+from headerkit._rename import register_config_hooks as register_rename_config
 from headerkit.backends import _load_backend_plugins
 from headerkit.hooks import _load_hook_plugins
 from headerkit.writers import _load_writer_plugins, coerce_writer_options
@@ -525,6 +526,8 @@ def main(argv: list[str] | None = None) -> int:
     _load_hook_plugins()
     if config is not None and config.plugins:
         _load_explicit_plugins(config.plugins)
+    if config is not None:
+        register_rename_config(config.rename)
 
     resolved_runtime = getattr(args, "runtime", None) or os.environ.get("HEADERKIT_RUNTIME")
     resolved_language = getattr(args, "language", None) or os.environ.get("HEADERKIT_LANGUAGE")
