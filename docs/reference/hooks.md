@@ -180,8 +180,7 @@ and writer options work the same way -- so a library consumer relying on a
 A library consumer applies it explicitly:
 
 ```python
-from headerkit import generate, register_config_hooks
-from headerkit._config import load_config
+from headerkit import generate, load_config, register_config_hooks
 
 register_config_hooks(load_config(".headerkit.toml").rename, writer="nim")
 generate("api.h", "nim")

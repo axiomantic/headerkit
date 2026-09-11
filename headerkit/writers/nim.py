@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import textwrap
 import unicodedata
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path, PureWindowsPath
 from typing import ClassVar
@@ -243,7 +243,7 @@ def _c_type_spelling(name: str, is_typedef: bool, tag_keyword: str) -> str:
 def _escape_ident(name: str) -> str:
     """Escape Nim keywords, operators, and invalid identifier characters."""
     if not name:
-        return "anon"
+        raise RenameError("the empty string is not a Nim identifier")
     if name in CPP_OPERATOR_MAP:
         return CPP_OPERATOR_MAP[name]
     if "::" in name:
@@ -370,6 +370,11 @@ def _validate_quoted_nim_ident(name: str, bare: str) -> None:
             current += ch
     if current:
         tokens.append(current)
+    if bare in {".", ":", "="} or ":" in bare:
+        raise RenameError(
+            f"{name!r} is not a legal Nim identifier: {bare!r} may not appear between backticks. "
+            f"{bare!r} is rejected by the Nim lexer."
+        )
     for token in tokens:
         if token[0] in NIM_OPERATOR_CHARS or token in NIM_KEYWORDS:
             continue
@@ -473,6 +478,62 @@ _C_TAG_PREFIXES: tuple[str, ...] = ("struct ", "union ", "enum ")
 #: enum or a typedef -- so a reference is resolved against these and only these.
 _TYPE_KINDS: frozenset[str] = frozenset({"struct", "union", "enum", "typedef"})
 
+#: The identifier of an anonymous record, invented by this writer rather than
+#: renamed from the header. Every site that needs to name such a record uses
+#: this constant so the declaration and every reference agree by construction.
+ANONYMOUS_RECORD_NAME: str = "AnonObject"
+
+# =============================================================================
+# Identity
+#
+# Module-scope declarations and type references are resolved using the complete
+# set of identity axes recorded in the IR.
+# =============================================================================
+
+#: Every axis a *module-scope declaration* is identified by. Declarations that
+#: agree on all of them are one entity spelled twice -- an opaque record and its
+#: definition, a forward declaration and the class. Declarations differing on any
+#: of them are distinct symbols competing for one Nim identifier, and the naming
+#: pass must see every one of them.
+#:
+#: The axes are named here and read by :func:`_decl_identity` only. Adding one is
+#: an entry here and a component there; tests pin the two against each other so
+#: they cannot drift.
+DECL_IDENTITY_AXES: tuple[str, ...] = ("name", "kind", "namespace")
+
+#: The identity of one module-scope declaration, in :data:`DECL_IDENTITY_AXES` order.
+DeclIdentity = tuple[str, str, str | None]
+
+
+def _decl_identity(name: str, kind: str, namespace: str | None) -> DeclIdentity:
+    """Build the identity tuple for a module-scope declaration.
+
+    An empty namespace and a missing one are the same fact -- global scope -- and
+    are normalised to ``None`` so two spellings of it cannot key two entries.
+    """
+    return (name, kind, namespace or None)
+
+
+def _decl_namespace(decl: object) -> str | None:
+    """The enclosing C++ namespace a declaration records, or ``None``.
+
+    ``Constant`` carries none at all, which is not an oversight in the IR: a
+    macro has no C++ scope to be in.
+    """
+    return getattr(decl, "namespace", None) or None
+
+
+#: Every axis a *type reference* is resolved by. A reference names no kind and no
+#: scope, so the answer is assembled from the type expression itself plus the
+#: facts the unit records around it.
+TYPE_REFERENCE_AXES: tuple[str, ...] = (
+    "name",
+    "qualifiers",
+    "is_elaborated",
+    "unit language",
+    "declared in this unit",
+)
+
 
 def _typedef_aliases_its_own_tag(t: Typedef) -> bool:
     """Whether ``t`` is the ``typedef struct foo foo;`` idiom: one entity, two kinds.
@@ -535,70 +596,11 @@ def _cfg_path_flag(flag: str, path: str) -> str:
         )
     # PureWindowsPath, not PurePath: the separator to normalise is a property of the
     # path, not of the host generating the config, and it leaves a POSIX path alone.
-    return f'"{flag}\\"{_nim_string_path(path)}\\""'
-
-
-def _type_matches(t: TypeExpr, pred: Callable[[str], bool]) -> bool:
-    """Whether any type name inside ``t`` satisfies ``pred``."""
-    if isinstance(t, CType):
-        return pred(t.name)
-    elif isinstance(t, Pointer):
-        return _type_matches(t.pointee, pred)
-    elif isinstance(t, Reference):
-        return _type_matches(t.target, pred)
-    elif isinstance(t, Array):
-        return _type_matches(t.element_type, pred)
-    elif isinstance(t, FunctionPointer):
-        if _type_matches(t.return_type, pred):
-            return True
-        return any(_type_matches(p.type, pred) for p in t.parameters)
-    return False
-
-
-def _decl_matches(d: object, pred: Callable[[str], bool]) -> bool:
-    """Whether any type name reachable from declaration ``d`` satisfies ``pred``."""
-    if isinstance(d, Struct):
-        for f in d.fields:
-            if _type_matches(f.type, pred):
-                return True
-        for m in d.methods + d.constructors:
-            if _type_matches(m.return_type, pred):
-                return True
-            if any(_type_matches(p.type, pred) for p in m.parameters):
-                return True
-        if d.destructor and any(_type_matches(p.type, pred) for p in d.destructor.parameters):
-            return True
-    elif isinstance(d, Function):
-        if _type_matches(d.return_type, pred):
-            return True
-        if any(_type_matches(p.type, pred) for p in d.parameters):
-            return True
-    elif isinstance(d, Typedef):
-        if _type_matches(d.underlying_type, pred):
-            return True
-    elif isinstance(d, Variable):
-        if _type_matches(d.type, pred):
-            return True
-    return False
-
-
-def _type_contains(t: TypeExpr, target_prefix: str) -> bool:
-    """Check structurally whether a TypeExpr contains target_prefix in its type names."""
-    return _type_matches(t, lambda name: target_prefix in name)
-
-
-def _decl_contains(d: object, target_prefix: str) -> bool:
-    """Check structurally whether a Declaration references target_prefix."""
-    return _decl_matches(d, lambda name: target_prefix in name)
+    return f'"{flag}\\"{PureWindowsPath(path).as_posix()}\\""'
 
 
 def _bare_type_head(raw: str) -> str:
-    """Strip qualifiers, tag keywords and template arguments down to the head name.
-
-    The tag keyword is stripped here so that the *caller* decides what a tag means,
-    rather than the answer depending on this function happening to leave one in
-    place. ``_type_name_requires_cpp`` is the one place that decision is made.
-    """
+    """Strip qualifiers, tag keywords and template arguments down to the head name."""
     name = raw.strip()
     for qualifier in ("const ", "volatile "):
         while name.startswith(qualifier):
@@ -610,27 +612,9 @@ def _bare_type_head(raw: str) -> str:
     return name.split("<", 1)[0].rsplit("::", 1)[-1].strip()
 
 
-def _decl_contains_exact(d: object, head: str) -> bool:
-    """Whether ``d`` references a type whose unqualified head is exactly ``head``.
-
-    The substring form cannot serve: libclang reports a ``std::string`` field as
-    the bare name ``string``, and a substring test for it also matches ``wstring``
-    and any C type containing those letters. The head comparison is exact, and a C
-    tag keeps its keyword so it never looks like a library name.
-    """
-    return _decl_matches(d, lambda name: not name.strip().startswith(_C_TAG_PREFIXES) and _bare_type_head(name) == head)
-
-
 #: Standard-library names the writer renders as a C++ helper type (``CppString``,
 #: ``UniquePtr``, ``SharedPtr``, ``WeakPtr``, ``CppVector``) or as an ``importcpp``
 #: base object.
-#:
-#: These are **unqualified heads**, because that is the shape the parse produces:
-#: libclang reports a ``std::string`` field as the bare name ``string``, so a
-#: ``std::``-qualified entry here would match nothing a backend ever emits. A C tag
-#: is distinguishable from these without ambiguity -- it keeps its ``struct ``,
-#: ``union `` or ``enum `` keyword -- so a C header declaring ``struct vector`` is
-#: not mistaken for ``std::vector``. See :func:`_type_name_requires_cpp`.
 CPP_STDLIB_MARKERS: frozenset[str] = frozenset(
     {
         "exception",
@@ -645,25 +629,19 @@ CPP_STDLIB_MARKERS: frozenset[str] = frozenset(
 )
 
 
-def _type_name_requires_cpp(raw: str, *, unit_is_cpp: bool) -> bool:
-    """Whether a type *name* is one only C++ can spell.
-
-    Two of the three signals are unambiguous and hold in any unit: a ``<`` is a
-    template-id and a ``::`` is a qualified name, and C has neither.
-
-    The third -- a bare name in :data:`CPP_STDLIB_MARKERS` -- is not decidable from
-    spelling at all: a ``std::string`` field and a C ``typedef struct {...} string;``
-    reach the IR as the identical ``CType(name="string")``. A tag keyword does not
-    separate them either, because a *use of a typedef* carries no tag. So that
-    branch is gated on ``unit_is_cpp``, the language the parser chose for the
-    translation unit; in a C unit a bare ``string`` is a C typedef and nothing else.
-    No heuristic over the name can substitute: the two are not merely hard to tell
-    apart, they are the same object.
-    """
+def _type_name_requires_cpp(
+    raw: str,
+    *,
+    unit_is_cpp: bool,
+    is_elaborated: bool | None = None,
+) -> bool:
+    """Whether a type *name* requires the C++ backend."""
     name = raw.strip()
     if "<" in name or "::" in name:
         return True
-    if not unit_is_cpp or name.startswith(_C_TAG_PREFIXES):
+    if not unit_is_cpp:
+        return False
+    if is_elaborated is True or name.startswith(_C_TAG_PREFIXES):
         return False
     return _bare_type_head(name) in CPP_STDLIB_MARKERS
 
@@ -674,7 +652,7 @@ def _type_requires_cpp(t: TypeExpr, *, unit_is_cpp: bool) -> bool:
         # Rendered as `var T`, which is a C++ reference. C has no such parameter.
         return True
     if isinstance(t, CType):
-        return _type_name_requires_cpp(t.name, unit_is_cpp=unit_is_cpp)
+        return _type_name_requires_cpp(t.name, unit_is_cpp=unit_is_cpp, is_elaborated=t.is_elaborated)
     if isinstance(t, Pointer):
         return _type_requires_cpp(t.pointee, unit_is_cpp=unit_is_cpp)
     if isinstance(t, Array):
@@ -743,7 +721,7 @@ def unit_requires_cpp(unit: SourceUnit | Header) -> bool:
     ``std::string`` or a C typedef of that name -- is settled by the language the
     parser recorded for the unit; see :func:`_type_name_requires_cpp`.
     """
-    unit_is_cpp = getattr(unit, "language", "c") == "cpp"
+    unit_is_cpp = getattr(unit, "language", None) == "cpp"
     for decl in unit.declarations:
         if isinstance(decl, Struct):
             if _struct_requires_cpp(decl):
@@ -815,36 +793,22 @@ class NimWriter(BaseWriter):
         if self._context.writer != "nim":
             self._context = replace(self._context, writer="nim")
         self._unit_is_cpp = False
-        # Keyed by (source name, kind), never by source name alone: two colliding
-        # symbols share a source name *by definition*, so a dict keyed on the name
-        # structurally cannot represent the answer a collision policy returns.
-        self._name_map: dict[tuple[str, str], str] = {}
+        self._name_map: dict[DeclIdentity, str] = {}
         self._type_refs: dict[str, dict[str, str]] = {}
         self._identity_owners: dict[str, Symbol] = {}
 
-    def _ident(self, name: str, *, kind: str) -> str:
-        """Return the Nim identifier for the source symbol *name* of *kind*.
-
-        Module-scope names resolved by the naming pass are looked up rather than
-        re-derived, so a declaration and every reference to it agree by
-        construction instead of by two code paths happening to compute the same
-        string. Anything else -- parameters, fields, types declared in headers
-        this unit only references -- goes through the same ``rename_symbol``
-        waterfall on the spot.
-
-        The result is validated against Nim's grammar whichever path produced it.
-        A missing legality renamer would otherwise return the source spelling
-        untouched and emit source the Nim lexer rejects, with no diagnostic here.
-        """
+    def _ident(self, name: str, *, kind: str, namespace: str | None = None) -> str:
+        """Return the Nim identifier for the source symbol *name* of *kind*."""
         if kind in MODULE_SCOPE_KINDS:
-            mapped = self._name_map.get((name, kind))
+            mapped = self._name_map.get(_decl_identity(name, kind, namespace))
             if mapped is not None:
                 return mapped
+            if namespace is None and "::" in name:
+                ns, bare = name.rsplit("::", 1)
+                mapped = self._name_map.get(_decl_identity(bare, kind, ns))
+                if mapped is not None:
+                    return mapped
             if kind in _TYPE_KINDS:
-                # A *use* of a type carries no kind: `_format_type` asks for
-                # `status` and cannot say whether the declaration behind it was a
-                # struct, an enum or a typedef. Resolve it against the type kinds
-                # the unit actually declared rather than guessing one.
                 mapped = self._resolve_type_ref(name)
                 if mapped is not None:
                     return mapped
@@ -869,15 +833,7 @@ class NimWriter(BaseWriter):
         )
 
     def _synthesized_ident(self, name: str, *, what: str) -> str:
-        """Check a name the *writer* invented against the same floor a renamed one passes.
-
-        ``CppString``, ``constructFoo``, ``AnonObject`` and ``Self`` are produced by
-        the renderer, not by the rename waterfall, so nothing else validates them
-        and nothing else checks them against the identifiers the naming pass
-        assigned. Both omissions emit a module Nim refuses -- a header declaring
-        ``struct Cpp_String`` alongside a ``std::string`` field gets two
-        declarations that are one identifier to Nim.
-        """
+        """Check a name the writer invented against the same floor a renamed one passes."""
         validate_nim_ident(name)
         owner = self._identity_owners.get(nim_ident_identity(name))
         if owner is not None:
@@ -906,49 +862,26 @@ class NimWriter(BaseWriter):
             return "function"
         return None
 
-    def _build_name_map(self, header: Header | SourceUnit) -> dict[tuple[str, str], str]:
-        """Rename every module-scope symbol, then prove the result is injective.
-
-        Renaming is not injective and neither is C-to-Nim spelling: ``__sig`` and
-        ``_sig`` collapse under underscore repair, and ``fooBar`` and ``foo_bar``
-        are one identifier to Nim however they were spelled in the header. This
-        pass is where that is caught -- under Nim's identity function, not under
-        ``==`` -- and where the ``resolve_collision`` hook is offered the decision.
-
-        The result is keyed by ``(source name, kind)``. Keying it by the source
-        name alone made every declarative collision policy emit the *same*
-        identifier for both colliding symbols, silently: colliding symbols share a
-        source name by definition, so the two resolved entries collapsed onto one
-        key and the last one won. The injectivity check ran on a ``Symbol``-keyed
-        mapping and passed, and the feature produced the exact
-        ``attempt to redefine`` it exists to prevent.
-        """
+    def _build_name_map(self, header: Header | SourceUnit) -> dict[DeclIdentity, str]:
+        """Rename every module-scope symbol, then prove the result is injective."""
         assigned: dict[Symbol, str] = {}
-        taken: set[tuple[str, str]] = set()
+        taken: set[DeclIdentity] = set()
         index = 0
 
-        def take(name: str, kind: str, location: object) -> None:
+        def take(name: str, kind: str, location: object, namespace: str | None = None) -> None:
             nonlocal index
             if not name or "(anonymous" in name or "(unnamed" in name:
                 return
-            if (name, kind) in taken:
-                # One entity spelled twice in the IR rather than two symbols
-                # competing for one identifier: an opaque record and its
-                # definition, a forward declaration and the class.
+            identity = _decl_identity(name, kind, namespace)
+            if identity in taken:
                 return
-            taken.add((name, kind))
+            taken.add(identity)
             file = getattr(location, "file", "") or ""
-            sym = Symbol(index=index, name=name, kind=kind, header=str(file))
+            sym = Symbol(index=index, name=name, kind=kind, header=str(file), namespace=namespace)
             index += 1
             assigned[sym] = dispatch_rename(name, kind=kind, context=self._context)
 
         declarations = list(header.declarations)
-        # `typedef struct foo foo;` is one entity under two kinds, and the emitter
-        # already collapses it to the tag's declaration. It is recognised here by
-        # what the typedef *aliases*, not by the bare fact that a typedef and a tag
-        # share a name: `enum status {...}; typedef int status;` is legal C
-        # declaring two distinct entities, and treating every such pair as one
-        # entity emitted `status*` twice with no diagnostic at all.
         declared_tags = {
             decl.name for decl in declarations if isinstance(decl, Struct | Enum) and decl.name and not decl.namespace
         }
@@ -957,12 +890,13 @@ class NimWriter(BaseWriter):
             kind = self._declaration_kind(decl)
             if kind is None:
                 continue
+            ns = _decl_namespace(decl)
             if isinstance(decl, Typedef) and _typedef_aliases_its_own_tag(decl) and decl.name in declared_tags:
                 continue
-            take(getattr(decl, "name", "") or "", kind, getattr(decl, "location", None))
+            take(getattr(decl, "name", "") or "", kind, getattr(decl, "location", None), namespace=ns)
             if isinstance(decl, Enum):
                 for value in decl.values:
-                    take(value.name, "enumerator", getattr(decl, "location", None))
+                    take(value.name, "enumerator", getattr(decl, "location", None), namespace=ns)
 
         for name in assigned.values():
             validate_nim_ident(name)
@@ -979,8 +913,10 @@ class NimWriter(BaseWriter):
         for sym, ident in sorted(resolved.items()):
             self._identity_owners.setdefault(nim_ident_identity(ident), sym)
             if sym.kind in _TYPE_KINDS:
-                self._type_refs.setdefault(sym.name, {})[sym.kind] = ident
-        return {(sym.name, sym.kind): ident for sym, ident in sorted(resolved.items())}
+                self._type_refs.setdefault(sym.name, {})[f"{sym.kind}:{sym.namespace}"] = ident
+                if sym.namespace:
+                    self._type_refs.setdefault(f"{sym.namespace}::{sym.name}", {})[sym.kind] = ident
+        return {_decl_identity(sym.name, sym.kind, sym.namespace): ident for sym, ident in sorted(resolved.items())}
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Nim comments."""
@@ -1006,7 +942,7 @@ class NimWriter(BaseWriter):
         # `typedef char string;` and a C++ header using `std::string` reach the
         # writer as the byte-identical `CType(name="string")`; the IR settles
         # which is which and no predicate over the spelling can.
-        self._unit_is_cpp = getattr(unit, "language", "c") == "cpp"
+        self._unit_is_cpp = getattr(unit, "language", None) == "cpp"
 
         # Every module-scope name is renamed and checked for collisions before a
         # single line is emitted, so a rejected unit is rejected whole rather
@@ -1015,7 +951,7 @@ class NimWriter(BaseWriter):
         known_base_classes: set[str] = {
             b.name.replace("::", "_") for decl in header.declarations if isinstance(decl, Struct) for b in decl.bases
         }
-        emitted_types: set[str] = set()
+        emitted_types: set[DeclIdentity] = set()
         types_section: list[str] = []
         procs_section: list[str] = []
         consts_section: list[str] = []
@@ -1033,25 +969,33 @@ class NimWriter(BaseWriter):
             types_section.append(
                 'std_exception* {.importcpp: "std::exception", header: "<exception>".} = object of RootObj'
             )
-            emitted_types.add("std_exception")
+            emitted_types.add(_decl_identity("std_exception", "struct", None))
 
         for decl in header.declarations:
             if isinstance(decl, Struct):
-                name = decl.name or "AnonObject"
-                if name not in emitted_types:
-                    emitted_types.add(name)
+                ident = _decl_identity(
+                    decl.name or ANONYMOUS_RECORD_NAME, "union" if decl.is_union else "struct", decl.namespace
+                )
+                if ident not in emitted_types:
+                    emitted_types.add(ident)
                     t_lines, m_lines = self._write_struct(decl, header_file, known_base_classes)
                     types_section.extend(t_lines)
                     procs_section.extend(m_lines)
             elif isinstance(decl, Enum):
-                t_lines, c_lines = self._write_enum(decl, header_file)
-                types_section.extend(t_lines)
-                consts_section.extend(c_lines)
-            elif isinstance(decl, Typedef):
-                t_lines = self._write_typedef(decl, emitted_types)
-                if t_lines:
-                    emitted_types.add(decl.name)
+                ident = _decl_identity(decl.name or "", "enum", decl.namespace)
+                if not decl.name or ident not in emitted_types:
+                    if decl.name:
+                        emitted_types.add(ident)
+                    t_lines, c_lines = self._write_enum(decl, header_file)
                     types_section.extend(t_lines)
+                    consts_section.extend(c_lines)
+            elif isinstance(decl, Typedef):
+                ident = _decl_identity(decl.name, "typedef", decl.namespace)
+                if ident not in emitted_types:
+                    t_lines = self._write_typedef(decl)
+                    if t_lines:
+                        emitted_types.add(ident)
+                        types_section.extend(t_lines)
             elif isinstance(decl, Function):
                 procs_section.extend(self._write_function(decl, header_file))
             elif isinstance(decl, Constant):
@@ -1066,11 +1010,12 @@ class NimWriter(BaseWriter):
         helper_types: list[str] = []
         helper_procs: list[str] = []
         for helper in sorted(self._used_helpers):
-            if helper in emitted_types:
+            ident = _decl_identity(helper, "struct", None)
+            if ident in emitted_types:
                 continue
             declaration, companions = CPP_HELPER_DECLARATIONS[helper]
             helper_types.append(declaration)
-            emitted_types.add(helper)
+            emitted_types.add(ident)
             for companion in companions:
                 helper_procs.extend(["", companion])
         types_section = helper_types + types_section
@@ -1114,16 +1059,7 @@ class NimWriter(BaseWriter):
             if "(anonymous" in name or "(unnamed" in name:
                 return "pointer"
 
-            # C++ Smart Pointers & Containers mapping, gated on the one predicate
-            # that decides this question -- the same call `unit_requires_cpp` makes
-            # -- rather than on a second test over the spelling that agrees with it
-            # only by coincidence. It did not: the predicate learned to ask the
-            # unit's language and this renderer kept mapping a bare `string` to
-            # `CppString` unconditionally, so a pure C header binding a
-            # `typedef char string;` emitted `importcpp: "std::string"` into a
-            # package whose nim.cfg correctly selected the C backend, and the
-            # generated package could not be built at all.
-            if not _type_name_requires_cpp(t.name, unit_is_cpp=self._unit_is_cpp):
+            if not _type_name_requires_cpp(t.name, unit_is_cpp=self._unit_is_cpp, is_elaborated=t.is_elaborated):
                 pass
             elif name.startswith("std::shared_ptr<") or name.startswith("shared_ptr<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
@@ -1199,13 +1135,9 @@ class NimWriter(BaseWriter):
         """Render a Struct or class as a Nim type declaration and its methods."""
         if s.name:
             name = s.name
-            t_name = self._ident(name, kind="union" if s.is_union else "struct")
+            t_name = self._ident(name, kind="union" if s.is_union else "struct", namespace=s.namespace)
         else:
-            # Invented by the writer rather than renamed from the header, so it is
-            # checked against the identifiers the naming pass assigned instead of
-            # looked up among them: a unit that really declares `AnonObject` would
-            # otherwise get two declarations under one name.
-            name = "AnonObject"
+            name = ANONYMOUS_RECORD_NAME
             t_name = self._synthesized_ident(name, what="an anonymous record")
 
         # Generics
@@ -1273,11 +1205,16 @@ class NimWriter(BaseWriter):
         has_begin = any(m.name == "begin" for m in s.methods)
         has_end = any(m.name == "end" for m in s.methods)
         if has_begin and has_end:
+            record_ident = (
+                self._ident(s.name, kind="struct", namespace=s.namespace)
+                if s.name
+                else self._synthesized_ident(ANONYMOUS_RECORD_NAME, what="an anonymous record")
+            )
             if s.template_params:
-                struct_type = f"{self._ident(s.name or 'Self', kind='struct')}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
+                struct_type = f"{record_ident}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
                 t_params = f"[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
             else:
-                struct_type = self._format_type(CType(s.name or "Self"))
+                struct_type = record_ident
                 t_params = ""
             begin_methods = [m for m in s.methods if m.name == "begin"]
             has_const_begin = any(m.is_const for m in begin_methods)
@@ -1297,14 +1234,19 @@ class NimWriter(BaseWriter):
 
     def _write_method(self, s: Struct, m: Function, header_file: str) -> list[str]:
         """Render a C++ member method or operator in Nim."""
-        m_name = self._ident(m.name, kind="function")
+        m_name = self._ident(m.name, kind="function", namespace=s.namespace)
         params: list[str] = []
 
         # 'this' parameter
+        record_ident = (
+            self._ident(s.name, kind="struct", namespace=s.namespace)
+            if s.name
+            else self._synthesized_ident(ANONYMOUS_RECORD_NAME, what="an anonymous record")
+        )
         if s.template_params:
-            struct_type = f"{self._ident(s.name or 'Self', kind='struct')}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
+            struct_type = f"{record_ident}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
         else:
-            struct_type = self._format_type(CType(s.name or "Self"))
+            struct_type = record_ident
 
         if not m.is_static:
             if m.is_const:
@@ -1327,7 +1269,9 @@ class NimWriter(BaseWriter):
             cpp_pattern = f"{s.name}::{m.name}(@)"
         elif m.name == "operator[]":
             cpp_pattern = "#[@]"
-        elif m.name.startswith("operator"):
+        elif m.name == "operator()":
+            cpp_pattern = "#(@)"
+        elif m.name in CPP_OPERATOR_MAP:
             op_sym = m.name[8:]
             if len(params) == 2:
                 cpp_pattern = f"(# {op_sym} @)"
@@ -1346,34 +1290,35 @@ class NimWriter(BaseWriter):
 
     def _write_destructor(self, s: Struct, dtor: Function, header_file: str) -> list[str]:
         """Render a C++ destructor as a Nim destroy proc."""
-        s_name = s.name or "Object"
+        s_name = s.name or ANONYMOUS_RECORD_NAME
+        record_ident = (
+            self._ident(s.name, kind="struct", namespace=s.namespace)
+            if s.name
+            else self._synthesized_ident(ANONYMOUS_RECORD_NAME, what="an anonymous record")
+        )
         if s.template_params:
-            struct_type = f"{self._ident(s_name, kind='struct')}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
+            struct_type = f"{record_ident}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
             t_params = f"[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
         else:
-            struct_type = self._format_type(CType(s_name))
+            struct_type = record_ident
             t_params = ""
         decl = f'proc destroy*{t_params}(this: var {struct_type}) {{.importcpp: "#.~{s_name}()", header: "{header_file}".}}'
         return ["", decl]
 
-    def _constructor_proc_name(self, s_name: str) -> str:
-        """The ``constructFoo`` proc name for a record, built from its *renamed* identifier.
-
-        Built from the source spelling, this emitted `constructmy__type` for a
-        `struct my__type` whose type declaration was correctly repaired to
-        `my_type`, and Nim rejected the file outright: `invalid token: trailing
-        underscore`. The renamed identifier is the one the rest of the module
-        already agrees on, so it is what the proc name is composed from -- and the
-        result is then held to the same floor and the same identity set as any
-        other name this writer invents.
-        """
-        base = self._ident(s_name, kind="struct").strip("`")
-        return self._synthesized_ident(f"construct{base}", what=f"the constructor of {s_name!r}")
+    def _constructor_proc_name(self, s: Struct) -> str:
+        """The ``constructFoo`` proc name for a record, built from its *renamed* identifier."""
+        if s.name:
+            base = self._ident(s.name, kind="struct", namespace=s.namespace).strip("`")
+            what = f"the constructor of {s.name!r}"
+        else:
+            base = self._synthesized_ident(ANONYMOUS_RECORD_NAME, what="an anonymous record").strip("`")
+            what = "the constructor of an anonymous record"
+        return self._synthesized_ident(f"construct{base}", what=what)
 
     def _write_constructor(self, s: Struct, ctor: Function, header_file: str) -> list[str]:
         """Render a C++ constructor as a Nim constructProc."""
-        s_name = s.name or "Object"
-        proc_name = self._constructor_proc_name(s_name)
+        s_name = s.name or ANONYMOUS_RECORD_NAME
+        proc_name = self._constructor_proc_name(s)
         params: list[str] = []
 
         for i, p in enumerate(ctor.parameters):
@@ -1382,13 +1327,18 @@ class NimWriter(BaseWriter):
             default_str = f" = {p.default_value}" if p.default_value else ""
             params.append(f"{p_name}: {p_type}{default_str}")
 
+        record_ident = (
+            self._ident(s.name, kind="struct", namespace=s.namespace)
+            if s.name
+            else self._synthesized_ident(ANONYMOUS_RECORD_NAME, what="an anonymous record")
+        )
         if s.template_params:
-            ret_type = f"{self._ident(s_name, kind='struct')}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
+            ret_type = f"{record_ident}[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
             t_params = f"[{', '.join(_template_param_ident(tp) for tp in s.template_params)}]"
             t_args = ", ".join(f"'*{i}" for i in range(len(s.template_params)))
             cpp_pattern = f"{s_name}<{t_args}>(@)"
         else:
-            ret_type = self._format_type(CType(s_name))
+            ret_type = record_ident
             t_params = ""
             cpp_pattern = f"{s_name}(@)"
 
@@ -1466,14 +1416,14 @@ class NimWriter(BaseWriter):
             # Emit anonymous enum values as constants
             const_lines: list[str] = []
             for v in e.values:
-                v_name = self._ident(v.name, kind="enumerator")
+                v_name = self._ident(v.name, kind="enumerator", namespace=e.namespace)
                 if v.value is not None:
                     const_lines.append(f"{v_name}* = {v.value}")
                 else:
                     const_lines.append(f"{v_name}* = 0")
             return [], const_lines
 
-        e_name = self._ident(name, kind="enum")
+        e_name = self._ident(name, kind="enum", namespace=e.namespace)
 
         spelling = _c_type_spelling(name, e.is_typedef, "enum")
         size_type = self._enum_size_type(e)
@@ -1482,19 +1432,16 @@ class NimWriter(BaseWriter):
             f'{e_name}* {{.size: sizeof({size_type}), importc: "{spelling}", header: "{header_file}".}} = enum',
         ]
         for v in e.values:
-            v_name = self._ident(v.name, kind="enumerator")
+            v_name = self._ident(v.name, kind="enumerator", namespace=e.namespace)
             if v.value is not None:
                 lines.append(f"  {v_name} = {v.value}")
             else:
                 lines.append(f"  {v_name}")
         return lines, []
 
-    def _write_typedef(self, t: Typedef, emitted_types: set[str] | None = None) -> list[str]:
+    def _write_typedef(self, t: Typedef) -> list[str]:
         """Render a Typedef declaration."""
         if not t.name:
-            return []
-
-        if emitted_types and t.name in emitted_types:
             return []
 
         # Self-referential typedefs (e.g. `typedef struct foo foo;`) are collapsed
@@ -1503,13 +1450,13 @@ class NimWriter(BaseWriter):
         if _typedef_aliases_its_own_tag(t):
             return []
 
-        t_name = self._ident(t.name, kind="typedef")
+        t_name = self._ident(t.name, kind="typedef", namespace=t.namespace)
         underlying = self._format_type(t.underlying_type)
         return [f"{t_name}* = {underlying}"]
 
     def _write_function(self, f: Function, header_file: str) -> list[str]:
         """Render a function declaration."""
-        f_name = self._ident(f.name, kind="function")
+        f_name = self._ident(f.name, kind="function", namespace=f.namespace)
         params: list[str] = []
         for i, p in enumerate(f.parameters):
             p_name = self._ident(p.name or f"a{i}", kind="param")
@@ -1541,7 +1488,7 @@ class NimWriter(BaseWriter):
 
     def _write_variable(self, v: Variable, header_file: str) -> list[str]:
         """Render an extern global variable."""
-        v_name = self._ident(v.name, kind="function")
+        v_name = self._ident(v.name, kind="function", namespace=v.namespace)
         v_type = self._format_type(v.type)
         return [f'var {v_name}* {{.importc: "{v.name}", header: "{header_file}".}}: {v_type}']
 
@@ -1659,11 +1606,11 @@ class NimWriter(BaseWriter):
         """
         if (f.access or "public") != "public":
             return False
-        return not (f.template_params or f.name.startswith("operator"))
+        return not (f.template_params or f.name in CPP_OPERATOR_MAP)
 
     def _collect_link_probes(self, unit: SourceUnit | Header) -> tuple[list[str], list[str], list[str]]:
         """Return the probe definitions, their call sites, and the complete C++ types."""
-        self._unit_is_cpp = getattr(unit, "language", "c") == "cpp"
+        self._unit_is_cpp = getattr(unit, "language", None) == "cpp"
         if not self._name_map:
             self._name_map = self._build_name_map(unit)
         probes: list[str] = []
@@ -1678,19 +1625,29 @@ class NimWriter(BaseWriter):
 
         for decl in unit.declarations:
             if isinstance(decl, Function) and not decl.template_params and not decl.is_variadic and decl.name:
-                add(self._ident(decl.name, kind="function"), None, decl.parameters, self._format_type(decl.return_type))
+                add(
+                    self._ident(decl.name, kind="function", namespace=decl.namespace),
+                    None,
+                    decl.parameters,
+                    self._format_type(decl.return_type),
+                )
             elif isinstance(decl, Struct) and _struct_requires_cpp(decl) and decl.name and not decl.template_params:
-                struct_type = self._ident(decl.name, kind="struct")
+                struct_type = self._ident(decl.name, kind="struct", namespace=decl.namespace)
                 complete_types.append(struct_type)
                 for m in decl.methods:
                     if not self._is_probeable(m):
                         continue
                     self_type = None if m.is_static else struct_type
-                    add(self._ident(m.name, kind="function"), self_type, m.parameters, self._format_type(m.return_type))
+                    add(
+                        self._ident(m.name, kind="function", namespace=decl.namespace),
+                        self_type,
+                        m.parameters,
+                        self._format_type(m.return_type),
+                    )
                 for ctor in decl.constructors:
                     if not self._is_probeable(ctor):
                         continue
-                    add(self._constructor_proc_name(decl.name), None, ctor.parameters, struct_type)
+                    add(self._constructor_proc_name(decl), None, ctor.parameters, struct_type)
 
         return probes, calls, complete_types
 

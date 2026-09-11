@@ -127,6 +127,7 @@ def _dict_to_field(d: dict[str, Any]) -> Field:
         is_anonymous_transparent=d.get("is_anonymous_transparent", False),
         access=d.get("access"),
         is_static=d.get("is_static", False),
+        is_padding=d.get("is_padding", False),
     )
 
 
@@ -164,6 +165,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         cpp_name=d.get("cpp_name"),
         notes=d.get("notes", []),
         inner_typedefs=d.get("inner_typedefs", {}),
+        nested_records=[_dict_to_struct(nr) for nr in d.get("nested_records", [])],
         bases=[_dict_to_base(b) for b in d.get("bases", [])],
         is_abstract=d.get("is_abstract", False),
         constructors=([_dict_to_function(c) for c in d["constructors"]] if "constructors" in d else []),
@@ -182,7 +184,10 @@ def _dict_to_enum(d: dict[str, Any]) -> Enum:
         name=d.get("name"),
         values=[_dict_to_enum_value(v) for v in d.get("values", [])],
         is_typedef=d.get("is_typedef", False),
+        namespace=d.get("namespace"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        is_scoped=d.get("is_scoped", False),
+        cpp_name=d.get("cpp_name"),
         underlying_type=d.get("underlying_type"),
         underlying_type_known=d.get("underlying_type_known", True),
     )

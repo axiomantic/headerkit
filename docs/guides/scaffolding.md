@@ -117,12 +117,11 @@ unmangled name to look up, and a header-only or statically linked library has no
 shared object at all -- such a tripwire fails for a reason unrelated to the bindings.
 
 A unit that binds nothing linkable -- one declaring only templates, which emit no
-symbol until instantiated -- gets a tripwire that reports *skipped* and echoes the
-reason. **Such a tripwire exits 0**, because Nim's `std/unittest` counts failures and
-a skip is not one, so a CI step reading its exit status alone learns nothing about
-linkage. The generated file says so in a comment. Do not read it as link
-verification; instantiate the generics you use in a test of your own instead. It cannot report success, because there is nothing there whose linkage it
-could have established. A private or protected member is not probed either: the
+symbol until instantiated -- gets a tripwire that reports inconclusive and fails loudly
+via `fail()`. It cannot exit 0 or report skipped, because a tripwire that exits 0
+without establishing linkage is a green mirage: a CI step reading its exit status
+alone would mistake it for verification. To resolve it, instantiate the generics you
+use in a test of your own. A private or protected member is not probed either: the
 probe would fail to compile rather than fail to link, taking the whole package with
 it.
 

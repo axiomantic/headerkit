@@ -931,31 +931,39 @@ class TreeSitterBackend:
         declarator_node = node.child_by_field_name("declarator")
 
         if declarator_node:
-            pointer_depth = 0
-            curr: Node | None = declarator_node
-            while curr and curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                pointer_depth += 1
-                curr = curr.child_by_field_name("declarator")
-
-            if curr and curr.type == "function_declarator":
+            func_node, ret_type = self._unwrap_function_declarator(
+                declarator_node,
+                self._qualified_type(node, type_node, CType("int")),
+            )
+            if func_node:
                 return self._convert_function_declarator(
-                    self._qualified_type(node, type_node, CType("int")),
-                    curr,
+                    ret_type,
+                    func_node,
                     filename,
-                    pointer_depth=pointer_depth,
                     namespace=namespace,
                     template_params=template_params,
                 )
 
         return []
 
-    def _is_function_declaration(self, declarator: Node) -> bool:
-        curr: Node | None = declarator
+    def _unwrap_function_declarator(
+        self,
+        node: Node,
+        base_type: TypeExpr,
+    ) -> tuple[Node | None, TypeExpr]:
+        curr: Node | None = node
+        ret_type = base_type
         while curr and curr.type in (
             "pointer_declarator",
             "abstract_pointer_declarator",
             "reference_declarator",
         ):
+            if curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
+                ret_type = Pointer(ret_type, qualifiers=_pointer_qualifiers(curr))
+            elif curr.type == "reference_declarator":
+                is_rval = any(c.type == "&&" for c in curr.children)
+                ret_type = Reference(ret_type, is_rvalue=is_rval)
+
             child = curr.child_by_field_name("declarator")
             if not child:
                 for c in curr.children:
@@ -964,6 +972,12 @@ class TreeSitterBackend:
                         break
             curr = child
 
+        if curr and curr.type == "function_declarator":
+            return curr, ret_type
+        return None, ret_type
+
+    def _is_function_declaration(self, declarator: Node) -> bool:
+        curr, _ = self._unwrap_function_declarator(declarator, CType("int"))
         if curr and curr.type == "function_declarator":
             inner = curr.child_by_field_name("declarator")
             if inner and inner.type in (
@@ -1126,18 +1140,12 @@ class TreeSitterBackend:
 
         for decl in declarators:
             if self._is_function_declaration(decl):
-                pointer_depth = 0
-                curr: Node | None = decl
-                while curr and curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                    pointer_depth += 1
-                    curr = curr.child_by_field_name("declarator")
-
-                if curr and curr.type == "function_declarator":
+                func_node, ret_type = self._unwrap_function_declarator(decl, base_type)
+                if func_node:
                     funcs = self._convert_function_declarator(
-                        base_type,
-                        curr,
+                        ret_type,
+                        func_node,
                         filename,
-                        pointer_depth=pointer_depth,
                         namespace=namespace,
                         template_params=template_params,
                     )
@@ -1595,34 +1603,8 @@ class TreeSitterBackend:
             base_type = CType("void")
         if not declarator_root:
             return base_type
-
-        curr: Node | None = declarator_root
-        wrappers: list[str] = []
-        while curr and curr.type != "function_declarator":
-            if curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                wrappers.append("*")
-                curr = curr.child_by_field_name("declarator")
-            elif curr.type == "reference_declarator":
-                is_rval = any(c.type == "&&" for c in curr.children)
-                wrappers.append("&&" if is_rval else "&")
-                curr = curr.child_by_field_name("declarator")
-                if not curr:
-                    for c in declarator_root.children:
-                        if c.type == "function_declarator":
-                            curr = c
-                            break
-            else:
-                break
-
-        ret = base_type
-        for w in wrappers:
-            if w == "*":
-                ret = Pointer(ret)
-            elif w == "&&":
-                ret = Reference(ret, is_rvalue=True)
-            elif w == "&":
-                ret = Reference(ret, is_rvalue=False)
-        return ret
+        _, ret_type = self._unwrap_function_declarator(declarator_root, base_type)
+        return ret_type
 
     def _convert_method_declarator(
         self,
@@ -1718,7 +1700,13 @@ class TreeSitterBackend:
                 elif curr.type == "reference_declarator":
                     is_rval = any(c.type == "&&" for c in curr.children)
                     p_type = Reference(p_type, is_rvalue=is_rval)
-                curr = curr.child_by_field_name("declarator")
+                child = curr.child_by_field_name("declarator")
+                if not child:
+                    for c in curr.children:
+                        if c.type not in ("*", "&", "&&", "type_qualifier", "const", "volatile"):
+                            child = c
+                            break
+                curr = child
 
             if curr and curr.type in ("identifier", "type_identifier", "field_identifier"):
                 p_name = _node_text(curr).strip()

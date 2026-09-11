@@ -37,6 +37,18 @@ def _archiver() -> str:
     return require_program("ar", "llvm-ar", install=CC_INSTALL)
 
 
+NIM_BACKENDS = ("libclang", "tree-sitter")
+
+
+@pytest.fixture(params=NIM_BACKENDS)
+def nim_backend_name(request: pytest.FixtureRequest) -> str:
+    """Run the gate once per installed parser backend."""
+    name = str(request.param)
+    if not is_backend_available(name):
+        missing_toolchain(f"the {name} backend is not available", BACKEND_INSTALL[name])
+    return name
+
+
 def parse_and_nim(backend: pytest.FixtureRequest, code: str) -> str:
     """Parse C code and convert to Nim binding string."""
     header = backend.parse(code, "test.h")  # type: ignore[attr-defined]
@@ -320,8 +332,8 @@ class TestCppBackendDecisionThroughTheParser:
         ("code", "filename", "needs_cpp"),
         [pytest.param(c, f, n, id=label) for label, c, f, n in CPP_DECISION_SOURCES],
     )
-    def test_decision(self, backend, code: str, filename: str, needs_cpp: bool) -> None:
-        unit = backend.parse(code, filename)
+    def test_decision(self, nim_backend_name: str, code: str, filename: str, needs_cpp: bool) -> None:
+        unit = get_backend(nim_backend_name).parse(code, filename)
         assert unit.declarations, "the fixture must parse into something or it asserts nothing"
         assert unit_requires_cpp(unit) is needs_cpp
 
@@ -329,10 +341,10 @@ class TestCppBackendDecisionThroughTheParser:
         ("code", "filename"),
         [pytest.param(c, f, id=label) for label, c, f, n in CPP_DECISION_SOURCES if not n],
     )
-    def test_c_sources_do_not_select_the_cpp_backend(self, backend, code: str, filename: str) -> None:
+    def test_c_sources_do_not_select_the_cpp_backend(self, nim_backend_name: str, code: str, filename: str) -> None:
         """The C path needs no toolchain, so this assertion runs everywhere the suite does."""
         layout = get_writer("nim").write_layout(
-            backend.parse(code, filename),
+            get_backend(nim_backend_name).parse(code, filename),
             ScaffoldOptions(package_name="plain", target_language="nim", layout="package"),
         )
         cfg = next(f.content for f in layout.files if f.path == "nim.cfg")
@@ -416,12 +428,12 @@ class TestCppShapesNeedTheCppBackend:
         [pytest.param(c, u, id=label) for label, c, u in CPP_COMPILE_SHAPES],
     )
     def test_cpp_shape_builds_only_under_the_cpp_backend(
-        self, backend, tmp_path: Path, code: str, consumer: str
+        self, nim_backend_name: str, tmp_path: Path, code: str, consumer: str
     ) -> None:
         nim_bin, _cxx = TestNimCppBuildConfiguration._require_toolchain()
         header = tmp_path / "shape.hpp"
         header.write_text(code)
-        unit = backend.parse(code, str(header))
+        unit = get_backend(nim_backend_name).parse(code, str(header))
         assert unit_requires_cpp(unit), "this shape must be classified C++ or the case tests nothing"
 
         pkg_dir = tmp_path / "pkg"
@@ -612,7 +624,7 @@ class TestCShapesStayOnTheCBackend:
         [pytest.param(c, i, u, e, id=label) for label, c, i, u, e in C_COMPILE_SHAPES],
     )
     def test_c_shape_builds_and_calls_through(
-        self, backend, tmp_path: Path, code: str, impl: str, consumer: str, expected: str
+        self, nim_backend_name: str, tmp_path: Path, code: str, impl: str, consumer: str, expected: str
     ) -> None:
         nim_bin, _cxx = TestNimCppBuildConfiguration._require_toolchain()
         cc_bin = require_program("cc", "gcc", "clang", install=CC_INSTALL)
@@ -627,7 +639,7 @@ class TestCShapesStayOnTheCBackend:
         assert compiled.returncode == 0, compiled.stderr
         assert run([_archiver(), "rcs", "liblib.a", "lib.o"], native).returncode == 0
 
-        unit = backend.parse(code, str(native / "lib.h"))
+        unit = get_backend(nim_backend_name).parse(code, str(native / "lib.h"))
         assert not unit_requires_cpp(unit), "a C header must not be classified C++"
 
         pkg_dir = tmp_path / "pkg"
@@ -698,20 +710,6 @@ class TestInconclusiveTripwireFailsLoudly:
             "the reason the run is red never reached the reader:\n" + built.stdout
         )
         assert built.stdout.count("TRIPWIRE INCONCLUSIVE") == 3, built.stdout
-
-
-#: Both parser backends, so a writer fix is proven against the IR each produces
-#: rather than against the one that happened to be convenient.
-NIM_BACKENDS = ("libclang", "tree-sitter")
-
-
-@pytest.fixture(params=NIM_BACKENDS)
-def nim_backend_name(request: pytest.FixtureRequest) -> str:
-    """Run the gate once per installed parser backend."""
-    name = str(request.param)
-    if not is_backend_available(name):
-        missing_toolchain(f"the {name} backend is not available", BACKEND_INSTALL[name])
-    return name
 
 
 # A Nim compile plus a link runs a whole toolchain, which the suite-wide 60s
@@ -916,6 +914,7 @@ class TestAdditionalBasesAreReported:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason=(
             "pre-existing: an importcpp object emitted with `of` is inheritable, so Nim "
             "emits RTTI (`m_type`) accesses that the C++ class does not have. Not specific "

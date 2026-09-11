@@ -1,5 +1,6 @@
 """headerkit - C/C++ header parsing toolkit."""
 
+from headerkit._config import HeaderkitConfig, load_config
 from headerkit._generate import BatchResult, GenerateResult, batch_generate, generate, generate_all
 from headerkit._ir_json import json_to_header
 from headerkit._populate import PopulateResult, PopulateTarget, populate
@@ -218,4 +219,7 @@ __all__ = [
     "enforce_injectivity",
     "register_config_hooks",
     "rename_cache_fingerprint",
+    # Config API
+    "HeaderkitConfig",
+    "load_config",
 ]

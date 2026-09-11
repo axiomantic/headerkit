@@ -119,6 +119,8 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["access"] = f.access
     if f.is_static:
         d["is_static"] = True
+    if f.is_padding:
+        d["is_padding"] = True
     return d
 
 
@@ -148,6 +150,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["notes"] = decl.notes
         if decl.inner_typedefs:
             d["inner_typedefs"] = decl.inner_typedefs
+        if decl.nested_records:
+            d["nested_records"] = [_decl_to_dict(nr) for nr in decl.nested_records]
         if decl.bases:
             d["bases"] = [_base_to_dict(b) for b in decl.bases]
         if decl.is_abstract:
@@ -181,6 +185,12 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["underlying_type_known"] = False
         if decl.is_typedef:
             d["is_typedef"] = True
+        if decl.is_scoped:
+            d["is_scoped"] = True
+        if decl.namespace:
+            d["namespace"] = decl.namespace
+        if decl.cpp_name:
+            d["cpp_name"] = decl.cpp_name
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d

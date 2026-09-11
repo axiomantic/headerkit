@@ -769,7 +769,7 @@ class TestTheGrammarFloorIsNotBypassableByConfiguration:
 
     @pytest.mark.parametrize(
         "payload",
-        ['`a".}b`', "`a\nb`", "`foo bar`", "`a;b`", "``", "`a`b`"],
+        ['`a".}b`', "`a\nb`", "`foo bar`", "`a;b`", "``", "`a`b`", "`a:b`", "`.`", "`:`", "`=`"],
     )
     def test_backtick_content_outside_the_floor_is_refused(self, payload: str) -> None:
         with pytest.raises(RenameError):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from headerkit.ir import (
     Array,
     BaseSpecifier,
@@ -464,3 +466,342 @@ class TestTriStateFieldsSurviveTheRoundTrip:
         )
         restored = _round_trip_json_str(header)
         assert restored.declarations[0].underlying_type_known is False
+
+
+class TestExhaustiveFieldRoundTrip:
+    """Every non-default field across all IR dataclasses must survive round-trip serialization."""
+
+    def test_all_fields_populated_round_trip(self) -> None:
+        loc = SourceLocation(file="comprehensive.hpp", line=42, column=7)
+
+        inner_struct = Struct(
+            name="Inner",
+            fields=[
+                Field(
+                    name="inner_f",
+                    type=CType("float", qualifiers=["const"], is_elaborated=False),
+                    bit_width=2,
+                    anonymous_struct=None,
+                    is_anonymous_transparent=False,
+                    access="public",
+                    is_static=False,
+                    is_padding=False,
+                )
+            ],
+            methods=[],
+            is_union=False,
+            is_cppclass=True,
+            is_typedef=False,
+            is_packed=False,
+            namespace="outer_ns",
+            template_params=[],
+            cpp_name="outer_ns::Inner",
+            notes=[],
+            inner_typedefs={},
+            nested_records=[],
+            bases=[],
+            is_abstract=False,
+            constructors=[],
+            destructor=None,
+            conversions=[],
+            vtable_entries=[],
+            attributes=[],
+            is_deprecated=False,
+            alignment=None,
+            location=loc,
+        )
+
+        test_struct = Struct(
+            name="Widget",
+            fields=[
+                Field(
+                    name="flags",
+                    type=CType("unsigned int", qualifiers=["volatile"], is_elaborated=True),
+                    bit_width=4,
+                    anonymous_struct=None,
+                    is_anonymous_transparent=True,
+                    access="protected",
+                    is_static=True,
+                    is_padding=False,
+                ),
+                Field(
+                    name="",
+                    type=CType("int"),
+                    bit_width=3,
+                    anonymous_struct=None,
+                    is_anonymous_transparent=False,
+                    access=None,
+                    is_static=False,
+                    is_padding=True,
+                ),
+                Field(
+                    name="nested_obj",
+                    type=CType("Inner"),
+                    bit_width=None,
+                    anonymous_struct=inner_struct,
+                    is_anonymous_transparent=False,
+                    access="private",
+                    is_static=False,
+                    is_padding=False,
+                ),
+            ],
+            methods=[
+                Function(
+                    name="get_id",
+                    return_type=CType("int"),
+                    parameters=[Parameter(name="opt", type=CType("int"), default_value="0")],
+                    is_variadic=False,
+                    calling_convention=None,
+                    namespace="outer_ns",
+                    template_params=[],
+                    is_static=False,
+                    is_const=True,
+                    is_virtual=True,
+                    is_pure_virtual=False,
+                    is_explicit=False,
+                    access="public",
+                    is_deleted=False,
+                    is_defaulted=False,
+                    is_noexcept=True,
+                    is_inline=True,
+                    body="{ return 1; }",
+                    attributes=["nodiscard"],
+                    is_deprecated=False,
+                    location=loc,
+                )
+            ],
+            is_union=False,
+            is_cppclass=True,
+            is_typedef=True,
+            is_packed=True,
+            namespace="outer_ns",
+            template_params=["T", "U"],
+            cpp_name="outer_ns::Widget",
+            notes=["generated binding"],
+            inner_typedefs={"Index": "unsigned long"},
+            nested_records=[inner_struct],
+            bases=[BaseSpecifier(name="BaseWidget", access="public", is_virtual=True)],
+            is_abstract=True,
+            constructors=[
+                Function(
+                    name="Widget",
+                    return_type=CType("void"),
+                    parameters=[Parameter(name="val", type=CType("int"), default_value="10")],
+                    is_variadic=False,
+                    calling_convention=None,
+                    namespace="outer_ns",
+                    template_params=[],
+                    is_static=False,
+                    is_const=False,
+                    is_virtual=False,
+                    is_pure_virtual=False,
+                    is_explicit=True,
+                    access="public",
+                    is_deleted=False,
+                    is_defaulted=False,
+                    is_noexcept=False,
+                    is_inline=False,
+                    body=None,
+                    attributes=[],
+                    is_deprecated=False,
+                    location=loc,
+                )
+            ],
+            destructor=Function(
+                name="~Widget",
+                return_type=CType("void"),
+                parameters=[],
+                is_variadic=False,
+                calling_convention=None,
+                namespace="outer_ns",
+                template_params=[],
+                is_static=False,
+                is_const=False,
+                is_virtual=True,
+                is_pure_virtual=False,
+                is_explicit=False,
+                access="public",
+                is_deleted=False,
+                is_defaulted=True,
+                is_noexcept=True,
+                is_inline=False,
+                body=None,
+                attributes=[],
+                is_deprecated=False,
+                location=loc,
+            ),
+            conversions=[
+                Function(
+                    name="operator bool",
+                    return_type=CType("bool"),
+                    parameters=[],
+                    is_variadic=False,
+                    calling_convention=None,
+                    namespace="outer_ns",
+                    template_params=[],
+                    is_static=False,
+                    is_const=True,
+                    is_virtual=False,
+                    is_pure_virtual=False,
+                    is_explicit=True,
+                    access="public",
+                    is_deleted=False,
+                    is_defaulted=False,
+                    is_noexcept=True,
+                    is_inline=False,
+                    body=None,
+                    attributes=[],
+                    is_deprecated=False,
+                    location=loc,
+                )
+            ],
+            vtable_entries=[
+                Function(
+                    name="render",
+                    return_type=CType("void"),
+                    parameters=[],
+                    is_variadic=False,
+                    calling_convention=None,
+                    namespace="outer_ns",
+                    template_params=[],
+                    is_static=False,
+                    is_const=False,
+                    is_virtual=True,
+                    is_pure_virtual=True,
+                    is_explicit=False,
+                    access="public",
+                    is_deleted=False,
+                    is_defaulted=False,
+                    is_noexcept=False,
+                    is_inline=False,
+                    body=None,
+                    attributes=[],
+                    is_deprecated=False,
+                    location=loc,
+                )
+            ],
+            attributes=["aligned(16)"],
+            is_deprecated=True,
+            alignment=16,
+            location=loc,
+        )
+
+        test_enum = Enum(
+            name="Color",
+            values=[
+                EnumValue(name="Red", value=1),
+                EnumValue(name="Green", value="1 << 1"),
+                EnumValue(name="Blue", value=None),
+            ],
+            is_typedef=True,
+            namespace="outer_ns",
+            location=loc,
+            is_scoped=True,
+            cpp_name="outer_ns::Color",
+            underlying_type="uint8_t",
+            underlying_type_known=False,
+        )
+
+        test_fn = Function(
+            name="process",
+            return_type=Reference(
+                target=Pointer(
+                    pointee=CType("char", qualifiers=["const"], is_elaborated=False),
+                    qualifiers=["const"],
+                ),
+                is_rvalue=True,
+                qualifiers=["const"],
+            ),
+            parameters=[
+                Parameter(
+                    name="buffer",
+                    type=Array(element_type=CType("char"), size=256),
+                    default_value=None,
+                ),
+                Parameter(
+                    name="callback",
+                    type=FunctionPointer(
+                        return_type=CType("int"),
+                        parameters=[Parameter(name="code", type=CType("int"), default_value=None)],
+                        is_variadic=True,
+                        calling_convention="cdecl",
+                    ),
+                    default_value="nullptr",
+                ),
+            ],
+            is_variadic=True,
+            calling_convention="fastcall",
+            namespace="outer_ns",
+            template_params=["V"],
+            is_static=True,
+            is_const=False,
+            is_virtual=False,
+            is_pure_virtual=False,
+            is_explicit=False,
+            access="public",
+            is_deleted=True,
+            is_defaulted=False,
+            is_noexcept=True,
+            is_inline=True,
+            body="{ return nullptr; }",
+            attributes=["deprecated", "hot"],
+            is_deprecated=True,
+            location=loc,
+        )
+
+        test_typedef = Typedef(
+            name="Callback",
+            underlying_type=Pointer(
+                FunctionPointer(
+                    return_type=CType("void"),
+                    parameters=[Parameter(name="arg", type=CType("void*"))],
+                    is_variadic=False,
+                    calling_convention=None,
+                )
+            ),
+            namespace="outer_ns",
+            attributes=["may_alias"],
+            is_deprecated=True,
+            location=loc,
+        )
+
+        test_var = Variable(
+            name="global_counter",
+            type=CType("long long", qualifiers=["volatile"]),
+            namespace="outer_ns",
+            attributes=["thread_local"],
+            is_deprecated=True,
+            alignment=8,
+            location=loc,
+        )
+
+        test_const = Constant(
+            name="BUFFER_LIMIT",
+            value=4096,
+            evaluated_value=4096,
+            raw_expression="1 << 12",
+            type=CType("int"),
+            is_macro=True,
+            location=loc,
+        )
+
+        header = Header(
+            path="comprehensive.hpp",
+            declarations=[
+                test_struct,
+                test_enum,
+                test_fn,
+                test_typedef,
+                test_var,
+                test_const,
+            ],
+            included_headers={"header1.h", "header2.h"},
+            language="cpp",
+            classification="header",
+        )
+
+        restored_from_dict = _round_trip(header)
+        assert asdict(restored_from_dict) == asdict(header)
+
+        restored_from_str = _round_trip_json_str(header)
+        assert asdict(restored_from_str) == asdict(header)

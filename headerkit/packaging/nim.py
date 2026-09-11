@@ -19,7 +19,7 @@ from headerkit.ir import (
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import DEDENT_BLOCK, render_block_template
 from headerkit.writers.ctypes import CTYPES_TYPE_MAP
-from headerkit.writers.nim import C_TO_NIM_PRIMITIVES
+from headerkit.writers.nim import C_TO_NIM_PRIMITIVES, NimWriter
 
 _PKG_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
@@ -106,7 +106,7 @@ def _c_type_to_nim(c_type_name: str) -> str:
         return f"ptr {_c_type_to_nim(base)}"
     if cleaned.isidentifier():
         return _escape_nim_ident(cleaned)
-    return "cint"
+    raise ValueError(f"unsupported C type for Nim: {c_type_name!r}")
 
 
 def _ir_type_to_nim(t: TypeExpr) -> str:
@@ -128,7 +128,7 @@ def _ir_type_to_nim(t: TypeExpr) -> str:
         return f"array[{t.size or 0}, {_ir_type_to_nim(t.element_type)}]"
     elif isinstance(t, FunctionPointer):
         return "pointer"
-    return "cint"
+    raise ValueError(f"unsupported IR type for Nim: {t!r}")
 
 
 def _c_type_to_ctypes(c_type_name: str) -> str:
@@ -242,17 +242,21 @@ def generate_nim_source(pkg: str, unit: SourceUnit | Header) -> str:
         lines.append("")
         return "\n".join(lines)
 
+    writer = NimWriter()
+    writer._unit_is_cpp = getattr(unit, "language", None) == "cpp"
+    writer._name_map = writer._build_name_map(unit)
+
     for fn in funcs:
         params_str_list: list[str] = []
         for idx, p in enumerate(fn.parameters):
-            p_name = _escape_nim_ident(p.name or f"arg{idx}")
+            p_name = writer._ident(p.name or f"arg{idx}", kind="param")
             p_nim = _ir_type_to_nim(p.type)
             params_str_list.append(f"{p_name}: {p_nim}")
         params_sig = ", ".join(params_str_list)
 
         ret_nim = _ir_type_to_nim(fn.return_type)
         stub = _nim_return_stub(ret_nim)
-        fn_nim_name = _escape_nim_ident(fn.name)
+        fn_nim_name = writer._ident(fn.name, kind="function", namespace=fn.namespace)
 
         lines.append(f'proc {fn_nim_name}*({params_sig}): {ret_nim} {{.exportc: "{fn.name}", dynlib, cdecl.}} =')
         lines.append(f"  {stub}")

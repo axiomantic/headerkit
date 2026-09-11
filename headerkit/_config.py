@@ -333,7 +333,7 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
     return config
 
 
-def load_config(path: Path) -> HeaderkitConfig:
+def load_config(path: Path | str) -> HeaderkitConfig:
     """Load and validate config from `path`.
 
     Raises ValueError on:
@@ -344,6 +344,7 @@ def load_config(path: Path) -> HeaderkitConfig:
     Returns empty HeaderkitConfig if path is a pyproject.toml with no
     [tool.headerkit] section.
     """
+    path = Path(path)
     if tomllib is None:
         raise ValueError(
             f"headerkit: TOML config found at {path} but no TOML parser available.\n"

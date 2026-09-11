@@ -634,7 +634,6 @@ class TestCfgPathQuoting:
         only on the one whose paths look like this.
         """
         rendered = _cfg_path_flag("-I", "C:\\Users\\a b")
-        assert "\\\\" not in rendered, rendered
         assert rendered == '"-I\\"C:/Users/a b\\""', rendered
 
     def test_double_quote_in_path_is_refused(self) -> None:
@@ -662,18 +661,27 @@ class TestTypeNameCppDetection:
             ("int", False, False),
             ("unsigned long", False, False),
             ("size_t", False, False),
-            # The undecidable ones. libclang reports `std::string` as the bare name
-            # `string`, and a C `typedef struct {...} string;` reports the same, so
-            # only the unit's language separates them.
-            ("string", True, False),
-            ("vector", True, False),
-            ("exception", True, False),
-            ("shared_ptr", True, False),
         ],
     )
-    def test_type_name(self, name: str, in_cpp_unit: bool, in_c_unit: bool) -> None:
+    def test_unambiguous_type_name(self, name: str, in_cpp_unit: bool, in_c_unit: bool) -> None:
         assert _type_name_requires_cpp(name, unit_is_cpp=True) is in_cpp_unit
         assert _type_name_requires_cpp(name, unit_is_cpp=False) is in_c_unit
+
+    @pytest.mark.parametrize(
+        "name",
+        ["string", "vector", "exception", "shared_ptr"],
+    )
+    def test_marker_type_name(self, name: str) -> None:
+        # In a C unit, never requires C++ regardless of is_elaborated
+        assert _type_name_requires_cpp(name, unit_is_cpp=False) is False
+        assert _type_name_requires_cpp(name, unit_is_cpp=False, is_elaborated=False) is False
+        assert _type_name_requires_cpp(name, unit_is_cpp=False, is_elaborated=True) is False
+
+        # In a C++ unit, is_elaborated=False or None means C++ stdlib type
+        assert _type_name_requires_cpp(name, unit_is_cpp=True, is_elaborated=False) is True
+        assert _type_name_requires_cpp(name, unit_is_cpp=True, is_elaborated=None) is True
+        # In a C++ unit, is_elaborated=True means C aggregate tag
+        assert _type_name_requires_cpp(name, unit_is_cpp=True, is_elaborated=True) is False
 
 
 class TestNimCfg:
@@ -712,7 +720,7 @@ class TestNimCfg:
         """A guessed -l resolves to the wrong library or to none; say so instead."""
         cfg = _nim_cfg(Header(path="c.h", declarations=[]))
         assert '--passL:"-l' not in cfg
-        assert "--writer-opt nim:library=" in cfg
+        assert "# No native library to link: pass --writer-opt nim:library=" in cfg
 
     def test_header_directory_becomes_an_include_path(self, tmp_path) -> None:
         header = tmp_path / "inc" / "c.hpp"
@@ -1032,7 +1040,7 @@ class TestTheRendererReadsTheUnitsLanguage:
                     Function(
                         name="take",
                         return_type=CType("int"),
-                        parameters=[Parameter("s", Pointer(CType("string")))],
+                        parameters=[Parameter("s", Pointer(CType("string", is_elaborated=False)))],
                     )
                 ],
             ),

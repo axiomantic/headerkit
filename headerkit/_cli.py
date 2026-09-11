@@ -634,7 +634,11 @@ def main(argv: list[str] | None = None) -> int:
                 extra_context={"include_dirs": list(include_dirs), "defines": list(defines)},
             )
             scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
-            project_layout = scaffold(unit, scaffold_opts)
+            try:
+                project_layout = scaffold(unit, scaffold_opts)
+            except (ValueError, RuntimeError, FileNotFoundError) as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 1
             written = project_layout.write_to_disk(target_dir)
             print(
                 f"headerkit: scaffolded {len(written)} files into {target_dir}",

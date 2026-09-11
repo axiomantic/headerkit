@@ -98,17 +98,29 @@ class Symbol:
     ``index`` is declaration order within the unit and ``header`` is the file the
     declaration came from; both exist so a collision policy can be deterministic
     without reading the IR.
+
+    ``namespace`` is the enclosing C++ namespace, or ``None`` at global scope. It
+    belongs to the symbol's identity rather than being decoration on it: every
+    ``name`` in the IR is *unqualified*, so two declarations in two namespaces
+    reach a writer as one ``(name, kind)`` pair while being two symbols competing
+    for a single target identifier.
     """
 
     index: int
     name: str
     kind: str
     header: str = ""
+    namespace: str | None = None
 
     @property
     def header_stem(self) -> str:
         """The originating header's filename without directories or extension."""
         return Path(self.header).stem if self.header else ""
+
+    @property
+    def qualified_name(self) -> str:
+        """The source spelling including any enclosing namespace."""
+        return f"{self.namespace}::{self.name}" if self.namespace else self.name
 
 
 _WORD_BOUNDARY = re.compile(r"[^0-9A-Za-z]+")
@@ -294,13 +306,19 @@ def parse_rename_config(data: Mapping[str, object], source: object = "<config>")
             if val is not None and not isinstance(val, str):
                 raise RenameError(f"headerkit: config error in {source}: rename rule {key!r} must be str")
             str_fields[key] = val
+        case_val = str_fields["case"] if str_fields["case"] is not None else "preserve"
+        if case_val not in CASE_STYLES:
+            raise RenameError(
+                f"headerkit: config error in {source}: rename rule 'case' must be one of "
+                f"{sorted(CASE_STYLES)}, got {case_val!r}"
+            )
         rules.append(
             RenameRule(
                 kinds=tuple(cast(list[str], kinds_val)),
                 strip_prefix=str_fields["strip_prefix"],
                 add_prefix=str_fields["add_prefix"],
                 add_suffix=str_fields["add_suffix"],
-                case=str_fields["case"] or "preserve",
+                case=case_val,
                 collapse_underscores=collapse,
             )
         )
@@ -318,12 +336,14 @@ def dispatch_rename(
     if kind not in RENAME_KINDS:
         raise RenameError(f"unknown rename kind {kind!r}; expected one of {sorted(RENAME_KINDS)}")
     disp = dispatcher or HookDispatcher()
-    result = disp.waterfall("rename_symbol", name, context=context, kind=kind)
-    if not isinstance(result, str) or not result:
-        raise RenameError(
-            f"a rename_symbol hook returned {result!r} for {name!r} (kind={kind}); expected a non-empty str"
-        )
-    return result
+    current = name
+    for impl in disp._get_hooks("rename_symbol", context):
+        current = impl.func(current, context=context, kind=kind)
+        if not isinstance(current, str) or not current:
+            raise RenameError(
+                f"a rename_symbol hook returned {current!r} for {name!r} (kind={kind}); expected a non-empty str"
+            )
+    return current
 
 
 def _slug(text: str) -> str:
@@ -479,7 +499,13 @@ def make_config_renamer(config: RenameConfig) -> Callable[..., str]:
 
 
 def _describe(symbols: Iterable[Symbol]) -> str:
-    return ", ".join(f"{s.name!r} ({s.kind})" for s in sorted(symbols))
+    """Name each symbol the way the source spells it, namespace included.
+
+    The unqualified name alone reads as one symbol repeated when two namespaces
+    declare it, which is precisely the case a collision message has to make
+    legible.
+    """
+    return ", ".join(f"{s.qualified_name!r} ({s.kind})" for s in sorted(symbols))
 
 
 def _group_by_identity(assigned: Mapping[Symbol, str], identity: Callable[[str], str]) -> dict[str, list[Symbol]]:
