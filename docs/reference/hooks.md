@@ -172,7 +172,7 @@ than emitting a module the compiler rejects.
 ### Renaming and the cache
 
 Renaming changes generated output, so the registered hooks enter the **output
-cache key** via [`rename_cache_fingerprint`][headerkit._rename.rename_cache_fingerprint].
+cache key** via [`rename_cache_fingerprint`][headerkit.rename_cache_fingerprint].
 A hook built from declarative config carries its config's digest, so two
 different rename configs cannot share a key. A hook written in Python is
 identified by module and qualified name: editing that function's body does not
@@ -208,22 +208,22 @@ move the key, the same limitation writer plugins have with `cache_version`.
     options:
       show_source: false
 
-::: headerkit._rename.Symbol
+::: headerkit.Symbol
     options:
       show_source: false
 
-::: headerkit._rename.RenameConfig
+::: headerkit.RenameConfig
     options:
       show_source: false
 
-::: headerkit._rename.RenameRule
+::: headerkit.RenameRule
     options:
       show_source: false
 
-::: headerkit._rename.enforce_injectivity
+::: headerkit.enforce_injectivity
     options:
       show_source: false
 
-::: headerkit._rename.rename_cache_fingerprint
+::: headerkit.rename_cache_fingerprint
     options:
       show_source: false

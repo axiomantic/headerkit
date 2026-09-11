@@ -28,14 +28,11 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
-
-if TYPE_CHECKING:  # pragma: no cover - typing only
-    pass
 
 #: The closed set of symbol kinds a renamer may be dispatched for.
 #:
@@ -415,17 +412,41 @@ def register_config_hooks(config: RenameConfig, **matchers: str) -> None:
     Registered at :attr:`~headerkit.hooks.Priority.PROJECT`, above every writer's
     legality renamer at ``FALLBACK``. The waterfall runs highest priority first,
     so a project rule is applied and then made legal, never the reverse.
+
+    Registering the same config twice is a no-op. It was not, and the second
+    registration was not merely redundant: ``rename_symbol`` is a waterfall, so
+    two copies of a prefix rule ran in series and ``foo`` came out ``hkhkfoo``.
+    The output cache key digests the registered hooks, so the duplicate also
+    moved the fingerprint and turned every subsequent lookup into a miss. Neither
+    reported anything. Two ``main()`` calls in one process is enough to reach it,
+    which is what a library consumer and the test suite both do.
     """
     if config.is_default:
         return
-    if config.rules:
+    fingerprint = config.fingerprint()
+    if config.rules and not _already_registered("rename_symbol", fingerprint, matchers):
         renamer = make_config_renamer(config)
-        renamer.headerkit_rename_fingerprint = config.fingerprint()  # type: ignore[attr-defined]
+        renamer.headerkit_rename_fingerprint = fingerprint  # type: ignore[attr-defined]
         HookRegistry.register_global("rename_symbol", renamer, priority=Priority.PROJECT, **matchers)
     resolver = make_config_resolver(config)
-    if resolver is not None:
-        resolver.headerkit_rename_fingerprint = config.fingerprint()  # type: ignore[attr-defined]
+    if resolver is not None and not _already_registered("resolve_collision", fingerprint, matchers):
+        resolver.headerkit_rename_fingerprint = fingerprint  # type: ignore[attr-defined]
         HookRegistry.register_global("resolve_collision", resolver, priority=Priority.PROJECT, **matchers)
+
+
+def _already_registered(point: str, fingerprint: str, matchers: Mapping[str, str]) -> bool:
+    """Whether this exact config is already registered at ``point`` for these matchers.
+
+    Identified by the config's fingerprint rather than by the function object: a
+    second call builds a different closure for the same config, so identity would
+    never match and the check would never fire.
+    """
+    return any(
+        impl.point == point
+        and getattr(impl.func, "headerkit_rename_fingerprint", None) == fingerprint
+        and impl.matchers == dict(matchers)
+        for impl in HookRegistry.snapshot()
+    )
 
 
 def make_config_resolver(
@@ -459,11 +480,6 @@ def make_config_renamer(config: RenameConfig) -> Callable[..., str]:
 
 def _describe(symbols: Iterable[Symbol]) -> str:
     return ", ".join(f"{s.name!r} ({s.kind})" for s in sorted(symbols))
-
-
-@dataclass
-class _Assignment:
-    assigned: dict[Symbol, str] = field(default_factory=dict)
 
 
 def _group_by_identity(assigned: Mapping[Symbol, str], identity: Callable[[str], str]) -> dict[str, list[Symbol]]:

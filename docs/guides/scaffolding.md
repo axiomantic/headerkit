@@ -56,7 +56,7 @@ nim_vector/
     └── test_nim_vector.nim    # High-level unit test skeleton
 ```
 
-### Nim build configuration
+#### Nim build configuration
 
 `nim.cfg` carries the flags the generated package needs in order to build. Every flag
 is invariant, derived from the parsed IR, or supplied by you. Nothing is guessed.

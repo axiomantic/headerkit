@@ -27,6 +27,7 @@ from headerkit._rename import (
     Symbol,
     SymbolCollisionError,
     apply_case,
+    dispatch_rename,
     enforce_injectivity,
     make_config_resolver,
     parse_rename_config,
@@ -773,3 +774,153 @@ class TestTheGrammarFloorIsNotBypassableByConfiguration:
     def test_backtick_content_outside_the_floor_is_refused(self, payload: str) -> None:
         with pytest.raises(RenameError):
             validate_nim_ident(payload)
+
+
+class TestRegisteringTheSameConfigTwiceIsANoOp:
+    """A second registration is not redundant; it changes the output and the cache key.
+
+    ``rename_symbol`` is a waterfall, so two copies of one prefix rule run in
+    series: ``foo`` comes out ``hkhkfoo``. And the output cache key digests the
+    registered hooks, so the duplicate also moves the fingerprint and turns every
+    subsequent lookup into a miss. Two ``main()`` calls in one process reach it.
+    """
+
+    CONFIG = RenameConfig(rules=(RenameRule(add_prefix="hk"),), collision_policy="prefer_shortest")
+
+    def test_the_prefix_is_applied_once(self, clean_hooks: None) -> None:
+        register_config_hooks(self.CONFIG, writer="nim")
+        register_config_hooks(self.CONFIG, writer="nim")
+        header = Header(path="x.h", declarations=[Function(name="foo", return_type=CType("void"))])
+        assert "proc hkfoo*" in write_nim(header, header_path="x.h")
+
+    def test_the_cache_fingerprint_does_not_move(self, clean_hooks: None) -> None:
+        register_config_hooks(self.CONFIG, writer="nim")
+        once = rename_cache_fingerprint()
+        register_config_hooks(self.CONFIG, writer="nim")
+        assert rename_cache_fingerprint() == once
+
+    def test_a_different_config_still_registers(self, clean_hooks: None) -> None:
+        """The negative control: deduplication must not swallow a real second config."""
+        register_config_hooks(self.CONFIG, writer="nim")
+        once = rename_cache_fingerprint()
+        register_config_hooks(RenameConfig(rules=(RenameRule(add_prefix="zz"),)), writer="nim")
+        assert rename_cache_fingerprint() != once
+
+    def test_the_same_config_for_a_different_writer_still_registers(self, clean_hooks: None) -> None:
+        """The matchers are part of the identity, not only the config."""
+        register_config_hooks(self.CONFIG, writer="nim")
+        once = rename_cache_fingerprint()
+        register_config_hooks(self.CONFIG, writer="ctypes")
+        assert rename_cache_fingerprint() != once
+
+
+class TestTheRefusalsNothingHadExercised:
+    """Every branch that exists to refuse, refused at least once.
+
+    These were all unreachable from the suite: a branch that has never run is a
+    branch nobody has established refuses anything, and the message it carries
+    has never been read by a test.
+    """
+
+    def test_an_unknown_kind_is_refused(self) -> None:
+        with pytest.raises(RenameError) as excinfo:
+            dispatch_rename("foo", kind="gadget", context=NIM_CONTEXT)
+        assert "unknown rename kind" in str(excinfo.value)
+
+    def test_a_hook_returning_a_non_string_is_refused(self, clean_hooks: None) -> None:
+        """Dispatched for a writer with no legality renamer, so the waterfall ends here.
+
+        Under ``writer="nim"`` the non-string is handed straight to
+        ``nim_legality_renamer`` at ``FALLBACK`` and raises ``TypeError`` from
+        inside ``_escape_ident`` before this branch is reached -- a separate gap,
+        and not the one under test.
+        """
+
+        def non_string_renamer(name: str, **_: object) -> object:  # noqa: ARG001
+            return 42
+
+        other = PipelineContext(writer="other")
+        HookRegistry.register_global("rename_symbol", non_string_renamer, priority=Priority.PROJECT, writer="other")
+        with pytest.raises(RenameError) as excinfo:
+            dispatch_rename("foo", kind="function", context=other)
+        assert "expected a non-empty str" in str(excinfo.value)
+
+    def test_a_resolver_returning_a_non_mapping_is_refused(self, clean_hooks: None) -> None:
+        def list_resolver(*_a: object, **_k: object) -> object:
+            return ["not", "a", "mapping"]
+
+        HookRegistry.register_global("resolve_collision", list_resolver, priority=Priority.PROJECT, writer="nim")
+        with pytest.raises(RenameError) as excinfo:
+            write_nim(TestCollisionsRaise.colliding_header(), header_path="collide.h")
+        assert "expected a mapping" in str(excinfo.value)
+
+    def test_a_resolver_returning_an_empty_identifier_is_refused(self, clean_hooks: None) -> None:
+        def resolver(collided, target, **_):  # noqa: ANN001, ANN003, ARG001
+            return dict.fromkeys(collided, "")
+
+        HookRegistry.register_global("resolve_collision", resolver, priority=Priority.PROJECT, writer="nim")
+        with pytest.raises(RenameError) as excinfo:
+            write_nim(TestCollisionsRaise.colliding_header(), header_path="collide.h")
+        assert "expected a non-empty str" in str(excinfo.value)
+
+    def test_add_suffix_is_applied(self) -> None:
+        """Not a refusal -- a rule field the suite had never exercised at all."""
+        assert RenameRule(add_suffix="_t").apply("point") == "point_t"
+
+    def test_an_unknown_case_style_is_refused_at_construction(self) -> None:
+        with pytest.raises(RenameError) as excinfo:
+            apply_case("foo", "kebab")
+        assert "unknown case style" in str(excinfo.value)
+
+    @pytest.mark.parametrize(
+        ("table", "expected"),
+        [
+            ({"collision_policy": 7}, "collision_policy must be str"),
+            ({"rules": {}}, "rules must be an array of tables"),
+            ({"rules": ["nope"]}, "must be a table"),
+            ({"rules": [{"kinds": "function"}]}, "must be list[str]"),
+            ({"rules": [{"collapse_underscores": "yes"}]}, "must be bool"),
+            ({"rules": [{"add_prefix": 3}]}, "'add_prefix' must be str"),
+            ({"rules": [{"nonsense": 1}]}, "unknown rename rule key(s)"),
+        ],
+    )
+    def test_malformed_config_tables_are_refused(self, table: dict, expected: str) -> None:
+        with pytest.raises(RenameError) as excinfo:
+            parse_rename_config(table, source="t.toml")
+        assert expected in str(excinfo.value)
+
+    def test_suffix_header_stem_leaves_a_stemless_symbol_alone(self) -> None:
+        """A symbol with no originating header has no stem to append."""
+        resolver = make_config_resolver(RenameConfig(collision_policy="suffix_header_stem"))
+        assert resolver is not None
+        mapping = resolver(
+            [
+                Symbol(index=0, name="fooBar", kind="function", header=""),
+                Symbol(index=1, name="foo_bar", kind="function", header="/inc/beta.h"),
+            ],
+            "fooBar",
+            context=NIM_CONTEXT,
+        )
+        assert sorted(mapping.values()) == ["fooBar", "fooBar_beta"]
+
+
+class TestTheFloorDoesNotRejectWhatNimAccepts:
+    """A false rejection is a defect in a floor too, not a safe direction.
+
+    Nim accepts a composed character written either way. The character check ran
+    over whatever form the header happened to carry, where the decomposed form
+    puts a combining mark -- not a letter, not a digit -- inside the name, so the
+    same identifier was accepted or refused depending on the editor that wrote
+    the header.
+    """
+
+    @pytest.mark.parametrize("form", ["NFC", "NFD"])
+    def test_both_normalisations_of_one_identifier_are_accepted(self, form: str) -> None:
+        import unicodedata
+
+        validate_nim_ident(unicodedata.normalize(form, "café"))
+
+    def test_a_lone_combining_mark_is_still_refused(self) -> None:
+        """The negative control: normalising must not admit a name with no base character."""
+        with pytest.raises(RenameError):
+            validate_nim_ident("́abc")

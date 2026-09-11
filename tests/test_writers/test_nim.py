@@ -748,10 +748,17 @@ class TestNimCfg:
         assert relative not in cfg, cfg
 
     def test_unordered_option_values_are_emitted_in_a_stable_order(self) -> None:
-        """A set would order the flags by iteration, defeating regenerate-and-diff."""
+        """A set would order the flags by iteration, defeating regenerate-and-diff.
+
+        The order asserted is the SORTED one, which is the whole claim. Comparing
+        two sets built in one process establishes nothing on its own: set
+        iteration order is a function of the hash seed, so within a process two
+        equal sets always iterate alike and the comparison cannot fail. The
+        cross-process half of the property is measured by
+        ``test_the_order_is_the_same_under_a_different_hash_seed``, which is where
+        the seed can actually differ.
+        """
         first = _nim_cfg(Header(path="c.h", declarations=[]), library={"zlib", "png", "aaa"})
-        second = _nim_cfg(Header(path="c.h", declarations=[]), library={"png", "aaa", "zlib"})
-        assert first == second
         order = [line for line in first.splitlines() if line.startswith('--passL:"-l')]
         assert order == ['--passL:"-laaa"', '--passL:"-lpng"', '--passL:"-lzlib"'], order
 
@@ -771,7 +778,6 @@ class TestNimCfg:
             return next(f.content for f in layout.files if f.path == "nim.cfg")
 
         first = cfg_for({"ZED=1", "ALPHA=1", "MID=1"})
-        assert first == cfg_for({"MID=1", "ZED=1", "ALPHA=1"})
         order = [line for line in first.splitlines() if line.startswith('--passC:"-D')]
         assert order == ['--passC:"-DALPHA=1"', '--passC:"-DMID=1"', '--passC:"-DZED=1"'], order
 
@@ -1051,3 +1057,64 @@ class TestTheRendererReadsTheUnitsLanguage:
         bindings = next(f.content for f in layout.files if f.path.endswith("unit.nim"))
         assert "--backend:cpp" not in cfg, cfg
         assert "importcpp" not in bindings, bindings
+
+
+@pytest.mark.allow("subprocess")
+class TestSetOrderingIsStableAcrossProcesses:
+    """The property is cross-process, so it is measured across processes.
+
+    ``set`` iteration order is a function of the interpreter's hash seed. Two
+    sets built inside one process therefore always iterate alike, and a
+    same-process ``first == second`` comparison of two equal sets cannot fail
+    whatever the writer does with them -- it reads as a regenerate-and-diff gate
+    and is one only by coincidence of never having been run twice with different
+    seeds.
+    """
+
+    #: Members chosen so that no observed hash seed iterates them in sorted order,
+    #: and the sorted order is therefore a real claim rather than a coin flip.
+    LIBRARIES = ("zlib", "png", "aaa")
+
+    @staticmethod
+    def _cfg_under_seed(seed: str) -> str:
+        import subprocess
+        import sys
+
+        script = textwrap.dedent("""\
+            from headerkit.ir import Header
+            from headerkit.scaffold import ScaffoldOptions
+            from headerkit.writers import get_writer
+
+            layout = get_writer("nim").write_layout(
+                Header(path="c.h", declarations=[]),
+                ScaffoldOptions(
+                    package_name="demo",
+                    target_language="nim",
+                    layout="package",
+                    options={"library": {"zlib", "png", "aaa"}},
+                    extra_context={"defines": {"ZED=1", "ALPHA=1", "MID=1"}},
+                ),
+            )
+            print(next(f.content for f in layout.files if f.path == "nim.cfg"))
+        """)
+        result = subprocess.run(  # noqa: S603
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout
+
+    def test_the_order_is_the_same_under_a_different_hash_seed(self) -> None:
+        """Both paths at once: writer-option coercion and the writer's own sort."""
+        # Seeds measured to iterate these members differently from one another,
+        # so the two runs really do disagree about set order before the sort.
+        first = self._cfg_under_seed("0")
+        second = self._cfg_under_seed("1")
+        assert first == second, f"the generated nim.cfg depends on the hash seed:\n{first}\n---\n{second}"
+        libs = [line for line in first.splitlines() if line.startswith('--passL:"-l')]
+        defines = [line for line in first.splitlines() if line.startswith('--passC:"-D')]
+        assert libs == ['--passL:"-laaa"', '--passL:"-lpng"', '--passL:"-lzlib"'], libs
+        assert defines == ['--passC:"-DALPHA=1"', '--passC:"-DMID=1"', '--passC:"-DZED=1"'], defines

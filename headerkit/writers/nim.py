@@ -15,6 +15,7 @@ Features
 from __future__ import annotations
 
 import textwrap
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path, PureWindowsPath
@@ -316,7 +317,15 @@ def _validate_bare_nim_ident(name: str, bare: str) -> None:
 
     ``name`` is the spelling to quote in the message, which differs from ``bare``
     when the caller stripped a pair of backticks off it.
+
+    Composed characters are compared in NFC. Nim accepts ``café`` written either
+    way, and the decomposed form puts a combining acute -- a mark, not a letter or
+    a digit -- in the name, so the character check refused a name the compiler
+    would have taken. Which normalisation a header arrives in is a property of
+    the editor that wrote it, and a floor that rejects on it rejects the wrong
+    thing.
     """
+    bare = unicodedata.normalize("NFC", bare)
     if bare.startswith("_") or bare.endswith("_"):
         raise RenameError(f"{name!r} is not a legal Nim identifier: it may not begin or end with an underscore")
     if not bare[0].isalpha():
