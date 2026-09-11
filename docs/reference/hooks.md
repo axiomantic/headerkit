@@ -120,6 +120,25 @@ one identifier whatever the header called them
 ([`nim_ident_identity`][headerkit.writers.nim.nim_ident_identity] is the
 function that says so). Equality on the emitted string is the wrong test.
 
+### Known limitation: collision checking is module-scope
+
+Collision checking covers the flat module-level namespace -- functions,
+structs, unions, enums, enumerators, typedefs and macros. It does **not** yet
+cover two fields of one record, or two parameters of one proc.
+
+That is a gap, not a safe exclusion. Nim rejects a colliding field or parameter
+exactly as it rejects a colliding module-level symbol: an object declaring both
+`fooBar` and `foo_bar` is `attempt to redefine: 'foo_bar'`, and so is a proc
+taking both as parameters. So a header whose collision sits at field or
+parameter level still produces a module its compiler refuses -- you get the
+error from Nim rather than from headerkit, without the source symbol names.
+
+Do not read a module-level refusal as evidence that the writer checks
+collisions generally. Detecting field- and parameter-level collisions needs the
+per-record and per-proc symbol identity that the IR contract work introduces.
+Both cases are pinned in `tests/test_rename.py` as strict xfails, so they turn
+red on the day that lands.
+
 ### Declarative configuration
 
 `[rename]` in `.headerkit.toml` covers the common cases without code:

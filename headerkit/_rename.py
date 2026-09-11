@@ -57,9 +57,18 @@ RENAME_KINDS: frozenset[str] = frozenset(
 )
 
 #: Kinds that share one flat module-level namespace in the generated output, and
-#: are therefore checked for collisions against each other. ``field`` and
-#: ``param`` are renamed like everything else but are scoped to their record or
-#: their proc, so they are not members of this set.
+#: are therefore checked for collisions against each other.
+#:
+#: ``field`` and ``param`` are renamed like every other kind but are **not**
+#: collision-checked, and that is a known gap rather than a safe exclusion. Nim
+#: rejects a colliding field or parameter exactly as it rejects a colliding
+#: module-level symbol -- an object declaring both ``fooBar`` and ``foo_bar`` is
+#: ``attempt to redefine: 'foo_bar'``, and so is a proc taking both as
+#: parameters. Detecting those needs the per-record and per-proc identity that
+#: the IR contract work introduces, so until then a header whose collision is at
+#: field or parameter level produces a module its compiler refuses, with no
+#: diagnostic from headerkit. ``tests/test_rename.py`` pins both cases as strict
+#: xfails so they go red the day that lands.
 MODULE_SCOPE_KINDS: frozenset[str] = frozenset(
     {"function", "struct", "union", "enum", "enumerator", "typedef", "macro"}
 )
@@ -503,7 +512,9 @@ def enforce_injectivity(
                 f"symbols {_describe(group)} all collapse to the identifier {target!r} "
                 f"(identity {ident!r}) in the generated output. headerkit will not guess which "
                 "one you meant: rename one at the source, add a rename_symbol rule, or register "
-                "a resolve_collision hook."
+                "a resolve_collision hook. Note that this check covers module-scope symbols only; "
+                "collisions between two fields of one record, or two parameters of one proc, are "
+                "not detected yet and will surface as a compiler error instead."
             )
         if not isinstance(mapping, Mapping):
             raise RenameError(

@@ -34,7 +34,7 @@ from headerkit._rename import (
     rename_cache_fingerprint,
 )
 from headerkit.hooks import HookRegistry, PipelineContext, Priority
-from headerkit.ir import CType, Enum, EnumValue, Function, Header, Parameter
+from headerkit.ir import CType, Enum, EnumValue, Field, Function, Header, Parameter, Struct
 from headerkit.writers.nim import (
     _escape_ident,
     nim_ident_identity,
@@ -189,6 +189,57 @@ class TestCollisionsRaise:
 
 @pytest.mark.allow("subprocess")
 @pytest.mark.timeout(300)
+@pytest.mark.allow("subprocess")
+@pytest.mark.timeout(300)
+class TestFieldAndParamCollisionsAreNotDetectedYet:
+    """Strict xfails pinning a known gap, so it turns red when it is closed.
+
+    Collision checking covers the module-level namespace only. Nim rejects a
+    colliding field or parameter just as firmly -- measured on Nim 2.2.10, an
+    object with both ``fooBar`` and ``foo_bar`` is ``attempt to redefine:
+    'foo_bar'``, and so is a proc taking both -- so these headers produce a
+    module the compiler refuses, with no diagnostic from headerkit.
+
+    Each case asserts the END STATE, not the defect: the generated module
+    compiles. They fail today and will pass once per-record and per-proc symbol
+    identity arrives with the IR contract work, at which point ``strict=True``
+    turns the xfail into a failure and these become ordinary tests.
+    """
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="field-level collisions are not detected yet; needs per-record identity from the IR contract work",
+    )
+    def test_two_fields_of_one_record_colliding_under_nim_identity(self, tmp_path: Path) -> None:
+        header = Header(
+            path="fields.h",
+            declarations=[
+                Struct(
+                    name="Holder",
+                    fields=[Field("fooBar", CType("int")), Field("foo_bar", CType("int"))],
+                )
+            ],
+        )
+        nim_check(write_nim(header, header_path="fields.h"), tmp_path, stem="fields")
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="parameter-level collisions are not detected yet; needs per-proc identity from the IR contract work",
+    )
+    def test_two_parameters_of_one_proc_colliding_under_nim_identity(self, tmp_path: Path) -> None:
+        header = Header(
+            path="params.h",
+            declarations=[
+                Function(
+                    name="go",
+                    return_type=CType("void"),
+                    parameters=[Parameter("fooBar", CType("int")), Parameter("foo_bar", CType("int"))],
+                )
+            ],
+        )
+        nim_check(write_nim(header, header_path="params.h"), tmp_path, stem="params")
+
+
 class TestResolveCollisionHook:
     """The resolver decides; the writer re-checks and never trusts it."""
 
