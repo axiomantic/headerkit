@@ -67,6 +67,139 @@ ctx = PipelineContext(backend="tree-sitter", writer="json", runtime="nim")
 unit, output = execute_pipeline(spec, context=ctx)
 ```
 
+## Symbol Renaming: `rename_symbol` and `resolve_collision`
+
+Two hook points govern the identifiers a writer emits.
+
+**`rename_symbol`** (`waterfall`) transforms one symbol's name:
+
+```python
+def renamer(name: str, *, context: PipelineContext, kind: str) -> str: ...
+```
+
+`kind` is one of `function`, `struct`, `union`, `enum`, `enumerator`, `field`,
+`typedef`, `param`, `macro`. It is what makes a case rule expressible at all:
+Nim spells types in PascalCase and procs in camelCase, which is one rule per
+kind and not one rule for the module.
+
+A waterfall runs **highest priority first**, and that ordering is the design.
+A project renamer registers at `Priority.PROJECT`; a writer registers its
+language's grammar rules at `Priority.FALLBACK` and therefore runs **last**.
+Whatever a project renames a symbol to must still survive the target language's
+lexer, and no configuration can bypass that floor. The Nim writer registers
+[`nim_legality_renamer`][headerkit.writers.nim.nim_legality_renamer] exactly the
+way it registers `write_output`.
+
+**`resolve_collision`** (`first_result`) decides what to do when two source
+symbols collapse onto one identifier:
+
+```python
+def resolver(
+    collided: tuple[Symbol, ...],
+    target: str,
+    *,
+    context: PipelineContext,
+) -> dict[Symbol, str] | None: ...
+```
+
+Return an identifier for **every** member of `collided`, or `None` to decline.
+The default is to **raise**, naming both source symbols. An automatic
+disambiguator -- a counter suffix, first-wins, longest-wins -- is the writer
+deciding which symbol the caller meant, and it fails silently: the caller gets
+bindings that compile and call the wrong function.
+
+The returned mapping is re-checked rather than trusted. A partial mapping is an
+error, every returned identifier is re-validated against the language grammar,
+and the results are re-tested for collisions under the target language's own
+identity function. A resolver that answers a collision with another collision
+fails loudly.
+
+Renaming is not injective, and neither is the C-to-Nim spelling: `__sig` and
+`_sig` collapse under underscore repair, and to Nim `fooBar` and `foo_bar` are
+one identifier whatever the header called them
+([`nim_ident_identity`][headerkit.writers.nim.nim_ident_identity] is the
+function that says so). Equality on the emitted string is the wrong test.
+
+### Known limitation: collision checking is module-scope
+
+Collision checking covers the flat module-level namespace -- functions,
+structs, unions, enums, enumerators, typedefs and macros. It does **not** yet
+cover two fields of one record, or two parameters of one proc.
+
+That is a gap, not a safe exclusion. Nim rejects a colliding field or parameter
+exactly as it rejects a colliding module-level symbol: an object declaring both
+`fooBar` and `foo_bar` is `attempt to redefine: 'foo_bar'`, and so is a proc
+taking both as parameters. So a header whose collision sits at field or
+parameter level still produces a module its compiler refuses -- you get the
+error from Nim rather than from headerkit, without the source symbol names.
+
+Do not read a module-level refusal as evidence that the writer checks
+collisions generally. Detecting field- and parameter-level collisions needs the
+per-record and per-proc symbol identity that the IR contract work introduces.
+Both cases are pinned in `tests/test_rename.py` as strict xfails, so they turn
+red on the day that lands.
+
+### Declarative configuration
+
+`[rename]` in `.headerkit.toml` covers the common cases without code:
+
+```toml
+[rename]
+collision_policy = "error"          # the default; see below for the others
+
+[[rename.rules]]
+kinds = ["function"]                # omit to apply to every kind
+strip_prefix = "juce_"
+case = "camel"                      # snake | camel | pascal | preserve
+collapse_underscores = true
+add_prefix = ""
+add_suffix = ""
+```
+
+Steps within one rule apply in a fixed order: `strip_prefix`, `case`,
+`collapse_underscores`, `add_prefix`, `add_suffix`. Rules apply in declared
+order. A rename that needs the symbol's type, its header, or a lookup table is
+not expressible here -- that is what the Python hook is for.
+
+`collision_policy` is one of `error` (default), `suffix_header_stem`,
+`prefer_shortest`, `prefer_longest`, `prefer_first_declared`. Every one but
+`error` is opt-in, each is deterministic given the same input set, and each is
+re-checked like any other resolver. `suffix_header_stem` separates symbols that
+came from different headers and cannot separate two declarations in one header:
+appending the same stem twice resolves nothing, and the re-check says so rather
+than emitting a module the compiler rejects.
+
+### Who applies a `[rename]` section
+
+The **CLI** reads `.headerkit.toml` and registers the section's hooks; nothing
+else does. `generate()`, `generate_all()` and `batch_generate()` take their
+inputs as arguments and read no config file at all -- store directory, plugins
+and writer options work the same way -- so a library consumer relying on a
+`[rename]` section on disk gets the default naming and no diagnostic.
+
+A library consumer applies it explicitly:
+
+```python
+from headerkit import generate, register_config_hooks
+from headerkit._config import load_config
+
+register_config_hooks(load_config(".headerkit.toml").rename, writer="nim")
+generate("api.h", "nim")
+```
+
+Registration is global and idempotent: registering the same config twice is a
+no-op, and registering a different one adds to the waterfall rather than
+replacing what is there.
+
+### Renaming and the cache
+
+Renaming changes generated output, so the registered hooks enter the **output
+cache key** via [`rename_cache_fingerprint`][headerkit.rename_cache_fingerprint].
+A hook built from declarative config carries its config's digest, so two
+different rename configs cannot share a key. A hook written in Python is
+identified by module and qualified name: editing that function's body does not
+move the key, the same limitation writer plugins have with `cache_version`.
+
 ## API Reference
 
 ::: headerkit.hooks.Priority
@@ -94,5 +227,29 @@ unit, output = execute_pipeline(spec, context=ctx)
       show_source: false
 
 ::: headerkit.hooks.execute_pipeline
+    options:
+      show_source: false
+
+::: headerkit.Symbol
+    options:
+      show_source: false
+
+::: headerkit.RenameConfig
+    options:
+      show_source: false
+
+::: headerkit.RenameRule
+    options:
+      show_source: false
+
+::: headerkit.enforce_injectivity
+    options:
+      show_source: false
+
+::: headerkit.rename_cache_fingerprint
+    options:
+      show_source: false
+
+::: headerkit.register_config_hooks
     options:
       show_source: false

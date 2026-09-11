@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+from headerkit._rename import RenameConfig, RenameError, parse_rename_config
+
 
 def _find_project_root(start: Path) -> Path:
     """Find project root by walking up from *start* looking for ``.git``.
@@ -94,6 +96,8 @@ class HeaderkitConfig:
     output: dict[str, str] = field(default_factory=dict)
     # Per-pattern overrides (pattern string -> override config dict)
     header_overrides: dict[str, dict[str, object]] = field(default_factory=dict)
+    # Symbol renaming ([rename] section)
+    rename: RenameConfig = field(default_factory=RenameConfig)
     # Resolved source path for error reporting
     source_path: Path | None = None
 
@@ -299,6 +303,18 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
                     f"headerkit: config error in {source}: cache.no_output_cache must be bool, got {type(val).__name__}"
                 )
             config.no_output_cache = val
+
+    # rename: [rename] section -> declarative rename_symbol / resolve_collision hooks
+    if "rename" in data:
+        rename_val = data["rename"]
+        if not isinstance(rename_val, dict):
+            raise ValueError(
+                f"headerkit: config error in {source}: rename must be a table, got {type(rename_val).__name__}"
+            )
+        try:
+            config.rename = parse_rename_config(cast(dict[str, object], rename_val), source)
+        except RenameError as exc:
+            raise ValueError(str(exc)) from exc
 
     # writer options: [writer.NAME] sections -> writer_options[NAME].options
     if "writer" in data:

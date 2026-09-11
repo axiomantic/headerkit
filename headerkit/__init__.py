@@ -3,6 +3,16 @@
 from headerkit._generate import BatchResult, GenerateResult, batch_generate, generate, generate_all
 from headerkit._ir_json import json_to_header
 from headerkit._populate import PopulateResult, PopulateTarget, populate
+from headerkit._rename import (
+    RenameConfig,
+    RenameError,
+    RenameRule,
+    Symbol,
+    SymbolCollisionError,
+    enforce_injectivity,
+    register_config_hooks,
+    rename_cache_fingerprint,
+)
 from headerkit._resolve import check_output_collisions, resolve_headers, resolve_output_path
 from headerkit._store_merge import MergeResult, store_merge
 from headerkit._target import TargetTriple, detect_process_triple, normalize_triple, parse_triple, resolve_target
@@ -198,4 +208,14 @@ __all__ = [
     "generate_nim_python_wrapper",
     "generate_nim_source",
     "generate_nim_wheel_layout",
+    # Renaming API -- published in docs/reference/hooks.md, so it is public here
+    # rather than reachable only through a private module.
+    "RenameConfig",
+    "RenameError",
+    "RenameRule",
+    "Symbol",
+    "SymbolCollisionError",
+    "enforce_injectivity",
+    "register_config_hooks",
+    "rename_cache_fingerprint",
 ]

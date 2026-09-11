@@ -4,7 +4,7 @@ IR cache key: SHA-256 of (ir_schema_version, backend, target,
 header content, defines, includes, other_args).
 
 Output cache key: SHA-256 of (ir_cache_key, writer_name, writer_options,
-writer_cache_version).
+writer_cache_version, rename_fingerprint).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from pathlib import Path
 # ``test_cache_key.py`` fingerprints the IR dataclasses and fails when this
 # constant has not moved with them, so the reminder is a check rather than a
 # comment nobody reads.
-_IR_SCHEMA_VERSION = "4"
+_IR_SCHEMA_VERSION = "5"
 
 
 @dataclass
@@ -152,9 +152,16 @@ def compute_output_cache_key(
     writer_name: str,
     writer_options: dict[str, object] | None = None,
     writer_cache_version: str | None = None,
+    rename_fingerprint: str | None = None,
 ) -> str:
     """Compute SHA-256 cache key for output layer.
 
+    :param rename_fingerprint: Digest of the registered ``rename_symbol`` and
+        ``resolve_collision`` hooks, from
+        :func:`headerkit._rename.rename_cache_fingerprint`. Renaming changes the
+        identifiers in the generated output, so leaving it out of the key makes
+        a changed rename rule read back the previous output under the previous
+        names and report a hit.
     :returns: Hex digest string.
     """
     hasher = hashlib.sha256()
@@ -169,5 +176,8 @@ def compute_output_cache_key(
 
     if writer_cache_version is not None:
         hasher.update(f"writer-version:{writer_cache_version}\0".encode())
+
+    if rename_fingerprint is not None:
+        hasher.update(f"rename:{rename_fingerprint}\0".encode())
 
     return hasher.hexdigest()

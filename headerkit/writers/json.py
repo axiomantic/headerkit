@@ -311,6 +311,10 @@ def header_to_json_dict(header: Header) -> dict[str, Any]:
     }
     if header.included_headers:
         data["included_headers"] = sorted(header.included_headers)
+    if header.language != "c":
+        data["language"] = header.language
+    if header.classification != "header":
+        data["classification"] = header.classification
     return data
 
 

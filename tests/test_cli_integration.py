@@ -668,3 +668,47 @@ class TestGenerateWithDefinePatterns:
 
         assert "#define MY_FLAG_ONE ..." in output
         assert "#define MY_FLAG_TWO ..." in output
+
+
+class TestScaffoldCarriesTheParseFlags:
+    """`-I` and `-D` reached the parse and nothing else.
+
+    ``ScaffoldOptions.extra_context`` existed, the Nim writer read
+    ``include_dirs`` and ``defines`` out of it, and the guide and the changelog
+    both said the generated ``nim.cfg`` carries them -- but the only code that
+    ever put anything in it was the writer's own tests. A package scaffolded with
+    ``-I``/``-D`` was generated with neither: an inert feature with passing tests
+    and documentation describing behaviour it did not have.
+    """
+
+    def test_include_dirs_and_defines_reach_the_generated_nim_cfg(self, tmp_path: Path) -> None:
+        include_dir = tmp_path / "vendor"
+        include_dir.mkdir()
+        (include_dir / "shared.h").write_text("typedef int shared_handle;\n")
+        header = tmp_path / "api.h"
+        header.write_text('#include "shared.h"\nshared_handle open_it(void);\n')
+
+        out_dir = tmp_path / "pkg"
+        rc = main(
+            [
+                str(header),
+                "--writer",
+                "nim",
+                "--layout",
+                "package",
+                "--package-name",
+                "apilib",
+                "--no-input",
+                "-I",
+                str(include_dir),
+                "-D",
+                "HK_FEATURE=1",
+                "-o",
+                f"nim:{out_dir}",
+            ]
+        )
+        assert rc == 0
+
+        cfg = (out_dir / "nim.cfg").read_text()
+        assert f'-I\\"{include_dir.resolve().as_posix()}\\"' in cfg, cfg
+        assert '--passC:"-DHK_FEATURE=1"' in cfg, cfg

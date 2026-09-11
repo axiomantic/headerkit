@@ -17,6 +17,7 @@ from headerkit._config import (
     merge_config,
 )
 from headerkit._generate import batch_generate, generate
+from headerkit._rename import register_config_hooks as register_rename_config
 from headerkit.backends import _load_backend_plugins
 from headerkit.hooks import _load_hook_plugins
 from headerkit.writers import _load_writer_plugins, coerce_writer_options
@@ -525,6 +526,8 @@ def main(argv: list[str] | None = None) -> int:
     _load_hook_plugins()
     if config is not None and config.plugins:
         _load_explicit_plugins(config.plugins)
+    if config is not None:
+        register_rename_config(config.rename)
 
     resolved_runtime = getattr(args, "runtime", None) or os.environ.get("HEADERKIT_RUNTIME")
     resolved_language = getattr(args, "language", None) or os.environ.get("HEADERKIT_LANGUAGE")
@@ -617,12 +620,18 @@ def main(argv: list[str] | None = None) -> int:
                 for key, values in spec.options.items():
                     scaffold_wopts[key] = values[0] if len(values) == 1 else values
 
+            # The include paths and defines the parse was given, carried to the
+            # writer so a generated build configuration can state the flags the
+            # header was actually parsed with. Without this the fields existed and
+            # the writer read them, but nothing outside the tests ever filled them:
+            # a package scaffolded with `-I`/`-D` was generated with neither.
             defaults = ScaffoldOptions(
                 package_name=pkg_name,
                 target_language=spec.name,
                 layout=layout_mode or "package",
                 test_type=test_type,
                 options=scaffold_wopts,
+                extra_context={"include_dirs": list(include_dirs), "defines": list(defines)},
             )
             scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
             project_layout = scaffold(unit, scaffold_opts)

@@ -932,3 +932,31 @@ class TestCallingConventionSerialization:
         result = json.loads(header_to_json(header))
         decl = result["declarations"][0]
         assert "calling_convention" not in decl["type"]
+
+
+class TestUnitMetadataSurvivesARoundTrip:
+    """Every field the deserialiser reads must be a field the writer emits.
+
+    The IR cache is a ``header_to_json_dict`` write followed by a ``json_to_header``
+    read, so a field only one half knows about is reset on every cache hit --
+    silently, and to the dataclass default, which is indistinguishable from a
+    parser having reported it. ``classification`` was read and never written:
+    ``"source"`` came back as ``"header"`` after one round trip.
+    """
+
+    def test_classification_and_language_both_survive(self) -> None:
+        from headerkit._ir_json import json_to_header
+        from headerkit.writers.json import header_to_json_dict
+
+        original = Header(path="u.cpp", declarations=[], language="cpp", classification="source")
+        restored = json_to_header(header_to_json_dict(original))
+        assert restored.classification == "source"
+        assert restored.language == "cpp"
+
+    def test_the_defaults_are_not_emitted(self) -> None:
+        """The negative control: a default-valued field stays out of the document."""
+        from headerkit.writers.json import header_to_json_dict
+
+        data = header_to_json_dict(Header(path="u.h", declarations=[]))
+        assert "classification" not in data
+        assert "language" not in data

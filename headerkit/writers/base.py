@@ -114,7 +114,16 @@ class WriterOption:
         if self.type is list:
             if isinstance(val, list):
                 return val
-            if isinstance(val, tuple | set):
+            if isinstance(val, set | frozenset):
+                # Sorted, not iteration-ordered: an unordered value would otherwise
+                # reorder generated output between runs and defeat regenerate-and-diff.
+                #
+                # Sorted by the string form, because the members need not be
+                # mutually comparable: `sorted({1, "a"})` is a TypeError, where
+                # `list()` -- what this replaced -- accepted it and returned an
+                # order that changed between runs.
+                return sorted(val, key=str)
+            if isinstance(val, tuple):
                 return list(val)
             if isinstance(val, str):
                 return [val]

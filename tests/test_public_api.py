@@ -267,3 +267,28 @@ def test_packaging_symbols_in_all():
     assert headerkit.generate_nim_python_wrapper is generate_nim_python_wrapper
     assert headerkit.generate_nim_source is generate_nim_source
     assert headerkit.generate_nim_wheel_layout is generate_nim_wheel_layout
+
+
+def test_renaming_api_is_public():
+    """The renaming surface the reference documents is importable from the package.
+
+    It was reachable only through the private ``headerkit._rename``, so the
+    documented import did not exist -- a public API that nothing outside the
+    package could reach without naming an underscore module.
+    """
+    import headerkit
+
+    expected = {
+        "RenameConfig",
+        "RenameError",
+        "RenameRule",
+        "Symbol",
+        "SymbolCollisionError",
+        "enforce_injectivity",
+        "register_config_hooks",
+        "rename_cache_fingerprint",
+    }
+    missing = sorted(name for name in expected if name not in headerkit.__all__)
+    assert not missing, f"documented renaming names absent from headerkit.__all__: {missing}"
+    for name in sorted(expected):
+        assert getattr(headerkit, name, None) is not None, name
