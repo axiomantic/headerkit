@@ -169,6 +169,28 @@ came from different headers and cannot separate two declarations in one header:
 appending the same stem twice resolves nothing, and the re-check says so rather
 than emitting a module the compiler rejects.
 
+### Who applies a `[rename]` section
+
+The **CLI** reads `.headerkit.toml` and registers the section's hooks; nothing
+else does. `generate()`, `generate_all()` and `batch_generate()` take their
+inputs as arguments and read no config file at all -- store directory, plugins
+and writer options work the same way -- so a library consumer relying on a
+`[rename]` section on disk gets the default naming and no diagnostic.
+
+A library consumer applies it explicitly:
+
+```python
+from headerkit import generate, register_config_hooks
+from headerkit._config import load_config
+
+register_config_hooks(load_config(".headerkit.toml").rename, writer="nim")
+generate("api.h", "nim")
+```
+
+Registration is global and idempotent: registering the same config twice is a
+no-op, and registering a different one adds to the waterfall rather than
+replacing what is there.
+
 ### Renaming and the cache
 
 Renaming changes generated output, so the registered hooks enter the **output
@@ -225,5 +247,9 @@ move the key, the same limitation writer plugins have with `cache_version`.
       show_source: false
 
 ::: headerkit.rename_cache_fingerprint
+    options:
+      show_source: false
+
+::: headerkit.register_config_hooks
     options:
       show_source: false

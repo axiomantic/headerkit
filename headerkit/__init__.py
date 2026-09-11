@@ -10,6 +10,7 @@ from headerkit._rename import (
     Symbol,
     SymbolCollisionError,
     enforce_injectivity,
+    register_config_hooks,
     rename_cache_fingerprint,
 )
 from headerkit._resolve import check_output_collisions, resolve_headers, resolve_output_path
@@ -215,5 +216,6 @@ __all__ = [
     "Symbol",
     "SymbolCollisionError",
     "enforce_injectivity",
+    "register_config_hooks",
     "rename_cache_fingerprint",
 ]

@@ -285,6 +285,7 @@ def test_renaming_api_is_public():
         "Symbol",
         "SymbolCollisionError",
         "enforce_injectivity",
+        "register_config_hooks",
         "rename_cache_fingerprint",
     }
     missing = sorted(name for name in expected if name not in headerkit.__all__)
