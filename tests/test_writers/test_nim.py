@@ -204,6 +204,9 @@ class TestNimWriter:
                 `ptr`*: SharedPtr[cint]
 
 
+            proc inc*[T](p: var ptr T) {.inline.} =
+              p = cast[ptr T](cast[uint](p) + sizeof(T).uint)
+
             proc get*[T](p: SharedPtr[T]): ptr T {.importcpp: "#.get()", header: "<memory>".}
 
             proc reset*[T](p: var SharedPtr[T]) {.importcpp: "#.reset()", header: "<memory>".}
@@ -218,7 +221,7 @@ class TestNimWriter:
 
             proc `end`*(this: var MyVector): ptr cint {.importcpp: "#.end(@)", header: "test.hpp".}
 
-            iterator items*(this: var MyVector): auto = {.inline.}
+            iterator items*(this: var MyVector): auto {.inline.} =
               var it = this.begin()
               while it != this.end():
                 yield it[]
@@ -293,11 +296,14 @@ class TestNimWriter:
               GenericVector*[T] {.importcpp: "GenericVector", header: "vec.hpp", bycopy.} = object
 
 
+            proc inc*[T](p: var ptr T) {.inline.} =
+              p = cast[ptr T](cast[uint](p) + sizeof(T).uint)
+
             proc begin*[T](this: var GenericVector[T]): ptr T {.importcpp: "#.begin(@)", header: "vec.hpp".}
 
             proc `end`*[T](this: var GenericVector[T]): ptr T {.importcpp: "#.end(@)", header: "vec.hpp".}
 
-            iterator items*[T](this: var GenericVector[T]): auto = {.inline.}
+            iterator items*[T](this: var GenericVector[T]): auto {.inline.} =
               var it = this.begin()
               while it != this.end():
                 yield it[]
@@ -406,7 +412,7 @@ class TestNimWriter:
               Vec2* {.importcpp: "Vec2", header: "math_ops.hpp", bycopy.} = object
 
 
-            proc create*(x: cfloat, y: cfloat): Vec2 {.importcpp: "Vec2::create(@)", header: "math_ops.hpp".}
+            proc create*(self_type: typedesc[Vec2], x: cfloat, y: cfloat): Vec2 {.importcpp: "Vec2::create(@)", header: "math_ops.hpp".}
 
             proc `+`*(this: var Vec2, other: Vec2): Vec2 {.importcpp: "(# + @)", header: "math_ops.hpp".}
 
@@ -798,3 +804,87 @@ class TestNimLexicalCorrectness:
         nim_file.write_text(code)
         res = subprocess.run([nim_bin, "check", "--hints:off", str(nim_file)], capture_output=True, text=True)
         assert res.returncode == 0, f"nim check failed on generic struct declaration:\n{res.stderr}\n{code}"
+
+    def test_deleted_methods_and_constructors_skipped(self) -> None:
+        """Verify that methods, constructors, and destructors marked is_deleted are skipped."""
+        s = Struct(
+            name="NonCopyable",
+            is_cppclass=True,
+            constructors=[
+                Function(name="NonCopyable", return_type=CType("void"), is_deleted=True),
+                Function(name="NonCopyable", return_type=CType("void"), parameters=[Parameter("x", CType("int"))]),
+            ],
+            methods=[
+                Function(name="clone", return_type=CType("NonCopyable"), is_deleted=True),
+                Function(name="valid", return_type=CType("bool")),
+            ],
+            destructor=Function(name="~NonCopyable", return_type=CType("void"), is_deleted=True),
+        )
+        h = Header(path="test.hpp", declarations=[s])
+        code = write_nim(h, header_path="test.hpp")
+        assert "constructNonCopyable" in code
+        assert "constructNonCopyable*()" not in code
+        assert "clone" not in code
+        assert "valid" in code
+        assert "destroy" not in code
+
+    def test_signature_deduplication(self) -> None:
+        """Verify that identical proc signatures within a struct are deduplicated."""
+        s = Struct(
+            name="Overloaded",
+            is_cppclass=True,
+            methods=[
+                Function(
+                    name="get",
+                    return_type=CType("int"),
+                    parameters=[Parameter("key", CType("int"))],
+                ),
+                Function(
+                    name="get",
+                    return_type=CType("float"),
+                    parameters=[Parameter("key", CType("int"))],
+                ),
+            ],
+        )
+        h = Header(path="test.hpp", declarations=[s])
+        code = write_nim(h, header_path="test.hpp")
+        assert code.count("proc get*") == 1
+
+    def test_unnameable_return_type_fallback_to_auto(self) -> None:
+        """Verify that methods returning undeclared/private types fallback to auto."""
+        s = Struct(
+            name="Element",
+            is_cppclass=True,
+            methods=[
+                Function(
+                    name="getSecretIterator",
+                    return_type=CType("PrivateIterator"),
+                ),
+            ],
+        )
+        h = Header(path="test.hpp", declarations=[s])
+        code = write_nim(h, header_path="test.hpp")
+        assert "proc getSecretIterator*(this: var Element): auto" in code
+
+    def test_scoped_enum_resolution(self) -> None:
+        """Verify that nested enums with keyword names resolve properly."""
+        e = Enum(
+            name="Type",
+            cpp_name="Expr::Type",
+            values=[EnumValue("constantType", 0)],
+        )
+        s = Struct(
+            name="Expr",
+            is_cppclass=True,
+            methods=[
+                Function(
+                    name="getType",
+                    return_type=CType("enum Type"),
+                    is_const=True,
+                ),
+            ],
+        )
+        h = Header(path="test.hpp", declarations=[e, s])
+        code = write_nim(h, header_path="test.hpp")
+        assert "Expr_Type* {.size: sizeof(cint)" in code
+        assert "proc getType*(this: Expr): Expr_Type" in code
