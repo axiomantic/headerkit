@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Canonical, order-independent test merging: `OutputFile.merge_strategy = "canonical_merge"` and `merge_incremental_tests(..., canonicalize=True)` ensure deterministic, byte-for-byte identical output regardless of the order in which multiple library versions are scaffolded.
 - Scaffolding hook lifecycle: introduced `scaffold_tests` (waterfall) and `transform_layout` (waterfall) hook points in `headerkit.scaffold`, enabling downstream projects and plugins to enrich test suites, inject build configurations (e.g. `nim.cfg`, `CMakeLists.txt`), and post-process layouts.
 - Within-file incremental test merging: `merge_incremental_tests` and `OutputFile.merge_strategy="append_new_tests"` preserve existing human-authored tests and custom assertions while automatically discovering and appending test stubs for new symbols.
 - Header version extraction: `extract_header_version` automatically detects library versions from preprocessor macros (`*_MAJOR_VERSION`, `*_VERSION`, `*_BUILD_NUMBER`) in header AST declarations, populating `extra_context["library_version"]`.
@@ -51,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Layout disk writer merge precedence: in `ProjectLayout.write_to_disk`, fixed an issue where `preserve_existing=True` short-circuited and prevented `merge_strategy` from executing.
+- Multi-test when block guard extraction: `_extract_nim_tests` now maintains active compile-time `when` guards across all tests inside a guarded block rather than only attaching the guard to the first test.
 - Function pointer and array return type inference in `NimWriter`: `_extract_type_identifiers` now strips parameter colons, braces, and dots, handles `UncheckedArray`, and ignores numeric array bounds so complex return signatures do not falsely degrade to `: auto`.
 - Nested struct top-level alias collision guards in `NimWriter`: `is_dangerous_nested` prevents unqualified bare aliases from polluting the global namespace or colliding with standard types and keywords.
 - Deduplicated out-of-line method declarations in `LibclangBackend` when both forward declaration and definition appear in the AST.

@@ -97,17 +97,66 @@ def test_tripwire_exported_symbols():
 
 ### Tripwire Verification in Nim
 ```nim
-import std/unittest
+import std/[unittest, dynlib]
 import mypkg
 
 suite "Tripwire Symbol & ABI Verification":
   test "verify foreign library entrypoints exist and link":
-    echo "Verifying tripwire symbol: vector_add"
-    echo "Verifying tripwire symbol: vector_norm"
-    checkpoint "Tripwire symbol link verification active"
+    let lib = loadLib("mypkg")
+    if lib == nil:
+      checkpoint "Native dynamic library 'mypkg' not found in system library path"
+      fail()
+    if lib.symAddr("vector_add") == nil:
+      checkpoint "Entry point 'vector_add' missing from native library 'mypkg'"
+      fail()
 ```
 
 ---
+
+## Multi-Version Bindings & Downstream Library Consumption
+
+When generating bindings for libraries that span multiple releases (such as JUCE 8.0, 8.1, and 9.0), projects must consider both how the scaffolder produces bindings and how downstream application developers consume them.
+
+### 1. Downstream Consumption: Compile-Time vs. Runtime
+
+Foreign C and C++ libraries compiled statically into Nim (e.g. via `--backend:cpp` and `importcpp`) resolve symbols and API differences at **compile time**. If an application attempts to call a C++ method that does not exist in the linked library version, the C++ compiler (`clang++`/`g++`) fails at compile time.
+
+HeaderKit emits header version macros as top-level Nim `const` values, enabling downstream application code to adapt across library versions seamlessly:
+
+```nim
+import juce_core
+
+# Pattern 1: Compile-time version branching
+when JUCE_MAJOR_VERSION >= 9:
+  proc runModernAudio() =
+    # JUCE 9 modern API
+    initDirect2DAudio()
+elif JUCE_MAJOR_VERSION == 8 and JUCE_MINOR_VERSION >= 1:
+  proc runModernAudio() =
+    # JUCE 8.1 fallback
+    initMetalAudio()
+else:
+  proc runModernAudio() =
+    # Legacy JUCE 8.0 fallback
+    initSoftwareAudio()
+
+# Pattern 2: Compile-time symbol probing
+when declared(initDirect2DAudio):
+  initDirect2DAudio()
+else:
+  initSoftwareAudio()
+
+# Pattern 3: Runtime version inspection
+echo "Running on JUCE runtime version: ", SystemStats.getJUCEVersion()
+```
+
+### 2. Order-Independent Multi-Version Scaffolding
+
+When regenerating test suites across multiple versions of a header, HeaderKit provides `OutputFile.merge_strategy = "canonical_merge"` and `merge_incremental_tests(..., canonicalize=True)`:
+
+- **Human Assertion Preservation**: Custom assertions added by engineers are never overwritten or clobbered.
+- **Symbol Discovery**: New symbols from incoming header versions have tests appended automatically.
+- **Order Independence**: Tests are canonically ordered by test title and suite, guaranteeing identical, byte-for-byte output regardless of whether Version 8 or Version 9 was processed first.
 
 ## Bring-Your-Own-Scaffolder (BYOScaffolder)
 

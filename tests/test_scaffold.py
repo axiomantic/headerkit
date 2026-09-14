@@ -507,7 +507,8 @@ class TestProjectLayoutIncrementalWrite:
                   test "String.isEmpty":
                     check 1 == 1
                     # Custom user code that must not be wiped
-                    check true
+                    let customUserVal = 42
+                    check customUserVal == 42
             """),
             encoding="utf-8",
         )
@@ -535,3 +536,99 @@ class TestProjectLayoutIncrementalWrite:
         assert "# Custom user code that must not be wiped" in result_content
         assert 'test "String.contains":' in result_content
         assert result_content.count('test "String.isEmpty":') == 1
+
+    def test_nim_merger_multi_test_when_block(self) -> None:
+        incoming = textwrap.dedent("""\
+            suite "Memory":
+              when declared(constructBlock):
+                test "Block constructor empty":
+                  check 1 == 1
+
+                test "Block constructor sized":
+                  check 2 == 2
+        """)
+        existing = textwrap.dedent("""\
+            suite "Memory":
+              test "placeholder":
+                check 0 == 0
+        """)
+        merged = merge_incremental_tests(existing, incoming, language="nim")
+        # Both tests must retain the guard when imported into a file that didn't have them
+        assert 'test "Block constructor empty":' in merged
+        assert 'test "Block constructor sized":' in merged
+        assert merged.count("when declared(constructBlock):") >= 1
+
+    def test_nim_merger_canonicalize_order_independent(self) -> None:
+        source_v8 = textwrap.dedent("""\
+            import std/unittest
+            import juce_core
+
+            suite "JUCE Core":
+              when declared(constructString):
+                test "String default constructor is empty":
+                  check 1 == 1
+
+              when declared(juce8Feature):
+                test "JUCE 8 feature":
+                  check 8 == 8
+        """)
+
+        source_v9 = textwrap.dedent("""\
+            import std/unittest
+            import juce_core
+
+            suite "JUCE Core":
+              when declared(constructString):
+                test "String default constructor is empty":
+                  check 1 == 1
+
+              when declared(juce9Feature):
+                test "JUCE 9 feature":
+                  check 9 == 9
+        """)
+
+        # Run 1: Start with v8, merge v9
+        merged_8_then_9 = merge_incremental_tests(source_v8, source_v9, language="nim", canonicalize=True)
+
+        # Run 2: Start with v9, merge v8
+        merged_9_then_8 = merge_incremental_tests(source_v9, source_v8, language="nim", canonicalize=True)
+
+        # Order of operations must not matter: output is canonical and identical
+        assert merged_8_then_9 == merged_9_then_8
+        assert 'test "JUCE 8 feature":' in merged_8_then_9
+        assert 'test "JUCE 9 feature":' in merged_8_then_9
+        assert 'test "String default constructor is empty":' in merged_8_then_9
+
+    def test_write_to_disk_merge_strategy_takes_precedence_over_preserve_existing(self, tmp_path: Path) -> None:
+        test_file = tmp_path / "tests" / "test_merge.nim"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text(
+            textwrap.dedent("""\
+                suite "Alpha":
+                  test "alpha":
+                    check 1 == 1
+            """),
+            encoding="utf-8",
+        )
+
+        incoming = ProjectLayout(
+            files=[
+                OutputFile(
+                    path="tests/test_merge.nim",
+                    content=textwrap.dedent("""\
+                        suite "Alpha":
+                          test "alpha":
+                            check 1 == 1
+
+                          test "beta":
+                            check 2 == 2
+                    """),
+                    preserve_existing=True,  # Even with preserve_existing=True, merge_strategy must run
+                    merge_strategy="append_new_tests",
+                )
+            ]
+        )
+        incoming.write_to_disk(tmp_path)
+        content = test_file.read_text(encoding="utf-8")
+        assert 'test "beta":' in content
+        assert 'test "alpha":' in content
