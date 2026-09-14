@@ -66,6 +66,8 @@ from headerkit.scaffold import (
     ScaffoldOptions,
     StdlibScaffolder,
     extract_function_names,
+    extract_header_version,
+    merge_incremental_tests,
     prompt_scaffold_options,
     scaffold,
 )
@@ -184,6 +186,8 @@ __all__ = [
     "BYOScaffolder",
     "StdlibScaffolder",
     "extract_function_names",
+    "extract_header_version",
+    "merge_incremental_tests",
     "prompt_scaffold_options",
     "scaffold",
     # Work-order API

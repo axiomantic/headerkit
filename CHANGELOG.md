@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Scaffolding hook lifecycle: introduced `scaffold_tests` (waterfall) and `transform_layout` (waterfall) hook points in `headerkit.scaffold`, enabling downstream projects and plugins to enrich test suites, inject build configurations (e.g. `nim.cfg`, `CMakeLists.txt`), and post-process layouts.
+- Within-file incremental test merging: `merge_incremental_tests` and `OutputFile.merge_strategy="append_new_tests"` preserve existing human-authored tests and custom assertions while automatically discovering and appending test stubs for new symbols.
+- Header version extraction: `extract_header_version` automatically detects library versions from preprocessor macros (`*_MAJOR_VERSION`, `*_VERSION`, `*_BUILD_NUMBER`) in header AST declarations, populating `extra_context["library_version"]`.
 - `TemplateParameter` dataclass in `headerkit.ir`, adding rich representation of C++ template parameters (`name`, `kind`, `type_constraint`, `default_value`, `is_variadic`). Exported via `headerkit.__all__`.
 - `Struct.template_parameters` and `Function.template_parameters` in IR schema version 5 (`IR_SCHEMA_VERSION = 5`), populating structured `TemplateParameter` lists alongside legacy string-based `template_params`.
 - `Struct.access` visibility tracking on records in IR schema v5, recording `"public"`, `"protected"`, or `"private"` visibility from parser backends.

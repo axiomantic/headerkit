@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import io
 import sys
+import textwrap
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from headerkit.hooks import HookRegistry, Priority, hook
-from headerkit.ir import CType, Function, Header, Parameter
+from headerkit.ir import Constant, CType, Function, Header, Parameter
 from headerkit.scaffold import (
     BYOScaffolder,
     OutputFile,
     ProjectLayout,
     ScaffoldOptions,
+    extract_header_version,
+    merge_incremental_tests,
     prompt_scaffold_options,
     scaffold,
 )
@@ -289,3 +292,246 @@ class TestCLIScaffolding:
         assert (out_dir / "src/nim_math/bindings.nim").exists()
         assert (out_dir / "tests/test_tripwire.nim").exists()
         assert (out_dir / "tests/test_nim_math.nim").exists()
+
+
+class TestExtractHeaderVersion:
+    def test_extract_composite_macros(self) -> None:
+        unit = Header(
+            path="juce.h",
+            declarations=[
+                Constant("JUCE_MAJOR_VERSION", 8, is_macro=True),
+                Constant("JUCE_MINOR_VERSION", 0, is_macro=True),
+                Constant("JUCE_BUILD_NUMBER", 2, is_macro=True),
+            ],
+        )
+        assert extract_header_version(unit) == "8.0.2"
+
+    def test_extract_composite_patch_fallback(self) -> None:
+        unit = Header(
+            path="lib.h",
+            declarations=[
+                Constant("FOO_VERSION_MAJOR", 3, is_macro=True),
+                Constant("FOO_VERSION_MINOR", 1, is_macro=True),
+            ],
+        )
+        assert extract_header_version(unit) == "3.1.0"
+
+    def test_extract_version_string_macro(self) -> None:
+        unit = Header(
+            path="sqlite3.h",
+            declarations=[
+                Constant("SQLITE_VERSION", '"3.45.1"', is_macro=True),
+            ],
+        )
+        assert extract_header_version(unit) == "3.45.1"
+
+    def test_extract_returns_none_when_no_version(self) -> None:
+        unit = Header(
+            path="plain.h",
+            declarations=[
+                Constant("MAX_BUFFER_SIZE", 1024, is_macro=True),
+            ],
+        )
+        assert extract_header_version(unit) is None
+
+
+class TestIncrementalTestMerger:
+    def test_nim_merger_appends_new_tests_and_preserves_existing(self) -> None:
+        existing = textwrap.dedent("""\
+            import std/unittest
+            import juce/core
+
+            suite "String":
+              test "String.isEmpty":
+                var s = initString()
+                check s.isEmpty()
+                # Human added custom assertion
+                check s.length() == 0
+        """)
+
+        incoming = textwrap.dedent("""\
+            import std/unittest
+            import juce/core
+
+            suite "String":
+              test "String.isEmpty":
+                var s = initString()
+                check s.isEmpty()
+
+              test "String.toRawUTF8":
+                var s = initString("hello")
+                check s.toRawUTF8() != nil
+        """)
+
+        merged = merge_incremental_tests(existing, incoming, language="nim")
+
+        # Must preserve human-edited assertion in String.isEmpty
+        assert "check s.length() == 0" in merged
+        # Must contain newly added test
+        assert 'test "String.toRawUTF8":' in merged
+        assert "check s.toRawUTF8() != nil" in merged
+        # String.isEmpty must only appear once
+        assert merged.count('test "String.isEmpty":') == 1
+
+    def test_nim_merger_with_guarded_tests(self) -> None:
+        existing = textwrap.dedent("""\
+            suite "File":
+              test "File.exists":
+                var f = initFile("/tmp")
+                check f.exists()
+        """)
+
+        incoming = textwrap.dedent("""\
+            suite "File":
+              test "File.exists":
+                var f = initFile("/tmp")
+                check f.exists()
+
+              when declared(hasWriteAccess):
+                test "File.hasWriteAccess":
+                  var f = initFile("/tmp")
+                  check f.hasWriteAccess()
+        """)
+
+        merged = merge_incremental_tests(existing, incoming, language="nim")
+        assert "when declared(hasWriteAccess):" in merged
+        assert 'test "File.hasWriteAccess":' in merged
+        assert merged.count('test "File.exists":') == 1
+
+    def test_nim_merger_no_new_tests_returns_identical(self) -> None:
+        existing = textwrap.dedent("""\
+            suite "Plain":
+              test "single":
+                check 1 == 1
+        """)
+        merged = merge_incremental_tests(existing, existing, language="nim")
+        assert merged == existing
+
+    def test_python_merger_appends_new_functions(self) -> None:
+        existing = textwrap.dedent("""\
+            def test_one():
+                assert 1 == 1
+        """)
+        incoming = textwrap.dedent("""\
+            def test_one():
+                assert 1 == 1
+
+            def test_two():
+                assert 2 == 2
+        """)
+        merged = merge_incremental_tests(existing, incoming, language="python")
+        assert "def test_one():" in merged
+        assert "def test_two():" in merged
+        assert merged.count("def test_one():") == 1
+
+
+class TestScaffoldingHookLifecycle:
+    def test_scaffold_tests_hook_enriches_layout(self, sample_unit: Header) -> None:
+        @hook("scaffold_tests", priority=Priority.PROJECT)
+        def add_extra_test(
+            layout: ProjectLayout,
+            _unit: Header,
+            _options: ScaffoldOptions,
+            **_kwargs: Any,
+        ) -> ProjectLayout:
+            layout.files.append(
+                OutputFile(
+                    path="tests/test_custom_extra.nim",
+                    content="# Custom extra test suite\n",
+                    merge_strategy="append_new_tests",
+                )
+            )
+            return layout
+
+        opts = ScaffoldOptions(package_name="hasher", target_language="nim", layout="package")
+        layout = scaffold(sample_unit, opts)
+        extra_file = layout.get_file("tests/test_custom_extra.nim")
+        assert extra_file is not None
+        assert extra_file.content == "# Custom extra test suite\n"
+        assert extra_file.merge_strategy == "append_new_tests"
+
+    def test_transform_layout_hook_injects_nim_cfg(self, sample_unit: Header) -> None:
+        @hook("transform_layout", priority=Priority.PROJECT)
+        def inject_nim_cfg(
+            layout: ProjectLayout,
+            _unit: Header,
+            _options: ScaffoldOptions,
+            **_kwargs: Any,
+        ) -> ProjectLayout:
+            existing = layout.get_file("nim.cfg")
+            if existing:
+                layout.files.remove(existing)
+                layout.files.append(
+                    OutputFile(
+                        path="nim.cfg",
+                        content=existing.content + '--backend:cpp\n--passC:"-std=c++17"\n',
+                    )
+                )
+            else:
+                layout.files.append(
+                    OutputFile(
+                        path="nim.cfg",
+                        content='--backend:cpp\n--passC:"-std=c++17"\n',
+                    )
+                )
+            return layout
+
+        opts = ScaffoldOptions(package_name="hasher", target_language="nim", layout="package")
+        layout = scaffold(sample_unit, opts)
+        cfg = layout.get_file("nim.cfg")
+        assert cfg is not None
+        assert '--passC:"-std=c++17"' in cfg.content
+
+    def test_version_detection_populates_extra_context(self) -> None:
+        unit = Header(
+            path="juce.h",
+            declarations=[
+                Constant("JUCE_MAJOR_VERSION", 8, is_macro=True),
+                Constant("JUCE_MINOR_VERSION", 0, is_macro=True),
+                Constant("JUCE_BUILD_NUMBER", 1, is_macro=True),
+            ],
+        )
+        opts = ScaffoldOptions(package_name="juce", target_language="nim", layout="file")
+        scaffold(unit, opts)
+        assert opts.extra_context.get("library_version") == "8.0.1"
+
+
+class TestProjectLayoutIncrementalWrite:
+    def test_write_to_disk_with_append_new_tests(self, tmp_path: Path) -> None:
+        test_file = tmp_path / "tests" / "test_string.nim"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        # Pre-existing test file with human edit
+        test_file.write_text(
+            textwrap.dedent("""\
+                suite "String":
+                  test "String.isEmpty":
+                    check 1 == 1
+                    # Custom user code that must not be wiped
+                    check true
+            """),
+            encoding="utf-8",
+        )
+
+        incoming_layout = ProjectLayout(
+            files=[
+                OutputFile(
+                    path="tests/test_string.nim",
+                    content=textwrap.dedent("""\
+                        suite "String":
+                          test "String.isEmpty":
+                            check 1 == 1
+
+                          test "String.contains":
+                            check "hello".contains("ll")
+                    """),
+                    merge_strategy="append_new_tests",
+                )
+            ]
+        )
+
+        incoming_layout.write_to_disk(tmp_path)
+
+        result_content = test_file.read_text(encoding="utf-8")
+        assert "# Custom user code that must not be wiped" in result_content
+        assert 'test "String.contains":' in result_content
+        assert result_content.count('test "String.isEmpty":') == 1

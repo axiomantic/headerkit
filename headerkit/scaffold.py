@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from headerkit.hooks import HookDispatcher, Priority, hook
-from headerkit.ir import Declaration, Function, Header, SourceUnit
+from headerkit.ir import Constant, Declaration, Function, Header, SourceUnit
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,9 @@ class OutputFile:
     #: is expected to edit -- work-order test stubs, the work order itself -- because a
     #: generator that eats the work it asked for is worse than no generator.
     preserve_existing: bool = False
+    #: Merge strategy when file already exists on disk.
+    #: Supported: None, "preserve", "append_new_tests".
+    merge_strategy: str | None = None
 
 
 @dataclass
@@ -39,15 +42,35 @@ class ProjectLayout:
 
     def write_to_disk(self, target_dir: Path | str, *, overwrite: bool = True) -> list[Path]:
         """Write all files in this layout to the destination directory."""
+        from headerkit.hooks import HookDispatcher, PipelineContext
+
         written: list[Path] = []
         base = Path(target_dir).resolve()
+        dispatcher = HookDispatcher()
         for f in self.files:
             p = (base / f.path).resolve()
             if not p.is_relative_to(base):
                 raise ValueError(f"Path traversal detected: {f.path}")
             p.parent.mkdir(parents=True, exist_ok=True)
-            if p.exists() and (f.preserve_existing or not overwrite):
-                continue
+            if p.exists():
+                if f.preserve_existing or not overwrite:
+                    continue
+                if f.merge_strategy:
+                    existing = p.read_text(encoding="utf-8")
+                    merged = dispatcher.first_result(
+                        "merge_file",
+                        existing,
+                        f.content,
+                        f.path,
+                        context=PipelineContext(target=f.path),
+                    )
+                    if merged is None and f.merge_strategy == "append_new_tests":
+                        lang = "nim" if f.path.endswith(".nim") else "python"
+                        merged = merge_incremental_tests(existing, f.content, language=lang)
+                    if merged is not None:
+                        p.write_text(merged, encoding="utf-8")
+                        written.append(p)
+                        continue
             p.write_text(f.content, encoding="utf-8")
             if f.is_executable:
                 p.chmod(p.stat().st_mode | 0o111)
@@ -59,6 +82,158 @@ def extract_function_names(unit: SourceUnit | Header) -> list[str]:
     """Extract top-level function names for test stubs and tripwires."""
     decls: list[Declaration] = getattr(unit, "declarations", [])
     return [d.name for d in decls if isinstance(d, Function) and d.name]
+
+
+def extract_header_version(unit: SourceUnit | Header) -> str | None:
+    """Extract library version from header macros or constants without regex."""
+    decls: list[Declaration] = getattr(unit, "declarations", [])
+    constants = {d.name: d for d in decls if isinstance(d, Constant)}
+
+    # Check for combined version strings e.g. FOO_VERSION "1.2.3"
+    for name, c in constants.items():
+        if name.endswith(("_VERSION", "_VERSION_STRING", "_VERSION_STR")):
+            val = str(c.evaluated_value if c.evaluated_value is not None else (c.value or ""))
+            val = val.strip("\"'")
+            parts = val.split(".")
+            if len(parts) >= 2 and all(p.isdigit() for p in parts[:2]):
+                return val
+
+    # Check for component macros e.g. FOO_MAJOR_VERSION, FOO_MINOR_VERSION
+    prefixes: set[str] = set()
+    for name in constants:
+        for suffix in ("_MAJOR_VERSION", "_VERSION_MAJOR"):
+            if name.endswith(suffix):
+                prefixes.add(name[: -len(suffix)])
+
+    for prefix in sorted(prefixes):
+        maj = constants.get(f"{prefix}_MAJOR_VERSION") or constants.get(f"{prefix}_VERSION_MAJOR")
+        min_ = constants.get(f"{prefix}_MINOR_VERSION") or constants.get(f"{prefix}_VERSION_MINOR")
+        patch = (
+            constants.get(f"{prefix}_PATCH_LEVEL")
+            or constants.get(f"{prefix}_PATCHLEVEL")
+            or constants.get(f"{prefix}_VERSION_PATCH")
+            or constants.get(f"{prefix}_BUILD_NUMBER")
+        )
+        if maj is not None and min_ is not None:
+            maj_val = str(maj.evaluated_value if maj.evaluated_value is not None else maj.value)
+            min_val = str(min_.evaluated_value if min_.evaluated_value is not None else min_.value)
+            patch_val = (
+                str(patch.evaluated_value if patch.evaluated_value is not None else patch.value)
+                if patch is not None
+                else "0"
+            )
+            return f"{maj_val}.{min_val}.{patch_val}"
+
+    return None
+
+
+def _extract_nim_tests(content: str) -> list[tuple[str, str]]:
+    """Extract (title, block_text) for tests in Nim source without regex."""
+    lines = content.splitlines(keepends=True)
+    tests: list[tuple[str, str]] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # Check for guard e.g. when declared(...) or when ...:
+        guard_line: str | None = None
+        if (
+            stripped.startswith("when ")
+            and stripped.endswith(":")
+            and i + 1 < len(lines)
+            and lines[i + 1].strip().startswith("test ")
+        ):
+            guard_line = line
+            i += 1
+            line = lines[i]
+            stripped = line.strip()
+
+        if stripped.startswith("test ") and ":" in stripped:
+            after_test = stripped[5:]
+            colon_idx = after_test.rfind(":")
+            title_part = after_test[:colon_idx].strip()
+            if "{" in title_part and title_part.endswith("}"):
+                title_part = title_part[: title_part.find("{")].strip()
+            test_title = title_part.strip("\"'")
+
+            indent = len(line) - len(line.lstrip())
+            block_lines = [guard_line] if guard_line is not None else []
+            block_lines.append(line)
+            i += 1
+            while i < len(lines):
+                next_line = lines[i]
+                next_stripped = next_line.strip()
+                if not next_stripped:
+                    block_lines.append(next_line)
+                    i += 1
+                    continue
+                next_indent = len(next_line) - len(next_line.lstrip())
+                if next_indent <= indent or (next_stripped.startswith("test ") and ":" in next_stripped):
+                    break
+                block_lines.append(next_line)
+                i += 1
+            tests.append((test_title, "".join(block_lines)))
+            continue
+        i += 1
+    return tests
+
+
+def _extract_python_tests(content: str) -> list[tuple[str, str]]:
+    """Extract (function_name, block_text) for tests in Python source without regex."""
+    lines = content.splitlines(keepends=True)
+    tests: list[tuple[str, str]] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if stripped.startswith("def test_") and "(" in stripped:
+            title = stripped[4 : stripped.find("(")].strip()
+            indent = len(line) - len(line.lstrip())
+            block_lines = [line]
+            i += 1
+            while i < len(lines):
+                next_line = lines[i]
+                next_stripped = next_line.strip()
+                if not next_stripped:
+                    block_lines.append(next_line)
+                    i += 1
+                    continue
+                next_indent = len(next_line) - len(next_line.lstrip())
+                if next_indent <= indent:
+                    break
+                block_lines.append(next_line)
+                i += 1
+            tests.append((title, "".join(block_lines)))
+            continue
+        i += 1
+    return tests
+
+
+def merge_incremental_tests(existing: str, new_incoming: str, language: str = "nim") -> str:
+    """Merge newly discovered test cases into an existing test file without clobbering.
+
+    Preserves all existing human edits, custom assertions, and test structure.
+    """
+    if language == "nim":
+        existing_tests = _extract_nim_tests(existing)
+        new_tests = _extract_nim_tests(new_incoming)
+    elif language in ("python", "py"):
+        existing_tests = _extract_python_tests(existing)
+        new_tests = _extract_python_tests(new_incoming)
+    else:
+        return existing
+
+    existing_titles = {t[0] for t in existing_tests}
+    missing_tests = [t for t in new_tests if t[0] not in existing_titles]
+
+    if not missing_tests:
+        return existing
+
+    result = existing.rstrip() + "\n\n"
+    for _, block in missing_tests:
+        result += block.rstrip() + "\n\n"
+    return result.rstrip() + "\n"
 
 
 @dataclass
@@ -73,6 +248,9 @@ class ScaffoldOptions:
     extra_context: dict[str, Any] = field(default_factory=dict)
     test_type: str = "both"  # Backwards compatibility alias for options["test_type"]
     test_runner: str = "tripwire"  # Backwards compatibility alias
+    test_strategy: str = "incremental"  # "incremental", "preserve", "regenerate"
+    version_guard: str = "declared"  # "declared", "version_gte", "compiles", "none"
+    version_constant: str | None = None
 
     def __post_init__(self) -> None:
         if "test_type" not in self.options and self.test_type != "both":
@@ -193,8 +371,24 @@ def scaffold(
     unit = dispatcher.waterfall("transform_unit", unit, context=ctx)
     result = dispatcher.first_result("scaffold_project", unit, options, context=ctx)
     if isinstance(result, ProjectLayout):
-        return result
-    return StdlibScaffolder().scaffold(unit, options)
+        layout = result
+    else:
+        layout = StdlibScaffolder().scaffold(unit, options)
+
+    # Detect or resolve version if not already present
+    if "library_version" not in options.extra_context:
+        detected_version = dispatcher.first_result("resolve_version", unit, context=ctx)
+        if detected_version is None:
+            detected_version = extract_header_version(unit)
+        if detected_version is not None:
+            options.extra_context["library_version"] = detected_version
+
+    if options.version_constant and "version_constant" not in options.extra_context:
+        options.extra_context["version_constant"] = options.version_constant
+
+    layout = dispatcher.waterfall("scaffold_tests", layout, unit, options, context=ctx)
+    layout = dispatcher.waterfall("transform_layout", layout, unit, options, context=ctx)
+    return layout
 
 
 def prompt_scaffold_options(
