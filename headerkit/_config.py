@@ -118,10 +118,11 @@ def find_config_file(start: Path | None = None) -> Path | None:
     home = Path.home()
 
     while True:
-        # Check .headerkit.toml first
-        headerkit_toml = current / ".headerkit.toml"
-        if headerkit_toml.exists():
-            return headerkit_toml
+        # Check .headerkit.toml and headerkit.toml first
+        for name in (".headerkit.toml", "headerkit.toml"):
+            headerkit_toml = current / name
+            if headerkit_toml.exists():
+                return headerkit_toml
 
         # Check pyproject.toml — only if it has [tool.headerkit] section
         pyproject = current / "pyproject.toml"

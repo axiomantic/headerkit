@@ -36,6 +36,14 @@ class TestFindConfigFile:
         result = find_config_file(start=tmp_path)
         assert result == config_file
 
+    def test_find_config_finds_undotted_headerkit_toml(self, tmp_path: Path) -> None:
+        """Finds headerkit.toml without leading dot in the start directory."""
+        (tmp_path / ".git").mkdir()
+        config_file = tmp_path / "headerkit.toml"
+        config_file.write_text("[backend]\n")
+        result = find_config_file(start=tmp_path)
+        assert result == config_file
+
     def test_find_config_finds_pyproject_with_headerkit_section(self, tmp_path: Path) -> None:
         """Finds pyproject.toml when it contains [tool.headerkit]."""
         (tmp_path / ".git").mkdir()
