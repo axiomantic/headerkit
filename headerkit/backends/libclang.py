@@ -2721,14 +2721,35 @@ class ClangASTConverter:
             tmpl_idx = toks.index("template")
             start = toks.index("<", tmpl_idx) + 1
             depth = 1
+            paren_depth = 0
+            bracket_depth = 0
+            brace_depth = 0
             end = start
             header_toks: list[str] = []
             while end < len(toks) and depth > 0:
                 tok = toks[end]
-                if tok == "<":
+                if tok == "(":
+                    paren_depth += 1
+                    header_toks.append(tok)
+                elif tok == ")":
+                    paren_depth = max(0, paren_depth - 1)
+                    header_toks.append(tok)
+                elif tok == "[":
+                    bracket_depth += 1
+                    header_toks.append(tok)
+                elif tok == "]":
+                    bracket_depth = max(0, bracket_depth - 1)
+                    header_toks.append(tok)
+                elif tok == "{":
+                    brace_depth += 1
+                    header_toks.append(tok)
+                elif tok == "}":
+                    brace_depth = max(0, brace_depth - 1)
+                    header_toks.append(tok)
+                elif tok == "<" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
                     depth += 1
                     header_toks.append(tok)
-                elif all(c == ">" for c in tok):
+                elif all(c == ">" for c in tok) and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
                     for _ in range(len(tok)):
                         if depth > 1:
                             depth -= 1
@@ -2745,12 +2766,17 @@ class ClangASTConverter:
         slices: list[list[str]] = []
         curr: list[str] = []
         d = 0
+        p_d = 0
         for tok in header_toks:
-            if tok in ("<", "("):
+            if tok in ("(", "[", "{"):
+                p_d += 1
+            elif tok in (")", "]", "}"):
+                p_d = max(0, p_d - 1)
+            elif tok == "<" and p_d == 0:
                 d += 1
-            elif tok in (">", ")"):
-                d -= 1
-            elif tok == "," and d == 0:
+            elif tok == ">" and p_d == 0:
+                d = max(0, d - 1)
+            elif tok == "," and d == 0 and p_d == 0:
                 slices.append(curr)
                 curr = []
                 continue
@@ -2780,11 +2806,16 @@ class ClangASTConverter:
                     name = ""
                     type_name = None
                 else:
-                    name = decl_toks[-1]
+                    name = decl_toks[-1] if decl_toks[-1].isidentifier() else ""
                     type_name = None
             else:
-                name = decl_toks[-1]
-                type_name = " ".join(decl_toks[:-1])
+                last = decl_toks[-1]
+                if last in (">", ")", "]", "}", "*", "&") or not last.isidentifier():
+                    name = ""
+                    type_name = " ".join(decl_toks)
+                else:
+                    name = last
+                    type_name = " ".join(decl_toks[:-1])
             params.append(
                 TemplateParameter(
                     name=name,
@@ -2923,7 +2954,7 @@ class ClangASTConverter:
         parsed_tpl_params = self._extract_template_parameters(cursor)
         if parsed_tpl_params:
             template_parameters = parsed_tpl_params
-            template_params = [p.name for p in parsed_tpl_params if p.is_type]
+            template_params = [p.name for p in parsed_tpl_params if p.is_type and p.name]
         else:
             template_parameters = [TemplateParameter(name=p) for p in template_params]
 
@@ -3182,7 +3213,7 @@ class ClangASTConverter:
         parsed_tpl_params = self._extract_template_parameters(cursor)
         if parsed_tpl_params:
             template_parameters = parsed_tpl_params
-            template_params = [p.name for p in parsed_tpl_params if p.is_type]
+            template_params = [p.name for p in parsed_tpl_params if p.is_type and p.name]
         else:
             template_parameters = [TemplateParameter(name=p) for p in template_params]
 
@@ -3287,7 +3318,7 @@ class ClangASTConverter:
         parsed_tpl_params = self._extract_template_parameters(cursor)
         if parsed_tpl_params:
             template_parameters = parsed_tpl_params
-            template_params = [p.name for p in parsed_tpl_params if p.is_type]
+            template_params = [p.name for p in parsed_tpl_params if p.is_type and p.name]
         else:
             template_parameters = [TemplateParameter(name=p) for p in template_params]
 

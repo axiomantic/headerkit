@@ -928,3 +928,57 @@ class TestNimLexicalCorrectness:
         code = write_nim(h, header_path="test.hpp")
         assert 'proc toCString*(this: String): cstring {.importcpp: "(char*)#.toRawUTF8()"' in code
         assert "proc `$`*(this: String): string =" in code
+
+    def test_nim_identifier_normalization_collision_disambiguation(self) -> None:
+        """Structs whose names collide under Nim's case/underscore insensitivity must be disambiguated."""
+        s1 = Struct(name="MessageManagerLock", is_cppclass=True, cpp_name="juce::MessageManagerLock")
+        s2 = Struct(name="MessageManager_Lock", is_cppclass=True, cpp_name="juce::MessageManager::Lock")
+        h = Header(path="test.hpp", declarations=[s1, s2])
+        code = write_nim(h, header_path="test.hpp")
+        assert "MessageManagerLock*" in code
+        assert "MessageManager_Lock_2*" in code
+        assert 'importcpp: "juce::MessageManager::Lock"' in code
+
+    def test_fixed_width_integer_default_value_suffixes(self) -> None:
+        """Default values for fixed-width integers must include type suffixes."""
+        f = Function(
+            name="setMagic",
+            return_type=CType("void"),
+            parameters=[
+                Parameter(name="mask", type=CType("uint32"), default_value="0xf2b49e2c"),
+                Parameter(name="count", type=CType("int64"), default_value="100"),
+            ],
+        )
+        h = Header(path="test.h", declarations=[f])
+        code = write_nim(h, header_path="test.h")
+        assert "mask: uint32 = 0xf2b49e2c'u32" in code
+        assert "count: int64 = 100'i64" in code
+
+    def test_template_nested_type_resolution(self) -> None:
+        """Template nested types like Helper<T>::Type format cleanly without emitting <> in identifiers."""
+        s = Struct(name="Outer_Inner", template_params=["T"])
+        f1 = Function(
+            name="setValue",
+            return_type=CType("void"),
+            parameters=[
+                Parameter(name="v", type=CType("FloatTypeHelper<SmoothedValueType>::Type")),
+            ],
+        )
+        f2 = Function(
+            name="getNested",
+            return_type=CType("Outer<int>::Inner"),
+            parameters=[],
+        )
+        h = Header(path="test.hpp", declarations=[s, f1, f2])
+        code = write_nim(h, header_path="test.hpp")
+        assert "v: auto" in code
+        assert "proc getNested*(): Outer_Inner[cint]" in code
+
+    def test_standard_nim_types_typedef_skipped(self) -> None:
+        """Typedefs for standard Nim types like uint32 must be omitted to prevent shadowing system types."""
+        t1 = Typedef(name="uint32", underlying_type=CType("unsigned int"))
+        t2 = Typedef(name="CustomId", underlying_type=CType("unsigned int"))
+        h = Header(path="test.h", declarations=[t1, t2])
+        code = write_nim(h, header_path="test.h")
+        assert "uint32* =" not in code
+        assert "CustomId* = cuint" in code
