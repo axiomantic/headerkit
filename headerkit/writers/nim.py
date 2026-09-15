@@ -561,16 +561,31 @@ class NimWriter(BaseWriter):
                 res.extend(_collect_bases(nr))
             return res
 
+        def _collect_polymorphic_and_base_names(st: Struct, parent_prefix: str = "") -> list[str]:
+            res: list[str] = _collect_bases(st)
+            st_name = f"{parent_prefix}_{st.name}" if parent_prefix and st.name else (st.name or "")
+            is_poly = (st.destructor and st.destructor.is_virtual) or any(m.is_virtual for m in st.methods)
+            if is_poly:
+                if st.name:
+                    res.append(st.name)
+                    res.append(st.name.split("::")[-1])
+                if st_name:
+                    res.append(st_name)
+                    res.append(st_name.replace("::", "_"))
+                if st.cpp_name:
+                    res.append(st.cpp_name)
+                    res.append(st.cpp_name.replace("::", "_"))
+                    res.append(st.cpp_name.split("::")[-1])
+            for nr in st.nested_records:
+                res.extend(_collect_polymorphic_and_base_names(nr, parent_prefix=st_name or st.name or ""))
+            return res
+
         all_base_names: set[str] = set()
         for decl in header.declarations:
             if isinstance(decl, Struct):
-                all_base_names.update(_collect_bases(decl))
-                if decl.name and (
-                    (decl.destructor and decl.destructor.is_virtual) or any(m.is_virtual for m in decl.methods)
-                ):
-                    all_base_names.add(decl.name)
+                all_base_names.update(_collect_polymorphic_and_base_names(decl))
         known_base_classes: set[str] = all_base_names
-        self._normalized_base_names: set[str] = {_normalize_nim_ident(b) for b in all_base_names}
+        self._normalized_base_names = {_normalize_nim_ident(b) for b in all_base_names}
         emitted_types: set[str] = set()
         types_section: list[str] = []
         procs_section: list[str] = []
@@ -1556,16 +1571,20 @@ class NimWriter(BaseWriter):
                 if base_t not in ("auto", "pointer", "void"):
                     base_str = f" of {base_t}"
         elif (
-            known_base_classes
-            and s.name
-            and (
-                s.name in known_base_classes
-                or s.name.split("_")[-1] in known_base_classes
-                or (
-                    hasattr(self, "_normalized_base_names")
-                    and _normalize_nim_ident(s.name) in self._normalized_base_names
+            (s.destructor and s.destructor.is_virtual)
+            or any(m.is_virtual for m in s.methods)
+            or (
+                known_base_classes
+                and s.name
+                and (
+                    s.name in known_base_classes
+                    or s.name.split("_")[-1] in known_base_classes
+                    or (
+                        hasattr(self, "_normalized_base_names")
+                        and _normalize_nim_ident(s.name) in self._normalized_base_names
+                    )
+                    or (s.cpp_name and s.cpp_name.split("::")[-1] in known_base_classes)
                 )
-                or (s.cpp_name and s.cpp_name.split("::")[-1] in known_base_classes)
             )
         ):
             base_str = " of RootObj"
