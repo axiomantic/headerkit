@@ -1616,8 +1616,12 @@ class NimWriter(BaseWriter):
             nim_name = qualified_name
         e_name = _escape_ident(nim_name, is_type=True)
 
-        spelling = _c_type_spelling(name, e.is_typedef, "enum")
-        lines = [f'{e_name}* {{.size: sizeof(cint), importc: "{spelling}", header: "{header_file}".}} = enum']
+        if e.cpp_name:
+            import_pragma = f'importcpp: "{e.cpp_name}", header: "{header_file}"'
+        else:
+            spelling = _c_type_spelling(name, e.is_typedef, "enum")
+            import_pragma = f'importc: "{spelling}", header: "{header_file}"'
+        lines = [f"{e_name}* {{.size: sizeof(cint), {import_pragma}.}} = enum"]
         for v in e.values:
             v_name = _escape_ident(v.name)
             if v.value is not None:
