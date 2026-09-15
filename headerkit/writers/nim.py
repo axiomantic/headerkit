@@ -1570,7 +1570,7 @@ class NimWriter(BaseWriter):
                 base_t = self._format_type(CType(raw_base))
                 if base_t not in ("auto", "pointer", "void"):
                     base_str = f" of {base_t}"
-        elif (
+        if not base_str and (
             (s.destructor and s.destructor.is_virtual)
             or any(m.is_virtual for m in s.methods)
             or (
