@@ -329,6 +329,9 @@ def _escape_ident(name: str, is_type: bool = False) -> str:
         return "anon"
     if name in CPP_OPERATOR_MAP:
         return CPP_OPERATOR_MAP[name]
+    if name.startswith('operator""'):
+        suffix_str = name[10:].strip().lstrip("_")
+        return f"op_lit_{suffix_str}" if suffix_str else "op_lit"
     if "::" in name:
         name = name.replace("::", "_")
 
@@ -420,6 +423,18 @@ def _format_default_value(val: str | None, type_name: str | None = None) -> str 
         return None
     v = val.strip()
     if v in ("nullptr", "NULL"):
+        if type_name:
+            clean_type = type_name.strip("`")
+            if (
+                clean_type.startswith("ptr ")
+                or clean_type.startswith("ref ")
+                or clean_type.startswith("pointer")
+                or clean_type.startswith("cstring")
+                or clean_type.startswith("proc ")
+                or clean_type == "pointer"
+            ):
+                return "nil"
+            return None
         return "nil"
     if v in ("true", "false"):
         return v
@@ -524,6 +539,12 @@ class NimWriter(BaseWriter):
 
         # Collect function names and type names upfront for collision detection
         func_names: set[str] = {decl.name for decl in header.declarations if isinstance(decl, Function) and decl.name}
+        for decl in header.declarations:
+            if isinstance(decl, Struct):
+                for m in decl.methods:
+                    if m.name:
+                        func_names.add(m.name)
+                        func_names.add(_escape_ident(m.name))
 
         def _collect_bases(st: Struct) -> list[str]:
             res: list[str] = []
@@ -1758,7 +1779,8 @@ class NimWriter(BaseWriter):
                 cpp_pattern = f"{op_sym}(#)"
         else:
             cpp_pattern = f"#.{(m.name)}(@)"
-        pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
+        clean_cpp_pattern = cpp_pattern.replace('"', '\\"')
+        pragmas.append(f'importcpp: "{clean_cpp_pattern}", header: "{header_file}"')
 
         decl = f"proc {m_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"
         if old_struct_name is not None:
@@ -1845,6 +1867,8 @@ class NimWriter(BaseWriter):
             const_lines: list[str] = []
             for v in e.values:
                 v_name = _escape_ident(v.name)
+                if func_names and (v.name in func_names or v_name in func_names):
+                    v_name = f"{v_name}_cmd"
                 if v.value is not None:
                     const_lines.append(f"{v_name}* = {v.value}")
                 else:
@@ -1990,9 +2014,11 @@ class NimWriter(BaseWriter):
 
         pragmas: list[str] = []
         if f.namespace:
-            pragmas.append(f'importcpp: "{f.namespace}::{f.name}(@)", header: "{header_file}"')
-        elif f.template_params:
-            pragmas.append(f'importcpp: "{f.name}(@)", header: "{header_file}"')
+            cpp_pattern = f"{f.namespace}::{f.name}(@)".replace('"', '\\"')
+            pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
+        elif f.template_params or '"' in f.name:
+            cpp_pattern = f"{f.name}(@)".replace('"', '\\"')
+            pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
         else:
             pragmas.append(f'importc: "{f.name}", header: "{header_file}"')
 
