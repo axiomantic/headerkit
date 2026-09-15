@@ -257,6 +257,14 @@ STANDARD_NIM_TYPES: set[str] = {
     "std_unordered_map",
     "std_pair",
     "duration",
+    "typedesc",
+    "Atomic",
+    "SharedPtr",
+    "UniquePtr",
+    "WeakPtr",
+    "CppVector",
+    "std_optional",
+    "initializer_list",
 }
 
 
@@ -521,6 +529,10 @@ class NimWriter(BaseWriter):
             res: list[str] = []
             for b in st.bases:
                 if b.name:
+                    clean_b = b.name.split("<")[0].strip()
+                    res.append(clean_b)
+                    res.append(clean_b.replace("::", "_"))
+                    res.append(clean_b.split("::")[-1])
                     res.append(b.name)
                     res.append(b.name.replace("::", "_"))
                     res.append(b.name.split("::")[-1])
@@ -806,6 +818,7 @@ class NimWriter(BaseWriter):
         self._emitted_proc_sigs: set[tuple[str, tuple[str, ...]]] = set()
         self._emitted_normalized_types: dict[str, str] = {_normalize_nim_ident(st): st for st in STANDARD_NIM_TYPES}
         self._type_renames: dict[str, str] = {}
+        self._type_aliases: dict[str, str] = {}
 
         for raw_opaque in sorted(opaque_targets):
             clean_opaque = _escape_ident(raw_opaque, is_type=True)
@@ -843,14 +856,23 @@ class NimWriter(BaseWriter):
                         known_types.add(nr.name)
                         known_types.add(f"{decl.name}_{nr.name}")
                         known_types.add(_escape_ident(f"{decl.name}_{nr.name}", is_type=True))
-                for it in decl.inner_typedefs:
-                    known_types.add(it)
-                    known_types.add(f"{decl.name}_{it}")
-                    known_types.add(_escape_ident(f"{decl.name}_{it}", is_type=True))
         for raw_opaque in opaque_targets:
             known_types.add(raw_opaque)
             known_types.add(_escape_ident(raw_opaque, is_type=True))
         self._known_types = known_types
+
+        for decl in header.declarations:
+            if isinstance(decl, Typedef) and decl.name:
+                underlying = self._format_type(decl.underlying_type)
+                base_alias = underlying.split("[")[0].strip("`")
+                self._type_aliases[decl.name] = base_alias
+                self._type_aliases[_escape_ident(decl.name, is_type=True)] = base_alias
+            elif isinstance(decl, Struct):
+                for in_name, in_underlying in decl.inner_typedefs.items():
+                    u_fmt = self._format_type(CType(in_underlying))
+                    b_alias = u_fmt.split("[")[0].strip("`")
+                    self._type_aliases[in_name] = b_alias
+                    self._type_aliases[f"{decl.name}_{in_name}"] = b_alias
 
         for decl in header.declarations:
             if isinstance(decl, Struct):
@@ -1160,10 +1182,19 @@ class NimWriter(BaseWriter):
             if "::" in name:
                 name = name.replace("::", "_")
 
+            if hasattr(self, "_current_nested_records") and name in self._current_nested_records:
+                return str(self._current_nested_records[name])
+
             if hasattr(self, "_current_struct_name") and self._current_struct_name:
                 scoped = f"{self._current_struct_name}_{name}"
                 if scoped in getattr(self, "_known_types", set()):
                     return _escape_ident(scoped, is_type=True)
+
+            if hasattr(self, "_struct_name_stack"):
+                for parent in reversed(self._struct_name_stack[:-1]):
+                    scoped = f"{parent}_{name}"
+                    if scoped in getattr(self, "_known_types", set()):
+                        return _escape_ident(scoped, is_type=True)
 
             if hasattr(self, "_type_renames"):
                 name = self._type_renames.get(name, name)
@@ -1256,11 +1287,12 @@ class NimWriter(BaseWriter):
         norm = _normalize_nim_ident(t_name)
         if hasattr(self, "_emitted_normalized_types"):
             if norm in self._emitted_normalized_types:
+                clean_base = t_name.strip("`")
                 suffix_idx = 2
-                candidate = f"{t_name}_{suffix_idx}"
+                candidate = _escape_ident(f"{clean_base}_{suffix_idx}", is_type=True)
                 while _normalize_nim_ident(candidate) in self._emitted_normalized_types:
                     suffix_idx += 1
-                    candidate = f"{t_name}_{suffix_idx}"
+                    candidate = _escape_ident(f"{clean_base}_{suffix_idx}", is_type=True)
                 if hasattr(self, "_type_renames"):
                     self._type_renames[name] = candidate
                 t_name = candidate
@@ -1276,8 +1308,13 @@ class NimWriter(BaseWriter):
         self._current_struct_template_params = set(self._get_struct_type_params(s))
         self._current_struct_name = name
 
-        self._current_nested_records = {}
+        if not hasattr(self, "_struct_name_stack"):
+            self._struct_name_stack = []
+        self._struct_name_stack.append(name)
+
+        self._current_nested_records = dict(old_nested or {})
         s_tps = self._get_struct_type_params(s)
+        tps = s_tps
         for n in s.nested_records:
             if n.name:
                 n_nim = f"{name}_{n.name}"
@@ -1365,6 +1402,10 @@ class NimWriter(BaseWriter):
                 if underlying_nim in ("auto", inner_name, f"`{inner_name}`"):
                     continue
                 tps = self._get_struct_type_params(s)
+                tokens = _extract_type_identifiers(underlying_nim)
+                all_known = getattr(self, "_known_types", set()) | set(tps)
+                if any(tok not in all_known for tok in tokens):
+                    continue
                 has_tp = bool(
                     tps
                     and (
@@ -1394,10 +1435,30 @@ class NimWriter(BaseWriter):
                     or any(tp.lower() == inner_name.lower() for tp in tps)
                 )
                 alias_name = f"{name}_{inner_name}" if is_dangerous_bare else inner_name
-                type_lines.append(f"{_escape_ident(alias_name, is_type=True)}*{t_params} = {underlying_nim}")
+                clean_alias = _escape_ident(alias_name, is_type=True)
+                norm = _normalize_nim_ident(clean_alias)
+                if hasattr(self, "_emitted_normalized_types"):
+                    if norm in self._emitted_normalized_types:
+                        alias_name = f"{name}_{inner_name}"
+                        clean_alias = _escape_ident(alias_name, is_type=True)
+                        norm = _normalize_nim_ident(clean_alias)
+                        if norm in self._emitted_normalized_types:
+                            continue
+                    self._emitted_normalized_types[norm] = clean_alias
+                type_lines.append(f"{clean_alias}*{t_params} = {underlying_nim}")
                 if emitted_types is not None:
                     emitted_types.add(alias_name)
+                    emitted_types.add(clean_alias)
                     emitted_types.add(inner_name)
+                if hasattr(self, "_known_types"):
+                    self._known_types.add(alias_name)
+                    self._known_types.add(clean_alias)
+                    self._known_types.add(inner_name)
+                if hasattr(self, "_type_aliases"):
+                    base_alias = underlying_nim.split("[")[0].strip("`")
+                    self._type_aliases[inner_name] = base_alias
+                    self._type_aliases[clean_alias] = base_alias
+                    self._type_aliases[alias_name] = base_alias
 
         # Generics (only emit type parameters in Nim generic object declarations)
         type_tpl_params = [tp for tp in s.template_parameters if tp.is_type and tp.name]
@@ -1450,8 +1511,21 @@ class NimWriter(BaseWriter):
             tps = self._get_struct_type_params(s)
             valid_bases = [b for b in public_bases if b.name and b.name not in tps]
             if valid_bases:
-                base_t = self._format_type(CType(valid_bases[0].name))
-                if base_t != "auto":
+                raw_base = valid_bases[0].name.strip("`")
+                if hasattr(self, "_current_nested_records") and raw_base in self._current_nested_records:
+                    raw_base = self._current_nested_records[raw_base]
+                elif hasattr(self, "_current_struct_name") and self._current_struct_name:
+                    scoped = f"{self._current_struct_name}_{raw_base}"
+                    if scoped in getattr(self, "_known_types", set()):
+                        raw_base = scoped
+                if hasattr(self, "_struct_name_stack"):
+                    for parent in reversed(self._struct_name_stack[:-1]):
+                        scoped = f"{parent}_{raw_base}"
+                        if scoped in getattr(self, "_known_types", set()):
+                            raw_base = scoped
+                            break
+                base_t = self._format_type(CType(raw_base))
+                if base_t not in ("auto", "pointer", "void"):
                     base_str = f" of {base_t}"
         elif (
             known_base_classes
@@ -1477,6 +1551,10 @@ class NimWriter(BaseWriter):
             for f in visible_fields:
                 f_name = _escape_ident(f.name)
                 f_type = self._format_type(f.type)
+                tokens = _extract_type_identifiers(f_type)
+                all_known = getattr(self, "_known_types", set()) | set(tps)
+                if any(tok not in all_known for tok in tokens):
+                    f_type = "pointer"
                 lines.append(f"  {f_name}*: {f_type}")
 
         # Static member variables
@@ -1486,7 +1564,9 @@ class NimWriter(BaseWriter):
             cpp_target = f"{struct_cpp}::{f.name}"
             var_name = _escape_ident(f"{name}_{f.name}")
             var_type = self._format_type(f.type)
-            if var_type in ("`type`", "type", "auto"):
+            tokens = _extract_type_identifiers(var_type)
+            all_known = getattr(self, "_known_types", set()) | set(tps)
+            if var_type in ("`type`", "type", "auto") or any(tok not in all_known for tok in tokens):
                 var_type = "pointer"
             methods_lines.extend(
                 ["", f'var {var_name}* {{.importcpp: "{cpp_target}", header: "{header_file}".}}: {var_type}']
@@ -1546,6 +1626,9 @@ class NimWriter(BaseWriter):
                 ]
             )
 
+        if hasattr(self, "_struct_name_stack") and self._struct_name_stack:
+            self._struct_name_stack.pop()
+
         if old_inner is not None:
             self._current_inner_typedefs = old_inner
         else:
@@ -1569,6 +1652,27 @@ class NimWriter(BaseWriter):
         type_lines.extend(lines)
         return type_lines, methods_lines
 
+    def _canonicalize_proc_param_type(self, pt: str) -> str:
+        clean = pt.strip()
+        prefix = ""
+        for pfx in ("var ", "ptr ", "lent ", "sink ", "typedesc["):
+            if clean.startswith(pfx):
+                prefix = pfx
+                clean = clean[len(pfx) :]
+                if pfx == "typedesc[" and clean.endswith("]"):
+                    clean = clean[:-1]
+                break
+        clean_base = clean.split("[")[0].strip("`")
+        if hasattr(self, "_type_aliases") and clean_base in self._type_aliases:
+            clean = self._type_aliases[clean_base]
+        elif hasattr(self, "_type_renames") and clean_base in self._type_renames:
+            clean = self._type_renames[clean_base]
+        else:
+            clean = clean_base
+        if prefix == "typedesc[":
+            return f"typedesc[{clean}]"
+        return f"{prefix}{clean}"
+
     def _write_method(self, s: Struct, m: Function, header_file: str) -> list[str]:
         """Render a C++ member method or operator in Nim."""
         if m.is_deleted:
@@ -1590,14 +1694,31 @@ class NimWriter(BaseWriter):
         else:
             params.append(f"this: var {struct_type}")
 
+        # Generic parameters (combine struct and method template parameters)
+        all_tp = list(tps)
+        m_tps = [tp.name for tp in m.template_parameters if tp.is_type and tp.name] or [
+            tp for tp in m.template_params if tp
+        ]
+        for mtp in m_tps:
+            if mtp not in all_tp:
+                all_tp.append(mtp)
+        t_params = f"[{', '.join(_escape_ident(tp) for tp in all_tp)}]" if all_tp else ""
+        all_known = getattr(self, "_known_types", set()) | set(all_tp) | set(tps)
+
         for i, p in enumerate(m.parameters):
             p_name = _escape_ident(p.name or f"a{i}")
             p_type = self._format_type(p.type, in_param=True)
+            tokens = _extract_type_identifiers(p_type)
+            if any(tok not in all_known for tok in tokens):
+                p_type = "auto"
             formatted_default = _format_default_value(p.default_value, p_type)
             default_str = f" = {formatted_default}" if formatted_default is not None else ""
             params.append(f"{p_name}: {p_type}{default_str}")
 
-        param_types = tuple(p.split(":", 1)[1].split("=")[0].strip() if ":" in p else p for p in params)
+        param_types = tuple(
+            self._canonicalize_proc_param_type(p.split(":", 1)[1].split("=")[0].strip() if ":" in p else p)
+            for p in params
+        )
         sig = (m_name, param_types)
         if hasattr(self, "_emitted_proc_sigs"):
             if sig in self._emitted_proc_sigs:
@@ -1608,20 +1729,9 @@ class NimWriter(BaseWriter):
                 return []
             self._emitted_proc_sigs.add(sig)
 
-        # Generic parameters (combine struct and method template parameters)
-        all_tp = list(tps)
-        m_tps = [tp.name for tp in m.template_parameters if tp.is_type and tp.name] or [
-            tp for tp in m.template_params if tp
-        ]
-        for mtp in m_tps:
-            if mtp not in all_tp:
-                all_tp.append(mtp)
-        t_params = f"[{', '.join(_escape_ident(tp) for tp in all_tp)}]" if all_tp else ""
-
         ret_type = self._format_type(m.return_type)
         if ret_type != "void":
             tokens = _extract_type_identifiers(ret_type)
-            all_known = getattr(self, "_known_types", set()) | set(all_tp) | set(tps)
             if any(tok not in all_known for tok in tokens):
                 ret_type = "auto"
         ret_str = f": {ret_type}" if ret_type != "void" else ""
@@ -1673,20 +1783,6 @@ class NimWriter(BaseWriter):
         proc_name = _escape_ident(f"construct{s_name}")
         params: list[str] = []
 
-        for i, p in enumerate(ctor.parameters):
-            p_name = _escape_ident(p.name or f"a{i}")
-            p_type = self._format_type(p.type, in_param=True)
-            formatted_default = _format_default_value(p.default_value, p_type)
-            default_str = f" = {formatted_default}" if formatted_default is not None else ""
-            params.append(f"{p_name}: {p_type}{default_str}")
-
-        param_types = tuple(p.split(":", 1)[1].split("=")[0].strip() if ":" in p else p for p in params)
-        sig = (proc_name, param_types)
-        if hasattr(self, "_emitted_proc_sigs"):
-            if sig in self._emitted_proc_sigs:
-                return []
-            self._emitted_proc_sigs.add(sig)
-
         tps = self._get_struct_type_params(s)
         ret_type = self._get_struct_nim_type(s)
 
@@ -1697,6 +1793,28 @@ class NimWriter(BaseWriter):
         for ctp in ctor_tps:
             if ctp not in all_tps:
                 all_tps.append(ctp)
+
+        all_known = getattr(self, "_known_types", set()) | set(all_tps)
+
+        for i, p in enumerate(ctor.parameters):
+            p_name = _escape_ident(p.name or f"a{i}")
+            p_type = self._format_type(p.type, in_param=True)
+            tokens = _extract_type_identifiers(p_type)
+            if any(tok not in all_known for tok in tokens):
+                p_type = "auto"
+            formatted_default = _format_default_value(p.default_value, p_type)
+            default_str = f" = {formatted_default}" if formatted_default is not None else ""
+            params.append(f"{p_name}: {p_type}{default_str}")
+
+        param_types = tuple(
+            self._canonicalize_proc_param_type(p.split(":", 1)[1].split("=")[0].strip() if ":" in p else p)
+            for p in params
+        )
+        sig = (proc_name, param_types)
+        if hasattr(self, "_emitted_proc_sigs"):
+            if sig in self._emitted_proc_sigs:
+                return []
+            self._emitted_proc_sigs.add(sig)
 
         if all_tps:
             t_params = f"[{', '.join(_escape_ident(tp) for tp in all_tps)}]"
@@ -1745,11 +1863,12 @@ class NimWriter(BaseWriter):
                 if qualified_name and _normalize_nim_ident(qualified_name) not in self._emitted_normalized_types:
                     e_name = qualified_name
                 else:
+                    clean_base = e_name.strip("`")
                     suffix_idx = 2
-                    candidate = f"{e_name}_{suffix_idx}"
+                    candidate = _escape_ident(f"{clean_base}_{suffix_idx}", is_type=True)
                     while _normalize_nim_ident(candidate) in self._emitted_normalized_types:
                         suffix_idx += 1
-                        candidate = f"{e_name}_{suffix_idx}"
+                        candidate = _escape_ident(f"{clean_base}_{suffix_idx}", is_type=True)
                     if hasattr(self, "_type_renames"):
                         self._type_renames[name] = candidate
                     e_name = candidate
@@ -1769,7 +1888,7 @@ class NimWriter(BaseWriter):
             if v.value is not None:
                 if v.value in seen_values:
                     first_name = seen_values[v.value]
-                    const_lines.append(f"const {v_name}* = {e_name}.{first_name}")
+                    const_lines.append(f"{v_name}* = {e_name}.{first_name}")
                 else:
                     seen_values[v.value] = v_name
                     lines.append(f"  {v_name} = {v.value}")
@@ -1829,14 +1948,26 @@ class NimWriter(BaseWriter):
             return []
         f_name = _escape_ident(f.name)
         params: list[str] = []
+        all_tp = set(
+            [tp.name for tp in f.template_parameters if tp.is_type and tp.name]
+            or [tp for tp in f.template_params if tp]
+        )
+        all_known = getattr(self, "_known_types", set()) | all_tp
+
         for i, p in enumerate(f.parameters):
             p_name = _escape_ident(p.name or f"a{i}")
             p_type = self._format_type(p.type, in_param=True)
+            tokens = _extract_type_identifiers(p_type)
+            if any(tok not in all_known for tok in tokens):
+                p_type = "auto"
             formatted_default = _format_default_value(p.default_value, p_type)
             default_str = f" = {formatted_default}" if formatted_default is not None else ""
             params.append(f"{p_name}: {p_type}{default_str}")
 
-        param_types = tuple(p.split(":", 1)[1].split("=")[0].strip() if ":" in p else p for p in params)
+        param_types = tuple(
+            self._canonicalize_proc_param_type(p.split(":", 1)[1].split("=")[0].strip() if ":" in p else p)
+            for p in params
+        )
         sig = (f_name, param_types)
         if hasattr(self, "_emitted_proc_sigs"):
             if sig in self._emitted_proc_sigs:
@@ -1846,7 +1977,6 @@ class NimWriter(BaseWriter):
         ret_type = self._format_type(f.return_type)
         if ret_type != "void":
             tokens = _extract_type_identifiers(ret_type)
-            all_known = getattr(self, "_known_types", set()) | set(f.template_params)
             if any(tok not in all_known for tok in tokens):
                 ret_type = "auto"
         ret_str = f": {ret_type}" if ret_type != "void" else ""

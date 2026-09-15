@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `NimWriter` type resolution and overload deduplication:
+  - Scoped base class resolution: resolves sibling nested class bases across enclosing struct hierarchies and preserves `_struct_name_stack`.
+  - Inner typedef filtering: skips unresolvable inner typedefs containing unknown tokens and dynamically registers valid ones in known types and type aliases.
+  - Proc signature canonicalization: canonicalizes alias parameter types in `_emitted_proc_sigs` to deduplicate generic alias method overloads.
+  - Parameter and field validation: validates method, constructor, and function parameter types and struct fields against known types, falling back safely to `auto` or `pointer` for unresolvable types.
 - Layout disk writer merge precedence: in `ProjectLayout.write_to_disk`, fixed an issue where `preserve_existing=True` short-circuited and prevented `merge_strategy` from executing.
 - Multi-test when block guard extraction: `_extract_nim_tests` now maintains active compile-time `when` guards across all tests inside a guarded block rather than only attaching the guard to the first test.
 - Function pointer and array return type inference in `NimWriter`: `_extract_type_identifiers` now strips parameter colons, braces, and dots, handles `UncheckedArray`, and ignores numeric array bounds so complex return signatures do not falsely degrade to `: auto`.
