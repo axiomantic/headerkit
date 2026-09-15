@@ -544,6 +544,10 @@ class NimWriter(BaseWriter):
         for decl in header.declarations:
             if isinstance(decl, Struct):
                 all_base_names.update(_collect_bases(decl))
+                if decl.name and (
+                    (decl.destructor and decl.destructor.is_virtual) or any(m.is_virtual for m in decl.methods)
+                ):
+                    all_base_names.add(decl.name)
         known_base_classes: set[str] = all_base_names
         self._normalized_base_names: set[str] = {_normalize_nim_ident(b) for b in all_base_names}
         emitted_types: set[str] = set()
@@ -828,8 +832,11 @@ class NimWriter(BaseWriter):
                 and raw_opaque not in emitted_types
                 and norm not in self._emitted_normalized_types
             ):
+                base_clause = (
+                    " of RootObj" if (raw_opaque in known_base_classes or clean_opaque in known_base_classes) else ""
+                )
                 types_section.append(
-                    f'{clean_opaque}* {{.importc: "struct {raw_opaque}", header: "{header_file}", bycopy.}} = object'
+                    f'{clean_opaque}* {{.importc: "struct {raw_opaque}", header: "{header_file}", bycopy.}} = object{base_clause}'
                 )
                 emitted_types.add(clean_opaque)
                 emitted_types.add(raw_opaque)
