@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `NimWriter` type resolution and overload deduplication:
+  - C++ inheritance and polymorphism: emitted `{.inheritable.}` pragma for C++ base classes, classes with virtual methods, and classes with virtual destructors instead of `of RootObj`, eliminating invalid `m_type` RTTI member injection when compiling against native C++ libraries while allowing subclass derivation.
+  - User-defined literal operator escaping: sanitized C++11 user-defined literal operators (e.g. `operator""_px`) in `_escape_ident` to valid Nim identifiers (`op_lit_*`) and escaped double quotes in `importcpp` patterns.
+  - Value object default value formatting: restricted `nullptr` / `NULL` to `nil` mapping in `_format_default_value` strictly to pointer, ref, cstring, and proc types, preventing invalid `nil` default assignments on C++ value objects (e.g. `UniquePtr`).
+  - Anonymous enum constant disambiguation: resolved top-level constant collisions between anonymous enum values and proc/method names by suffixing colliding constants with `_cmd`.
   - Scoped base class resolution: resolves sibling nested class bases across enclosing struct hierarchies and preserves `_struct_name_stack`.
   - Inner typedef filtering: skips unresolvable inner typedefs containing unknown tokens and dynamically registers valid ones in known types and type aliases.
   - Proc signature canonicalization: canonicalizes alias parameter types in `_emitted_proc_sigs` to deduplicate generic alias method overloads.
