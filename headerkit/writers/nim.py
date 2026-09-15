@@ -1364,7 +1364,8 @@ class NimWriter(BaseWriter):
         # Static member variables
         static_fields = [f for f in s.fields if f.is_static and f.access not in ("private", "protected")]
         for f in static_fields:
-            cpp_target = f"{s.cpp_name or s.name}::{f.name}"
+            struct_cpp = s.cpp_name or (f"{s.namespace}::{s.name}" if s.namespace else s.name)
+            cpp_target = f"{struct_cpp}::{f.name}"
             var_name = _escape_ident(f"{name}_{f.name}")
             var_type = self._format_type(f.type)
             if var_type in ("`type`", "type", "auto"):
@@ -1411,6 +1412,21 @@ class NimWriter(BaseWriter):
                             "    inc it",
                         ]
                     )
+
+        # Idiomatic stringifier helper for String types exposing toRawUTF8
+        if s.name == "String" and any(
+            m.name == "toRawUTF8" for m in s.methods if m.access not in ("private", "protected")
+        ):
+            struct_type = self._get_struct_nim_type(s)
+            methods_lines.extend(
+                [
+                    "",
+                    f'proc toCString*(this: {struct_type}): cstring {{.importcpp: "(char*)#.toRawUTF8()", header: "{header_file}".}}',
+                    f"proc `$`*(this: {struct_type}): string =",
+                    "  let c = this.toCString()",
+                    '  if c == nil: "" else: $c',
+                ]
+            )
 
         if old_inner is not None:
             self._current_inner_typedefs = old_inner
@@ -1495,7 +1511,8 @@ class NimWriter(BaseWriter):
         # Pragmas
         pragmas: list[str] = []
         if m.is_static:
-            cpp_pattern = f"{s.name}::{m.name}(@)"
+            struct_cpp = s.cpp_name or (f"{s.namespace}::{s.name}" if s.namespace else s.name)
+            cpp_pattern = f"{struct_cpp}::{m.name}(@)"
         elif m.name == "operator[]":
             cpp_pattern = "#[@]"
         elif m.name.startswith("operator"):

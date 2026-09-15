@@ -888,3 +888,43 @@ class TestNimLexicalCorrectness:
         code = write_nim(h, header_path="test.hpp")
         assert "Expr_Type* {.size: sizeof(cint)" in code
         assert "proc getType*(this: Expr): Expr_Type" in code
+
+    def test_static_method_namespace_qualification(self) -> None:
+        """Static methods on namespaced structs must include namespace in importcpp."""
+        s = Struct(
+            name="SystemStats",
+            namespace="juce",
+            is_cppclass=True,
+            methods=[
+                Function(
+                    name="getJUCEVersion",
+                    return_type=CType("const char *"),
+                    is_static=True,
+                ),
+            ],
+            fields=[
+                Field(name="buildNumber", type=CType("int"), is_static=True),
+            ],
+        )
+        h = Header(path="test.hpp", declarations=[s])
+        code = write_nim(h, header_path="test.hpp")
+        assert 'importcpp: "juce::SystemStats::getJUCEVersion(@)"' in code
+        assert 'importcpp: "juce::SystemStats::buildNumber"' in code
+
+    def test_string_type_synthesizes_idiomatic_helpers(self) -> None:
+        """A struct named String exposing toRawUTF8 gets toCString and $ helpers."""
+        s = Struct(
+            name="String",
+            namespace="juce",
+            is_cppclass=True,
+            methods=[
+                Function(
+                    name="toRawUTF8",
+                    return_type=CType("const char *"),
+                ),
+            ],
+        )
+        h = Header(path="test.hpp", declarations=[s])
+        code = write_nim(h, header_path="test.hpp")
+        assert 'proc toCString*(this: String): cstring {.importcpp: "(char*)#.toRawUTF8()"' in code
+        assert "proc `$`*(this: String): string =" in code
