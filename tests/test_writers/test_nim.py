@@ -982,3 +982,75 @@ class TestNimLexicalCorrectness:
         code = write_nim(h, header_path="test.h")
         assert "uint32* =" not in code
         assert "CustomId* = cuint" in code
+
+    def test_user_defined_literal_operator_escaping(self) -> None:
+        """User-defined literal operators like operator""_px must escape to op_lit_px with escaped quotes."""
+        f = Function(
+            name='operator""_px',
+            return_type=CType("int"),
+            parameters=[Parameter(name="v", type=CType("unsigned long long"))],
+        )
+        h = Header(path="test.hpp", declarations=[f])
+        code = write_nim(h, header_path="test.hpp")
+        assert "proc op_lit_px*(v: culonglong): cint" in code
+        assert r'importcpp: "operator\"\"_px(@)"' in code
+
+    def test_polymorphic_cpp_struct_inheritable_pragma(self) -> None:
+        """Polymorphic C++ structs must emit inheritable pragma rather than RootObj."""
+        s = Struct(
+            name="AudioProcessor",
+            is_cppclass=True,
+            methods=[
+                Function(name="processBlock", return_type=CType("void"), is_virtual=True),
+            ],
+        )
+        h = Header(path="test.hpp", declarations=[s])
+        code = write_nim(h, header_path="test.hpp")
+        assert (
+            'AudioProcessor* {.importcpp: "AudioProcessor", header: "test.hpp", bycopy, inheritable.} = object' in code
+        )
+        assert "of RootObj" not in code
+
+    def test_proc_signature_deduplication_preserves_generic_overloads(self) -> None:
+        """Proc signature deduplication must preserve distinct generic argument overloads."""
+        s0 = Struct(name="AudioBuffer", template_params=["T"], is_cppclass=True)
+        s = Struct(
+            name="Processor",
+            is_cppclass=True,
+            methods=[
+                Function(
+                    name="process",
+                    return_type=CType("void"),
+                    parameters=[Parameter(name="buf", type=Reference(CType("AudioBuffer<float>")))],
+                ),
+                Function(
+                    name="process",
+                    return_type=CType("void"),
+                    parameters=[Parameter(name="buf", type=Reference(CType("AudioBuffer<double>")))],
+                ),
+            ],
+        )
+        h = Header(path="test.hpp", declarations=[s0, s])
+        code = write_nim(h, header_path="test.hpp")
+        assert "proc process*(this: var Processor, buf: var AudioBuffer[cfloat])" in code
+        assert "proc process*(this: var Processor, buf: var AudioBuffer[cdouble])" in code
+
+    def test_anonymous_enum_collision_disambiguation(self) -> None:
+        """Anonymous enum constants colliding with proc names use namespace prefix or domain-neutral _val suffix."""
+        e1 = Enum(
+            name="",
+            namespace="juce::StandardApplicationCommandIDs",
+            values=[EnumValue(name="cut", value=100), EnumValue(name="copy", value=101)],
+        )
+        e2 = Enum(
+            name="",
+            values=[EnumValue(name="reset", value=200)],
+        )
+        f_cut = Function(name="cut", return_type=CType("void"))
+        f_copy = Function(name="copy", return_type=CType("void"))
+        f_reset = Function(name="reset", return_type=CType("void"))
+        h = Header(path="test.h", declarations=[e1, e2, f_cut, f_copy, f_reset])
+        code = write_nim(h, header_path="test.h")
+        assert "StandardApplicationCommandIDs_cut* = 100" in code
+        assert "StandardApplicationCommandIDs_copy* = 101" in code
+        assert "reset_val* = 200" in code

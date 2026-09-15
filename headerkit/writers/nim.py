@@ -1712,13 +1712,28 @@ class NimWriter(BaseWriter):
                 if pfx == "typedesc[" and clean.endswith("]"):
                     clean = clean[:-1]
                 break
-        clean_base = clean.split("[")[0].strip("`")
-        if hasattr(self, "_type_aliases") and clean_base in self._type_aliases:
-            clean = self._type_aliases[clean_base]
-        elif hasattr(self, "_type_renames") and clean_base in self._type_renames:
-            clean = self._type_renames[clean_base]
+
+        if "[" in clean and clean.endswith("]"):
+            open_b = clean.find("[")
+            clean_base = clean[:open_b].strip("`")
+            inner_str = clean[open_b + 1 : -1]
+            canon_base = clean_base
+            if hasattr(self, "_type_aliases") and clean_base in self._type_aliases:
+                canon_base = self._type_aliases[clean_base]
+            elif hasattr(self, "_type_renames") and clean_base in self._type_renames:
+                canon_base = self._type_renames[clean_base]
+            inner_args = _split_template_args(inner_str)
+            canon_args = [self._canonicalize_proc_param_type(arg.strip()) for arg in inner_args]
+            clean = f"{canon_base}[{', '.join(canon_args)}]"
         else:
-            clean = clean_base
+            clean_base = clean.strip("`")
+            if hasattr(self, "_type_aliases") and clean_base in self._type_aliases:
+                clean = self._type_aliases[clean_base]
+            elif hasattr(self, "_type_renames") and clean_base in self._type_renames:
+                clean = self._type_renames[clean_base]
+            else:
+                clean = clean_base
+
         if prefix == "typedesc[":
             return f"typedesc[{clean}]"
         return f"{prefix}{clean}"
@@ -1887,10 +1902,18 @@ class NimWriter(BaseWriter):
         if is_anonymous:
             # Emit anonymous enum values as constants
             const_lines: list[str] = []
+            ns_prefix = ""
+            if e.namespace:
+                last_ns = e.namespace.split("::")[-1].strip()
+                if last_ns and last_ns not in ("std", "juce"):
+                    ns_prefix = f"{_escape_ident(last_ns)}_"
             for v in e.values:
                 v_name = _escape_ident(v.name)
                 if func_names and (v.name in func_names or v_name in func_names):
-                    v_name = f"{v_name}_cmd"
+                    if ns_prefix:
+                        v_name = f"{ns_prefix}{v_name}"
+                    else:
+                        v_name = f"{v_name}_val"
                 if v.value is not None:
                     const_lines.append(f"{v_name}* = {v.value}")
                 else:
