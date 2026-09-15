@@ -613,7 +613,7 @@ class NimWriter(BaseWriter):
 
         if has_std_exception:
             types_section.append(
-                'std_exception* {.importcpp: "std::exception", header: "<exception>".} = object of RootObj'
+                'std_exception* {.importcpp: "std::exception", header: "<exception>", inheritable.} = object'
             )
             emitted_types.add("std_exception")
 
@@ -868,11 +868,11 @@ class NimWriter(BaseWriter):
                 and raw_opaque not in emitted_types
                 and norm not in self._emitted_normalized_types
             ):
-                base_clause = (
-                    " of RootObj" if (raw_opaque in known_base_classes or clean_opaque in known_base_classes) else ""
+                inheritable_pragma = (
+                    ", inheritable" if (raw_opaque in known_base_classes or clean_opaque in known_base_classes) else ""
                 )
                 types_section.append(
-                    f'{clean_opaque}* {{.importc: "struct {raw_opaque}", header: "{header_file}", bycopy.}} = object{base_clause}'
+                    f'{clean_opaque}* {{.importc: "struct {raw_opaque}", header: "{header_file}", bycopy{inheritable_pragma}.}} = object'
                 )
                 emitted_types.add(clean_opaque)
                 emitted_types.add(raw_opaque)
@@ -1544,8 +1544,6 @@ class NimWriter(BaseWriter):
         if s.is_packed:
             pragma_parts.append("packed")
 
-        pragma_str = f" {{.{', '.join(pragma_parts)}.}}" if pragma_parts else ""
-
         # Inheritance
         base_str = ""
         if s.bases:
@@ -1570,7 +1568,7 @@ class NimWriter(BaseWriter):
                 base_t = self._format_type(CType(raw_base))
                 if base_t not in ("auto", "pointer", "void"):
                     base_str = f" of {base_t}"
-        if not base_str and (
+        is_inheritable = not base_str and (
             (s.destructor and s.destructor.is_virtual)
             or any(m.is_virtual for m in s.methods)
             or (
@@ -1586,9 +1584,14 @@ class NimWriter(BaseWriter):
                     or (s.cpp_name and s.cpp_name.split("::")[-1] in known_base_classes)
                 )
             )
-        ):
-            base_str = " of RootObj"
+        )
+        if is_inheritable:
+            if is_cpp:
+                pragma_parts.append("inheritable")
+            else:
+                base_str = " of RootObj"
 
+        pragma_str = f" {{.{', '.join(pragma_parts)}.}}" if pragma_parts else ""
         lines = [f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
 
         visible_fields = [f for f in s.fields if not f.is_static and f.access not in ("private", "protected")]
