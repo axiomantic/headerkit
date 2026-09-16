@@ -1904,9 +1904,9 @@ class NimWriter(BaseWriter):
             const_lines: list[str] = []
             ns_prefix = ""
             if e.namespace:
-                last_ns = e.namespace.split("::")[-1].strip()
-                if last_ns and last_ns not in ("std", "juce"):
-                    ns_prefix = f"{_escape_ident(last_ns)}_"
+                ns_parts = [p.strip() for p in e.namespace.split("::") if p.strip()]
+                if len(ns_parts) > 1 and ns_parts[-1] != "std":
+                    ns_prefix = f"{_escape_ident(ns_parts[-1])}_"
             for v in e.values:
                 v_name = _escape_ident(v.name)
                 if func_names and (v.name in func_names or v_name in func_names):
