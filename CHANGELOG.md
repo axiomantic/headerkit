@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Extension project scaffolding: `headerkit new` and `headerkit new-plugin` CLI subcommands (and `scaffold_plugin` Python API) interactively generate complete, standalone HeaderKit writer backends, parser backends, or hook plugins with `pyproject.toml` (configured entry points), module implementations, test suites, `AGENTS.md` instructions, and CI workflows.
 - Scaffolding `AGENTS.md` generation: automatically generates project and package instructions, test commands, and quality invariants in `AGENTS.md` across all package layouts (`package`, `project`, `wheel`, `scikit-build`) in `BaseWriter.write_layout()`.
 - Configurable symbol access floor: `access_floor` option on `NimWriter` and `CythonWriter` supporting `"public"`, `"protected"`, `"private"`, and `"all"` (or `None`), allowing downstream callers to preserve full member visibility in general-purpose IR workflows.
 - Dual-CI architecture: extracted core CI routines into portable, parameterized scripts (`scripts/ci/lint.sh`, `scripts/ci/test.sh`, `scripts/ci/install-deps-linux.sh`), authored `.forgejo/workflows/ci.yml` for self-hosted Linux Podman runners, and documented the dual-CI setup in `CONTRIBUTING.md`.

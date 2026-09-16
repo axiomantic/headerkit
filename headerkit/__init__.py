@@ -80,6 +80,11 @@ from headerkit.scaffold import (
     register_test_extractor,
     scaffold,
 )
+from headerkit.scaffold_plugin import (
+    PluginScaffoldOptions,
+    prompt_plugin_scaffold_options,
+    scaffold_plugin,
+)
 from headerkit.workorder import (
     DEFINITION_OF_DONE,
     WORK_ORDER_MARKER,
@@ -212,6 +217,9 @@ __all__ = [
     "merge_incremental_tests",
     "prompt_scaffold_options",
     "scaffold",
+    "PluginScaffoldOptions",
+    "prompt_plugin_scaffold_options",
+    "scaffold_plugin",
     # Work-order API
     "WorkOrder",
     "Tier1Test",

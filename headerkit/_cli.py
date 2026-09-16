@@ -78,7 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="headerkit",
         description="Parse C/C++ header files and emit output via configurable writers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Subcommands:\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index, populate)\n  store                Store operations (merge)",
+        epilog="Subcommands:\n  new, new-plugin     Scaffold a new extension project (writer, backend, plugin)\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index, populate)\n  store                Store operations (merge)",
     )
     parser.add_argument(
         "input_files",
@@ -412,6 +412,12 @@ def _merge_config_writer_opts(
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns exit code (0 = success, 1 = error)."""
     raw_args = sys.argv[1:] if argv is None else argv
+    # Subcommand dispatch: `headerkit new [args]` / `headerkit new-plugin [args]`
+    if raw_args and raw_args[0] in ("new", "new-plugin"):
+        from headerkit.scaffold_plugin import plugin_scaffold_main
+
+        return plugin_scaffold_main(raw_args[1:])
+
     # Subcommand dispatch: `headerkit install-libclang [args]`
     if raw_args and raw_args[0] == "install-libclang":
         from headerkit.install_libclang import main as _install_main
