@@ -47,6 +47,7 @@ from __future__ import (
     annotations,
 )
 
+import collections
 from dataclasses import (
     dataclass,
     field,
@@ -571,6 +572,30 @@ class Enum:
 
 
 @dataclass
+class TemplateParameter:
+    """A C++ template parameter.
+
+    :param name: Identifier name of the template parameter.
+    :param default_value: Default type or expression string, or None.
+    :param is_type: True for type parameters (typename/class), False for non-type parameters.
+    :param type_name: C++ type for non-type parameters (e.g. 'int', 'size_t'), or None.
+    :param is_parameter_pack: True if this is a variadic parameter pack (e.g. 'typename... Args').
+    """
+
+    name: str
+    default_value: str | None = None
+    is_type: bool = True
+    type_name: str | None = None
+    is_parameter_pack: bool = False
+
+    def __str__(self) -> str:
+        prefix = "" if self.is_type else f"{self.type_name} "
+        pack = "..." if self.is_parameter_pack else ""
+        default = f" = {self.default_value}" if self.default_value is not None else ""
+        return f"{prefix}{self.name}{pack}{default}"
+
+
+@dataclass
 class Struct:
     """Struct or union declaration.
 
@@ -632,6 +657,7 @@ class Struct:
     is_packed: bool = False
     namespace: str | None = None
     template_params: list[str] = field(default_factory=list)
+    template_parameters: list[TemplateParameter] = field(default_factory=list)
     cpp_name: str | None = None
     notes: list[str] = field(default_factory=list)
     inner_typedefs: dict[str, str] = field(default_factory=dict)  # name -> underlying_type
@@ -644,8 +670,15 @@ class Struct:
     vtable_entries: list[Function] = field(default_factory=list)
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
+    access: str | None = None
     alignment: int | None = None
     location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        if self.template_parameters and not self.template_params:
+            self.template_params = [p.name for p in self.template_parameters]
+        elif self.template_params and not self.template_parameters:
+            self.template_parameters = [TemplateParameter(name=p) for p in self.template_params]
 
     def __str__(self) -> str:
         if self.is_cppclass:
@@ -707,6 +740,7 @@ class Function:
     calling_convention: str | None = None
     namespace: str | None = None
     template_params: list[str] = field(default_factory=list)
+    template_parameters: list[TemplateParameter] = field(default_factory=list)
     is_static: bool = False
     is_const: bool = False
     is_virtual: bool = False
@@ -721,6 +755,12 @@ class Function:
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        if self.template_parameters and not self.template_params:
+            self.template_params = [p.name for p in self.template_parameters]
+        elif self.template_params and not self.template_parameters:
+            self.template_parameters = [TemplateParameter(name=p) for p in self.template_params]
 
     def __str__(self) -> str:
         params = ", ".join(str(p) for p in self.parameters)
@@ -1139,3 +1179,261 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
     def supported_classifications(self) -> frozenset[str]:
         """Set of input classifications supported by this backend (e.g., ``frozenset({"header", "source"})``)."""
         ...
+
+
+# =============================================================================
+# Access Floor Filtering & Inheritance Hierarchy
+# =============================================================================
+
+_ACCESS_LEVELS: dict[str, int] = {
+    "public": 0,
+    "protected": 1,
+    "private": 2,
+    "all": 2,
+}
+
+
+def _access_allowed(item_access: str | None, floor: str) -> bool:
+    """Return True if item_access meets or exceeds the required floor."""
+    if item_access is None or floor.lower() in ("private", "all", "none"):
+        return True
+    item_level = _ACCESS_LEVELS.get(item_access.lower(), 0)
+    floor_level = _ACCESS_LEVELS.get(floor.lower(), 0)
+    return item_level <= floor_level
+
+
+def _filter_struct_access(st: Struct, floor: str) -> Struct:
+    """Filter struct members, bases, and nested records below access floor."""
+    new_bases = [b for b in st.bases if _access_allowed(b.access, floor)]
+    new_methods = [m for m in st.methods if _access_allowed(m.access, floor)]
+    new_constructors = [c for c in st.constructors if _access_allowed(c.access, floor)]
+    new_destructor = st.destructor if _access_allowed(st.destructor.access if st.destructor else None, floor) else None
+    new_nested = [_filter_struct_access(nr, floor) for nr in st.nested_records if _access_allowed(nr.access, floor)]
+    new_fields = [f for f in st.fields if _access_allowed(f.access, floor)]
+
+    return replace(
+        st,
+        bases=new_bases,
+        methods=new_methods,
+        constructors=new_constructors,
+        destructor=new_destructor,
+        nested_records=new_nested,
+        fields=new_fields,
+    )
+
+
+def filter_access_floor(
+    unit: SourceUnit | Header,
+    floor: str = "public",
+) -> SourceUnit | Header:
+    """Filter declarations, members, and base classes below the specified access floor.
+
+    :param unit: The IR unit (Header or SourceUnit) to filter.
+    :param floor: Access floor - ``"public"`` (default, keeps public and unannotated),
+        ``"protected"`` (keeps public and protected), ``"private"`` or ``"all"`` (keeps all without pruning).
+    """
+    if not floor or floor.lower() in ("private", "all", "none"):
+        return unit
+
+    new_decls: list[Declaration] = []
+    for decl in unit.declarations:
+        decl_access = getattr(decl, "access", None)
+        if not _access_allowed(decl_access, floor):
+            continue
+        if isinstance(decl, Struct):
+            new_decls.append(_filter_struct_access(decl, floor))
+        else:
+            new_decls.append(decl)
+
+    return replace(unit, declarations=new_decls)
+
+
+class TypeHierarchy:
+    """Graph of struct and class inheritance relationships across an IR unit.
+
+    Provides query methods for discovering polymorphic classes, base classes,
+    root bases, and virtual methods without requiring individual writers
+    to reimplement recursive struct graph traversals.
+    """
+
+    def __init__(self, unit: SourceUnit | Header) -> None:
+        self.unit = unit
+        self._structs: list[Struct] = []
+        self._by_name: dict[str, Struct] = {}
+        self._by_cpp_name: dict[str, Struct] = {}
+        self._by_short_name: dict[str, list[Struct]] = collections.defaultdict(list)
+        self._bases: dict[str, list[str]] = {}
+        self._children: dict[str, list[str]] = collections.defaultdict(list)
+        self._polymorphic: set[str] = set()
+        self._all_base_and_poly_names: set[str] = set()
+        self._build_index()
+
+    def _build_index(self) -> None:
+        def _collect(s: Struct) -> None:
+            self._structs.append(s)
+            if s.name:
+                self._by_name[s.name] = s
+                short = s.name.split("::")[-1]
+                self._by_short_name[short].append(s)
+            if s.cpp_name:
+                self._by_cpp_name[s.cpp_name] = s
+                short_cpp = s.cpp_name.split("::")[-1]
+                self._by_short_name[short_cpp].append(s)
+
+            # Check if this struct itself is polymorphic
+            is_poly = (
+                (s.destructor is not None and s.destructor.is_virtual)
+                or any(m.is_virtual for m in s.methods)
+                or any(b.is_virtual for b in s.bases)
+            )
+            if is_poly:
+                if s.name:
+                    self._polymorphic.add(s.name)
+                    self._all_base_and_poly_names.add(s.name)
+                    self._all_base_and_poly_names.add(s.name.split("::")[-1])
+                    self._all_base_and_poly_names.add(s.name.replace("::", "_"))
+                if s.cpp_name:
+                    self._polymorphic.add(s.cpp_name)
+                    self._all_base_and_poly_names.add(s.cpp_name)
+                    self._all_base_and_poly_names.add(s.cpp_name.split("::")[-1])
+                    self._all_base_and_poly_names.add(s.cpp_name.replace("::", "_"))
+
+            # Collect bases
+            for b in s.bases:
+                if b.name:
+                    clean_b = b.name.split("<")[0].strip()
+                    if s.name:
+                        self._bases.setdefault(s.name, []).append(clean_b)
+                    self._children[clean_b].append(s.name or s.cpp_name or "")
+                    self._all_base_and_poly_names.add(clean_b)
+                    self._all_base_and_poly_names.add(clean_b.replace("::", "_"))
+                    self._all_base_and_poly_names.add(clean_b.split("::")[-1])
+                    self._all_base_and_poly_names.add(b.name)
+                    self._all_base_and_poly_names.add(b.name.replace("::", "_"))
+                    self._all_base_and_poly_names.add(b.name.split("::")[-1])
+
+            for nr in s.nested_records:
+                _collect(nr)
+
+        for decl in self.unit.declarations:
+            if isinstance(decl, Struct):
+                _collect(decl)
+
+    def find_struct(self, name: str, enclosing_namespace: str | None = None) -> Struct | None:
+        """Find a struct by exact name, cpp_name, or scoped short name candidate."""
+        if name in self._by_name:
+            return self._by_name[name]
+        if name in self._by_cpp_name:
+            return self._by_cpp_name[name]
+        if enclosing_namespace:
+            prefixed = f"{enclosing_namespace}::{name}"
+            if prefixed in self._by_name:
+                return self._by_name[prefixed]
+            if prefixed in self._by_cpp_name:
+                return self._by_cpp_name[prefixed]
+        short = name.split("::")[-1]
+        cands = self._by_short_name.get(short, [])
+        if len(cands) == 1:
+            return cands[0]
+        if enclosing_namespace:
+            for c in cands:
+                if c.namespace == enclosing_namespace:
+                    return c
+        return cands[0] if cands else None
+
+    def is_polymorphic(self, name_or_struct: str | Struct) -> bool:
+        """Return True if struct or any ancestor class has virtual methods or virtual bases."""
+        st = name_or_struct if isinstance(name_or_struct, Struct) else self.find_struct(name_or_struct)
+        if st is None:
+            if isinstance(name_or_struct, str):
+                return name_or_struct in self._polymorphic
+            return False
+        if (st.destructor and st.destructor.is_virtual) or any(m.is_virtual for m in st.methods):
+            return True
+        for b in st.bases:
+            if b.name:
+                clean_b = b.name.split("<")[0].strip()
+                if self.is_polymorphic(clean_b):
+                    return True
+        return False
+
+    def is_root_base(self, name_or_struct: str | Struct) -> bool:
+        """Return True if struct has derived subclasses in this unit but has no known bases itself."""
+        name = name_or_struct.name if isinstance(name_or_struct, Struct) else name_or_struct
+        if not name:
+            return False
+        has_children = bool(self._children.get(name) or self._children.get(name.split("::")[-1]))
+        st = self.find_struct(name)
+        has_bases = bool(st and st.bases)
+        return has_children and not has_bases
+
+    def all_base_and_polymorphic_names(self) -> set[str]:
+        """Return all names (qualified, short, and C++-spelled) of base classes and polymorphic types."""
+        return set(self._all_base_and_poly_names)
+
+
+def is_cpp_value_type(
+    type_expr: TypeExpr,
+    primitive_types: set[str] | None = None,
+) -> bool:
+    """Return True if type_expr represents a C++ aggregate/class returned by value.
+
+    A C++ method returning an aggregate or class by value creates a temporary
+    object whose lifetime ends at the enclosing full-expression semicolon.
+    Foreign writers (Nim, Cython, C-shim, ctypes, Rust) must bind the result
+    to a local stack frame or pass an out-parameter rather than coercing
+    pointer accessors inline.
+    """
+    if isinstance(type_expr, (Pointer, Reference, FunctionPointer, Array)):
+        return False
+    prims = primitive_types or {
+        "void",
+        "bool",
+        "_Bool",
+        "char",
+        "signed char",
+        "unsigned char",
+        "short",
+        "short int",
+        "signed short",
+        "signed short int",
+        "unsigned short",
+        "unsigned short int",
+        "int",
+        "signed",
+        "signed int",
+        "unsigned",
+        "unsigned int",
+        "long",
+        "long int",
+        "signed long",
+        "signed long int",
+        "unsigned long",
+        "unsigned long int",
+        "long long",
+        "long long int",
+        "signed long long",
+        "signed long long int",
+        "unsigned long long",
+        "unsigned long long int",
+        "float",
+        "double",
+        "long double",
+        "int8_t",
+        "uint8_t",
+        "int16_t",
+        "uint16_t",
+        "int32_t",
+        "uint32_t",
+        "int64_t",
+        "uint64_t",
+        "size_t",
+        "ssize_t",
+        "intptr_t",
+        "uintptr_t",
+        "ptrdiff_t",
+    }
+    if isinstance(type_expr, CType):
+        base_name = type_expr.name.split("<")[0].split("[")[0].strip()
+        return base_name not in prims
+    return False

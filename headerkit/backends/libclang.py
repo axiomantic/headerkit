@@ -74,6 +74,7 @@ from headerkit.ir import (
     SourceLocation,
     SourceUnit,
     Struct,
+    TemplateParameter,
     Typedef,
     TypeExpr,
     Variable,
@@ -1483,7 +1484,7 @@ class ClangASTConverter:
         kind = cursor.kind
 
         if (
-            kind == CursorKind.TYPEDEF_DECL
+            kind in (CursorKind.TYPEDEF_DECL, CursorKind.TYPE_ALIAS_DECL)
             or kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL)
             or kind == CursorKind.ENUM_DECL
             or kind in (CursorKind.CLASS_DECL, CursorKind.CLASS_TEMPLATE)
@@ -1503,7 +1504,7 @@ class ClangASTConverter:
         typedef_map: dict[str, Any] = {}
 
         for child in root_cursor.get_children():
-            if child.kind == CursorKind.TYPEDEF_DECL:
+            if child.kind in (CursorKind.TYPEDEF_DECL, CursorKind.TYPE_ALIAS_DECL):
                 if not self._is_from_target_file(child) and child.spelling:
                     typedef_map[child.spelling] = child
 
@@ -1683,7 +1684,7 @@ class ClangASTConverter:
             self._process_enum(cursor)
         elif kind in (CursorKind.FUNCTION_DECL, CursorKind.FUNCTION_TEMPLATE):
             self._process_function(cursor)
-        elif kind == CursorKind.TYPEDEF_DECL:
+        elif kind in (CursorKind.TYPEDEF_DECL, CursorKind.TYPE_ALIAS_DECL):
             self._process_typedef(cursor)
         elif kind == CursorKind.VAR_DECL:
             self._process_variable(cursor)
@@ -2346,6 +2347,7 @@ class ClangASTConverter:
             CursorKind.VAR_DECL,
             CursorKind.PARM_DECL,
             CursorKind.TYPEDEF_DECL,
+            CursorKind.TYPE_ALIAS_DECL,
         ):
             self._bind_anon_name(cursor.spelling, cursor.type)
         elif kind == CursorKind.FUNCTION_DECL:
@@ -2562,7 +2564,12 @@ class ClangASTConverter:
                         notes.append(
                             f"Field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'"
                         )
-                elif child.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
+                elif child.kind in (
+                    CursorKind.STRUCT_DECL,
+                    CursorKind.UNION_DECL,
+                    CursorKind.CLASS_DECL,
+                    CursorKind.CLASS_TEMPLATE,
+                ):
                     if not self._is_anonymous_decl(child):
                         # A tagged record *defined* inside another record body
                         # still needs a top-level definition; a field using it
@@ -2577,7 +2584,11 @@ class ClangASTConverter:
                         # the writer renders inside the parent's body where the
                         # qualification is implicit.
                         if child.is_definition():
-                            if is_cppclass:
+                            if child.kind == CursorKind.CLASS_TEMPLATE:
+                                nested = self._process_class_template(child, emit=False)
+                                if nested is not None:
+                                    nested_records.append(nested)
+                            elif is_cppclass:
                                 nested = self._process_struct(
                                     child,
                                     is_union=child.kind == CursorKind.UNION_DECL,
@@ -2634,11 +2645,22 @@ class ClangASTConverter:
                 elif child.kind in (CursorKind.CXX_METHOD, CursorKind.FUNCTION_TEMPLATE) and (
                     is_cppclass or cursor.kind == CursorKind.STRUCT_DECL
                 ):
-                    method = self._convert_method(child)
-                    if method:
-                        methods.append(method)
+                    c_name = child.spelling
+                    is_ctor = bool(
+                        name and (c_name == name or c_name.startswith(f"{name}<") or c_name.split("<")[0] == name)
+                    )
+                    if is_ctor:
+                        ctor = self._convert_method(child, is_constructor=True)
+                        if ctor:
+                            constructors.append(ctor)
+                        elif c_name:
+                            notes.append(f"Constructor '{c_name}' skipped: unable to represent parameter types")
                     else:
-                        notes.append(f"Method '{child.spelling}' skipped: unable to represent signature")
+                        method = self._convert_method(child)
+                        if method:
+                            methods.append(method)
+                        else:
+                            notes.append(f"Method '{child.spelling}' skipped: unable to represent signature")
 
         # Handle template specialization
         cpp_name = None
@@ -2678,6 +2700,7 @@ class ClangASTConverter:
             vtable_entries=vtable_entries,
             attributes=attrs,
             is_deprecated=is_deprecated,
+            access=self._get_access_specifier(cursor),
             alignment=alignment,
             location=self._get_location(cursor),
             nested_records=nested_records,
@@ -2686,17 +2709,136 @@ class ClangASTConverter:
             self.declarations.append(struct)
         return struct
 
-    def _process_class_template(self, cursor: Any) -> None:
+    def _extract_template_parameters(self, cursor: Any) -> list[TemplateParameter]:
+        """Extract typed template parameters with defaults and pack status from template tokens."""
+        try:
+            toks = [t.spelling for t in cursor.get_tokens()]
+        except Exception:
+            return []
+        if "template" not in toks:
+            return []
+        try:
+            tmpl_idx = toks.index("template")
+            start = toks.index("<", tmpl_idx) + 1
+            depth = 1
+            paren_depth = 0
+            bracket_depth = 0
+            brace_depth = 0
+            end = start
+            header_toks: list[str] = []
+            while end < len(toks) and depth > 0:
+                tok = toks[end]
+                if tok == "(":
+                    paren_depth += 1
+                    header_toks.append(tok)
+                elif tok == ")":
+                    paren_depth = max(0, paren_depth - 1)
+                    header_toks.append(tok)
+                elif tok == "[":
+                    bracket_depth += 1
+                    header_toks.append(tok)
+                elif tok == "]":
+                    bracket_depth = max(0, bracket_depth - 1)
+                    header_toks.append(tok)
+                elif tok == "{":
+                    brace_depth += 1
+                    header_toks.append(tok)
+                elif tok == "}":
+                    brace_depth = max(0, brace_depth - 1)
+                    header_toks.append(tok)
+                elif tok == "<" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+                    depth += 1
+                    header_toks.append(tok)
+                elif all(c == ">" for c in tok) and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+                    for _ in range(len(tok)):
+                        if depth > 1:
+                            depth -= 1
+                            header_toks.append(">")
+                        elif depth == 1:
+                            depth = 0
+                            break
+                else:
+                    header_toks.append(tok)
+                end += 1
+        except Exception:
+            return []
+
+        slices: list[list[str]] = []
+        curr: list[str] = []
+        d = 0
+        p_d = 0
+        for tok in header_toks:
+            if tok in ("(", "[", "{"):
+                p_d += 1
+            elif tok in (")", "]", "}"):
+                p_d = max(0, p_d - 1)
+            elif tok == "<" and p_d == 0:
+                d += 1
+            elif tok == ">" and p_d == 0:
+                d = max(0, d - 1)
+            elif tok == "," and d == 0 and p_d == 0:
+                slices.append(curr)
+                curr = []
+                continue
+            curr.append(tok)
+        if curr:
+            slices.append(curr)
+
+        params: list[TemplateParameter] = []
+        for s in slices:
+            if not s:
+                continue
+            is_pack = "..." in s
+            default_val = None
+            if "=" in s:
+                eq_idx = s.index("=")
+                default_val = " ".join(s[eq_idx + 1 :]).replace(" *", "*").replace(" &", "&")
+                decl_toks = s[:eq_idx]
+            else:
+                decl_toks = s
+            decl_toks = [t for t in decl_toks if t != "..."]
+            if not decl_toks:
+                continue
+            is_type = decl_toks[0] in ("typename", "class")
+            if is_type:
+                if len(decl_toks) == 1:
+                    # Anonymous type parameter (e.g. typename = Foo)
+                    name = ""
+                    type_name = None
+                else:
+                    name = decl_toks[-1] if decl_toks[-1].isidentifier() else ""
+                    type_name = None
+            else:
+                last = decl_toks[-1]
+                if last in (">", ")", "]", "}", "*", "&") or not last.isidentifier():
+                    name = ""
+                    type_name = " ".join(decl_toks)
+                else:
+                    name = last
+                    type_name = " ".join(decl_toks[:-1])
+            params.append(
+                TemplateParameter(
+                    name=name,
+                    default_value=default_val,
+                    is_type=is_type,
+                    type_name=type_name,
+                    is_parameter_pack=is_pack,
+                )
+            )
+        return params
+
+    def _process_class_template(self, cursor: Any, emit: bool = True) -> Struct | None:
         """Process a C++ class template declaration."""
         name = cursor.spelling or None
         if not name:
-            return
+            return None
 
         # Skip if already processed
-        key = f"template:{name}"
-        if key in self._seen:
-            return
-        self._seen.add(key)
+        if emit:
+            key = f"template:{name}"
+            if key in self._seen:
+                return None
+            self._seen.add(key)
 
         # Extract template type parameters and track non-type parameters
         template_params: list[str] = []
@@ -2709,6 +2851,7 @@ class ClangASTConverter:
         conversions: list[Function] = []
         notes: list[str] = []
         inner_typedefs: dict[str, str] = {}
+        nested_records: list[Struct] = []
 
         is_abstract = False
         try:
@@ -2738,72 +2881,93 @@ class ClangASTConverter:
                     is_virt = bool(child.is_virtual_base())
                 if not is_virt:
                     with contextlib.suppress(Exception):
-                        is_virt = any(t.spelling == "virtual" for t in child.get_tokens())
-                bases.append(BaseSpecifier(name=base_name, access=access, is_virtual=is_virt))
-            elif child.kind in (CursorKind.TYPEDEF_DECL, CursorKind.TYPE_ALIAS_DECL):
-                # Inner aliases, in both spellings C++ offers: the classic
-                # ``typedef Iterator<T, PT> iterator`` (TYPEDEF_DECL) and the
-                # C++11 ``using type = T;`` (TYPE_ALIAS_DECL).  They mean the
-                # same thing and both expose ``underlying_typedef_type``, but
-                # clang reports them as distinct cursor kinds, so matching only
-                # the first silently loses every ``using`` alias.
-                typedef_name = child.spelling
-                underlying = child.underlying_typedef_type.spelling
-                if typedef_name and underlying:
-                    inner_typedefs[typedef_name] = underlying
+                        is_virt = bool(child.is_virtual())
+                bases.append(
+                    BaseSpecifier(
+                        name=base_name,
+                        access=access,
+                        is_virtual=is_virt,
+                    )
+                )
             elif child.kind == CursorKind.FIELD_DECL:
                 field = self._convert_field(child)
                 if field:
                     fields.append(field)
-                elif not self._is_padding_bitfield(child):
-                    notes.append(f"Field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'")
-            elif child.kind == CursorKind.VAR_DECL:
-                field = self._convert_field(child)
-                if field:
-                    field.is_static = True
-                    fields.append(field)
+            elif child.kind in (
+                CursorKind.STRUCT_DECL,
+                CursorKind.UNION_DECL,
+                CursorKind.CLASS_DECL,
+                CursorKind.CLASS_TEMPLATE,
+            ):
+                if child.is_definition() and not self._is_anonymous_decl(child):
+                    if child.kind == CursorKind.CLASS_TEMPLATE:
+                        nested = self._process_class_template(child, emit=False)
+                    else:
+                        nested = self._process_struct(
+                            child,
+                            is_union=child.kind == CursorKind.UNION_DECL,
+                            emit=False,
+                        )
+                    if nested is not None:
+                        nested_records.append(nested)
+            elif child.kind in (CursorKind.TYPEDEF_DECL, CursorKind.TYPE_ALIAS_DECL):
+                # Track inner typedefs for resolving type aliases in member signatures
+                typedef_name = child.spelling
+                underlying_type = child.underlying_typedef_type.spelling
+                if typedef_name and underlying_type:
+                    inner_typedefs[typedef_name] = underlying_type
+            elif child.kind in (
+                CursorKind.CXX_METHOD,
+                CursorKind.FUNCTION_TEMPLATE,
+            ):
+                c_name = child.spelling
+                is_ctor = bool(
+                    name and (c_name == name or c_name.startswith(f"{name}<") or c_name.split("<")[0] == name)
+                )
+                if is_ctor:
+                    ctor = self._convert_method(child, is_constructor=True)
+                    if ctor:
+                        constructors.append(ctor)
+                    elif c_name:
+                        notes.append(f"Constructor '{c_name}' skipped: unable to represent signature")
                 else:
-                    notes.append(
-                        f"Static field '{child.spelling}' skipped: unable to represent type '{child.type.spelling}'"
-                    )
+                    method = self._convert_method(child)
+                    if method:
+                        methods.append(method)
+                    elif child.spelling:
+                        notes.append(f"Method '{child.spelling}' skipped: unable to represent signature")
             elif child.kind == CursorKind.CONSTRUCTOR:
                 ctor = self._convert_method(child, is_constructor=True)
                 if ctor:
                     constructors.append(ctor)
-                else:
-                    notes.append(f"Constructor '{child.spelling}' skipped: unable to represent parameter types")
+                elif child.spelling:
+                    notes.append(f"Constructor '{child.spelling}' skipped: unable to represent signature")
             elif child.kind == CursorKind.DESTRUCTOR:
-                dtor = self._convert_method(child, is_destructor=True)
-                if dtor:
-                    destructor = dtor
-                else:
-                    notes.append(f"Destructor '{child.spelling}' skipped: unable to represent parameter types")
+                destructor = self._convert_method(child, is_destructor=True)
             elif child.kind == CursorKind.CONVERSION_FUNCTION:
                 conv = self._convert_method(child, is_conversion=True)
                 if conv:
                     conversions.append(conv)
-                else:
-                    notes.append(
-                        f"Conversion function '{child.spelling}' skipped: unable to represent return type '{child.result_type.spelling}'"
-                    )
-            elif child.kind in (CursorKind.CXX_METHOD, CursorKind.FUNCTION_TEMPLATE):
-                method = self._convert_method(child)
-                if method:
-                    methods.append(method)
-                else:
+                elif child.spelling:
                     notes.append(f"Method '{child.spelling}' skipped: unable to represent signature")
 
-        if not template_params:
+        parsed_tpl_params = self._extract_template_parameters(cursor)
+        if parsed_tpl_params:
+            template_parameters = parsed_tpl_params
+            template_params = [p.name for p in parsed_tpl_params if p.is_type and p.name]
+        else:
+            template_parameters = [TemplateParameter(name=p) for p in template_params]
+
+        if not template_params and not template_parameters:
             # No template parameters found - treat as regular class
-            return
+            return None
 
         # Add note if non-type parameters exist
         if nontype_params:
             for param_name, param_type in nontype_params:
                 notes.append(
                     f"NOTE: Template has non-type parameter '{param_name}' ({param_type}). "
-                    "Cython does not support non-type template parameters. "
-                    "Use specific instantiations as needed."
+                    "Non-type template parameter may require explicit instantiation in foreign language bindings."
                 )
 
         vtable_entries = [m for m in methods if m.is_virtual or m.is_pure_virtual]
@@ -2816,8 +2980,10 @@ class ClangASTConverter:
             is_cppclass=True,
             namespace=self._current_namespace,
             template_params=template_params,
+            template_parameters=template_parameters,
             notes=notes,
             inner_typedefs=inner_typedefs,
+            nested_records=nested_records,
             bases=bases,
             is_abstract=is_abstract,
             constructors=constructors,
@@ -2826,7 +2992,9 @@ class ClangASTConverter:
             vtable_entries=vtable_entries,
             location=self._get_location(cursor),
         )
-        self.declarations.append(struct)
+        if emit:
+            self.declarations.append(struct)
+        return struct
 
     def _process_partial_specialization(self, cursor: Any) -> None:
         """Process a C++ partial template specialization.
@@ -2987,7 +3155,18 @@ class ClangASTConverter:
     def _process_function(self, cursor: Any) -> None:
         """Process a function or function template declaration."""
         name = cursor.spelling
-        if not name:
+        if not name or name.startswith("<deduction guide"):
+            return
+
+        # Skip member functions/methods defined out-of-line: they belong to the record,
+        # which has already collected them from the class definition.
+        parent = getattr(cursor, "semantic_parent", None)
+        if parent is not None and parent.kind in (
+            CursorKind.STRUCT_DECL,
+            CursorKind.UNION_DECL,
+            CursorKind.CLASS_DECL,
+            CursorKind.CLASS_TEMPLATE,
+        ):
             return
 
         # Skip if already processed (distinguish function templates from standard functions and overloads)
@@ -3031,6 +3210,13 @@ class ClangASTConverter:
         is_inline, body = self._is_inline_function(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
+        parsed_tpl_params = self._extract_template_parameters(cursor)
+        if parsed_tpl_params:
+            template_parameters = parsed_tpl_params
+            template_params = [p.name for p in parsed_tpl_params if p.is_type and p.name]
+        else:
+            template_parameters = [TemplateParameter(name=p) for p in template_params]
+
         func = Function(
             name=name,
             return_type=return_type,
@@ -3038,6 +3224,7 @@ class ClangASTConverter:
             is_variadic=is_variadic,
             namespace=self._current_namespace,
             template_params=template_params,
+            template_parameters=template_parameters,
             is_noexcept=is_noexcept,
             is_inline=is_inline,
             body=body,
@@ -3057,8 +3244,10 @@ class ClangASTConverter:
     ) -> Function | None:
         """Convert a C++ method, constructor, destructor, or conversion function to a Function IR node."""
         name = cursor.spelling
-        if not name:
+        if not name or name.startswith("<deduction guide"):
             return None
+        if (is_constructor or is_destructor) and "<" in name:
+            name = name.split("<")[0]
 
         template_params: list[str] = []
         for child in cursor.get_children():
@@ -3126,12 +3315,20 @@ class ClangASTConverter:
         access = self._get_access_specifier(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
+        parsed_tpl_params = self._extract_template_parameters(cursor)
+        if parsed_tpl_params:
+            template_parameters = parsed_tpl_params
+            template_params = [p.name for p in parsed_tpl_params if p.is_type and p.name]
+        else:
+            template_parameters = [TemplateParameter(name=p) for p in template_params]
+
         return Function(
             name=name,
             return_type=return_type,
             parameters=parameters,
             is_variadic=is_variadic,
             template_params=template_params,
+            template_parameters=template_parameters,
             is_static=is_static,
             is_const=is_const,
             is_virtual=is_virtual,

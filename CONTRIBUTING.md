@@ -35,12 +35,23 @@ Pre-commit hooks enforce lint and format checks automatically on each commit.
 6. Open a pull request against `main`.
 7. Dispatch CI for the pull request's head commit, and wait for it to pass. Nothing does this for you -- see below.
 
-## CI is manual
+## Dual-CI Architecture and Shared Scripts
 
-The test matrix spans four operating systems and five Python versions. Running it on
+HeaderKit employs a dual-CI architecture with shared script execution:
+
+- **Shared CI scripts (`scripts/ci/`)**: Build, lint, and test logic lives in standalone, parameterized shell scripts that can be invoked locally or by CI runners:
+  - `scripts/ci/lint.sh`: Runs `ruff check`, `ruff format --check`, `mypy --strict`, and Clang stubtest.
+  - `scripts/ci/test.sh`: Verifies required test toolchain prerequisites and invokes `pytest -rs`.
+  - `scripts/ci/install-deps-linux.sh`: Installs `libclang-dev` and modern C23-capable GCC on Debian/Ubuntu systems.
+- **Forgejo CI (`.forgejo/workflows/ci.yml`)**: Runs on self-hosted Forgejo (`https://git.axiomantic.dev`) using Podman-backed Linux runners (`runs-on: docker`) on push and pull requests for Linux/OS-agnostic legs.
+- **GitHub Actions (`.github/workflows/ci.yml`, `.github/workflows/test.yml`)**: Hosted on the manual GitHub mirror (`axiomantic`). Because the self-hosted private runner is Linux-only (no private macOS or Windows runner capacity), GitHub Actions handles the macOS and Windows matrix legs and manual cross-version matrix testing.
+
+## CI on GitHub is manual
+
+The GitHub test matrix spans four operating systems and five Python versions. Running it on
 every push costs real money and holds the macOS runner that every other pull request
-is queued behind, so **no workflow in this repository runs on `push` or
-`pull_request`.** You start CI yourself:
+is queued behind, so **no workflow on GitHub runs automatically on `push` or
+`pull_request`.** You start GitHub CI manually:
 
 ```bash
 # The boundary Python versions (3.10 and 3.14) on Linux, macOS and Windows.

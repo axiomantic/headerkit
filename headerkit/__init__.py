@@ -47,9 +47,13 @@ from headerkit.ir import (
     SourceLocation,
     SourceUnit,
     Struct,
+    TemplateParameter,
     Typedef,
     TypeExpr,
+    TypeHierarchy,
     Variable,
+    filter_access_floor,
+    is_cpp_value_type,
 )
 from headerkit.packaging import (
     generate_nim_cmake,
@@ -60,12 +64,20 @@ from headerkit.packaging import (
 )
 from headerkit.scaffold import (
     BYOScaffolder,
+    CTestExtractor,
+    NimTestExtractor,
     OutputFile,
     ProjectLayout,
+    PythonTestExtractor,
     ScaffoldOptions,
     StdlibScaffolder,
+    TestBlockExtractor,
     extract_function_names,
+    extract_header_version,
+    get_test_extractor,
+    merge_incremental_tests,
     prompt_scaffold_options,
+    register_test_extractor,
     scaffold,
 )
 from headerkit.workorder import (
@@ -81,6 +93,7 @@ from headerkit.writers import (
     BaseWriter,
     WriterBackend,
     WriterOption,
+    canonicalize_type_brackets,
     coerce_writer_options,
     get_default_writer,
     get_writer,
@@ -90,6 +103,7 @@ from headerkit.writers import (
     list_writer_options,
     list_writers,
     register_writer,
+    split_template_args,
 )
 
 __all__ = [
@@ -107,11 +121,15 @@ __all__ = [
     "EnumValue",
     "Enum",
     "Struct",
+    "TemplateParameter",
+    "TypeHierarchy",
     "Function",
     "Typedef",
     "Variable",
     "Constant",
     "Declaration",
+    "filter_access_floor",
+    "is_cpp_value_type",
     # Container
     "Header",
     "SourceUnit",
@@ -129,6 +147,7 @@ __all__ = [
     "BaseWriter",
     "WriterOption",
     # Writer API
+    "canonicalize_type_brackets",
     "coerce_writer_options",
     "get_default_writer",
     "get_writer",
@@ -138,6 +157,7 @@ __all__ = [
     "list_writer_options",
     "list_writers",
     "register_writer",
+    "split_template_args",
     # Generate API
     "generate",
     "generate_all",
@@ -181,7 +201,15 @@ __all__ = [
     "ScaffoldOptions",
     "BYOScaffolder",
     "StdlibScaffolder",
+    "TestBlockExtractor",
+    "NimTestExtractor",
+    "PythonTestExtractor",
+    "CTestExtractor",
+    "get_test_extractor",
+    "register_test_extractor",
     "extract_function_names",
+    "extract_header_version",
+    "merge_incremental_tests",
     "prompt_scaffold_options",
     "scaffold",
     # Work-order API

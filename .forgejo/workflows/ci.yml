@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - feat/*
+      - fix/*
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: docker
+    container:
+      image: python:3.12-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run CI lint script
+        run: bash scripts/ci/lint.sh
+
+  test:
+    runs-on: docker
+    container:
+      image: python:3.12-bookworm
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (Linux)
+        run: bash scripts/ci/install-deps-linux.sh
+      - name: Run CI test script
+        run: bash scripts/ci/test.sh
