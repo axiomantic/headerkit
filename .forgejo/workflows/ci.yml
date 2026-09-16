@@ -14,6 +14,14 @@ jobs:
     container:
       image: python:3.12-bookworm
     steps:
+      # actions/checkout is a JavaScript action; python:3.12-bookworm has no
+      # Node.js runtime, so it must be installed before checkout runs (the
+      # step that needs it) rather than after (the step that would need the
+      # checked-out repo).
+      - name: Install Node.js runtime (for actions/checkout)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq nodejs
       - uses: actions/checkout@v4
       - name: Run CI lint script
         run: bash scripts/ci/lint.sh
@@ -21,14 +29,33 @@ jobs:
   test:
     runs-on: docker
     container:
-      image: python:3.12-bookworm
+      image: ubuntu:24.04
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.12"]
+    env:
+      DEBIAN_FRONTEND: noninteractive
     steps:
+      # Same actions/checkout-needs-node ordering constraint as the lint job,
+      # plus the base OS toolchain: Python (ubuntu:24.04 ships 3.12 by
+      # default, matching the matrix version above) and build tools curl and
+      # tar need for the Nim install step below.
+      - name: Install Node.js runtime and base toolchain (for actions/checkout, Python, Nim)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq nodejs python3 python3-pip python3-venv python3-dev curl xz-utils
       - uses: actions/checkout@v4
-      - name: Install dependencies (Linux)
+      - name: Install libclang and a C23-capable compiler (Ubuntu)
         run: bash scripts/ci/install-deps-linux.sh
+      - name: Install Nim
+        run: bash scripts/ci/install-nim-linux.sh
+      # A venv at .venv is what scripts/ci/lint.sh and scripts/ci/test.sh
+      # both auto-detect and prepend to PATH, so it carries across steps
+      # without needing a separate $GITHUB_PATH write here.
+      - name: Install package
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -e '.[test,treesitter]'
       - name: Run CI test script
         run: bash scripts/ci/test.sh

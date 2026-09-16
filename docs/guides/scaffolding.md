@@ -88,6 +88,7 @@ When scaffolding a package, HeaderKit generates test suites tailored to the targ
 import pytest
 from mypkg import _bindings
 
+
 @pytest.mark.tripwire
 def test_tripwire_exported_symbols():
     """Tripwire verification: asserts foreign C symbols are present in runtime bindings."""
@@ -175,6 +176,7 @@ from headerkit.ir import Header
 from headerkit.scaffold import BYOScaffolder, OutputFile, ProjectLayout, ScaffoldOptions, scaffold
 from headerkit.writers import get_writer
 
+
 class CopierScaffolder(BYOScaffolder):
     def __init__(self, template_dir: Path) -> None:
         self.template_dir = template_dir
@@ -196,12 +198,15 @@ class CopierScaffolder(BYOScaffolder):
             )
             files = [
                 OutputFile(path=str(p.relative_to(tmp_dir)), content=p.read_text(encoding="utf-8"))
-                for p in Path(tmp_dir).rglob("*") if p.is_file()
+                for p in Path(tmp_dir).rglob("*")
+                if p.is_file()
             ]
             return ProjectLayout(files=files)
 
+
 # Register via HeaderKit hook engine
 copier_plugin = CopierScaffolder(Path("./templates/custom_template"))
+
 
 @hook("scaffold_project", priority=Priority.OVERRIDE)
 def custom_scaffold_hook(unit: Header, options: ScaffoldOptions, **_kwargs) -> ProjectLayout:

@@ -8,9 +8,16 @@ fi
 
 echo "=== Running CI Lint Checks ==="
 
-# Install package in editable mode with lint extras if not already installed
-if ! python3 -c "import ruff, mypy" >/dev/null 2>&1; then
-    python3 -m pip install -e '.[lint]'
+# Install package in editable mode with lint extras if not already installed.
+# treesitter is included alongside lint, not just test: headerkit's package
+# __init__ imports headerkit.backends, which has a guarded (try/except
+# ImportError) `import headerkit.backends.treesitter` for its runtime
+# fallback -- safe at runtime, but mypy still resolves that import
+# statically when building the module graph. Without tree_sitter installed,
+# mypy.stubtest below fails to build at all (import-not-found), independent
+# of anything the clang stub itself asserts.
+if ! python3 -c "import ruff, mypy, tree_sitter" >/dev/null 2>&1; then
+    python3 -m pip install -e '.[lint,treesitter]'
 fi
 
 # Run ruff check and format check

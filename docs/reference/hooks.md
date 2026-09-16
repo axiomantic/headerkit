@@ -28,17 +28,17 @@ Hooks can filter invocation contexts by specifying attribute matchers:
 from headerkit.hooks import hook, Priority, PipelineContext
 from headerkit.ir import SourceUnit
 
+
 @hook("parse_unit", backend="tree-sitter", priority=Priority.STANDARD)
-def custom_parser(code: str, filename: str, context: PipelineContext) -> SourceUnit | None:
-    ...
+def custom_parser(code: str, filename: str, context: PipelineContext) -> SourceUnit | None: ...
+
 
 @hook("write_output", writer="ctypes", priority=Priority.STANDARD)
-def write_ctypes(unit: SourceUnit, context: PipelineContext) -> str:
-    ...
+def write_ctypes(unit: SourceUnit, context: PipelineContext) -> str: ...
+
 
 @hook("write_output", writer="*", target="*windows*", priority=Priority.PROJECT)
-def windows_override(unit: SourceUnit, context: PipelineContext) -> str:
-    ...
+def windows_override(unit: SourceUnit, context: PipelineContext) -> str: ...
 ```
 
 ## Backend and Writer Unification

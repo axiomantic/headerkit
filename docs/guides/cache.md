@@ -538,8 +538,8 @@ class MyWriter:
     def format_description(self) -> str:
         return "My custom output format"
 
-    def write(self, header):
-        ...
+    def write(self, header): ...
+
 
 register_writer("mywriter", MyWriter)
 ```

@@ -275,6 +275,7 @@ Under the hood, HeaderKit uses the [`WriterBackend`][headerkit.writers.WriterBac
 from typing import Protocol
 from headerkit.ir import SourceUnit
 
+
 class WriterBackend(Protocol):
     def write(self, header: SourceUnit) -> str: ...
 
@@ -306,6 +307,7 @@ from headerkit.ir import (
     Variable,
 )
 
+
 def convert_type(t):
     """Convert a TypeExpr to your target format."""
     if isinstance(t, CType):
@@ -322,6 +324,7 @@ def convert_type(t):
     elif isinstance(t, FunctionPointer):
         # Function pointer: t.return_type, t.parameters, t.is_variadic
         ...
+
 
 def convert_declaration(decl):
     """Convert a Declaration to your target format."""
@@ -368,5 +371,6 @@ pip install headerkit-markdown-writer
 import mywriter  # noqa: F401
 
 from headerkit import get_writer
+
 writer = get_writer("markdown")
 ```

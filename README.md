@@ -354,6 +354,7 @@ Or write a custom writer in Python:
 from headerkit.ir import SourceUnit
 from headerkit.writers import BaseWriter, register_writer
 
+
 class RubyFfiWriter(BaseWriter):
     @property
     def name(self) -> str:
@@ -363,6 +364,7 @@ class RubyFfiWriter(BaseWriter):
         lines = ["require 'ffi'", "module MyLib", "  extend FFI::Library"]
         # Iterate over unit.declarations...
         return "\n".join(lines)
+
 
 register_writer("ruby", RubyFfiWriter)
 ```

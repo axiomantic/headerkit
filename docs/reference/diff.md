@@ -44,16 +44,22 @@ from headerkit.writers import get_writer
 
 backend = get_backend()
 
-old_header = backend.parse("""
+old_header = backend.parse(
+    """
 int add(int a, int b);
 int multiply(int a, int b);
-""", "math_v1.h")
+""",
+    "math_v1.h",
+)
 
-new_header = backend.parse("""
+new_header = backend.parse(
+    """
 int add(int a, int b);
 double multiply(double a, double b);
 int subtract(int a, int b);
-""", "math_v2.h")
+""",
+    "math_v2.h",
+)
 
 # JSON report
 writer = get_writer("diff", baseline=old_header, format="json")

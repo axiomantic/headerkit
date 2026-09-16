@@ -9,6 +9,7 @@ Every backend must implement the [`ParserBackend`][headerkit.ir.ParserBackend] p
 ```python
 from headerkit.ir import Header, ParserBackend
 
+
 class ParserBackend(Protocol):
     def parse(
         self,

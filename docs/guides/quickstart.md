@@ -178,6 +178,7 @@ print(prompt_writer.write(header))
 
 # API compatibility diff between two header versions
 from headerkit import get_backend
+
 old_header = get_backend().parse(old_code, "point.h")
 new_header = get_backend().parse(new_code, "point.h")
 diff_writer = get_writer("diff", baseline=old_header, format="markdown")
@@ -188,6 +189,7 @@ Use `list_writers()` to discover all registered writers at runtime:
 
 ```python
 from headerkit import list_writers
+
 print(list_writers())
 # ['cffi', 'cshim', 'ctypes', 'cython', 'diff', 'json', 'lua', 'mojo', 'nim', 'prompt']
 ```

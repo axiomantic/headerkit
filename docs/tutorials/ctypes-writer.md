@@ -30,6 +30,7 @@ lib = ctypes.CDLL("./libmylib.so")
 lib.add.argtypes = [ctypes.c_int, ctypes.c_int]
 lib.add.restype = ctypes.c_int
 
+
 class Point(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_double),
@@ -338,11 +339,13 @@ import os
 
 lib = ctypes.CDLL(os.path.join(os.path.dirname(__file__), "libpoint.so"))
 
+
 class Point(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_double),
         ("y", ctypes.c_double),
     ]
+
 
 # enum ShapeType
 SHAPE_CIRCLE = 0
