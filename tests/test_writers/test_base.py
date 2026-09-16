@@ -189,6 +189,36 @@ class TestBaseWriterSharedFeatures:
         assert len(res_st.fields) == 1
         assert res_st.fields[0].name == "pub"
 
+    def test_min_access_floor_override_via_options(self):
+        from headerkit.scaffold import ScaffoldOptions
+
+        class PublicOnlyWriter(BaseWriter):
+            min_access_floor = "public"
+
+            def _render(self, unit):
+                return ""
+
+        st = Struct(
+            name="Foo",
+            fields=[
+                Field("pub", CType("int"), access="public"),
+                Field("priv", CType("int"), access="private"),
+            ],
+        )
+        h = Header(path="test.h", declarations=[st])
+        writer = PublicOnlyWriter()
+
+        # Override to "all" via options
+        layout_all = writer.write_layout(h, ScaffoldOptions(options={"access_floor": "all"}))
+        assert len(layout_all.files) == 1
+
+        # Override to "private" via options
+        opts_priv = ScaffoldOptions(options={"access_floor": "private"})
+        prepared_priv = writer._prepare(h, options=opts_priv)
+        res_priv = [d for d in prepared_priv.declarations if isinstance(d, Struct)][0]
+        assert len(res_priv.fields) == 2
+        assert [f.name for f in res_priv.fields] == ["pub", "priv"]
+
     def test_disambiguate_anonymous_enums(self):
         class DummyWriter(BaseWriter):
             pass

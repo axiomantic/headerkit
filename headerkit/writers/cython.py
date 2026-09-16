@@ -2218,6 +2218,12 @@ class CythonWriter(BaseWriter):
             default="headerkit.stubs",
             type=str,
         ),
+        WriterOption(
+            name="access_floor",
+            description="Minimum member access level to include (public, protected, private, or all)",
+            default="public",
+            choices=("public", "protected", "private", "all"),
+        ),
     )
 
     def __init__(self, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:

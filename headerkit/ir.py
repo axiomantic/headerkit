@@ -1189,12 +1189,13 @@ _ACCESS_LEVELS: dict[str, int] = {
     "public": 0,
     "protected": 1,
     "private": 2,
+    "all": 2,
 }
 
 
 def _access_allowed(item_access: str | None, floor: str) -> bool:
     """Return True if item_access meets or exceeds the required floor."""
-    if item_access is None:
+    if item_access is None or floor.lower() in ("private", "all", "none"):
         return True
     item_level = _ACCESS_LEVELS.get(item_access.lower(), 0)
     floor_level = _ACCESS_LEVELS.get(floor.lower(), 0)
@@ -1229,9 +1230,9 @@ def filter_access_floor(
 
     :param unit: The IR unit (Header or SourceUnit) to filter.
     :param floor: Access floor - ``"public"`` (default, keeps public and unannotated),
-        ``"protected"`` (keeps public and protected), or ``"private"`` (keeps all).
+        ``"protected"`` (keeps public and protected), ``"private"`` or ``"all"`` (keeps all without pruning).
     """
-    if floor.lower() == "private":
+    if not floor or floor.lower() in ("private", "all", "none"):
         return unit
 
     new_decls: list[Declaration] = []

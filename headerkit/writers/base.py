@@ -225,8 +225,6 @@ class BaseWriter:
         options: ScaffoldOptions | None = None,
     ) -> ProjectLayout:
         """Convert parsed unit IR into a complete ProjectLayout."""
-        unit = self._prepare(unit)
-
         opts = options or ScaffoldOptions(target_language=self.name, layout="file")
         if opts.layout not in self.supported_layouts:
             raise ValueError(
@@ -236,6 +234,8 @@ class BaseWriter:
 
         if self.supported_options and opts.options:
             opts.options = coerce_writer_options(opts.options, self.supported_options)
+
+        unit = self._prepare(unit, options=opts)
 
         if opts.layout == "file":
             return self._write_single_file_layout(unit, opts)
@@ -271,15 +271,28 @@ class BaseWriter:
 
     min_access_floor: ClassVar[str | None] = None
 
-    def _prepare(self, unit: SourceUnit | Header) -> SourceUnit | Header:
+    def _prepare(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions | None = None,
+    ) -> SourceUnit | Header:
         """Normalize IR before rendering.
 
-        Applies access floor filtering when :attr:`min_access_floor` is configured,
-        and strips unnamed bitfield padding unless :attr:`consumes_padding_fields`
-        is True.
+        Applies access floor filtering when :attr:`min_access_floor` or
+        ``options.options["access_floor"]`` is configured, and strips unnamed
+        bitfield padding unless :attr:`consumes_padding_fields` is True.
+
+        Access filtering can be overridden per invocation via:
+        - ``options.options["access_floor"] = "all"`` (or ``"private"``) to keep all symbols.
+        - Subclassing with ``min_access_floor = None``.
         """
-        if self.min_access_floor is not None and self.min_access_floor != "private":
-            unit = filter_access_floor(unit, floor=self.min_access_floor)
+        floor = self.min_access_floor
+        if options and options.options and "access_floor" in options.options:
+            raw_floor = options.options["access_floor"]
+            floor = str(raw_floor) if raw_floor is not None else None
+
+        if floor and floor.lower() not in ("private", "all", "none"):
+            unit = filter_access_floor(unit, floor=floor)
         if not self.consumes_padding_fields:
             return strip_padding_fields(unit)
         return unit

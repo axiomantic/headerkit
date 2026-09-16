@@ -500,6 +500,12 @@ class NimWriter(BaseWriter):
             default=None,
             type=str,
         ),
+        WriterOption(
+            name="access_floor",
+            description="Minimum member access level to include (public, protected, private, or all)",
+            default="public",
+            choices=("public", "protected", "private", "all"),
+        ),
     )
 
     def __init__(self, *, header_path: str | None = None) -> None:

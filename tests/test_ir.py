@@ -541,8 +541,8 @@ class TestFilterAccessFloor:
             ],
         )
         h = Header(path="test.h", declarations=[st])
-        filtered = filter_access_floor(h, floor="private")
-        assert filtered is h
+        assert filter_access_floor(h, floor="private") is h
+        assert filter_access_floor(h, floor="all") is h
 
 
 class TestTypeHierarchy:
