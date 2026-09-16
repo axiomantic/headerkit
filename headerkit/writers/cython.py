@@ -2203,6 +2203,7 @@ class CythonWriter(BaseWriter):
     format_description: str = "Cython .pxd declarations for C/C++ interop"
     default_output_pattern: str = "{dir}/{stem}.pxd"
     default_extension: str = ".pxd"
+    min_access_floor: ClassVar[str | None] = "public"
     supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(

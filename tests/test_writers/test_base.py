@@ -5,7 +5,24 @@ import textwrap
 
 import pytest
 
-from headerkit.writers.base import DEDENT_BLOCK, module_level_bindings, render_block_template
+from headerkit.ir import (
+    CType,
+    Enum,
+    EnumValue,
+    Field,
+    Function,
+    Header,
+    Parameter,
+    Struct,
+)
+from headerkit.writers.base import (
+    DEDENT_BLOCK,
+    BaseWriter,
+    canonicalize_type_brackets,
+    module_level_bindings,
+    render_block_template,
+    split_template_args,
+)
 
 
 class TestModuleLevelBindings:
@@ -99,3 +116,95 @@ class TestRenderBlockTemplate:
     def test_blocks_substitute_left_to_right(self) -> None:
         template = f"{DEDENT_BLOCK}\n{DEDENT_BLOCK}\n"
         assert render_block_template(template, "first", "second") == "first\nsecond\n"
+
+
+class TestSplitTemplateArgs:
+    def test_split_simple_comma(self):
+        assert split_template_args("int, float, char*") == ["int", "float", "char*"]
+
+    def test_split_nested_angle_brackets(self):
+        assert split_template_args("std::map<std::string, int>, float") == [
+            "std::map<std::string, int>",
+            "float",
+        ]
+
+    def test_split_nested_square_brackets(self):
+        assert split_template_args("Table[string, seq[int]], int") == [
+            "Table[string, seq[int]]",
+            "int",
+        ]
+
+
+class TestCanonicalizeTypeBrackets:
+    def test_canonicalize_nested_brackets(self):
+        def norm(t: str) -> str:
+            return {"float32": "cfloat", "float64": "cdouble"}.get(t, t)
+
+        assert canonicalize_type_brackets("AudioBuffer[float32]", norm) == "AudioBuffer[cfloat]"
+        assert canonicalize_type_brackets("Map[string, Vector[float64]]", norm) == "Map[string, Vector[cdouble]]"
+
+
+class TestBaseWriterSharedFeatures:
+    def test_get_overload_signature(self):
+        class DummyWriter(BaseWriter):
+            pass
+
+        writer = DummyWriter()
+        fn1 = Function(
+            name="process",
+            return_type=CType("void"),
+            parameters=[Parameter("buf", CType("AudioBuffer[float32]"))],
+        )
+        fn2 = Function(
+            name="process",
+            return_type=CType("void"),
+            parameters=[Parameter("buf", CType("AudioBuffer[float64]"))],
+        )
+
+        sig1 = writer.get_overload_signature(fn1)
+        sig2 = writer.get_overload_signature(fn2)
+
+        assert sig1 != sig2
+        assert sig1 == ("process", ("AudioBuffer[float32]",))
+        assert sig2 == ("process", ("AudioBuffer[float64]",))
+
+    def test_min_access_floor_filters_in_prepare(self):
+        class PublicOnlyWriter(BaseWriter):
+            min_access_floor = "public"
+
+            def _render(self, unit):
+                return ""
+
+        st = Struct(
+            name="Foo",
+            fields=[
+                Field("pub", CType("int"), access="public"),
+                Field("priv", CType("int"), access="private"),
+            ],
+        )
+        h = Header(path="test.h", declarations=[st])
+        writer = PublicOnlyWriter()
+        prepared = writer._prepare(h)
+        res_st = [d for d in prepared.declarations if isinstance(d, Struct)][0]
+        assert len(res_st.fields) == 1
+        assert res_st.fields[0].name == "pub"
+
+    def test_disambiguate_anonymous_enums(self):
+        class DummyWriter(BaseWriter):
+            pass
+
+        writer = DummyWriter()
+        e_scoped = Enum(
+            name="",
+            namespace="juce::Commands",
+            values=[EnumValue(name="cut", value=1)],
+        )
+        e_root = Enum(
+            name="",
+            values=[EnumValue(name="reset", value=2)],
+        )
+        h = Header(path="test.h", declarations=[e_scoped, e_root])
+        disambiguated = writer.disambiguate_anonymous_enums(h, func_names={"cut", "reset"})
+        enums = [d for d in disambiguated.declarations if isinstance(d, Enum)]
+        assert enums[0].values[0].name == "Commands_cut"
+        assert enums[1].values[0].name == "reset_val"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from headerkit.hooks import HookDispatcher, Priority, hook
 from headerkit.ir import Constant, Declaration, Function, Header, SourceUnit
@@ -128,122 +128,239 @@ def extract_header_version(unit: SourceUnit | Header) -> str | None:
     return None
 
 
-def _extract_nim_tests(content: str) -> tuple[str, list[tuple[str, str]]]:
-    """Extract (preamble, [(title, block_text), ...]) for tests in Nim source without regex."""
-    lines = content.splitlines(keepends=True)
-    tests: list[tuple[str, str]] = []
-    preamble_lines: list[str] = []
-    first_test_found = False
-    current_when_guard: tuple[int, str] | None = None
-    i = 0
+@runtime_checkable
+class TestBlockExtractor(Protocol):
+    """Protocol for language-specific test suite extraction without regex."""
 
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
+    def extract_tests(self, content: str) -> tuple[str, list[tuple[str, str]]]:
+        """Extract (preamble, [(test_title, test_block_code), ...])."""
+        ...
 
-        if not stripped:
+
+TestBlockExtractor.__test__ = False  # type: ignore[attr-defined]
+
+
+class NimTestExtractor:
+    """Extract tests from Nim source code without regex."""
+
+    def extract_tests(self, content: str) -> tuple[str, list[tuple[str, str]]]:
+        lines = content.splitlines(keepends=True)
+        tests: list[tuple[str, str]] = []
+        preamble_lines: list[str] = []
+        first_test_found = False
+        current_when_guard: tuple[int, str] | None = None
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+
+            if not stripped:
+                if not first_test_found:
+                    preamble_lines.append(line)
+                i += 1
+                continue
+
+            indent = len(line) - len(line.lstrip())
+
+            if current_when_guard is not None and indent <= current_when_guard[0]:
+                current_when_guard = None
+
+            if stripped.startswith("when ") and stripped.endswith(":"):
+                current_when_guard = (indent, line)
+                if not first_test_found:
+                    j = i + 1
+                    while j < len(lines) and not lines[j].strip():
+                        j += 1
+                    if j < len(lines) and lines[j].strip().startswith("test "):
+                        first_test_found = True
+                    else:
+                        preamble_lines.append(line)
+                i += 1
+                continue
+
+            if stripped.startswith("test ") and ":" in stripped:
+                first_test_found = True
+                after_test = stripped[5:]
+                colon_idx = after_test.rfind(":")
+                title_part = after_test[:colon_idx].strip()
+                if "{" in title_part and title_part.endswith("}"):
+                    title_part = title_part[: title_part.find("{")].strip()
+                test_title = title_part.strip("\"'")
+
+                test_indent = indent
+                guard_line = (
+                    current_when_guard[1]
+                    if current_when_guard is not None and test_indent > current_when_guard[0]
+                    else None
+                )
+                block_lines = [guard_line] if guard_line is not None else []
+                block_lines.append(line)
+                i += 1
+                while i < len(lines):
+                    next_line = lines[i]
+                    next_stripped = next_line.strip()
+                    if not next_stripped:
+                        block_lines.append(next_line)
+                        i += 1
+                        continue
+                    next_indent = len(next_line) - len(next_line.lstrip())
+                    if next_indent <= test_indent or (next_stripped.startswith("test ") and ":" in next_stripped):
+                        break
+                    block_lines.append(next_line)
+                    i += 1
+                tests.append((test_title, "".join(block_lines)))
+                continue
+
             if not first_test_found:
                 preamble_lines.append(line)
             i += 1
-            continue
 
-        indent = len(line) - len(line.lstrip())
+        preamble = "".join(preamble_lines)
+        return preamble, tests
 
-        # Check if an active when guard expired due to outdent
-        if current_when_guard is not None and indent <= current_when_guard[0]:
-            current_when_guard = None
 
-        # Check for when guard e.g. "when declared(...) :"
-        if stripped.startswith("when ") and stripped.endswith(":"):
-            current_when_guard = (indent, line)
-            if not first_test_found:
-                # Look ahead to see if the next non-empty line starts a test
-                j = i + 1
-                while j < len(lines) and not lines[j].strip():
-                    j += 1
-                if j < len(lines) and lines[j].strip().startswith("test "):
-                    first_test_found = True
-                else:
-                    preamble_lines.append(line)
-            i += 1
-            continue
+class PythonTestExtractor:
+    """Extract tests from Python source code without regex."""
 
-        if stripped.startswith("test ") and ":" in stripped:
-            first_test_found = True
-            after_test = stripped[5:]
-            colon_idx = after_test.rfind(":")
-            title_part = after_test[:colon_idx].strip()
-            if "{" in title_part and title_part.endswith("}"):
-                title_part = title_part[: title_part.find("{")].strip()
-            test_title = title_part.strip("\"'")
-
-            test_indent = indent
-            guard_line = (
-                current_when_guard[1]
-                if current_when_guard is not None and test_indent > current_when_guard[0]
-                else None
-            )
-            block_lines = [guard_line] if guard_line is not None else []
-            block_lines.append(line)
-            i += 1
-            while i < len(lines):
-                next_line = lines[i]
-                next_stripped = next_line.strip()
-                if not next_stripped:
+    def extract_tests(self, content: str) -> tuple[str, list[tuple[str, str]]]:
+        lines = content.splitlines(keepends=True)
+        tests: list[tuple[str, str]] = []
+        preamble_lines: list[str] = []
+        first_test_found = False
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+            if stripped.startswith("def test_") and "(" in stripped:
+                first_test_found = True
+                title = stripped[4 : stripped.find("(")].strip()
+                indent = len(line) - len(line.lstrip())
+                block_lines = [line]
+                i += 1
+                while i < len(lines):
+                    next_line = lines[i]
+                    next_stripped = next_line.strip()
+                    if not next_stripped:
+                        block_lines.append(next_line)
+                        i += 1
+                        continue
+                    next_indent = len(next_line) - len(next_line.lstrip())
+                    if next_indent <= indent:
+                        break
                     block_lines.append(next_line)
                     i += 1
-                    continue
-                next_indent = len(next_line) - len(next_line.lstrip())
-                if next_indent <= test_indent or (next_stripped.startswith("test ") and ":" in next_stripped):
-                    break
-                block_lines.append(next_line)
+                tests.append((title, "".join(block_lines)))
+                continue
+            if not first_test_found:
+                preamble_lines.append(line)
+            i += 1
+        preamble = "".join(preamble_lines)
+        return preamble, tests
+
+
+class CTestExtractor:
+    """Extract tests from C/C++ test suites (Catch2, GoogleTest, Criterion, Unity) without regex."""
+
+    def extract_tests(self, content: str) -> tuple[str, list[tuple[str, str]]]:
+        lines = content.splitlines(keepends=True)
+        tests: list[tuple[str, str]] = []
+        preamble_lines: list[str] = []
+        first_test_found = False
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+
+            if not stripped:
+                if not first_test_found:
+                    preamble_lines.append(line)
                 i += 1
-            tests.append((test_title, "".join(block_lines)))
-            continue
+                continue
 
-        if not first_test_found:
-            preamble_lines.append(line)
-        i += 1
+            is_catch2 = stripped.startswith("TEST_CASE(")
+            is_gtest = stripped.startswith("TEST(") or stripped.startswith("TEST_F(")
+            is_criterion = stripped.startswith("Test(")
+            is_func_test = (
+                stripped.startswith("void test_")
+                or stripped.startswith("static void test_")
+                or stripped.startswith("int test_")
+            ) and "(" in stripped
 
-    preamble = "".join(preamble_lines)
-    return preamble, tests
+            if is_catch2 or is_gtest or is_criterion or is_func_test:
+                first_test_found = True
+                title = ""
+                if is_catch2:
+                    start_q = stripped.find('"')
+                    if start_q != -1:
+                        end_q = stripped.find('"', start_q + 1)
+                        if end_q != -1:
+                            title = stripped[start_q + 1 : end_q]
+                elif is_gtest or is_criterion:
+                    start_p = stripped.find("(")
+                    end_p = stripped.find(")", start_p + 1)
+                    if start_p != -1 and end_p != -1:
+                        args = [a.strip().strip('"') for a in stripped[start_p + 1 : end_p].split(",")]
+                        title = ".".join(args)
+                elif is_func_test:
+                    start_fn = stripped.find("test_")
+                    end_fn = stripped.find("(", start_fn)
+                    if start_fn != -1 and end_fn != -1:
+                        title = stripped[start_fn:end_fn].strip()
+
+                if not title:
+                    title = f"test_{len(tests) + 1}"
+
+                block_lines = [line]
+                brace_depth = line.count("{") - line.count("}")
+                i += 1
+                while i < len(lines):
+                    next_line = lines[i]
+                    block_lines.append(next_line)
+                    brace_depth += next_line.count("{") - next_line.count("}")
+                    i += 1
+                    if brace_depth <= 0 and "{" in "".join(block_lines):
+                        break
+                tests.append((title, "".join(block_lines)))
+                continue
+
+            if not first_test_found:
+                preamble_lines.append(line)
+            i += 1
+
+        preamble = "".join(preamble_lines)
+        return preamble, tests
+
+
+_TEST_EXTRACTORS: dict[str, TestBlockExtractor] = {
+    "nim": NimTestExtractor(),
+    "python": PythonTestExtractor(),
+    "py": PythonTestExtractor(),
+    "c": CTestExtractor(),
+    "cpp": CTestExtractor(),
+    "cxx": CTestExtractor(),
+}
+
+
+def register_test_extractor(language: str, extractor: TestBlockExtractor) -> None:
+    """Register a test extractor for a target language."""
+    _TEST_EXTRACTORS[language.lower()] = extractor
+
+
+def get_test_extractor(language: str) -> TestBlockExtractor | None:
+    """Get the registered test extractor for a language, or None if unsupported."""
+    return _TEST_EXTRACTORS.get(language.lower())
+
+
+def _extract_nim_tests(content: str) -> tuple[str, list[tuple[str, str]]]:
+    """Extract tests from Nim source (backwards-compatibility helper)."""
+    return NimTestExtractor().extract_tests(content)
 
 
 def _extract_python_tests(content: str) -> tuple[str, list[tuple[str, str]]]:
-    """Extract (preamble, [(func_name, block_text), ...]) for tests in Python source without regex."""
-    lines = content.splitlines(keepends=True)
-    tests: list[tuple[str, str]] = []
-    preamble_lines: list[str] = []
-    first_test_found = False
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-        if stripped.startswith("def test_") and "(" in stripped:
-            first_test_found = True
-            title = stripped[4 : stripped.find("(")].strip()
-            indent = len(line) - len(line.lstrip())
-            block_lines = [line]
-            i += 1
-            while i < len(lines):
-                next_line = lines[i]
-                next_stripped = next_line.strip()
-                if not next_stripped:
-                    block_lines.append(next_line)
-                    i += 1
-                    continue
-                next_indent = len(next_line) - len(next_line.lstrip())
-                if next_indent <= indent:
-                    break
-                block_lines.append(next_line)
-                i += 1
-            tests.append((title, "".join(block_lines)))
-            continue
-        if not first_test_found:
-            preamble_lines.append(line)
-        i += 1
-    preamble = "".join(preamble_lines)
-    return preamble, tests
+    """Extract tests from Python source (backwards-compatibility helper)."""
+    return PythonTestExtractor().extract_tests(content)
 
 
 def merge_incremental_tests(
@@ -259,14 +376,12 @@ def merge_incremental_tests(
     When canonicalize=True, test cases within each suite/module are canonically ordered
     by test title, ensuring deterministic, order-independent output across multiple runs.
     """
-    if language == "nim":
-        existing_preamble, existing_tests = _extract_nim_tests(existing)
-        new_preamble, new_tests = _extract_nim_tests(new_incoming)
-    elif language in ("python", "py"):
-        existing_preamble, existing_tests = _extract_python_tests(existing)
-        new_preamble, new_tests = _extract_python_tests(new_incoming)
-    else:
+    extractor = get_test_extractor(language)
+    if extractor is None:
         return existing
+
+    existing_preamble, existing_tests = extractor.extract_tests(existing)
+    new_preamble, new_tests = extractor.extract_tests(new_incoming)
 
     existing_titles = {t[0] for t in existing_tests}
     missing_tests = [t for t in new_tests if t[0] not in existing_titles]

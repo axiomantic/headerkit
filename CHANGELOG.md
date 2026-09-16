@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Shared IR access floor filtering: `filter_access_floor(unit, floor)` in `headerkit.ir` and `BaseWriter.min_access_floor` property (enabled with `"public"` on `NimWriter` and `CythonWriter`) uniformly prune inaccessible `private` and `protected` structs, fields, methods, constructors, destructors, and bases during `_prepare()` before writer emission.
+- Polymorphic class hierarchy analysis: `TypeHierarchy` in `headerkit.ir` models complete inheritance DAGs across structs, computing root bases, descendants, and polymorphic types across compilation units.
+- C++ aggregate value detection: `is_cpp_value_type` in `headerkit.ir` identifies return-by-value composite aggregates to guide lifetime management and prevent dangling pointer bugs across foreign language bindings.
+- Bracketed type expression canonicalization: `canonicalize_type_brackets` and `split_template_args` in `headerkit.writers.base` provide balanced, non-regex normalization and argument splitting across `<...>`, `(...)`, and `[...]`.
+- Shared anonymous enum disambiguation: `BaseWriter.disambiguate_anonymous_enums` provides enclosing-scope-aware renaming for un-scoped enumerators across all writer backends.
+- Pluggable test scaffolding extractors: `TestBlockExtractor` protocol, `register_test_extractor`, and `get_test_extractor` in `headerkit.scaffold` allow target languages to provide custom test extraction for incremental test merging.
+- Non-regex C/C++ test extraction: `CTestExtractor` in `headerkit.scaffold` extracts Catch2, GoogleTest, Criterion, and plain C test functions with balanced brace depth counting for order-independent test merging.
 - Canonical, order-independent test merging: `OutputFile.merge_strategy = "canonical_merge"` and `merge_incremental_tests(..., canonicalize=True)` ensure deterministic, byte-for-byte identical output regardless of the order in which multiple library versions are scaffolded.
 - Scaffolding hook lifecycle: introduced `scaffold_tests` (waterfall) and `transform_layout` (waterfall) hook points in `headerkit.scaffold`, enabling downstream projects and plugins to enrich test suites, inject build configurations (e.g. `nim.cfg`, `CMakeLists.txt`), and post-process layouts.
 - Within-file incremental test merging: `merge_incremental_tests` and `OutputFile.merge_strategy="append_new_tests"` preserve existing human-authored tests and custom assertions while automatically discovering and appending test stubs for new symbols.

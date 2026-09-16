@@ -485,6 +485,7 @@ class NimWriter(BaseWriter):
     format_description: str = "Nim bindings with C and C++ interop"
     default_output_pattern: str = "{dir}/{stem}.nim"
     default_extension: str = ".nim"
+    min_access_floor: ClassVar[str | None] = "public"
     supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel", "scikit-build")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(

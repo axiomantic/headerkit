@@ -4,10 +4,21 @@ from __future__ import annotations
 
 import ast
 import textwrap
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
-from headerkit.ir import Header, SourceUnit, strip_padding_fields
+from headerkit.ir import (
+    Declaration,
+    Enum,
+    EnumValue,
+    Function,
+    Header,
+    SourceUnit,
+    Struct,
+    filter_access_floor,
+    strip_padding_fields,
+)
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 
 #: One-line stand-in for a generated multi-line block inside a dedented
@@ -145,6 +156,53 @@ def coerce_writer_options(
     return result
 
 
+def split_template_args(arg_str: str) -> list[str]:
+    """Split top-level comma-separated template arguments respecting nested <...>, [...], and (...)."""
+    args: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in arg_str:
+        if char in "<([":
+            depth += 1
+            current.append(char)
+        elif char in ">)]":
+            depth -= 1
+            current.append(char)
+        elif char == "," and depth == 0:
+            args.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    if current:
+        args.append("".join(current).strip())
+    return [a for a in args if a]
+
+
+def canonicalize_type_brackets(
+    type_str: str,
+    normalizer: Callable[[str], str] | None = None,
+) -> str:
+    """Recursively canonicalize generic and template brackets ([...] and <...>)."""
+    clean = type_str.strip()
+    if not clean:
+        return clean
+
+    for open_b, close_b in (("[", "]"), ("<", ">")):
+        if open_b in clean and clean.endswith(close_b):
+            idx = clean.find(open_b)
+            base = clean[:idx].strip()
+            if normalizer:
+                base = normalizer(base)
+            inner = clean[idx + 1 : -1].strip()
+            if inner:
+                args = split_template_args(inner)
+                canon_args = [canonicalize_type_brackets(a, normalizer) for a in args]
+                return f"{base}{open_b}{', '.join(canon_args)}{close_b}"
+            return f"{base}{open_b}{close_b}"
+
+    return normalizer(clean) if normalizer else clean
+
+
 class BaseWriter:
     """Base class providing unified layout generation for all output writers."""
 
@@ -211,16 +269,79 @@ class BaseWriter:
         """Generate custom layout defined by subclass."""
         return self._write_package_layout(unit, options)
 
+    min_access_floor: ClassVar[str | None] = None
+
     def _prepare(self, unit: SourceUnit | Header) -> SourceUnit | Header:
         """Normalize IR before rendering.
 
-        Every entry point must route through this, including a ``write``
-        override, or unnamed-bitfield padding reaches a writer that cannot
-        represent it. ``test_no_padding_leaks_into_writers`` enforces that.
+        Applies access floor filtering when :attr:`min_access_floor` is configured,
+        and strips unnamed bitfield padding unless :attr:`consumes_padding_fields`
+        is True.
         """
+        if self.min_access_floor is not None and self.min_access_floor != "private":
+            unit = filter_access_floor(unit, floor=self.min_access_floor)
         if not self.consumes_padding_fields:
             return strip_padding_fields(unit)
         return unit
+
+    def get_overload_signature(
+        self,
+        func: Function,
+        normalizer: Callable[[str], str] | None = None,
+    ) -> tuple[str, tuple[str, ...]]:
+        """Compute an overload-safe canonical signature tuple (name, (param_type_1, ...)).
+
+        Recursively canonicalizes generic brackets ([...] and <...>) and applies
+        the optional type normalizer to each parameter type.
+        """
+        param_types: list[str] = []
+        for p in func.parameters:
+            pt = str(p.type)
+            canon_pt = canonicalize_type_brackets(pt, normalizer)
+            param_types.append(canon_pt)
+        return (func.name, tuple(param_types))
+
+    def disambiguate_anonymous_enums(
+        self,
+        unit: SourceUnit | Header,
+        func_names: set[str] | None = None,
+        fallback_suffix: str = "_val",
+    ) -> SourceUnit | Header:
+        """Disambiguate anonymous enum constant names that collide with functions or outer scopes."""
+        from dataclasses import replace
+
+        def _process_enum(e: Enum) -> Enum:
+            is_anon = not e.name or "(unnamed" in e.name or "(anonymous" in e.name or e.name.startswith("enum (")
+            if not is_anon:
+                return e
+            ns_prefix = ""
+            if e.namespace:
+                ns_parts = [p.strip() for p in e.namespace.split("::") if p.strip()]
+                if len(ns_parts) > 1 and ns_parts[-1] != "std":
+                    ns_prefix = f"{ns_parts[-1]}_"
+            new_values: list[EnumValue] = []
+            for v in e.values:
+                v_name = v.name
+                if func_names and v_name in func_names:
+                    new_name = f"{ns_prefix}{v_name}" if ns_prefix else f"{v_name}{fallback_suffix}"
+                    new_values.append(replace(v, name=new_name))
+                else:
+                    new_values.append(v)
+            return replace(e, values=new_values)
+
+        def _process_struct(s: Struct) -> Struct:
+            new_nested: list[Struct] = [_process_struct(nr) for nr in s.nested_records]
+            return replace(s, nested_records=new_nested)
+
+        new_decls: list[Declaration] = []
+        for decl in unit.declarations:
+            if isinstance(decl, Enum):
+                new_decls.append(_process_enum(decl))
+            elif isinstance(decl, Struct):
+                new_decls.append(_process_struct(decl))
+            else:
+                new_decls.append(decl)
+        return replace(unit, declarations=new_decls)
 
     def _render(self, unit: SourceUnit | Header) -> str:
         """Render unit to string representation. Subclasses implement this."""

@@ -13,13 +13,20 @@ import pytest
 from headerkit.hooks import HookRegistry, Priority, hook
 from headerkit.ir import Constant, CType, Function, Header, Parameter
 from headerkit.scaffold import (
+    _TEST_EXTRACTORS,
     BYOScaffolder,
+    CTestExtractor,
+    NimTestExtractor,
     OutputFile,
     ProjectLayout,
+    PythonTestExtractor,
     ScaffoldOptions,
+    TestBlockExtractor,
     extract_header_version,
+    get_test_extractor,
     merge_incremental_tests,
     prompt_scaffold_options,
+    register_test_extractor,
     scaffold,
 )
 
@@ -27,8 +34,11 @@ from headerkit.scaffold import (
 @pytest.fixture(autouse=True)
 def clean_registry():
     snapshot = HookRegistry.snapshot()
+    extractor_snapshot = dict(_TEST_EXTRACTORS)
     yield
     HookRegistry.restore(snapshot)
+    _TEST_EXTRACTORS.clear()
+    _TEST_EXTRACTORS.update(extractor_snapshot)
 
 
 @pytest.fixture
@@ -632,3 +642,183 @@ class TestProjectLayoutIncrementalWrite:
         content = test_file.read_text(encoding="utf-8")
         assert 'test "beta":' in content
         assert 'test "alpha":' in content
+
+
+class TestTestExtractors:
+    def test_default_extractors_registered(self) -> None:
+        c_ext = get_test_extractor("c")
+        assert isinstance(c_ext, CTestExtractor)
+        assert isinstance(c_ext, TestBlockExtractor)
+        assert isinstance(get_test_extractor("nim"), NimTestExtractor)
+        assert isinstance(get_test_extractor("python"), PythonTestExtractor)
+        assert isinstance(get_test_extractor("py"), PythonTestExtractor)
+        assert isinstance(get_test_extractor("cpp"), CTestExtractor)
+        assert isinstance(get_test_extractor("cxx"), CTestExtractor)
+        assert get_test_extractor("unknown_lang") is None
+
+    def test_custom_extractor_registration(self) -> None:
+        class DummyExtractor:
+            def extract_tests(self, content: str) -> tuple[str, list[tuple[str, str]]]:
+                lines = content.splitlines(keepends=True)
+                preamble: list[str] = []
+                tests: list[tuple[str, str]] = []
+                for line in lines:
+                    if line.startswith("// test:"):
+                        title = line[len("// test:") :].strip()
+                        tests.append((title, line))
+                    else:
+                        preamble.append(line)
+                return "".join(preamble), tests
+
+        register_test_extractor("dummy", DummyExtractor())
+        extractor = get_test_extractor("dummy")
+        assert extractor is not None
+        preamble, tests = extractor.extract_tests("// preamble\n// test: alpha\n")
+        assert preamble == "// preamble\n"
+        assert tests == [("alpha", "// test: alpha\n")]
+
+        existing = textwrap.dedent("""\
+            // dummy preamble
+            // test: test1
+        """)
+        incoming = textwrap.dedent("""\
+            // dummy preamble
+            // test: test1
+            // test: test2
+        """)
+        merged = merge_incremental_tests(existing, incoming, language="dummy")
+        assert "// test: test1" in merged
+        assert "// test: test2" in merged
+
+
+class TestCTestExtractor:
+    def test_extract_catch2_tests(self) -> None:
+        extractor = CTestExtractor()
+        source = textwrap.dedent("""\
+            #include <catch2/catch_test_macros.hpp>
+            #include "mylib.h"
+
+            static int helper(int x) {
+                return x * 2;
+            }
+
+            TEST_CASE("Addition works", "[math]") {
+                REQUIRE(1 + 1 == 2);
+                if (true) {
+                    REQUIRE(helper(2) == 4);
+                }
+            }
+
+            TEST_CASE("Subtraction works", "[math]") {
+                REQUIRE(3 - 1 == 2);
+            }
+        """)
+        preamble, tests = extractor.extract_tests(source)
+        assert "#include <catch2/catch_test_macros.hpp>" in preamble
+        assert "static int helper" in preamble
+        assert len(tests) == 2
+        assert tests[0][0] == "Addition works"
+        assert "REQUIRE(helper(2) == 4);" in tests[0][1]
+        assert tests[1][0] == "Subtraction works"
+        assert "REQUIRE(3 - 1 == 2);" in tests[1][1]
+
+    def test_extract_gtest_and_criterion(self) -> None:
+        extractor = CTestExtractor()
+        source = textwrap.dedent("""\
+            #include <gtest/gtest.h>
+
+            TEST(MathSuite, Multiply) {
+                EXPECT_EQ(2 * 3, 6);
+            }
+
+            TEST_F(FixtureSuite, Step) {
+                EXPECT_TRUE(true);
+            }
+
+            Test(criterion_suite, sample) {
+                cr_assert(1);
+            }
+        """)
+        preamble, tests = extractor.extract_tests(source)
+        assert "#include <gtest/gtest.h>" in preamble
+        assert len(tests) == 3
+        assert tests[0][0] == "MathSuite.Multiply"
+        assert "EXPECT_EQ(2 * 3, 6);" in tests[0][1]
+        assert tests[1][0] == "FixtureSuite.Step"
+        assert tests[2][0] == "criterion_suite.sample"
+
+    def test_extract_plain_c_functions(self) -> None:
+        extractor = CTestExtractor()
+        source = textwrap.dedent("""\
+            #include <assert.h>
+
+            void test_basic_arithmetic(void) {
+                assert(1 + 1 == 2);
+            }
+
+            static void test_internal_state(void) {
+                assert(42 == 42);
+            }
+        """)
+        preamble, tests = extractor.extract_tests(source)
+        assert "#include <assert.h>" in preamble
+        assert len(tests) == 2
+        assert tests[0][0] == "test_basic_arithmetic"
+        assert "assert(1 + 1 == 2);" in tests[0][1]
+        assert tests[1][0] == "test_internal_state"
+        assert "assert(42 == 42);" in tests[1][1]
+
+    def test_c_merge_incremental_tests(self) -> None:
+        existing = textwrap.dedent("""\
+            #include <catch2/catch_test_macros.hpp>
+
+            TEST_CASE("Alpha", "[tag]") {
+                REQUIRE(1 == 1);
+            }
+        """)
+        incoming = textwrap.dedent("""\
+            #include <catch2/catch_test_macros.hpp>
+
+            TEST_CASE("Alpha", "[tag]") {
+                REQUIRE(1 == 1);
+            }
+
+            TEST_CASE("Beta", "[tag]") {
+                REQUIRE(2 == 2);
+            }
+        """)
+        merged = merge_incremental_tests(existing, incoming, language="c")
+        assert 'TEST_CASE("Alpha", "[tag]")' in merged
+        assert 'TEST_CASE("Beta", "[tag]")' in merged
+        assert merged.count('TEST_CASE("Alpha"') == 1
+
+    def test_c_merger_canonicalize_order_independent(self) -> None:
+        source_a = textwrap.dedent("""\
+            #include <catch2/catch_test_macros.hpp>
+
+            TEST_CASE("Common", "[tag]") {
+                REQUIRE(0 == 0);
+            }
+
+            TEST_CASE("Feature A", "[tag]") {
+                REQUIRE(1 == 1);
+            }
+        """)
+        source_b = textwrap.dedent("""\
+            #include <catch2/catch_test_macros.hpp>
+
+            TEST_CASE("Common", "[tag]") {
+                REQUIRE(0 == 0);
+            }
+
+            TEST_CASE("Feature B", "[tag]") {
+                REQUIRE(2 == 2);
+            }
+        """)
+
+        merged_ab = merge_incremental_tests(source_a, source_b, language="cpp", canonicalize=True)
+        merged_ba = merge_incremental_tests(source_b, source_a, language="cpp", canonicalize=True)
+
+        assert merged_ab == merged_ba
+        assert 'TEST_CASE("Feature A", "[tag]")' in merged_ab
+        assert 'TEST_CASE("Feature B", "[tag]")' in merged_ab
