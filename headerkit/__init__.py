@@ -47,6 +47,7 @@ from headerkit.ir import (
     SourceLocation,
     SourceUnit,
     Struct,
+    TemplateParameter,
     Typedef,
     TypeExpr,
     Variable,
@@ -65,6 +66,8 @@ from headerkit.scaffold import (
     ScaffoldOptions,
     StdlibScaffolder,
     extract_function_names,
+    extract_header_version,
+    merge_incremental_tests,
     prompt_scaffold_options,
     scaffold,
 )
@@ -107,6 +110,7 @@ __all__ = [
     "EnumValue",
     "Enum",
     "Struct",
+    "TemplateParameter",
     "Function",
     "Typedef",
     "Variable",
@@ -182,6 +186,8 @@ __all__ = [
     "BYOScaffolder",
     "StdlibScaffolder",
     "extract_function_names",
+    "extract_header_version",
+    "merge_incremental_tests",
     "prompt_scaffold_options",
     "scaffold",
     # Work-order API

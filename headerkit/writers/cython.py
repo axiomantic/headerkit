@@ -1200,7 +1200,7 @@ class PxdWriter:
         if struct.bases:
             base_names: list[str] = []
             for base in struct.bases:
-                if not base.name:
+                if not base.name or base.access in ("private", "protected"):
                     continue
                 rendered = self._format_base_name(base.name, struct.namespace)
                 if rendered is None:
@@ -1250,6 +1250,8 @@ class PxdWriter:
         # Constructors (cppclass)
         ctor_name = name.split(" ", 1)[0].split("[", 1)[0].split("(", 1)[0]
         for ctor in struct.constructors:
+            if ctor.access in ("private", "protected"):
+                continue
             params_str = self._format_params(ctor.parameters, ctor.is_variadic)
             lines.append(f"{self.INDENT}{ctor_name}({params_str})")
 
@@ -1269,6 +1271,8 @@ class PxdWriter:
         # a plain method. Dropping the list outright made a class whose only
         # members were conversions emit a body-less ``cdef cppclass``.
         for method in [*struct.methods, *struct.conversions]:
+            if method.access in ("private", "protected"):
+                continue
             return_type_name = method.return_type.name if isinstance(method.return_type, CType) else None
             if return_type_name and return_type_name in self._unsupported_inner_typedefs:
                 underlying = self._current_inner_typedefs.get(return_type_name, return_type_name)
@@ -1400,6 +1404,8 @@ class PxdWriter:
         lines: list[str] = []
 
         for fld in fields:
+            if fld.access in ("private", "protected"):
+                continue
             if fld.anonymous_struct is not None:
                 lines.extend(self._write_fields(fld.anonymous_struct.fields))
                 continue
@@ -1578,6 +1584,8 @@ class PxdWriter:
         skipped and replaced by a diagnostic naming the symbol and the type. A
         silent drop would leave the binding quietly incomplete.
         """
+        if func.access in ("private", "protected"):
+            return []
         lines: list[str] = []
         if func.is_static:
             lines.append("@staticmethod")

@@ -571,6 +571,30 @@ class Enum:
 
 
 @dataclass
+class TemplateParameter:
+    """A C++ template parameter.
+
+    :param name: Identifier name of the template parameter.
+    :param default_value: Default type or expression string, or None.
+    :param is_type: True for type parameters (typename/class), False for non-type parameters.
+    :param type_name: C++ type for non-type parameters (e.g. 'int', 'size_t'), or None.
+    :param is_parameter_pack: True if this is a variadic parameter pack (e.g. 'typename... Args').
+    """
+
+    name: str
+    default_value: str | None = None
+    is_type: bool = True
+    type_name: str | None = None
+    is_parameter_pack: bool = False
+
+    def __str__(self) -> str:
+        prefix = "" if self.is_type else f"{self.type_name} "
+        pack = "..." if self.is_parameter_pack else ""
+        default = f" = {self.default_value}" if self.default_value is not None else ""
+        return f"{prefix}{self.name}{pack}{default}"
+
+
+@dataclass
 class Struct:
     """Struct or union declaration.
 
@@ -632,6 +656,7 @@ class Struct:
     is_packed: bool = False
     namespace: str | None = None
     template_params: list[str] = field(default_factory=list)
+    template_parameters: list[TemplateParameter] = field(default_factory=list)
     cpp_name: str | None = None
     notes: list[str] = field(default_factory=list)
     inner_typedefs: dict[str, str] = field(default_factory=dict)  # name -> underlying_type
@@ -644,8 +669,15 @@ class Struct:
     vtable_entries: list[Function] = field(default_factory=list)
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
+    access: str | None = None
     alignment: int | None = None
     location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        if self.template_parameters and not self.template_params:
+            self.template_params = [p.name for p in self.template_parameters]
+        elif self.template_params and not self.template_parameters:
+            self.template_parameters = [TemplateParameter(name=p) for p in self.template_params]
 
     def __str__(self) -> str:
         if self.is_cppclass:
@@ -707,6 +739,7 @@ class Function:
     calling_convention: str | None = None
     namespace: str | None = None
     template_params: list[str] = field(default_factory=list)
+    template_parameters: list[TemplateParameter] = field(default_factory=list)
     is_static: bool = False
     is_const: bool = False
     is_virtual: bool = False
@@ -721,6 +754,12 @@ class Function:
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        if self.template_parameters and not self.template_params:
+            self.template_params = [p.name for p in self.template_parameters]
+        elif self.template_params and not self.template_parameters:
+            self.template_parameters = [TemplateParameter(name=p) for p in self.template_params]
 
     def __str__(self) -> str:
         params = ", ".join(str(p) for p in self.parameters)
