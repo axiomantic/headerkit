@@ -235,13 +235,26 @@ class BaseWriter:
         if self.supported_options and opts.options:
             opts.options = coerce_writer_options(opts.options, self.supported_options)
 
-        unit = self._prepare(unit, options=opts)
+        try:
+            unit = self._prepare(unit, options=opts)
+        except TypeError:
+            unit = self._prepare(unit)
 
         if opts.layout == "file":
-            return self._write_single_file_layout(unit, opts)
+            layout = self._write_single_file_layout(unit, opts)
         elif opts.layout in ("package", "project"):
-            return self._write_package_layout(unit, opts)
-        return self._write_custom_layout(unit, opts)
+            layout = self._write_package_layout(unit, opts)
+        else:
+            layout = self._write_custom_layout(unit, opts)
+
+        if opts.layout in ("package", "project", "wheel", "scikit-build"):
+            if layout.get_file("AGENTS.md") is None:
+                from headerkit.workorder import render_agents_md
+
+                agents_content = render_agents_md(opts.package_name, self.name)
+                layout.files.append(OutputFile(path="AGENTS.md", content=agents_content, preserve_existing=True))
+
+        return layout
 
     def _write_single_file_layout(
         self,

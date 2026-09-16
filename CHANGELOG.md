@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Scaffolding `AGENTS.md` generation: automatically generates project and package instructions, test commands, and quality invariants in `AGENTS.md` across all package layouts (`package`, `project`, `wheel`, `scikit-build`) in `BaseWriter.write_layout()`.
+- Configurable symbol access floor: `access_floor` option on `NimWriter` and `CythonWriter` supporting `"public"`, `"protected"`, `"private"`, and `"all"` (or `None`), allowing downstream callers to preserve full member visibility in general-purpose IR workflows.
+- Dual-CI architecture: extracted core CI routines into portable, parameterized scripts (`scripts/ci/lint.sh`, `scripts/ci/test.sh`, `scripts/ci/install-deps-linux.sh`), authored `.forgejo/workflows/ci.yml` for self-hosted Linux Podman runners, and documented the dual-CI setup in `CONTRIBUTING.md`.
 - Shared IR access floor filtering: `filter_access_floor(unit, floor)` in `headerkit.ir` and `BaseWriter.min_access_floor` property (enabled with `"public"` on `NimWriter` and `CythonWriter`) uniformly prune inaccessible `private` and `protected` structs, fields, methods, constructors, destructors, and bases during `_prepare()` before writer emission.
 - Polymorphic class hierarchy analysis: `TypeHierarchy` in `headerkit.ir` models complete inheritance DAGs across structs, computing root bases, descendants, and polymorphic types across compilation units.
 - C++ aggregate value detection: `is_cpp_value_type` in `headerkit.ir` identifies return-by-value composite aggregates to guide lifetime management and prevent dangling pointer bugs across foreign language bindings.

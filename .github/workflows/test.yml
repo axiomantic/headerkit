@@ -30,6 +30,8 @@ jobs:
         os: [ubuntu-latest]
         python-version: ${{ fromJSON(inputs.full-matrix && '["3.10", "3.11", "3.12", "3.13", "3.14"]' || '["3.10", "3.14"]') }}
         include:
+          # Note: macOS and Windows legs run exclusively on GitHub Actions because
+          # our self-hosted Forgejo CI runner is Linux/Podman-only (no private macOS/Windows capacity).
           - os: macos-latest
             python-version: "3.14"
           - os: windows-latest
@@ -48,15 +50,7 @@ jobs:
       # allowlisted.
       - name: Install libclang and a C23-capable compiler (Ubuntu)
         if: runner.os == 'Linux'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y libclang-dev gcc-14 g++-14
-          sudo update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-14 100
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-14 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-          cc --version
+        run: bash scripts/ci/install-deps-linux.sh
       - name: Install libclang (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -140,18 +134,12 @@ jobs:
       # test. Every one of these is a hard requirement of the suite under CI:
       # tests/skip_policy.py turns a missing one into a failure, and the session
       # gate in tests/conftest.py fails the run on any skip it did not sanction.
-      - name: Verify the toolchain the suite requires
-        shell: bash
-        run: python scripts/check_test_toolchain.py
       - name: Cache test header downloads
         uses: actions/cache@v6
         with:
           path: ~/.cache/headerkit-test-headers
           key: test-headers-v2
-      # -rs prints skip reasons, which the default output hides entirely.
-      # -x is deliberately absent: the point of the session gate is the full
-      # inventory of what did not run, and stopping at the first failure would
-      # surrender exactly that.
-      - name: Run tests
+      # Run tests via shared CI script; verifies toolchain prerequisites and invokes pytest -rs.
+      - name: Run tests via shared CI script
         shell: bash
-        run: pytest -rs
+        run: bash scripts/ci/test.sh

@@ -562,6 +562,7 @@ def scaffold(
 
     layout = dispatcher.waterfall("scaffold_tests", layout, unit, options, context=ctx)
     layout = dispatcher.waterfall("transform_layout", layout, unit, options, context=ctx)
+
     return layout
 
 

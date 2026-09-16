@@ -117,6 +117,12 @@ class TestStdlibScaffolderNim:
         assert "nim.cfg" in paths
         assert "tests/test_tripwire.nim" in paths
         assert "tests/test_hasher.nim" in paths
+        assert "AGENTS.md" in paths
+
+        agents_file = layout.get_file("AGENTS.md")
+        assert agents_file is not None
+        assert "# Agents" in agents_file.content
+        assert "hasher" in agents_file.content
 
         nimble_content = layout.get_file("hasher.nimble").content
         assert 'packageName   = "hasher"' in nimble_content
