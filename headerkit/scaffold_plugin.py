@@ -203,7 +203,7 @@ def _render_pyproject_toml(options: PluginScaffoldOptions) -> str:
             {{ name = "{options.author}", email = "{options.author_email}" }},
         ]
         dependencies = [
-            "headerkit>=0.44.0",
+            "headerkit>=0.45.0",
         ]
 
         [project.optional-dependencies]
