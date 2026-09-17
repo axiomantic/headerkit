@@ -32,14 +32,28 @@ class ConfigMatrix:
         dimension_type: str = "feature",
         define_template: str | None = None,
     ) -> None:
-        self.dimensions.append(
-            MatrixDimension(
-                name=name,
-                values=tuple(values),
-                dimension_type=dimension_type,  # type: ignore[arg-type]
-                define_template=define_template,
-            )
+        dim = MatrixDimension(
+            name=name,
+            values=tuple(values),
+            dimension_type=dimension_type,  # type: ignore[arg-type]
+            define_template=define_template,
         )
+        for idx, existing in enumerate(self.dimensions):
+            if existing.name == name:
+                self.dimensions[idx] = dim
+                return
+        self.dimensions.append(dim)
+
+    def has_dimension(self, name: str) -> bool:
+        """Check if a dimension by name is present."""
+        return any(d.name == name for d in self.dimensions)
+
+    def get_dimension(self, name: str) -> MatrixDimension:
+        """Retrieve dimension definition by name."""
+        for d in self.dimensions:
+            if d.name == name:
+                return d
+        raise KeyError(f"Dimension '{name}' not found")
 
     def add_constraint(self, constraint: Callable[[ConfigCondition], bool]) -> None:
         """Register a predicate that must return True for valid configurations."""
