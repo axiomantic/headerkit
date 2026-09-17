@@ -1079,6 +1079,7 @@ def strip_padding_fields(unit: SourceUnit) -> SourceUnit:
         Use :class:`headerkit.transforms.builtin.StripPaddingFields` or ``unit >> StripPaddingFields()`` instead.
     """
     import warnings
+
     from headerkit.transforms.builtin import StripPaddingFields
 
     warnings.warn(

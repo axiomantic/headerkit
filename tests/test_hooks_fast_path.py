@@ -1,8 +1,16 @@
 """Tests for HookRegistry fast-path point indexing and snapshot isolation."""
 
-from __future__ import annotations
+import pytest
 
 from headerkit.hooks import HookRegistry, PipelineContext, hook
+
+
+@pytest.fixture(autouse=True)
+def clean_registry():
+    saved = HookRegistry.snapshot()
+    HookRegistry.clear()
+    yield
+    HookRegistry.restore(saved)
 
 
 def test_hook_registry_has_point_fast_path() -> None:
@@ -12,16 +20,11 @@ def test_hook_registry_has_point_fast_path() -> None:
     def dummy_hook(node: object, _context: PipelineContext) -> object:
         return node
 
-    try:
-        assert HookRegistry.has_point("transform:CustomNode") is True
-        assert HookRegistry.has_point("transform:OtherNode") is False
-    finally:
-        HookRegistry.clear()
-        assert HookRegistry.has_point("transform:CustomNode") is False
+    assert HookRegistry.has_point("transform:CustomNode") is True
+    assert HookRegistry.has_point("transform:OtherNode") is False
 
 
 def test_hook_registry_snapshot_and_restore_synchronization() -> None:
-    HookRegistry.clear()
     assert HookRegistry.has_point("transform:A") is False
 
     @hook("transform:A")
@@ -37,4 +40,3 @@ def test_hook_registry_snapshot_and_restore_synchronization() -> None:
     HookRegistry.restore(snap)
     assert HookRegistry.has_point("transform:A") is True
     assert len(HookRegistry.get_global_matching("transform:A", PipelineContext())) == 1
-    HookRegistry.clear()
