@@ -425,12 +425,18 @@ class ScaffoldOptions:
     test_strategy: str = "incremental"  # "incremental", "preserve", "regenerate"
     version_guard: str = "declared"  # "declared", "version_gte", "compiles", "none"
     version_constant: str | None = None
+    macro_types: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if "test_type" not in self.options and self.test_type != "both":
             self.options["test_type"] = self.test_type
         elif "test_type" in self.options:
             self.test_type = str(self.options["test_type"])
+
+        if "macro_types" not in self.options and self.macro_types:
+            self.options["macro_types"] = self.macro_types
+        elif "macro_types" in self.options and not self.macro_types:
+            self.macro_types = dict(self.options["macro_types"])
 
     def get_option(self, name: str, default: Any = None) -> Any:
         """Get a writer-specific option value."""

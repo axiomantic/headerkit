@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import textwrap
 from dataclasses import replace
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from headerkit.ir import (
     Array,
@@ -26,6 +26,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
     Pointer,
     Reference,
     SourceUnit,
@@ -506,10 +507,36 @@ class NimWriter(BaseWriter):
             default="public",
             choices=("public", "protected", "private", "all"),
         ),
+        WriterOption(
+            name="macro_types",
+            description="Type hints for macro functions",
+            default=None,
+            type=dict,
+        ),
     )
 
-    def __init__(self, *, header_path: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        header_path: str | None = None,
+        macro_types: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
         self.header_path = header_path
+        self.macro_types: dict[str, dict[str, Any]] = dict(macro_types) if macro_types else {}
+
+    def _prepare(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions | None = None,
+    ) -> SourceUnit | Header:
+        if options is not None:
+            if "macro_types" in options.options and options.options["macro_types"]:
+                self.macro_types.update(options.options["macro_types"])
+            elif options.macro_types:
+                self.macro_types.update(options.macro_types)
+            if "header_path" in options.options and options.options["header_path"]:
+                self.header_path = str(options.options["header_path"])
+        return super()._prepare(unit, options=options)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Nim comments."""
@@ -949,6 +976,8 @@ class NimWriter(BaseWriter):
                 consts_section.extend(self._write_constant(decl))
             elif isinstance(decl, Variable):
                 procs_section.extend(self._write_variable(decl, header_file))
+            elif isinstance(decl, MacroFunction):
+                procs_section.extend(self._write_macro_function(decl, header_file))
 
         if types_section:
             lines.append("type")
@@ -2100,6 +2129,66 @@ class NimWriter(BaseWriter):
         c_name = _escape_ident(c.name)
         return [f"{c_name}* = {c.value}"]
 
+    def _write_macro_function(self, m: MacroFunction, header_file: str) -> list[str]:
+        """Render a C function-like macro in Nim."""
+        if m.has_token_pasting:
+            return [f"# Macro {m.name} skipped: contains preprocessor token-pasting (##) operator"]
+
+        if m.name in self.macro_types:
+            hint = self.macro_types[m.name]
+            ret_type = hint.get("return_type", "void")
+            params_hint = hint.get("parameters", [])
+            param_strs = [f"{_escape_ident(p['name'])}: {p['type']}" for p in params_hint]
+            proc_name = _escape_ident(m.name.lower())
+            params_joined = ", ".join(param_strs)
+            return [
+                f'proc {proc_name}*({params_joined}): {ret_type} {{.importc: "{m.name}", header: "{header_file}", nodecl.}}'
+            ]
+
+        c_bridge_name = f"c_{m.name}"
+        template_name = _escape_ident(m.name.lower())
+        if c_bridge_name.lower() == template_name:
+            c_bridge_name = f"c_macro_{m.name}"
+
+        if not m.parameters:
+            if m.is_statement:
+                return [
+                    f'proc {c_bridge_name}*(): void {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+                    f"template {template_name}*(): untyped =",
+                    f"  {c_bridge_name}()",
+                ]
+            return [
+                f'proc {c_bridge_name}*(): cint {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+                f"template {template_name}*(): untyped =",
+                f"  {c_bridge_name}()",
+            ]
+
+        param_names = [_escape_ident(p.name if p.name != "__VA_ARGS__" else "args") for p in m.parameters]
+        call_params = ", ".join(param_names)
+
+        if m.is_statement:
+            if len(param_names) == 1:
+                type_params = "[T]"
+                c_params = f"{param_names[0]}: T"
+            else:
+                type_params = f"[{', '.join(f'T{i + 1}' for i in range(len(param_names)))}]"
+                c_params = ", ".join(f"{name}: T{i + 1}" for i, name in enumerate(param_names))
+            t_params = ", ".join(f"{p}: untyped" for p in param_names)
+            return [
+                f'proc {c_bridge_name}*{type_params}({c_params}): void {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+                f"template {template_name}*({t_params}): untyped =",
+                f"  {c_bridge_name}({call_params})",
+            ]
+
+        # Untyped expression macro
+        c_params = f"{', '.join(param_names)}: T"
+        t_params = f"{', '.join(param_names)}: untyped"
+        return [
+            f'proc {c_bridge_name}*[T]({c_params}): T {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+            f"template {template_name}*({t_params}): untyped =",
+            f"  {c_bridge_name}({call_params})",
+        ]
+
     def _write_package_layout(
         self,
         unit: SourceUnit | Header,
@@ -2211,9 +2300,14 @@ class NimWriter(BaseWriter):
         return self._write_package_layout(unit, options)
 
 
-def write_nim(header: Header | SourceUnit, *, header_path: str | None = None) -> str:
+def write_nim(
+    header: Header | SourceUnit,
+    *,
+    header_path: str | None = None,
+    macro_types: dict[str, dict[str, Any]] | None = None,
+) -> str:
     """Convenience function to generate Nim bindings from a Header IR."""
-    return NimWriter(header_path=header_path).write(header)
+    return NimWriter(header_path=header_path, macro_types=macro_types).write(header)
 
 
 from headerkit.writers import register_writer  # noqa: E402
