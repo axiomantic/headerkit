@@ -33,6 +33,7 @@ def test_type_aliases_are_unions():
         Enum,
         Function,
         FunctionPointer,
+        MacroFunction,
         Pointer,
         Reference,
         Struct,
@@ -45,7 +46,7 @@ def test_type_aliases_are_unions():
     assert type_expr_members == {CType, Pointer, Reference, Array, FunctionPointer}
 
     decl_members = set(typing.get_args(headerkit.Declaration))
-    assert decl_members == {Enum, Struct, Function, Typedef, Variable, Constant}
+    assert decl_members == {Enum, Struct, Function, Typedef, Variable, Constant, MacroFunction}
 
 
 def test_ir_types_match_direct_import():
@@ -68,6 +69,8 @@ def test_ir_types_match_direct_import():
     assert headerkit.Typedef is ir.Typedef
     assert headerkit.Variable is ir.Variable
     assert headerkit.Constant is ir.Constant
+    assert headerkit.MacroParameter is ir.MacroParameter
+    assert headerkit.MacroFunction is ir.MacroFunction
     assert headerkit.Header is ir.Header
     assert headerkit.SourceUnit is ir.SourceUnit
     assert headerkit.InputSpec is ir.InputSpec

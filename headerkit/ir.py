@@ -904,8 +904,57 @@ class Constant:
         return f"const {self.name} = {self.value}"
 
 
+@dataclass
+class MacroParameter:
+    """Parameter of a function-like macro.
+
+    :param name: Parameter name.
+    :param is_variadic: True if this parameter represents variadic arguments.
+    """
+
+    name: str
+    is_variadic: bool = False
+
+    def __str__(self) -> str:
+        if self.is_variadic and self.name != "...":
+            return f"{self.name}..."
+        return self.name
+
+
+@dataclass
+class MacroFunction:
+    """Function-like macro declaration (#define FOO(a, b) ...).
+
+    :param name: Macro name.
+    :param parameters: Macro parameters.
+    :param is_variadic: Whether the macro accepts variable arguments.
+    :param body: Macro replacement body.
+    :param is_statement: Whether macro body represents a statement (e.g. do { ... } while(0)).
+    :param has_token_pasting: Whether the body uses ## token pasting.
+    :param namespace: C++ namespace if any.
+    :param location: Source location.
+    """
+
+    name: str
+    parameters: list[MacroParameter] = field(default_factory=list)
+    is_variadic: bool = False
+    body: str = ""
+    is_statement: bool = False
+    has_token_pasting: bool = False
+    namespace: str | None = None
+    location: SourceLocation | None = None
+
+    def __str__(self) -> str:
+        params = ", ".join(str(p) for p in self.parameters)
+        if self.is_variadic and not any(p.is_variadic or p.name == "..." for p in self.parameters):
+            params = f"{params}, ..." if params else "..."
+        if self.body:
+            return f"#define {self.name}({params}) {self.body}"
+        return f"#define {self.name}({params})"
+
+
 # Type alias for any declaration
-Declaration = Union[Enum, Struct, Function, Typedef, Variable, Constant]
+Declaration = Union[Enum, Struct, Function, Typedef, Variable, Constant, MacroFunction]
 
 
 # =============================================================================
@@ -1437,3 +1486,35 @@ def is_cpp_value_type(
         base_name = type_expr.name.split("<")[0].split("[")[0].strip()
         return base_name not in prims
     return False
+
+
+__all__ = [
+    "Array",
+    "BaseSpecifier",
+    "Constant",
+    "CType",
+    "Declaration",
+    "Enum",
+    "EnumValue",
+    "Field",
+    "Function",
+    "FunctionPointer",
+    "Header",
+    "InputSpec",
+    "MacroFunction",
+    "MacroParameter",
+    "Parameter",
+    "ParserBackend",
+    "Pointer",
+    "Reference",
+    "SourceLocation",
+    "SourceUnit",
+    "Struct",
+    "TemplateParameter",
+    "TypeExpr",
+    "TypeHierarchy",
+    "Typedef",
+    "Variable",
+    "filter_access_floor",
+    "is_cpp_value_type",
+]

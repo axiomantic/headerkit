@@ -39,6 +39,8 @@ from headerkit.ir import (
     # Container
     Header,
     InputSpec,
+    MacroFunction,
+    MacroParameter,
     Parameter,
     # Protocol
     ParserBackend,
@@ -132,6 +134,8 @@ __all__ = [
     "Typedef",
     "Variable",
     "Constant",
+    "MacroFunction",
+    "MacroParameter",
     "Declaration",
     "filter_access_floor",
     "is_cpp_value_type",
