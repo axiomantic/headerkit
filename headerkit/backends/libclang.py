@@ -67,6 +67,8 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
+    MacroParameter,
     Parameter,
     ParserBackend,
     Pointer,
@@ -1185,6 +1187,27 @@ def _same_macro_value(a: Constant, b: Constant) -> bool:
     )
 
 
+def _same_macro_decl(a: Constant | MacroFunction, b: Constant | MacroFunction) -> bool:
+    """Report whether two macro declarations carry the same definition."""
+    if isinstance(a, Constant) and isinstance(b, Constant):
+        return _same_macro_value(a, b)
+    if isinstance(a, MacroFunction) and isinstance(b, MacroFunction):
+        return (
+            a.parameters,
+            a.is_variadic,
+            a.body,
+            a.is_statement,
+            a.has_token_pasting,
+        ) == (
+            b.parameters,
+            b.is_variadic,
+            b.body,
+            b.is_statement,
+            b.has_token_pasting,
+        )
+    return False
+
+
 class ClangASTConverter:
     """Converts libclang cursors to headerkit IR.
 
@@ -1235,10 +1258,10 @@ class ClangASTConverter:
         self.declarations: list[Declaration] = []
         # Track seen declarations to avoid duplicates
         self._seen: set[str] = set()
-        # Macro name -> the Constant currently emitted for it. A later #define of
-        # the same name supersedes an earlier one, so the previous Constant is
+        # Macro name -> the declaration currently emitted for it. A later #define of
+        # the same name supersedes an earlier one, so the previous declaration is
         # withdrawn from ``declarations`` rather than the redefinition ignored.
-        self._macro_decls: dict[str, Constant] = {}
+        self._macro_decls: dict[str, Constant | MacroFunction] = {}
         # Current namespace context (for nested namespace support)
         self._namespace_stack: list[str] = []
         # Store translation unit for dependency resolution
@@ -1728,30 +1751,39 @@ class ClangASTConverter:
         either as a variable declaration produces code that does not compile.
 
         A later ``#define`` of a name supersedes an earlier one. When the
-        superseding definition is not emittable, the earlier Constant is
+        superseding definition is not emittable, the earlier declaration is
         withdrawn.
         """
         name = cursor.spelling
         if not name:
             return
 
-        constant = self._build_macro_constant(cursor, name)
+        macro_decl = self._build_macro_decl(cursor, name)
 
         previous = self._macro_decls.get(name)
-        if previous is not None and constant is not None and _same_macro_value(previous, constant):
+        if previous is not None and macro_decl is not None and _same_macro_decl(previous, macro_decl):
             # Identical redefinition - keep the original declaration and its position.
             return
 
         self._macro_decls.pop(name, None)
         if previous is not None:
-            # A redefinition replaces the earlier value; drop the stale Constant.
+            # A redefinition replaces the earlier value; drop the stale declaration.
             self.declarations = [d for d in self.declarations if d is not previous]
 
-        if constant is not None:
-            self._macro_decls[name] = constant
-            self.declarations.append(constant)
+        if macro_decl is not None:
+            self._macro_decls[name] = macro_decl
+            self.declarations.append(macro_decl)
 
-    def _build_macro_constant(self, cursor: Any, name: str) -> Constant | None:
+    def _build_macro_decl(self, cursor: Any, name: str) -> Constant | MacroFunction | None:
+        """Build a Constant or MacroFunction for a ``#define``, or None if unsupported."""
+        tokens = list(cursor.get_tokens())
+        if not tokens:
+            return None
+        if _is_function_like_macro(tokens):
+            return self._build_function_like_macro(cursor, name, tokens)
+        return self._build_macro_constant(cursor, name, tokens)
+
+    def _build_macro_constant(self, cursor: Any, name: str, tokens: list[Any] | None = None) -> Constant | None:
         """Build the :class:`Constant` for a ``#define``, or None if it denotes no value.
 
         Function-like macros and macros with an empty replacement list are
@@ -1759,7 +1791,8 @@ class ClangASTConverter:
         declaration yields code that does not compile.
         """
         # First token is the macro name, the rest is the replacement list.
-        tokens = list(cursor.get_tokens())
+        if tokens is None:
+            tokens = list(cursor.get_tokens())
 
         if _is_function_like_macro(tokens):
             return None
@@ -1788,6 +1821,122 @@ class ClangASTConverter:
             is_macro=True,
             location=location,
         )
+
+    def _build_function_like_macro(
+        self, cursor: Any, name: str, tokens: list[Any] | None = None
+    ) -> MacroFunction | None:
+        """Build a :class:`MacroFunction` for a function-like macro definition."""
+        if tokens is None:
+            tokens = list(cursor.get_tokens())
+
+        if not _is_function_like_macro(tokens):
+            return None
+
+        # Find matching ')' for parameter list
+        closing_paren_idx = -1
+        depth = 0
+        for i in range(1, len(tokens)):
+            if tokens[i].spelling == "(":
+                depth += 1
+            elif tokens[i].spelling == ")":
+                depth -= 1
+                if depth == 0:
+                    closing_paren_idx = i
+                    break
+
+        if closing_paren_idx == -1:
+            return None
+
+        param_tokens = tokens[2:closing_paren_idx]
+        body_tokens = tokens[closing_paren_idx + 1 :]
+
+        parameters: list[MacroParameter] = []
+        is_macro_variadic = False
+
+        if param_tokens:
+            current_param: list[Any] = []
+            for tok in param_tokens:
+                if tok.spelling == ",":
+                    if current_param:
+                        p = self._parse_macro_parameter(current_param)
+                        if p is not None:
+                            parameters.append(p)
+                            if p.is_variadic:
+                                is_macro_variadic = True
+                        current_param = []
+                else:
+                    current_param.append(tok)
+            if current_param:
+                p = self._parse_macro_parameter(current_param)
+                if p is not None:
+                    parameters.append(p)
+                    if p.is_variadic:
+                        is_macro_variadic = True
+
+        body_parts: list[str] = []
+        prev_tok: Any = None
+        for tok in body_tokens:
+            if prev_tok is not None:
+                try:
+                    if tok.extent.start.offset > prev_tok.extent.end.offset:
+                        body_parts.append(" ")
+                except (AttributeError, TypeError):
+                    body_parts.append(" ")
+            body_parts.append(tok.spelling)
+            prev_tok = tok
+        body = "".join(body_parts)
+
+        has_token_pasting = any(t.spelling == "##" for t in body_tokens)
+
+        body_spellings = [t.spelling for t in body_tokens]
+        is_statement = False
+        if body_spellings:
+            if (body_spellings[0] == "do" and any(s == "while" for s in body_spellings)) or (
+                body_spellings[0] == "{" and body_spellings[-1] in ("}", ";")
+            ):
+                is_statement = True
+            else:
+                p_depth = 0
+                for s in body_spellings:
+                    if s == "(":
+                        p_depth += 1
+                    elif s == ")":
+                        p_depth = max(0, p_depth - 1)
+                    elif s == ";" and p_depth == 0:
+                        is_statement = True
+                        break
+
+        loc = cursor.location
+        location = SourceLocation(
+            file=loc.file.name if loc.file else self.filename,
+            line=loc.line,
+            column=loc.column,
+        )
+
+        return MacroFunction(
+            name=name,
+            parameters=parameters,
+            is_variadic=is_macro_variadic,
+            body=body,
+            is_statement=is_statement,
+            has_token_pasting=has_token_pasting,
+            namespace=self._current_namespace,
+            location=location,
+        )
+
+    def _parse_macro_parameter(self, tokens: list[Any]) -> MacroParameter | None:
+        """Parse parameter tokens into a MacroParameter."""
+        if not tokens:
+            return None
+        spellings = [t.spelling for t in tokens]
+        if spellings == ["..."]:
+            return MacroParameter(name="__VA_ARGS__", is_variadic=True)
+        if len(spellings) >= 2 and spellings[-1] == "...":
+            return MacroParameter(name=spellings[0], is_variadic=True)
+        if spellings[0].endswith("..."):
+            name = spellings[0][:-3] or "__VA_ARGS__"
+            return MacroParameter(name=name, is_variadic=True)
+        return MacroParameter(name=spellings[0], is_variadic=False)
 
     def _analyze_macro_tokens(
         self, tokens: list[Any]
@@ -4443,7 +4592,11 @@ class LibclangBackend:
         preprocessor itself which names survive, so the answer cannot disagree
         with the compiler.
         """
-        candidates = [d.name for d in header.declarations if isinstance(d, Constant) and d.is_macro]
+        candidates = [
+            d.name
+            for d in header.declarations
+            if (isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)
+        ]
         if not candidates:
             return
 
@@ -4477,19 +4630,23 @@ class LibclangBackend:
                     defined.add(candidates[int(index)])
 
         header.declarations = [
-            d for d in header.declarations if not (isinstance(d, Constant) and d.is_macro and d.name not in defined)
+            d
+            for d in header.declarations
+            if not (
+                ((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name not in defined
+            )
         ]
 
     @staticmethod
-    def _final_macro_state(tu: Any, converter: ClangASTConverter) -> dict[str, Constant | None]:
-        """Map each macro name to the Constant its LAST ``#define`` yields, or None.
+    def _final_macro_state(tu: Any, converter: ClangASTConverter) -> dict[str, Constant | MacroFunction | None]:
+        """Map each macro name to the declaration its LAST ``#define`` yields, or None.
 
         The preprocessing record lists ``#define`` directives in the order the
         preprocessor met them and omits directives in branches it did not take,
         so iterating it and letting later entries win reproduces the macro table
         as it stands at the end of the translation unit.
         """
-        state: dict[str, Constant | None] = {}
+        state: dict[str, Constant | MacroFunction | None] = {}
         for cur in tu.cursor.get_children():
             if cur.kind != CursorKind.MACRO_DEFINITION:
                 continue
@@ -4498,24 +4655,26 @@ class LibclangBackend:
                 continue
             name = cur.spelling
             if name:
-                state[name] = converter._build_macro_constant(cur, name)
+                state[name] = converter._build_macro_decl(cur, name)
         return state
 
     @classmethod
     def _apply_final_macro_state(cls, header: Header, tu: Any, converter: ClangASTConverter) -> None:
-        """Drop or correct macro Constants that the final macro table contradicts."""
+        """Drop or correct macro declarations that the final macro table contradicts."""
         state = cls._final_macro_state(tu, converter)
         if not state:
             return
 
         kept: list[Declaration] = []
         for decl in header.declarations:
-            if isinstance(decl, Constant) and decl.is_macro and decl.name in state:
+            if (
+                (isinstance(decl, Constant) and decl.is_macro) or isinstance(decl, MacroFunction)
+            ) and decl.name in state:
                 final = state[decl.name]
                 if final is None:
                     # Last definition has no value - emitting it would not compile.
                     continue
-                if not _same_macro_value(decl, final):
+                if not _same_macro_decl(decl, final):
                     kept.append(final)
                     continue
             kept.append(decl)
