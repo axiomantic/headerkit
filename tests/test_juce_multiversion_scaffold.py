@@ -80,7 +80,7 @@ class TestJuceMultiVersionScaffolding:
                     suite "JUCE Core Test Suite":
                       when declared(constructString):
                         test "String default constructor":
-                          check 1 == 1
+                          check declared(constructString)
                 """)
             ]
 
@@ -89,7 +89,7 @@ class TestJuceMultiVersionScaffolding:
                     textwrap.dedent("""\
                     when declared(juce80LegacyProcessor):
                       test "JUCE 8.0 Legacy Processor API":
-                        check 80 == 80
+                        check declared(juce80LegacyProcessor)
                 """)
                 )
             elif maj == 8 and min_ == 1:
@@ -97,7 +97,7 @@ class TestJuceMultiVersionScaffolding:
                     textwrap.dedent("""\
                     when declared(juce81AudioProcessor):
                       test "JUCE 8.1 Enhanced Audio Processor":
-                        check 81 == 81
+                        check declared(juce81AudioProcessor)
                 """)
                 )
             elif maj >= 9:
@@ -105,7 +105,7 @@ class TestJuceMultiVersionScaffolding:
                     textwrap.dedent("""\
                     when declared(juce90ModernEngine):
                       test "JUCE 9.0 Modern Audio Engine":
-                        check 90 == 90
+                        check declared(juce90ModernEngine)
                 """)
                 )
 

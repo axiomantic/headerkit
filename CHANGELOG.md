@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Extension project scaffolding README and test stubs: in `headerkit.scaffold_plugin`, fixed usage instructions in scaffolded `README.md` to accurately reflect CLI flags and API patterns for writers, backends, and hook plugins, and enhanced scaffolded writer test stubs to assert file content non-tautologically rather than checking path presence alone.
 - `NimWriter` type resolution and overload deduplication:
   - C++ inheritance and polymorphism: emitted `{.inheritable.}` pragma for C++ base classes, classes with virtual methods, and classes with virtual destructors instead of `of RootObj`, eliminating invalid `m_type` RTTI member injection when compiling against native C++ libraries while allowing subclass derivation.
   - User-defined literal operator escaping: sanitized C++11 user-defined literal operators (e.g. `operator""_px`) in `_escape_ident` to valid Nim identifiers (`op_lit_*`) and escaped double quotes in `importcpp` patterns.

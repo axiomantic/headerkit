@@ -349,7 +349,7 @@ def _render_backend_impl(options: PluginScaffoldOptions) -> str:
                 project_prefixes: tuple[str, ...] | None = None,
                 allowlist: list[str] | None = None,
                 denylist: list[str] | None = None,
-            ) -> Header:
+            ) -> SourceUnit:
                 \"\"\"Parse code into HeaderKit IR.
 
                 NOTE: HeaderKit strictly prohibits regex-based AST extraction.
@@ -525,11 +525,13 @@ def _render_tests(options: PluginScaffoldOptions) -> str:
 
 
             def test_writer_write_layout() -> None:
-                \"\"\"Verify write_layout emits files matching default extension.\"\"\"
+                \"\"\"Verify write_layout emits files matching default extension with valid contents.\"\"\"
                 writer = {cls_name}()
                 layout = writer.write_layout(_sample_unit())
                 assert len(layout.files) >= 1
-                assert any(f.path.endswith(writer.default_extension) for f in layout.files)
+                target_file = next(f for f in layout.files if f.path.endswith(writer.default_extension))
+                assert len(target_file.content) > 0
+                assert "add_numbers" in target_file.content or "Point" in target_file.content
         """)
     elif options.plugin_type == "backend":
         cls_name = _class_name_for(options.target, "backend")
@@ -609,6 +611,62 @@ def _render_agents_md(options: PluginScaffoldOptions) -> str:
 
 
 def _render_readme_md(options: PluginScaffoldOptions) -> str:
+    if options.plugin_type == "writer":
+        usage_section = textwrap.dedent(f"""\
+            ## Usage
+
+            Once installed, HeaderKit will automatically discover this writer via Python entry points.
+
+            ```bash
+            # Command-line usage
+            headerkit input.h --writer {options.target}
+            ```
+
+            ```python
+            # Python API usage
+            from headerkit.writers import get_writer
+
+            writer = get_writer("{options.target}")
+            ```\
+        """)
+    elif options.plugin_type == "backend":
+        usage_section = textwrap.dedent(f"""\
+            ## Usage
+
+            Once installed, HeaderKit will automatically discover this backend via Python entry points.
+
+            ```bash
+            # Command-line usage
+            headerkit input.h --backend {options.target}
+            ```
+
+            ```python
+            # Python API usage
+            from headerkit.backends import get_backend
+
+            backend = get_backend("{options.target}")
+            ```\
+        """)
+    else:
+        usage_section = textwrap.dedent(f"""\
+            ## Usage
+
+            Once installed, HeaderKit will automatically discover this plugin via Python entry points (`headerkit.hooks`).
+
+            You can also explicitly enable it in your `pyproject.toml` or `headerkit.toml`:
+
+            ```toml
+            [tool.headerkit]
+            plugins = ["{options.package_name}"]
+            ```
+
+            ```python
+            # Python API usage
+            # Importing the package activates registered hooks with HeaderKit's pipeline
+            import {options.package_name}
+            ```\
+        """)
+
     return textwrap.dedent(f"""\
         # {options.name}
 
@@ -620,21 +678,7 @@ def _render_readme_md(options: PluginScaffoldOptions) -> str:
         pip install -e '.[test,lint]'
         ```
 
-        ## Usage
-
-        Once installed, HeaderKit will automatically discover this {options.plugin_type} via Python entry points.
-
-        ```bash
-        # Command-line usage
-        headerkit input.h --{options.plugin_type} {options.target}
-        ```
-
-        ```python
-        # Python API usage
-        from headerkit.{options.plugin_type}s import get_{options.plugin_type}
-
-        ext = get_{options.plugin_type}("{options.target}")
-        ```
+        {usage_section}
 
         ## Testing
 

@@ -209,8 +209,14 @@ class TestBaseWriterSharedFeatures:
         writer = PublicOnlyWriter()
 
         # Override to "all" via options
+        prep_all = writer._prepare(h, options=ScaffoldOptions(options={"access_floor": "all"}))
+        res_all = [d for d in prep_all.declarations if isinstance(d, Struct)][0]
+        assert len(res_all.fields) == 2
+        assert [f.name for f in res_all.fields] == ["pub", "priv"]
+
         layout_all = writer.write_layout(h, ScaffoldOptions(options={"access_floor": "all"}))
         assert len(layout_all.files) == 1
+        assert layout_all.files[0].path == "bindings.txt"
 
         # Override to "private" via options
         opts_priv = ScaffoldOptions(options={"access_floor": "private"})

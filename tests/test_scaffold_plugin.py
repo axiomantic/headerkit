@@ -79,12 +79,19 @@ class TestPluginScaffolding:
         assert "assert_true(" not in test_file.content
         assert 'get_writer("zig")' in test_file.content
         assert "add_numbers" in test_file.content
+        assert "target_file.content" in test_file.content
 
         # Verify AGENTS.md content
         agents_file = layout.get_file("AGENTS.md")
         assert agents_file is not None
         assert "Zero Tautological Assertions" in agents_file.content
         assert "ZigWriter" in agents_file.content
+
+        # Verify README content
+        readme_file = layout.get_file("README.md")
+        assert readme_file is not None
+        assert "headerkit input.h --writer zig" in readme_file.content
+        assert "from headerkit.writers import get_writer" in readme_file.content
 
     def test_scaffold_backend_layout(self) -> None:
         opts = PluginScaffoldOptions(
@@ -116,6 +123,12 @@ class TestPluginScaffolding:
         assert agents_file is not None
         assert "Strict Prohibition Against Regex AST Extraction" in agents_file.content
 
+        # Verify README content
+        readme_file = layout.get_file("README.md")
+        assert readme_file is not None
+        assert "headerkit input.h --backend tree_sitter_custom" in readme_file.content
+        assert "from headerkit.backends import get_backend" in readme_file.content
+
     def test_scaffold_plugin_layout(self) -> None:
         opts = PluginScaffoldOptions(
             plugin_type="plugin",
@@ -137,6 +150,12 @@ class TestPluginScaffolding:
         plugin_file = layout.get_file(f"{opts.package_name}/plugin.py")
         assert plugin_file is not None
         assert '@hook("transform_unit"' in plugin_file.content
+
+        # Verify README content
+        readme_file = layout.get_file("README.md")
+        assert readme_file is not None
+        assert 'plugins = ["headerkit_plugin_transform"]' in readme_file.content
+        assert "import headerkit_plugin_transform" in readme_file.content
 
     def test_options_normalization_bare_names(self) -> None:
         # Bare name should expand based on plugin_type
