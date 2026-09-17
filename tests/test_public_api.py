@@ -270,3 +270,30 @@ def test_packaging_symbols_in_all():
     assert headerkit.generate_nim_python_wrapper is generate_nim_python_wrapper
     assert headerkit.generate_nim_source is generate_nim_source
     assert headerkit.generate_nim_wheel_layout is generate_nim_wheel_layout
+
+
+def test_reconcile_symbols_in_all():
+    """Topological reconciliation engine symbols should be exported in headerkit.__all__."""
+    import headerkit
+    from headerkit.reconcile import (
+        PlatformCondition,
+        PlatformGuardedBlock,
+        ReconciledUnit,
+        declarations_equal,
+        reconcile_units,
+    )
+
+    for name in (
+        "PlatformCondition",
+        "PlatformGuardedBlock",
+        "ReconciledUnit",
+        "declarations_equal",
+        "reconcile_units",
+    ):
+        assert name in headerkit.__all__, f"{name} missing from headerkit.__all__"
+
+    assert headerkit.PlatformCondition is PlatformCondition
+    assert headerkit.PlatformGuardedBlock is PlatformGuardedBlock
+    assert headerkit.ReconciledUnit is ReconciledUnit
+    assert headerkit.declarations_equal is declarations_equal
+    assert headerkit.reconcile_units is reconcile_units

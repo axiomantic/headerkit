@@ -64,6 +64,13 @@ from headerkit.packaging import (
     generate_nim_source,
     generate_nim_wheel_layout,
 )
+from headerkit.reconcile import (
+    PlatformCondition,
+    PlatformGuardedBlock,
+    ReconciledUnit,
+    declarations_equal,
+    reconcile_units,
+)
 from headerkit.scaffold import (
     BYOScaffolder,
     CTestExtractor,
@@ -238,4 +245,10 @@ __all__ = [
     "generate_nim_python_wrapper",
     "generate_nim_source",
     "generate_nim_wheel_layout",
+    # Reconciliation API
+    "PlatformCondition",
+    "PlatformGuardedBlock",
+    "ReconciledUnit",
+    "declarations_equal",
+    "reconcile_units",
 ]
