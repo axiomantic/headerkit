@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
 from headerkit.ir import Declaration, Header, SourceLocation, SourceUnit
+from headerkit.matrix.matrix import ConfigMatrix
 from headerkit.matrix.models import ConfigCondition
 
 TARGET_TO_PREDICATE: dict[str, PlatformCondition] = {}
@@ -47,12 +49,35 @@ class PlatformGuardedBlock:
     branches: list[tuple[PlatformCondition, list[Declaration]]]
 
 
+@dataclass(frozen=True)
+class MatrixCondition:
+    """General multi-dimensional boolean condition for guarded blocks."""
+
+    predicate: str
+    raw_conditions: tuple[ConfigCondition, ...]
+
+
+@dataclass
+class MatrixGuardedBlock:
+    """A block of declaration branches guarded by multi-dimensional conditions."""
+
+    branches: list[tuple[MatrixCondition, list[Declaration]]]
+
+
 @dataclass
 class ReconciledUnit:
     """Topologically ordered and platform-reconciled unit."""
 
     path: str
     items: list[Declaration | PlatformGuardedBlock] = field(default_factory=list)
+
+
+@dataclass
+class MultiDimensionalReconciledUnit:
+    """Topologically ordered unit containing common declarations and matrix-guarded blocks."""
+
+    path: str
+    items: list[Declaration | MatrixGuardedBlock] = field(default_factory=list)
 
 
 def strip_locations(obj: object) -> object:
@@ -274,29 +299,36 @@ def minimize_conditions(
     return "true" if target_lang != "cython" else "1"
 
 
-def reconcile_units(units: Sequence[tuple[str, Header | SourceUnit]]) -> ReconciledUnit:
-    """Reconcile multiple platform-tagged compilation units into a single ReconciledUnit.
+def reconcile_matrix(
+    matrix_units: Sequence[tuple[ConfigCondition, SourceUnit]],
+    matrix: ConfigMatrix | None = None,
+    target_lang: str = "nim",
+) -> MultiDimensionalReconciledUnit:
+    """Reconciles N compilation units across a configuration matrix."""
+    if not matrix_units:
+        return MultiDimensionalReconciledUnit(path="")
 
-    Preserves topological declaration sequence, emits common declarations unconditionally,
-    and groups divergent declarations into PlatformGuardedBlock branches.
-    """
-    if not units:
-        return ReconciledUnit(path="")
-
-    path = units[0][1].path
-    normalized: list[tuple[PlatformCondition, list[Declaration]]] = [
-        (get_platform_condition(tag), list(unit.declarations)) for tag, unit in units
+    path = matrix_units[0][1].path
+    normalized: list[tuple[ConfigCondition, list[Declaration]]] = [
+        (cond, list(unit.declarations)) for cond, unit in matrix_units
     ]
 
     if len(normalized) == 1:
-        return ReconciledUnit(path=path, items=list(normalized[0][1]))
+        return MultiDimensionalReconciledUnit(path=path, items=list(normalized[0][1]))
 
-    # Find common anchors across all units
-    # An anchor is an entry that appears in all units with identical structure and monotonic order
+    domain_matrix: dict[str, set[Any]] = defaultdict(set)
+    if matrix is not None:
+        for dim in matrix.dimensions:
+            domain_matrix[dim.name] = set(dim.values)
+    else:
+        for cond, _ in normalized:
+            for k, v in cond.items():
+                domain_matrix[k].add(v)
+
     first_decls = normalized[0][1]
     other_units_decls = [decls for _, decls in normalized[1:]]
 
-    anchors_in_units: list[list[int]] = []  # List of [idx_0, idx_1, ..., idx_k-1]
+    anchors_in_units: list[list[int]] = []
     curr_search_indices = [0] * len(other_units_decls)
 
     for i, d0 in enumerate(first_decls):
@@ -318,35 +350,96 @@ def reconcile_units(units: Sequence[tuple[str, Header | SourceUnit]]) -> Reconci
             for u_idx, m_idx in enumerate(matched_indices):
                 curr_search_indices[u_idx] = m_idx + 1
 
-    # Now construct the reconciled sequence using slices between anchors
-    reconciled_items: list[Declaration | PlatformGuardedBlock] = []
+    reconciled_items: list[Declaration | MatrixGuardedBlock] = []
     prev_indices = [0] * len(normalized)
 
-    for anchor_pos in anchors_in_units:
-        # Check if any unit has declarations between prev_index and anchor_pos
-        branches: list[tuple[PlatformCondition, list[Declaration]]] = []
+    def process_interval(end_indices: list[int]) -> None:
+        slices: list[tuple[ConfigCondition, list[Declaration]]] = []
         for u_idx, (cond, decls) in enumerate(normalized):
-            end_idx = anchor_pos[u_idx]
+            end_idx = end_indices[u_idx]
             slice_decls = decls[prev_indices[u_idx] : end_idx]
+            prev_indices[u_idx] = end_idx + 1 if end_idx < len(decls) else end_idx
             if slice_decls:
-                branches.append((cond, slice_decls))
-            prev_indices[u_idx] = end_idx + 1
+                slices.append((cond, slice_decls))
 
-        if branches:
-            reconciled_items.append(PlatformGuardedBlock(branches=branches))
+        if not slices:
+            return
 
-        # Emit the common anchor declaration unconditionally
-        anchor_decl = normalized[0][1][anchor_pos[0]]
-        reconciled_items.append(anchor_decl)
+        equiv_classes: list[tuple[list[ConfigCondition], list[Declaration]]] = []
+        for cond, decls in slices:
+            matched = False
+            for class_configs, class_decls in equiv_classes:
+                if len(decls) == len(class_decls) and all(
+                    declarations_equal(d1, d2) for d1, d2 in zip(decls, class_decls, strict=True)
+                ):
+                    class_configs.append(cond)
+                    matched = True
+                    break
+            if not matched:
+                equiv_classes.append(([cond], decls))
 
-    # Check for remaining declarations after the last anchor
-    trailing_branches: list[tuple[PlatformCondition, list[Declaration]]] = []
-    for u_idx, (cond, decls) in enumerate(normalized):
-        slice_decls = decls[prev_indices[u_idx] :]
-        if slice_decls:
-            trailing_branches.append((cond, slice_decls))
+        if len(equiv_classes) == 1 and len(equiv_classes[0][0]) == len(normalized):
+            reconciled_items.extend(equiv_classes[0][1])
+            return
 
-    if trailing_branches:
-        reconciled_items.append(PlatformGuardedBlock(branches=trailing_branches))
+        branches: list[tuple[MatrixCondition, list[Declaration]]] = []
+        for class_configs, class_decls in equiv_classes:
+            predicate = minimize_conditions(class_configs, domain_matrix, target_lang=target_lang)
+            mat_cond = MatrixCondition(predicate=predicate, raw_conditions=tuple(class_configs))
+            branches.append((mat_cond, class_decls))
 
-    return ReconciledUnit(path=path, items=reconciled_items)
+        reconciled_items.append(MatrixGuardedBlock(branches=branches))
+
+    for anchor_pos in anchors_in_units:
+        process_interval(anchor_pos)
+        reconciled_items.append(normalized[0][1][anchor_pos[0]])
+
+    process_interval([len(decls) for _, decls in normalized])
+
+    return MultiDimensionalReconciledUnit(path=path, items=reconciled_items)
+
+
+def reconcile_units(units: Sequence[tuple[str, Header | SourceUnit]]) -> ReconciledUnit:
+    """Reconcile multiple platform-tagged compilation units into a single ReconciledUnit.
+
+    Preserves topological declaration sequence, emits common declarations unconditionally,
+    and groups divergent declarations into PlatformGuardedBlock branches.
+    Projects 1D platform inputs onto reconcile_matrix.
+    """
+    if not units:
+        return ReconciledUnit(path="")
+
+    targets = tuple(tag for tag, _ in units)
+    matrix = ConfigMatrix()
+    matrix.add_dimension("target", targets, dimension_type="target")
+
+    matrix_units: list[tuple[ConfigCondition, SourceUnit]] = []
+    for tag, u in units:
+        if isinstance(u, Header):
+            su = SourceUnit(path=u.path, declarations=list(u.declarations))
+        else:
+            su = u
+        matrix_units.append((ConfigCondition({"target": tag}), su))
+
+    md_unit = reconcile_matrix(matrix_units, matrix=matrix, target_lang="nim")
+
+    items: list[Declaration | PlatformGuardedBlock] = []
+    for item in md_unit.items:
+        if isinstance(item, MatrixGuardedBlock):
+            branches: list[tuple[PlatformCondition, list[Declaration]]] = []
+            for cond, decls in item.branches:
+                if len(cond.raw_conditions) == 1:
+                    raw_c = cond.raw_conditions[0]
+                    plat_tag = str(raw_c.get("target", "posix"))
+                    plat_cond = get_platform_condition(plat_tag)
+                else:
+                    tags = frozenset.union(
+                        *(get_platform_condition(str(c.get("target", "posix"))).tags for c in cond.raw_conditions)
+                    )
+                    plat_cond = PlatformCondition(tags=tags, nim_predicate=cond.predicate)
+                branches.append((plat_cond, list(decls)))
+            items.append(PlatformGuardedBlock(branches=branches))
+        else:
+            items.append(item)
+
+    return ReconciledUnit(path=md_unit.path, items=items)
