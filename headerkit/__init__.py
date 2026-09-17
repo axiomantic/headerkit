@@ -57,6 +57,21 @@ from headerkit.ir import (
     filter_access_floor,
     is_cpp_value_type,
 )
+from headerkit.matrix import (
+    MAX_MATRIX_CONFIGURATIONS,
+    ConfigCondition,
+    ConfigMatrix,
+    MalformedOverrideError,
+    MatrixDimension,
+    MatrixExplosionError,
+    MatrixManifest,
+    ProbeOptions,
+    SysrootWarning,
+    discover_dimensions,
+    extract_overrides,
+    inject_overrides,
+    probe_configuration,
+)
 from headerkit.packaging import (
     generate_nim_cmake,
     generate_nim_pyproject,
@@ -65,10 +80,16 @@ from headerkit.packaging import (
     generate_nim_wheel_layout,
 )
 from headerkit.reconcile import (
+    MatrixCondition,
+    MatrixGuardedBlock,
+    MultiDimensionalReconciledUnit,
     PlatformCondition,
     PlatformGuardedBlock,
     ReconciledUnit,
     declarations_equal,
+    minimize_conditions,
+    quine_mccluskey_minimize,
+    reconcile_matrix,
     reconcile_units,
 )
 from headerkit.scaffold import (
@@ -93,6 +114,17 @@ from headerkit.scaffold_plugin import (
     PluginScaffoldOptions,
     prompt_plugin_scaffold_options,
     scaffold_plugin,
+)
+from headerkit.transforms import (
+    ChainedFilter,
+    FilterByHeader,
+    IRTransformer,
+    MakeOpaque,
+    PipelineFilter,
+    RenameTypes,
+    StripPaddingFields,
+    StripPrefix,
+    rewrite_type_references,
 )
 from headerkit.workorder import (
     DEFINITION_OF_DONE,
@@ -251,4 +283,34 @@ __all__ = [
     "ReconciledUnit",
     "declarations_equal",
     "reconcile_units",
+    "MatrixCondition",
+    "MatrixGuardedBlock",
+    "MultiDimensionalReconciledUnit",
+    "reconcile_matrix",
+    "minimize_conditions",
+    "quine_mccluskey_minimize",
+    # Transforms API
+    "IRTransformer",
+    "PipelineFilter",
+    "ChainedFilter",
+    "StripPrefix",
+    "MakeOpaque",
+    "RenameTypes",
+    "StripPaddingFields",
+    "FilterByHeader",
+    "rewrite_type_references",
+    # Matrix API
+    "ConfigCondition",
+    "MatrixDimension",
+    "ConfigMatrix",
+    "MatrixExplosionError",
+    "MAX_MATRIX_CONFIGURATIONS",
+    "discover_dimensions",
+    "probe_configuration",
+    "ProbeOptions",
+    "SysrootWarning",
+    "MatrixManifest",
+    "extract_overrides",
+    "inject_overrides",
+    "MalformedOverrideError",
 ]

@@ -297,3 +297,42 @@ def test_reconcile_symbols_in_all():
     assert headerkit.ReconciledUnit is ReconciledUnit
     assert headerkit.declarations_equal is declarations_equal
     assert headerkit.reconcile_units is reconcile_units
+
+
+def test_transforms_and_matrix_public_exports() -> None:
+    """IR transforms and configuration matrix symbols should be exported in headerkit.__all__."""
+    import headerkit
+
+    expected_symbols = [
+        "IRTransformer",
+        "PipelineFilter",
+        "ChainedFilter",
+        "StripPrefix",
+        "MakeOpaque",
+        "RenameTypes",
+        "StripPaddingFields",
+        "FilterByHeader",
+        "rewrite_type_references",
+        "ConfigCondition",
+        "MatrixDimension",
+        "ConfigMatrix",
+        "MatrixExplosionError",
+        "MAX_MATRIX_CONFIGURATIONS",
+        "discover_dimensions",
+        "probe_configuration",
+        "ProbeOptions",
+        "SysrootWarning",
+        "MatrixManifest",
+        "extract_overrides",
+        "inject_overrides",
+        "MalformedOverrideError",
+        "MatrixCondition",
+        "MatrixGuardedBlock",
+        "MultiDimensionalReconciledUnit",
+        "reconcile_matrix",
+        "minimize_conditions",
+        "quine_mccluskey_minimize",
+    ]
+    for sym in expected_symbols:
+        assert hasattr(headerkit, sym), f"Expected symbol {sym!r} in headerkit"
+        assert sym in headerkit.__all__, f"Symbol {sym!r} missing from headerkit.__all__"
