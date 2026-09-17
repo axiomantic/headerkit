@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from headerkit._ir_json import json_to_header
 from headerkit.ir import (
     Header,
@@ -201,3 +203,31 @@ class TestMacroFunctionJson:
 
         reconstructed = json_to_header(d)
         assert reconstructed == header
+
+    def test_deserialization_missing_name_raises_key_error(self) -> None:
+        malformed_decl = {
+            "path": "bad.h",
+            "declarations": [
+                {
+                    "kind": "macro_function",
+                    "parameters": [],
+                    "body": "foo",
+                }
+            ],
+        }
+        with pytest.raises(KeyError):
+            json_to_header(malformed_decl)
+
+    def test_deserialization_param_missing_name_raises_key_error(self) -> None:
+        malformed_param = {
+            "path": "bad.h",
+            "declarations": [
+                {
+                    "kind": "macro_function",
+                    "name": "FOO",
+                    "parameters": [{"is_variadic": True}],
+                }
+            ],
+        }
+        with pytest.raises(KeyError):
+            json_to_header(malformed_param)

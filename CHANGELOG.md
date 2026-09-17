@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `MacroParameter` and `MacroFunction` IR nodes: representation of C/C++ function-like macros (`#define FOO(x, y) ((x) + (y))`) with parameter lists, variadic indicators, body expressions/statements, and token-pasting detection (`##`). Exported in `headerkit` and `headerkit.ir`, with full JSON serialization and deserialization symmetry in `headerkit.writers.json` and `headerkit._ir_json`.
+
 - Extension project scaffolding: `headerkit new` and `headerkit new-plugin` CLI subcommands (and `scaffold_plugin` Python API) interactively generate complete, standalone HeaderKit writer backends, parser backends, or hook plugins with `pyproject.toml` (configured entry points), module implementations, test suites, `AGENTS.md` instructions, and CI workflows.
 - Scaffolding `AGENTS.md` generation: automatically generates project and package instructions, test commands, and quality invariants in `AGENTS.md` across all package layouts (`package`, `project`, `wheel`, `scikit-build`) in `BaseWriter.write_layout()`.
 - Configurable symbol access floor: `access_floor` option on `NimWriter` and `CythonWriter` supporting `"public"`, `"protected"`, `"private"`, and `"all"` (or `None`), allowing downstream callers to preserve full member visibility in general-purpose IR workflows.
