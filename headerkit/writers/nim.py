@@ -517,6 +517,12 @@ class NimWriter(BaseWriter):
         ),
     )
 
+    _known_types: set[str]
+    _emitted_proc_sigs: set[tuple[str, tuple[str, ...]]]
+    _emitted_normalized_types: dict[str, str]
+    _type_renames: dict[str, str]
+    _type_aliases: dict[str, str]
+
     def __init__(
         self,
         *,
@@ -891,10 +897,14 @@ class NimWriter(BaseWriter):
                 for p in decl.parameters:
                     opaque_targets.update(_collect_opaque_pointer_names(p.type))
 
-        self._emitted_proc_sigs: set[tuple[str, tuple[str, ...]]] = set()
-        self._emitted_normalized_types: dict[str, str] = {_normalize_nim_ident(st): st for st in STANDARD_NIM_TYPES}
-        self._type_renames: dict[str, str] = {}
-        self._type_aliases: dict[str, str] = {}
+        if not hasattr(self, "_emitted_proc_sigs"):
+            self._emitted_proc_sigs = set()
+        if not hasattr(self, "_emitted_normalized_types"):
+            self._emitted_normalized_types = {_normalize_nim_ident(st): st for st in STANDARD_NIM_TYPES}
+        if not hasattr(self, "_type_renames"):
+            self._type_renames = {}
+        if not hasattr(self, "_type_aliases"):
+            self._type_aliases = {}
 
         for raw_opaque in sorted(opaque_targets):
             clean_opaque = _escape_ident(raw_opaque, is_type=True)
@@ -938,7 +948,10 @@ class NimWriter(BaseWriter):
         for raw_opaque in opaque_targets:
             known_types.add(raw_opaque)
             known_types.add(_escape_ident(raw_opaque, is_type=True))
-        self._known_types = known_types
+        if hasattr(self, "_known_types"):
+            self._known_types.update(known_types)
+        else:
+            self._known_types = known_types
 
         for decl in header.declarations:
             if isinstance(decl, Typedef) and decl.name:
@@ -2317,6 +2330,24 @@ class NimWriter(BaseWriter):
             else:
                 all_decls.append(item)
 
+        # Pre-seed known types across the entire ReconciledUnit so cross-chunk references resolve
+        self._emitted_proc_sigs = set()
+        self._emitted_normalized_types = {_normalize_nim_ident(st): st for st in STANDARD_NIM_TYPES}
+        self._type_renames = {}
+        self._type_aliases = {}
+        known: set[str] = set(STANDARD_NIM_TYPES)
+        for d in all_decls:
+            if hasattr(d, "name") and d.name:
+                known.add(d.name)
+                known.add(_escape_ident(d.name, is_type=True))
+            if isinstance(d, Struct):
+                for nr in d.nested_records:
+                    if nr.name and nr.access not in ("private", "protected"):
+                        known.add(nr.name)
+                        known.add(f"{d.name}_{nr.name}")
+                        known.add(_escape_ident(f"{d.name}_{nr.name}", is_type=True))
+        self._known_types = known
+
         has_call_operator = any(
             isinstance(decl, Struct) and any(m.name == "operator()" for m in decl.methods) for decl in all_decls
         )
@@ -2381,7 +2412,20 @@ class NimWriter(BaseWriter):
             if isinstance(item, PlatformGuardedBlock):
                 flush_accumulator()
                 block_lines: list[str] = []
+
+                # Snapshot state prior to guarded block so each mutually exclusive branch
+                # sees a clean baseline without cross-branch type name collision mangling
+                sigs_base = set(getattr(self, "_emitted_proc_sigs", set()))
+                types_base = dict(getattr(self, "_emitted_normalized_types", {}))
+                renames_base = dict(getattr(self, "_type_renames", {}))
+                aliases_base = dict(getattr(self, "_type_aliases", {}))
+
                 for idx, (cond, branch_decls) in enumerate(item.branches):
+                    self._emitted_proc_sigs = set(sigs_base)
+                    self._emitted_normalized_types = dict(types_base)
+                    self._type_renames = dict(renames_base)
+                    self._type_aliases = dict(aliases_base)
+
                     kw = "when" if idx == 0 else "elif"
                     block_lines.append(f"{kw} {cond.nim_predicate}:")
                     rendered_branch = _render_decl_list(branch_decls)
@@ -2390,12 +2434,30 @@ class NimWriter(BaseWriter):
                     else:
                         for b_line in rendered_branch.splitlines():
                             block_lines.append(f"  {b_line}" if b_line else "")
+
+                # Reset back to base for downstream unconditional declarations
+                self._emitted_proc_sigs = set(sigs_base)
+                self._emitted_normalized_types = dict(types_base)
+                self._type_renames = dict(renames_base)
+                self._type_aliases = dict(aliases_base)
+
                 if block_lines:
                     sections.append("\n".join(block_lines))
             else:
                 decl_accumulator.append(item)
 
         flush_accumulator()
+
+        if hasattr(self, "_known_types"):
+            delattr(self, "_known_types")
+        if hasattr(self, "_emitted_proc_sigs"):
+            delattr(self, "_emitted_proc_sigs")
+        if hasattr(self, "_emitted_normalized_types"):
+            delattr(self, "_emitted_normalized_types")
+        if hasattr(self, "_type_renames"):
+            delattr(self, "_type_renames")
+        if hasattr(self, "_type_aliases"):
+            delattr(self, "_type_aliases")
 
         if sections:
             lines.append("\n\n".join(sections))

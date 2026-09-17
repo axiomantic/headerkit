@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
+- Topological AST reconciliation engine: `reconcile_units`, `declarations_equal`, `PlatformCondition`, `PlatformGuardedBlock`, and `ReconciledUnit` in `headerkit.reconcile` (exported in `headerkit`) perform anchor-based sequence alignment across compilation units tagged with target triples, emitting common declarations unconditionally while partitioning platform-divergent declarations into `when defined(...)` branches.
+- Safe Nim code generation for C macros: `NimWriter` generates non-recursive C generic bridge procedures (`proc c_NAME*[T]`) and public templates (`template name*`) using `{.nodecl.}` to allow C preprocessor expansion without duplicate symbol or prototype collisions.
+- Platform-guarded code generation: `NimWriter.write_reconciled()` emits topologically ordered Nim bindings with `when/elif` conditional blocks, preserving per-branch scope isolation to prevent false duplicate-symbol mangling across mutually exclusive OS branches.
+- Cross-platform test harness and fixtures: `tests/fixtures/cross_platform.h` and `tests/test_integration/test_cross_platform.py` verify preprocessor branch isolation across Clang target triples (`arm64-apple-darwin`, `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`), host Nim typechecking, and architecture-matched Docker Linux execution.
+- Developer guide: `docs/guides/platform_guarded_store_merge.md` documents the architecture, target triple workflow, reconciliation algorithm, macro generation, and containerized CI validation.
+- IR schema bump to version 6 (`_IR_SCHEMA_VERSION = "6"`): invalidates warm caches when `MacroParameter` and `MacroFunction` dataclasses are introduced to prevent stale IR substitution.
 - `MacroParameter` and `MacroFunction` IR nodes: representation of C/C++ function-like macros (`#define FOO(x, y) ((x) + (y))`) with parameter lists, variadic indicators, body expressions/statements, and token-pasting detection (`##`). Exported in `headerkit` and `headerkit.ir`, with full JSON serialization and deserialization symmetry in `headerkit.writers.json` and `headerkit._ir_json`.
 
 - Extension project scaffolding: `headerkit new` and `headerkit new-plugin` CLI subcommands (and `scaffold_plugin` Python API) interactively generate complete, standalone HeaderKit writer backends, parser backends, or hook plugins with `pyproject.toml` (configured entry points), module implementations, test suites, `AGENTS.md` instructions, and CI workflows.

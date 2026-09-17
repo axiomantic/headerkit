@@ -106,6 +106,7 @@ markers = [
     "treesitter: tests requiring tree-sitter optional dependency",
     "download: tests requiring network access to download headers",
     "slow: marks tests as slow-running",
+    "docker: tests requiring docker daemon",
 ]
 
 [project.entry-points."headerkit.backends"]
