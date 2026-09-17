@@ -7,6 +7,7 @@ import importlib
 import importlib.metadata
 import os
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -72,13 +73,104 @@ def _env_bool(name: str, *, default: bool = False) -> bool:
     return val.lower() in ("1", "true", "yes")
 
 
+class HeaderkitArgumentParser(argparse.ArgumentParser):
+    """Argument parser supporting subcommands alongside top-level positional inputs."""
+
+    def parse_args(  # type: ignore[override]
+        self,
+        args: Sequence[str] | None = None,
+        namespace: argparse.Namespace | None = None,
+    ) -> argparse.Namespace:
+        raw = sys.argv[1:] if args is None else list(args)
+        if raw and raw[0] == "add-target":
+            p = argparse.ArgumentParser(prog="headerkit add-target")
+            p.add_argument("command", choices=["add-target"])
+            p.add_argument("output_file", help="Path to existing output file containing manifest")
+            p.add_argument("--target", required=True, help="Target architecture triple to add")
+            p.add_argument("--lang", default=None, help="Target language")
+            return p.parse_args(raw, namespace)
+        res = super().parse_args(args, namespace)
+        if not hasattr(res, "command"):
+            res.command = None
+        return res
+
+
+def add_target_command(args: argparse.Namespace) -> int:
+    """CLI entrypoint for `headerkit add-target <output_file> --target <triple>`."""
+    output_path = Path(args.output_file)
+    if not output_path.exists():
+        print(f"Error: target file not found: {output_path}", file=sys.stderr)
+        return 1
+
+    lang = args.lang
+    if not lang:
+        suffix = output_path.suffix.lstrip(".")
+        if suffix in ("nim", "nimble"):
+            lang = "nim"
+        elif suffix in ("pyx", "pxd"):
+            lang = "cython"
+        elif suffix in ("py", "pyi"):
+            lang = "python"
+        elif suffix in ("c", "h"):
+            lang = "c"
+        elif suffix in ("cpp", "hpp", "cc"):
+            lang = "cpp"
+        else:
+            lang = "nim"
+
+    existing_content = output_path.read_text(encoding="utf-8")
+    from headerkit.ir import SourceUnit
+    from headerkit.matrix.manifest import (
+        emit_manifest_comment,
+        extract_manifest,
+        extract_overrides,
+        inject_overrides,
+    )
+    from headerkit.matrix.models import ConfigCondition
+    from headerkit.matrix.probe import probe_configuration
+    from headerkit.reconcile import reconcile_matrix
+    from headerkit.writers import get_writer
+
+    try:
+        overrides = extract_overrides(existing_content, language=lang)
+        manifest = extract_manifest(existing_content, language=lang)
+    except Exception as exc:
+        print(f"Error reading existing manifest or overrides: {exc}", file=sys.stderr)
+        return 1
+
+    new_triple = args.target
+    existing_targets = (
+        list(manifest.matrix.get_dimension("target").values) if manifest.matrix.has_dimension("target") else []
+    )
+    if new_triple not in existing_targets:
+        existing_targets.append(new_triple)
+        manifest.matrix.add_dimension("target", existing_targets, dimension_type="target")
+
+    matrix_units: list[tuple[ConfigCondition, SourceUnit]] = []
+    for t in existing_targets:
+        cond = ConfigCondition({"target": t})
+        unit = probe_configuration(manifest.header_path, cond)
+        matrix_units.append((cond, unit))
+
+    reconciled = reconcile_matrix(matrix_units, matrix=manifest.matrix, target_lang=lang)
+    writer = get_writer(lang)
+    generated_code = writer.write(reconciled)  # type: ignore[arg-type]
+
+    manifest_comment = emit_manifest_comment(manifest, language=lang)
+    code_with_manifest = manifest_comment + "\n" + generated_code
+    final_output = inject_overrides(code_with_manifest, overrides, language=lang)
+
+    output_path.write_text(final_output, encoding="utf-8")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Construct and return the argument parser."""
-    parser = argparse.ArgumentParser(
+    parser = HeaderkitArgumentParser(
         prog="headerkit",
         description="Parse C/C++ header files and emit output via configurable writers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Subcommands:\n  new, new-plugin     Scaffold a new extension project (writer, backend, plugin)\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index, populate)\n  store                Store operations (merge)",
+        epilog="Subcommands:\n  add-target          Add target to existing generated binding matrix\n  new, new-plugin     Scaffold a new extension project (writer, backend, plugin)\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index, populate)\n  store                Store operations (merge)",
     )
     parser.add_argument(
         "input_files",
@@ -412,6 +504,11 @@ def _merge_config_writer_opts(
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns exit code (0 = success, 1 = error)."""
     raw_args = sys.argv[1:] if argv is None else argv
+    if raw_args and raw_args[0] == "add-target":
+        parser = _build_parser()
+        args = parser.parse_args(raw_args)
+        return add_target_command(args)
+
     # Subcommand dispatch: `headerkit new [args]` / `headerkit new-plugin [args]`
     if raw_args and raw_args[0] in ("new", "new-plugin"):
         from headerkit.scaffold_plugin import plugin_scaffold_main

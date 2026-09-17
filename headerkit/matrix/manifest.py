@@ -80,6 +80,7 @@ def inject_overrides(generated_code: str, overrides: dict[str, str], language: s
 
     lines = generated_code.splitlines()
     output_lines: list[str] = []
+    injected_ids: set[str] = set()
     idx = 0
     while idx < len(lines):
         line = lines[idx]
@@ -87,6 +88,7 @@ def inject_overrides(generated_code: str, overrides: dict[str, str], language: s
         start_match = start_pattern.match(stripped)
         if start_match:
             block_id = start_match.group(1)
+            injected_ids.add(block_id)
             output_lines.append(line)
             idx += 1
             while idx < len(lines):
@@ -101,6 +103,30 @@ def inject_overrides(generated_code: str, overrides: dict[str, str], language: s
         else:
             output_lines.append(line)
         idx += 1
+
+    # Preserve any unplaced override blocks (e.g. user-defined standalone blocks)
+    remaining_ids = [k for k in overrides if k not in injected_ids]
+    if remaining_ids:
+        insert_idx = len(output_lines)
+        manifest_end_idx = -1
+        for i, line_content in enumerate(output_lines):
+            if "@headerkit-matrix-manifest" in line_content:
+                for j in range(i + 1, len(output_lines)):
+                    if "===" in output_lines[j] or "---" in output_lines[j] or "===" in output_lines[j].strip():
+                        manifest_end_idx = j + 1
+                        break
+                break
+        if manifest_end_idx != -1:
+            insert_idx = manifest_end_idx
+
+        block_lines: list[str] = []
+        for r_id in remaining_ids:
+            block_lines.append("")
+            block_lines.append(f"{prefix} @headerkit:override {r_id}")
+            block_lines.extend(overrides[r_id].splitlines())
+            block_lines.append(f"{prefix} @headerkit:end-override {r_id}")
+
+        output_lines[insert_idx:insert_idx] = block_lines
 
     return "\n".join(output_lines) + ("\n" if generated_code.endswith("\n") else "")
 
