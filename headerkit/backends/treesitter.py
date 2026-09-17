@@ -580,7 +580,7 @@ class TreeSitterBackend:
                 )
                 results.extend(self._lifted_declarations)
                 self._lifted_declarations = []
-                results.extend(d for d in decls if self._keep_typedef(d))
+                results.extend(decls)
             return results
 
         if node.type in ("preproc_elif", "preproc_else"):
