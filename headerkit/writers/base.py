@@ -17,9 +17,9 @@ from headerkit.ir import (
     SourceUnit,
     Struct,
     filter_access_floor,
-    strip_padding_fields,
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
+from headerkit.transforms.builtin import StripPaddingFields
 
 #: One-line stand-in for a generated multi-line block inside a dedented
 #: template. See :func:`render_block_template` for why the substitution cannot
@@ -307,7 +307,7 @@ class BaseWriter:
         if floor and floor.lower() not in ("private", "all", "none"):
             unit = filter_access_floor(unit, floor=floor)
         if not self.consumes_padding_fields:
-            return strip_padding_fields(unit)
+            return StripPaddingFields().transform(unit)
         return unit
 
     def get_overload_signature(

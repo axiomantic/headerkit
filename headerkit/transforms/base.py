@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import replace
-from typing import Any
+from typing import Any, TypeVar
 
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext
+
+NodeT = TypeVar("NodeT")
 
 
 class IRTransformer:
@@ -37,7 +39,7 @@ class IRTransformer:
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node, context=context)
 
-    def generic_visit(self, node: Any, context: PipelineContext | None = None) -> Any:
+    def generic_visit(self, node: NodeT, context: PipelineContext | None = None) -> NodeT:
         """Default visitor traversing all dataclass fields."""
         if not dataclasses.is_dataclass(node) or isinstance(node, type):
             return node

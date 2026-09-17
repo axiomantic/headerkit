@@ -1075,29 +1075,18 @@ Header = SourceUnit
 def strip_padding_fields(unit: SourceUnit) -> SourceUnit:
     """Return a copy of ``unit`` with every unnamed-bitfield padding Field removed.
 
-    Padding is layout information, not API. A writer that emits C source (Cython,
-    cffi, cshim, Nim, Lua, Mojo) hands the record back to a C compiler, which
-    recomputes the layout from the original declaration; a padding entry in that
-    output would be a spurious member. Only a writer that reconstructs the layout
-    itself -- ctypes -- consumes them.
-
-    Filtering here rather than at each writer's field loop keeps the rule in one
-    place: a writer cannot forget to apply it, and a new writer inherits the safe
-    default.
+    .. deprecated:: 0.4.0
+        Use :class:`headerkit.transforms.builtin.StripPaddingFields` or ``unit >> StripPaddingFields()`` instead.
     """
+    import warnings
+    from headerkit.transforms.builtin import StripPaddingFields
 
-    def _struct(st: Struct) -> Struct:
-        return replace(
-            st,
-            fields=[
-                replace(f, anonymous_struct=_struct(f.anonymous_struct) if f.anonymous_struct else None)
-                for f in st.fields
-                if not f.is_padding
-            ],
-            nested_records=[_struct(n) for n in st.nested_records],
-        )
-
-    return replace(unit, declarations=[_struct(d) if isinstance(d, Struct) else d for d in unit.declarations])
+    warnings.warn(
+        "strip_padding_fields is deprecated, use StripPaddingFields().transform(unit) or unit >> StripPaddingFields()",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+    return StripPaddingFields().transform(unit)
 
 
 # =============================================================================
