@@ -39,6 +39,29 @@ class TestDeclarationsEqual:
         )
         assert declarations_equal(func1, func2) is True
 
+    def test_ignores_nested_source_locations_in_struct_methods(self) -> None:
+        m1 = Function(
+            name="process",
+            return_type=CType("void"),
+            location=SourceLocation(file="mac.h", line=12, column=4),
+        )
+        m2 = Function(
+            name="process",
+            return_type=CType("void"),
+            location=SourceLocation(file="linux.h", line=88, column=2),
+        )
+        s1 = Struct(
+            name="Engine",
+            methods=[m1],
+            location=SourceLocation(file="mac.h", line=10, column=1),
+        )
+        s2 = Struct(
+            name="Engine",
+            methods=[m2],
+            location=SourceLocation(file="linux.h", line=85, column=1),
+        )
+        assert declarations_equal(s1, s2) is True
+
     def test_detects_structural_difference(self) -> None:
         func1 = Function(
             name="add",

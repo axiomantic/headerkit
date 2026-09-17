@@ -13,6 +13,7 @@ from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     Array,
     BaseSpecifier,
+    Constant,
     CType,
     Declaration,
     Enum,
@@ -520,6 +521,7 @@ class TreeSitterBackend:
         self._pack_regions, self._unknown_pack_ranges = _pack_regions(tree.root_node)
 
         declarations: list[Declaration] = []
+        self._current_declarations = declarations
         for child in tree.root_node.children:
             decls = self._convert_top_level(child, filename, is_cpp=is_cpp)
             # A record synthesized for a named member of an anonymous type must
@@ -530,6 +532,7 @@ class TreeSitterBackend:
             self._lifted_declarations = []
             declarations.extend(d for d in decls if self._keep_typedef(d))
 
+        delattr(self, "_current_declarations")
         return Header(path=filename, declarations=declarations)
 
     def _keep_typedef(self, decl: Declaration) -> bool:
@@ -559,6 +562,7 @@ class TreeSitterBackend:
         namespace: str | None = None,
         template_params: list[str] | None = None,
         is_cpp: bool = False,
+        active_list: list[Declaration] | None = None,
     ) -> list[Declaration]:
         if node.type in ("preproc_ifdef", "preproc_if"):
             results: list[Declaration] = []
@@ -566,15 +570,17 @@ class TreeSitterBackend:
                 # Do not walk mutually exclusive #elif/#else branches when traversing the primary #if branch
                 if child.type in ("preproc_elif", "preproc_else"):
                     continue
-                results.extend(
-                    self._convert_top_level(
-                        child,
-                        filename,
-                        namespace=namespace,
-                        template_params=template_params,
-                        is_cpp=is_cpp,
-                    )
+                decls = self._convert_top_level(
+                    child,
+                    filename,
+                    namespace=namespace,
+                    template_params=template_params,
+                    is_cpp=is_cpp,
+                    active_list=results,
                 )
+                results.extend(self._lifted_declarations)
+                self._lifted_declarations = []
+                results.extend(d for d in decls if self._keep_typedef(d))
             return results
 
         if node.type in ("preproc_elif", "preproc_else"):
@@ -590,6 +596,7 @@ class TreeSitterBackend:
                         namespace=namespace,
                         template_params=template_params,
                         is_cpp=is_cpp,
+                        active_list=results,
                     )
                 )
             return results
@@ -639,11 +646,57 @@ class TreeSitterBackend:
             en = self._convert_enum(node, filename, namespace=namespace)
             return [en] if en else []
 
+        if node.type == "preproc_call":
+            dir_node = node.child_by_field_name("directive")
+            arg_node = node.child_by_field_name("argument")
+            if dir_node and dir_node.text and dir_node.text.decode("utf-8").strip() == "#undef":
+                if arg_node and arg_node.text:
+                    undef_name = arg_node.text.decode("utf-8").strip()
+                    self._undef_macro(undef_name, active_list=active_list)
+            return []
+
         if node.type == "preproc_function_def":
             macro = self._convert_preproc_function_def(node, filename, namespace=namespace)
-            return [macro] if macro else []
+            if macro:
+                if self._record_macro(macro, active_list=active_list):
+                    return []
+                return [macro]
+            return []
 
         return []
+
+    def _undef_macro(self, name: str, active_list: list[Declaration] | None = None) -> None:
+        """Drop macro declarations matching name from current declarations and active list."""
+        if hasattr(self, "_current_declarations"):
+            self._current_declarations[:] = [
+                d
+                for d in self._current_declarations
+                if not (((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == name)
+            ]
+        if active_list is not None:
+            active_list[:] = [
+                d
+                for d in active_list
+                if not (((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == name)
+            ]
+
+    def _record_macro(
+        self,
+        macro: MacroFunction,
+        active_list: list[Declaration] | None = None,
+    ) -> bool:
+        """Update existing macro in-place if redefined, returning True if updated."""
+        if hasattr(self, "_current_declarations"):
+            for idx, d in enumerate(self._current_declarations):
+                if ((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == macro.name:
+                    self._current_declarations[idx] = macro
+                    return True
+        if active_list is not None:
+            for idx, d in enumerate(active_list):
+                if ((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == macro.name:
+                    active_list[idx] = macro
+                    return True
+        return False
 
     def _convert_preproc_function_def(
         self,

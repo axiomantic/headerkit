@@ -105,6 +105,10 @@ class TestCrossPlatformIntegration:
         assert (
             'proc c_MAKE_FLAG*[T](bit: T): T {.importc: "MAKE_FLAG", header: "cross_platform.h", nodecl.}' in nim_code
         )
+        assert (
+            'proc c_CALC_OFFSET*[T1, T2](base: T1, idx: T2): T1 {.importc: "CALC_OFFSET", header: "cross_platform.h", nodecl.}'
+            in nim_code
+        )
         assert "template make_flag*(bit: untyped): untyped =" in nim_code
         assert (
             'proc c_SAFE_FREE*[T](p: T): void {.importc: "SAFE_FREE", header: "cross_platform.h", nodecl.}' in nim_code

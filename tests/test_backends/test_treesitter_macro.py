@@ -135,3 +135,22 @@ class TestTreeSitterMacroFunctionExtraction:
         macro_names = [d.name for d in header.declarations if isinstance(d, MacroFunction)]
         assert "ACTIVE_MACRO" in macro_names
         assert "INACTIVE_MACRO" not in macro_names
+
+    def test_macro_redefinition_takes_latest(self) -> None:
+        code = (
+            "#define CLAMP(x) ((x) < 0 ? 0 : (x))\n"
+            "#define CLAMP(x, lo, hi) ((x) < (lo) ? (lo) : ((x) > (hi) ? (hi) : (x)))\n"
+            "void dummy(void);\n"
+        )
+        header = self.backend.parse(code, "test.h")
+        macros = [d for d in header.declarations if isinstance(d, MacroFunction) and d.name == "CLAMP"]
+        assert len(macros) == 1
+        assert len(macros[0].parameters) == 3
+        assert [p.name for p in macros[0].parameters] == ["x", "lo", "hi"]
+
+    def test_macro_undef_dropped(self) -> None:
+        code = "#define DISCARD_ME(x) ((x) * 2)\n#undef DISCARD_ME\n#define KEEP_ME(x) ((x) * 3)\nvoid dummy(void);\n"
+        header = self.backend.parse(code, "test.h")
+        macro_names = [d.name for d in header.declarations if isinstance(d, MacroFunction)]
+        assert "DISCARD_ME" not in macro_names
+        assert "KEEP_ME" in macro_names

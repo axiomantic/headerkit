@@ -2166,14 +2166,9 @@ class NimWriter(BaseWriter):
             c_bridge_name = f"c_macro_{m.name}"
 
         if not m.parameters:
-            if m.is_statement:
-                return [
-                    f'proc {c_bridge_name}*(): void {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
-                    f"template {template_name}*(): untyped =",
-                    f"  {c_bridge_name}()",
-                ]
+            ret_val = "void" if (m.is_statement or not m.body.strip()) else "cint"
             return [
-                f'proc {c_bridge_name}*(): cint {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+                f'proc {c_bridge_name}*(): {ret_val} {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
                 f"template {template_name}*(): untyped =",
                 f"  {c_bridge_name}()",
             ]
@@ -2196,10 +2191,17 @@ class NimWriter(BaseWriter):
             ]
 
         # Untyped expression macro
-        c_params = f"{', '.join(param_names)}: T"
-        t_params = f"{', '.join(param_names)}: untyped"
+        if len(param_names) == 1:
+            type_params = "[T]"
+            c_params = f"{param_names[0]}: T"
+            ret_type = "T"
+        else:
+            type_params = f"[{', '.join(f'T{i + 1}' for i in range(len(param_names)))}]"
+            c_params = ", ".join(f"{name}: T{i + 1}" for i, name in enumerate(param_names))
+            ret_type = "T1"
+        t_params = ", ".join(f"{p}: untyped" for p in param_names)
         return [
-            f'proc {c_bridge_name}*[T]({c_params}): T {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+            f'proc {c_bridge_name}*{type_params}({c_params}): {ret_type} {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
             f"template {template_name}*({t_params}): untyped =",
             f"  {c_bridge_name}({call_params})",
         ]

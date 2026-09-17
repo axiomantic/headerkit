@@ -27,8 +27,11 @@ class TestNimMacroCodeGeneration:
         writer = NimWriter(header_path="math_utils.h")
         output = writer.write(header)
 
-        assert 'proc c_MULTIPLY*[T](a, b: T): T {.importc: "MULTIPLY", header: "math_utils.h", nodecl.}' in output
-        assert "template multiply*(a, b: untyped): untyped =" in output
+        assert (
+            'proc c_MULTIPLY*[T1, T2](a: T1, b: T2): T1 {.importc: "MULTIPLY", header: "math_utils.h", nodecl.}'
+            in output
+        )
+        assert "template multiply*(a: untyped, b: untyped): untyped =" in output
         assert "c_MULTIPLY(a, b)" in output
 
     def test_zero_param_expression_macro(self) -> None:

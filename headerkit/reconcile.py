@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from headerkit.ir import Declaration, Header, SourceUnit
+from headerkit.ir import Declaration, Header, SourceLocation, SourceUnit
 
 TARGET_TO_PREDICATE: dict[str, PlatformCondition] = {}
 
@@ -52,14 +53,40 @@ class ReconciledUnit:
     items: list[Declaration | PlatformGuardedBlock] = field(default_factory=list)
 
 
+def strip_locations(obj: object) -> object:
+    """Recursively strip SourceLocation from AST objects, dataclasses, and collections."""
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, SourceLocation):
+        return None
+    if isinstance(obj, list):
+        return [strip_locations(item) for item in obj]
+    if isinstance(obj, tuple):
+        return tuple(strip_locations(item) for item in obj)
+    if isinstance(obj, set):
+        return {strip_locations(item) for item in obj}
+    if isinstance(obj, dict):
+        return {k: strip_locations(v) for k, v in obj.items()}
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        changes: dict[str, object] = {}
+        for f in dataclasses.fields(obj):
+            val = getattr(obj, f.name)
+            if f.name == "location":
+                changes["location"] = None
+            else:
+                changes[f.name] = strip_locations(val)
+        return replace(obj, **changes)
+    return obj
+
+
 def declarations_equal(a: Declaration, b: Declaration) -> bool:
-    """Report whether two declarations are structurally identical, ignoring SourceLocation."""
+    """Report whether two declarations are structurally identical, ignoring SourceLocation recursively."""
     if type(a) is not type(b):
         return False
     try:
-        a_no_loc = replace(a, location=None) if hasattr(a, "location") else a
-        b_no_loc = replace(b, location=None) if hasattr(b, "location") else b
-        return bool(a_no_loc == b_no_loc)
+        a_clean = strip_locations(a)
+        b_clean = strip_locations(b)
+        return bool(a_clean == b_clean)
     except Exception:
         return False
 
