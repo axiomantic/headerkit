@@ -323,6 +323,8 @@ def test_transforms_and_matrix_public_exports() -> None:
         "ProbeOptions",
         "SysrootWarning",
         "MatrixManifest",
+        "emit_manifest_comment",
+        "extract_manifest",
         "extract_overrides",
         "inject_overrides",
         "MalformedOverrideError",

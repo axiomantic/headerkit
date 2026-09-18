@@ -147,8 +147,7 @@ def add_target_command(args: argparse.Namespace) -> int:
         manifest.matrix.add_dimension("target", existing_targets, dimension_type="target")
 
     matrix_units: list[tuple[ConfigCondition, SourceUnit]] = []
-    for t in existing_targets:
-        cond = ConfigCondition({"target": t})
+    for cond in manifest.matrix.resolve():
         unit = probe_configuration(manifest.header_path, cond)
         matrix_units.append((cond, unit))
 

@@ -16,6 +16,7 @@ from headerkit.ir import (
     SourceLocation,
     SourceUnit,
     Struct,
+    Variable,
     strip_padding_fields,
 )
 from headerkit.transforms.builtin import (
@@ -77,8 +78,9 @@ def test_strip_prefix_updates_cross_references() -> None:
         ],
     )
     anon_st = Struct(name=None, fields=[Field(name="x", type=CType("int"))])
+    var = Variable(name="ma_log_level", type=CType("int"))
 
-    unit = SourceUnit(path="miniaudio.h", declarations=[st, anon_st, fn])
+    unit = SourceUnit(path="miniaudio.h", declarations=[st, anon_st, fn, var])
     stripped = unit >> StripPrefix("ma_")
 
     assert isinstance(stripped, SourceUnit)
@@ -90,6 +92,9 @@ def test_strip_prefix_updates_cross_references() -> None:
     param_type = fn_stripped.parameters[0].type
     assert isinstance(param_type, Pointer)
     assert param_type.pointee == CType("device")
+    var_stripped = stripped.declarations[3]
+    assert isinstance(var_stripped, Variable)
+    assert var_stripped.name == "log_level"
 
 
 def test_make_opaque() -> None:

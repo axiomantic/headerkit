@@ -54,3 +54,4 @@ def test_probe_configuration_sysroot_warning() -> None:
         f.flush()
         unit = probe_configuration(f.name, cond, options=opts)
         assert isinstance(unit, SourceUnit)
+        assert any(d.name == "my_handle" for d in unit.declarations)

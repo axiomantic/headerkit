@@ -25,6 +25,7 @@ from headerkit.ir import (
     Struct,
     Typedef,
     TypeExpr,
+    Variable,
 )
 from headerkit.transforms.filter import PipelineFilter
 
@@ -95,7 +96,15 @@ class StripPrefix(PipelineFilter):
     def __init__(
         self,
         prefix: str,
-        targets: tuple[str, ...] = ("functions", "structs", "enums", "typedefs", "constants", "macros"),
+        targets: tuple[str, ...] = (
+            "functions",
+            "structs",
+            "enums",
+            "typedefs",
+            "constants",
+            "macros",
+            "variables",
+        ),
     ) -> None:
         self.prefix = prefix
         self.targets = tuple(targets)
@@ -164,6 +173,14 @@ class StripPrefix(PipelineFilter):
             if stripped is not None:
                 return replace(mf, name=stripped)
         return mf
+
+    def visit_Variable(self, node: Variable, context: PipelineContext | None = None) -> Variable:
+        v = self.generic_visit(node, context=context)
+        if "variables" in self.targets and v.name:
+            stripped = self._strip(v.name)
+            if stripped is not None:
+                return replace(v, name=stripped)
+        return v
 
 
 class MakeOpaque(PipelineFilter):
