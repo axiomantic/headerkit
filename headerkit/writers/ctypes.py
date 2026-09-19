@@ -2258,7 +2258,7 @@ class CtypesWriter(BaseWriter):
     format_description: str = "Python ctypes bindings"
     default_output_pattern: str = "{dir}/{stem}_ctypes.py"
     default_extension: str = ".py"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel")
     #: This writer reconstructs record layout rather than deferring to a C
     #: compiler, so it is the one consumer that needs the padding entries.
     consumes_padding_fields: ClassVar[bool] = True
@@ -2395,6 +2395,17 @@ class CtypesWriter(BaseWriter):
             files.extend(build_work_order_files(unit, pkg, "python"))
 
         return ProjectLayout(files=files)
+
+    def _write_custom_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        if options.layout == "wheel":
+            from headerkit.packaging.ctypes import generate_ctypes_wheel_layout
+
+            return generate_ctypes_wheel_layout(unit, options)
+        return self._write_package_layout(unit, options)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Python comments."""
