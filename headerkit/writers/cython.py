@@ -28,8 +28,9 @@ from __future__ import annotations
 import re
 import textwrap
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import replace
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from headerkit.ir import (
     Array,
@@ -49,6 +50,14 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
     Variable,
+)
+from headerkit.reconcile import (
+    MatrixCondition,
+    MatrixGuardedBlock,
+    MultiDimensionalReconciledUnit,
+    PlatformCondition,
+    PlatformGuardedBlock,
+    ReconciledUnit,
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers._cython_keywords import keywords
@@ -2188,6 +2197,54 @@ def write_pxd(header: Header, *, stub_cimport_prefix: str | None = "headerkit.st
 # =====================================================================
 
 
+def _condition_to_cython(cond: Any, _domain_matrix: dict[str, set[Any]] | None = None) -> str:
+    """Translate a PlatformCondition or MatrixCondition into Cython compile-time IF condition."""
+    if isinstance(cond, PlatformCondition):
+        for tag in cond.tags:
+            t_low = tag.lower()
+            if "darwin" in t_low or "mac" in t_low or "apple" in t_low:
+                return 'UNAME_SYSNAME == "Darwin"'
+            if "linux" in t_low:
+                return 'UNAME_SYSNAME == "Linux"'
+            if "windows" in t_low or "msvc" in t_low or "win32" in t_low:
+                return 'UNAME_SYSNAME == "Windows"'
+        return "1"
+
+    if isinstance(cond, MatrixCondition):
+        platforms = {c["target"] for c in cond.raw_conditions if "target" in c} if cond.raw_conditions else set()
+        if platforms:
+            cy_plats: list[str] = []
+            for p in sorted(platforms):
+                p_low = p.lower()
+                if "darwin" in p_low or "mac" in p_low or "apple" in p_low:
+                    cy_plats.append('"Darwin"')
+                elif "linux" in p_low:
+                    cy_plats.append('"Linux"')
+                elif "windows" in p_low or "msvc" in p_low or "win32" in p_low:
+                    cy_plats.append('"Windows"')
+            if len(cy_plats) > 1:
+                return f"UNAME_SYSNAME in ({', '.join(cy_plats)})"
+            elif cy_plats:
+                return f"UNAME_SYSNAME == {cy_plats[0]}"
+
+        # Fallback to predicate string mapping
+        pred = getattr(cond, "predicate", "")
+        if pred:
+            if "UNAME_SYSNAME" in pred:
+                return pred
+            pred_mapped = pred
+            pred_mapped = pred_mapped.replace("defined(macosx)", 'UNAME_SYSNAME == "Darwin"')
+            pred_mapped = pred_mapped.replace("defined(darwin)", 'UNAME_SYSNAME == "Darwin"')
+            pred_mapped = pred_mapped.replace("defined(linux)", 'UNAME_SYSNAME == "Linux"')
+            pred_mapped = pred_mapped.replace("defined(windows)", 'UNAME_SYSNAME == "Windows"')
+            pred_mapped = pred_mapped.replace("defined(_WIN32)", 'UNAME_SYSNAME == "Windows"')
+            pred_mapped = pred_mapped.replace(" && ", " and ")
+            pred_mapped = pred_mapped.replace(" || ", " or ")
+            return pred_mapped
+
+    return "1"
+
+
 class CythonWriter(BaseWriter):
     """Writer that converts Header IR into Cython .pxd declarations.
 
@@ -2234,9 +2291,79 @@ class CythonWriter(BaseWriter):
         writer = PxdWriter(header, stub_cimport_prefix=self.stub_cimport_prefix)
         return writer.write()
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to Cython .pxd string."""
+    def write(self, header: Any) -> str:
+        """Convert header IR or reconciled unit to Cython .pxd string."""
+        if isinstance(header, (ReconciledUnit, MultiDimensionalReconciledUnit)):
+            return self.write_reconciled(header)
         return self._render(self._prepare(header))
+
+    def write_reconciled(
+        self,
+        unit: ReconciledUnit | MultiDimensionalReconciledUnit,
+    ) -> str:
+        """Render a ReconciledUnit containing common declarations and platform-guarded blocks."""
+        header_path = unit.path or "header.h"
+        all_cimports: set[str] = set()
+
+        def _render_chunk(decls: list[Declaration]) -> list[str]:
+            if not decls:
+                return []
+            sub_header = Header(path=header_path, declarations=decls)
+            writer = PxdWriter(sub_header, stub_cimport_prefix=self.stub_cimport_prefix)
+            body = writer._write_body()
+            all_cimports.update(writer._cimport_lines())
+            return body
+
+        sections: list[str] = []
+        decl_accumulator: list[Declaration] = []
+
+        def flush_accumulator() -> None:
+            if decl_accumulator:
+                rendered = _render_chunk(decl_accumulator)
+                if rendered:
+                    sections.append("\n".join(rendered))
+                decl_accumulator.clear()
+
+        domain_matrix: dict[str, set[Any]] = defaultdict(set)
+        for item in unit.items:
+            if isinstance(item, MatrixGuardedBlock):
+                for m_cond, _ in item.branches:
+                    if hasattr(m_cond, "raw_conditions"):
+                        for rc in m_cond.raw_conditions:
+                            for k, v in rc.items():
+                                domain_matrix[k].add(v)
+
+        for item in unit.items:
+            if isinstance(item, (PlatformGuardedBlock, MatrixGuardedBlock)):
+                flush_accumulator()
+                block_lines: list[str] = []
+                branches: Sequence[tuple[Any, list[Declaration]]] = item.branches
+                for idx, (b_cond, b_decls) in enumerate(branches):
+                    cy_cond = _condition_to_cython(b_cond, domain_matrix)
+                    kw = "IF" if idx == 0 else "ELIF"
+                    block_lines.append(f"{kw} {cy_cond}:")
+                    rendered_b = _render_chunk(b_decls)
+                    if not rendered_b:
+                        block_lines.append("    pass")
+                    else:
+                        for line in rendered_b:
+                            block_lines.append(f"    {line}" if line else "")
+                sections.append("\n".join(block_lines))
+            else:
+                decl_accumulator.append(item)
+
+        flush_accumulator()
+
+        output_lines: list[str] = ["# Generated by headerkit", ""]
+        if all_cimports:
+            for cimp in sorted(all_cimports):
+                output_lines.append(cimp)
+            output_lines.append("")
+
+        if sections:
+            output_lines.append("\n\n".join(sections))
+
+        return "\n".join(output_lines).rstrip() + "\n"
 
     def _write_package_layout(
         self,
