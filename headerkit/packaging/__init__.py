@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from headerkit.packaging.common import (
+    generate_pyproject_toml,
+    generate_pytest_tripwire,
+    generate_pytest_unit_tests,
+)
 from headerkit.packaging.nim import (
     generate_nim_cmake,
     generate_nim_pyproject,
@@ -16,4 +21,7 @@ __all__ = [
     "generate_nim_python_wrapper",
     "generate_nim_source",
     "generate_nim_wheel_layout",
+    "generate_pyproject_toml",
+    "generate_pytest_tripwire",
+    "generate_pytest_unit_tests",
 ]
