@@ -16,7 +16,8 @@ import platform
 import re
 import textwrap
 import warnings
-from collections.abc import Mapping
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
@@ -24,6 +25,7 @@ from headerkit.ir import (
     Array,
     Constant,
     CType,
+    Declaration,
     Enum,
     Field,
     Function,
@@ -35,6 +37,16 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
     Variable,
+)
+from headerkit.reconcile import (
+    MatrixCondition,
+    MatrixGuardedBlock,
+    MultiDimensionalReconciledUnit,
+    PlatformCondition,
+    PlatformGuardedBlock,
+    ReconciledUnit,
+    get_py_platform,
+    minimize_conditions,
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
 from headerkit.workorder import build_work_order_files
@@ -256,7 +268,7 @@ def _is_const_char_pointer(t: TypeExpr) -> bool:
     if isinstance(t, Pointer) and isinstance(t.pointee, CType):
         if t.pointee.name == "char" and "const" in t.pointee.qualifiers:
             return True
-    return False
+    return bool(isinstance(t, CType) and ("const char*" in t.name.replace(" ", "") or "const char *" in t.name))
 
 
 def _is_void_pointer(t: TypeExpr) -> bool:
@@ -264,7 +276,7 @@ def _is_void_pointer(t: TypeExpr) -> bool:
     if isinstance(t, Pointer) and isinstance(t.pointee, CType):
         if t.pointee.name == "void" and not t.pointee.qualifiers:
             return True
-    return False
+    return bool(isinstance(t, CType) and t.name.replace(" ", "") in ("void*", "void*"))
 
 
 def _is_char_pointer(t: TypeExpr) -> bool:
@@ -272,7 +284,7 @@ def _is_char_pointer(t: TypeExpr) -> bool:
     if isinstance(t, Pointer) and isinstance(t.pointee, CType):
         if t.pointee.name == "char" and not t.pointee.qualifiers:
             return True
-    return False
+    return bool(isinstance(t, CType) and t.name.replace(" ", "") == "char*")
 
 
 def type_to_ctypes(t: TypeExpr, types: _TypeTable = _EMPTY_TYPES) -> str:
@@ -2222,6 +2234,47 @@ def header_to_ctypes(header: Header, lib_name: str = "_lib", *, library: str | N
     return "\n".join(output_lines)
 
 
+def _condition_to_python(cond: Any, domain_matrix: dict[str, set[Any]] | None = None) -> str:
+    """Translate a PlatformCondition or MatrixCondition into a valid Python expression."""
+    if isinstance(cond, PlatformCondition):
+        for tag in cond.tags:
+            py_p = get_py_platform(tag)
+            if py_p:
+                return f"sys.platform == {py_p!r}"
+        return "True"
+
+    if isinstance(cond, MatrixCondition):
+        if cond.raw_conditions:
+            if domain_matrix:
+                minimized = minimize_conditions(cond.raw_conditions, domain_matrix, target_lang="python")
+                if minimized and minimized != "true":
+                    return minimized
+            platforms = {c["target"] for c in cond.raw_conditions if "target" in c}
+            if platforms:
+                py_plats = tuple(sorted({get_py_platform(p) for p in platforms}))
+                if len(py_plats) > 1:
+                    return f"sys.platform in {py_plats!r}"
+                elif py_plats:
+                    return f"sys.platform == {py_plats[0]!r}"
+
+        # Fallback to predicate string mapping
+        pred = getattr(cond, "predicate", "")
+        if pred:
+            if pred.startswith("sys.platform"):
+                return pred
+            pred_mapped = pred
+            pred_mapped = pred_mapped.replace("defined(macosx)", "sys.platform == 'darwin'")
+            pred_mapped = pred_mapped.replace("defined(darwin)", "sys.platform == 'darwin'")
+            pred_mapped = pred_mapped.replace("defined(linux)", "sys.platform == 'linux'")
+            pred_mapped = pred_mapped.replace("defined(windows)", "sys.platform == 'win32'")
+            pred_mapped = pred_mapped.replace("defined(_WIN32)", "sys.platform == 'win32'")
+            pred_mapped = pred_mapped.replace(" && ", " and ")
+            pred_mapped = pred_mapped.replace(" || ", " or ")
+            return pred_mapped
+
+    return "True"
+
+
 class CtypesWriter(BaseWriter):
     """Writer that generates Python ctypes binding modules from headerkit IR.
 
@@ -2293,9 +2346,134 @@ class CtypesWriter(BaseWriter):
         header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         return header_to_ctypes(header, lib_name=self._lib_name, library=library)
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to Python ctypes binding source code."""
+    def write(self, header: Any) -> str:
+        """Convert header IR or reconciled unit to Python ctypes binding source code."""
+        if isinstance(header, (ReconciledUnit, MultiDimensionalReconciledUnit)):
+            return self.write_reconciled(header)
         return self._render(header)
+
+    def write_reconciled(
+        self,
+        unit: ReconciledUnit | MultiDimensionalReconciledUnit,
+        *,
+        library: str | None = None,
+    ) -> str:
+        """Render a ReconciledUnit containing common declarations and platform-guarded blocks."""
+        if not unit.items:
+            return '"""Bindings generated by headerkit."""\n'
+
+        all_decls: list[Declaration] = []
+        domain_matrix: dict[str, set[Any]] = defaultdict(set)
+        for item in unit.items:
+            if isinstance(item, PlatformGuardedBlock):
+                for _p_cond, b_decls in item.branches:
+                    all_decls.extend(b_decls)
+            elif isinstance(item, MatrixGuardedBlock):
+                for m_cond, b_decls in item.branches:
+                    all_decls.extend(b_decls)
+                    if hasattr(m_cond, "raw_conditions"):
+                        for rc in m_cond.raw_conditions:
+                            for k, v in rc.items():
+                                domain_matrix[k].add(v)
+            else:
+                all_decls.append(item)
+
+        synthetic_header = Header(path=unit.path or "", declarations=all_decls)
+        typedef_names = _typedef_names(synthetic_header)
+        types = _type_table(synthetic_header)
+        packed_expectations: dict[str, tuple[int, int, dict[str, int]] | None] = {}
+
+        output_lines: list[str] = [
+            _module_docstring(unit.path or "bindings"),
+            "",
+            "from __future__ import annotations",
+            "",
+            "import ctypes",
+            "import ctypes.util",
+            "import sys",
+        ]
+        if library is not None:
+            output_lines.append("import os")
+            output_lines.append("")
+            output_lines.append(f"# {'=' * 60}")
+            output_lines.append("# Native library")
+            output_lines.append(f"# {'=' * 60}")
+            output_lines.append("")
+            loader = _library_loader(library, self._lib_name)
+            output_lines.append(loader)
+            output_lines.append("")
+        else:
+            output_lines.append("")
+
+        def _render_decls(decls: list[Declaration]) -> list[str]:
+            sections: dict[str, list[str]] = {
+                "constants": [],
+                "enums": [],
+                "structs": [],
+                "typedefs": [],
+                "functions": [],
+                "variables": [],
+            }
+            branch_bound: list[str] = []
+            for decl in decls:
+                result, section = _render_declaration(decl, self._lib_name, typedef_names, types, packed_expectations)
+                if result is not None and section:
+                    sections[section].append(result)
+                    if section == "functions" and library is not None:
+                        name = getattr(decl, "name", None)
+                        if name and name not in branch_bound:
+                            branch_bound.append(name)
+
+            out: list[str] = []
+            for sec_name in _SECTION_ORDER:
+                for item_str in sections[sec_name]:
+                    out.append(item_str)
+            if branch_bound:
+                for sym in branch_bound:
+                    out.append(f"{sym} = {self._lib_name}.{sym}")
+            return out
+
+        sections_out: list[str] = []
+        decl_accumulator: list[Declaration] = []
+
+        def flush_accumulator() -> None:
+            if decl_accumulator:
+                rendered = _render_decls(decl_accumulator)
+                if rendered:
+                    sections_out.append("\n\n".join(rendered))
+                decl_accumulator.clear()
+
+        for item in unit.items:
+            if isinstance(item, (PlatformGuardedBlock, MatrixGuardedBlock)):
+                flush_accumulator()
+                block_lines: list[str] = []
+                branches: Sequence[tuple[Any, list[Declaration]]] = item.branches
+                for idx, (b_cond, b_decls) in enumerate(branches):
+                    py_cond = _condition_to_python(b_cond, domain_matrix)
+                    kw = "if" if idx == 0 else "elif"
+                    block_lines.append(f"{kw} {py_cond}:")
+                    rendered_b = _render_decls(b_decls)
+                    if not rendered_b:
+                        block_lines.append("    pass")
+                    else:
+                        for chunk in rendered_b:
+                            for line in chunk.splitlines():
+                                block_lines.append(f"    {line}" if line else "")
+                            block_lines.append("")
+                        if block_lines and block_lines[-1] == "":
+                            block_lines.pop()
+                block_lines.append("else:")
+                block_lines.append('    raise OSError(f"Unsupported platform: {sys.platform}")')
+                sections_out.append("\n".join(block_lines))
+            else:
+                decl_accumulator.append(item)
+
+        flush_accumulator()
+
+        if sections_out:
+            output_lines.append("\n\n".join(sections_out))
+
+        return "\n".join(output_lines).rstrip() + "\n"
 
     def _write_package_layout(
         self,
