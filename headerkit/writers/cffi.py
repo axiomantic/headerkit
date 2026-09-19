@@ -25,6 +25,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
     Parameter,
     Pointer,
     SourceUnit,
@@ -202,8 +203,21 @@ def decl_to_cffi(
         return _constant_to_cffi(decl)
     elif isinstance(decl, Variable):
         return _variable_to_cffi(decl, tag_kinds)
+    elif isinstance(decl, MacroFunction):
+        return _macro_function_to_cffi(decl)
     else:
         return None
+
+
+def _macro_function_to_cffi(decl: MacroFunction) -> str | None:
+    """Convert a MacroFunction to CFFI prototype declaration."""
+    if decl.has_token_pasting:
+        return f"/* Macro function '{decl.name}' with token pasting skipped */"
+    params = [f"int {p.name}" for p in decl.parameters]
+    if decl.is_variadic:
+        params.append("...")
+    params_str = ", ".join(params) if params else "void"
+    return f"int {decl.name}({params_str});"
 
 
 def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | None:

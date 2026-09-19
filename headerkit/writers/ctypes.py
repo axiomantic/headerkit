@@ -31,6 +31,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
     Pointer,
     SourceUnit,
     Struct,
@@ -39,15 +40,11 @@ from headerkit.ir import (
     Variable,
 )
 from headerkit.reconcile import (
-    MatrixCondition,
     MatrixGuardedBlock,
     MultiDimensionalReconciledUnit,
-    PlatformCondition,
     PlatformGuardedBlock,
     ReconciledUnit,
     condition_to_python,
-    get_py_platform,
-    minimize_conditions,
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
 from headerkit.workorder import build_work_order_files
@@ -1609,6 +1606,10 @@ def _render_declaration(
         return _function_to_ctypes(decl, lib_name, types), "functions"
     if isinstance(decl, Variable):
         return _variable_to_ctypes(decl, lib_name, types), "variables"
+    if isinstance(decl, MacroFunction):
+        params_str = ", ".join(p.name for p in decl.parameters)
+        sig = f"{decl.name}({params_str})"
+        return f"# Macro function '{sig}' skipped (preprocessor macro)", "functions"
     return None, ""
 
 

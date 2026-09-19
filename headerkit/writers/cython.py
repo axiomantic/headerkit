@@ -42,6 +42,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
     Parameter,
     Pointer,
     Reference,
@@ -667,7 +668,7 @@ class PxdWriter:
                 continue
             if isinstance(decl, Struct) and decl.name in typedef_struct_names:
                 continue
-            if isinstance(decl, Function):
+            if isinstance(decl, (Function, MacroFunction)):
                 continue
             decl_lines = self._write_declaration(decl)
             for line in decl_lines:
@@ -741,10 +742,10 @@ class PxdWriter:
             lines.append("")
             lines.extend(struct_bodies)
 
-        # Phase 5: Functions
+        # Phase 5: Functions and MacroFunctions
         func_decls: list[str] = []
         for decl in decls:
-            if isinstance(decl, Function):
+            if isinstance(decl, (Function, MacroFunction)):
                 decl_lines = self._write_declaration(decl)
                 for line in decl_lines:
                     func_decls.append(f"{self.INDENT}{line}" if line else "")
@@ -1135,7 +1136,19 @@ class PxdWriter:
             return self._write_variable(decl)
         if isinstance(decl, Constant):
             return self._write_constant(decl)
+        if isinstance(decl, MacroFunction):
+            return self._write_macro_function(decl)
         return []
+
+    def _write_macro_function(self, decl: MacroFunction) -> list[str]:
+        """Convert a MacroFunction to Cython cdef extern function or comment stub."""
+        if decl.has_token_pasting:
+            return [f"# Macro function '{decl.name}' with token pasting skipped"]
+        params = [f"int {p.name}" for p in decl.parameters]
+        if decl.is_variadic:
+            params.append("...")
+        params_str = ", ".join(params)
+        return [f"int {decl.name}({params_str})"]
 
     # -----------------------------------------------------------------
     # Struct / union / cppclass
