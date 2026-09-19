@@ -552,7 +552,7 @@ class CffiWriter(BaseWriter):
     format_description: str = "CFFI cdef declarations for ffibuilder.cdef()"
     default_output_pattern: str = "{dir}/{stem}.cdef.txt"
     default_extension: str = ".py"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="test_type",
@@ -721,6 +721,17 @@ class CffiWriter(BaseWriter):
             files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
 
         return ProjectLayout(files=files)
+
+    def _write_custom_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        if options.layout == "wheel":
+            from headerkit.packaging.cffi import generate_cffi_wheel_layout
+
+            return generate_cffi_wheel_layout(unit, options)
+        return self._write_package_layout(unit, options)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping cache metadata in C-style comments."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from headerkit.packaging.cffi import generate_cffi_wheel_layout
 from headerkit.packaging.common import (
     generate_pyproject_toml,
     generate_pytest_tripwire,
@@ -17,6 +18,7 @@ from headerkit.packaging.nim import (
 )
 
 __all__ = [
+    "generate_cffi_wheel_layout",
     "generate_cython_wheel_layout",
     "generate_nim_cmake",
     "generate_nim_pyproject",
