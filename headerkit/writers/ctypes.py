@@ -45,6 +45,7 @@ from headerkit.reconcile import (
     PlatformCondition,
     PlatformGuardedBlock,
     ReconciledUnit,
+    condition_to_python,
     get_py_platform,
     minimize_conditions,
 )
@@ -2234,45 +2235,7 @@ def header_to_ctypes(header: Header, lib_name: str = "_lib", *, library: str | N
     return "\n".join(output_lines)
 
 
-def _condition_to_python(cond: Any, domain_matrix: dict[str, set[Any]] | None = None) -> str:
-    """Translate a PlatformCondition or MatrixCondition into a valid Python expression."""
-    if isinstance(cond, PlatformCondition):
-        for tag in cond.tags:
-            py_p = get_py_platform(tag)
-            if py_p:
-                return f"sys.platform == {py_p!r}"
-        return "True"
-
-    if isinstance(cond, MatrixCondition):
-        if cond.raw_conditions:
-            if domain_matrix:
-                minimized = minimize_conditions(cond.raw_conditions, domain_matrix, target_lang="python")
-                if minimized and minimized != "true":
-                    return minimized
-            platforms = {c["target"] for c in cond.raw_conditions if "target" in c}
-            if platforms:
-                py_plats = tuple(sorted({get_py_platform(p) for p in platforms}))
-                if len(py_plats) > 1:
-                    return f"sys.platform in {py_plats!r}"
-                elif py_plats:
-                    return f"sys.platform == {py_plats[0]!r}"
-
-        # Fallback to predicate string mapping
-        pred = getattr(cond, "predicate", "")
-        if pred:
-            if pred.startswith("sys.platform"):
-                return pred
-            pred_mapped = pred
-            pred_mapped = pred_mapped.replace("defined(macosx)", "sys.platform == 'darwin'")
-            pred_mapped = pred_mapped.replace("defined(darwin)", "sys.platform == 'darwin'")
-            pred_mapped = pred_mapped.replace("defined(linux)", "sys.platform == 'linux'")
-            pred_mapped = pred_mapped.replace("defined(windows)", "sys.platform == 'win32'")
-            pred_mapped = pred_mapped.replace("defined(_WIN32)", "sys.platform == 'win32'")
-            pred_mapped = pred_mapped.replace(" && ", " and ")
-            pred_mapped = pred_mapped.replace(" || ", " or ")
-            return pred_mapped
-
-    return "True"
+_condition_to_python = condition_to_python
 
 
 class CtypesWriter(BaseWriter):
