@@ -213,10 +213,12 @@ def _macro_function_to_cffi(decl: MacroFunction) -> str | None:
     """Convert a MacroFunction to CFFI prototype declaration."""
     if decl.has_token_pasting:
         return f"/* Macro function '{decl.name}' with token pasting skipped */"
-    params = [f"int {p.name}" for p in decl.parameters]
-    if decl.is_variadic:
-        params.append("...")
-    params_str = ", ".join(params) if params else "void"
+    named_params = [
+        f"int {p.name}" for p in decl.parameters if not p.is_variadic and p.name not in ("...", "__VA_ARGS__")
+    ]
+    if decl.is_variadic or any(p.is_variadic or p.name in ("...", "__VA_ARGS__") for p in decl.parameters):
+        named_params.append("...")
+    params_str = ", ".join(named_params) if named_params else "void"
     return f"int {decl.name}({params_str});"
 
 

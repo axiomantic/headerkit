@@ -108,6 +108,8 @@ def generate_ctypes_wheel_layout(
     # 3. src/{pkg}/_bindings.py
     writer = CtypesWriter()
     bindings_code = writer.write(unit)
+    funcs = [d for d in getattr(unit, "declarations", []) if isinstance(d, Function) and d.name]
+
     # Ensure bindings uses _lib from _loader
     if "_lib = None" in bindings_code:
         bindings_code = bindings_code.replace(
@@ -116,6 +118,34 @@ def generate_ctypes_wheel_layout(
         )
     elif "import ctypes" in bindings_code:
         bindings_code = f"from {pkg}._loader import _lib\n" + bindings_code
+
+    if funcs:
+        banner = "# " + ("=" * 60) + "\n# Function Prototypes\n# " + ("=" * 60)
+        if banner in bindings_code:
+            before, after = bindings_code.split(banner, 1)
+            proto_lines: list[str] = []
+            for line in after.strip().splitlines():
+                if line.startswith("# ===="):
+                    break
+                proto_lines.append(f"    {line}" if line else "")
+
+            export_lines = [
+                "# " + ("=" * 60),
+                "# Function Prototypes & Bindings",
+                "# " + ("=" * 60),
+                "",
+                "if _lib is not None:",
+            ]
+            for pline in proto_lines:
+                export_lines.append(pline)
+            for fn in funcs:
+                export_lines.append(f"    {fn.name} = _lib.{fn.name}")
+            export_lines.append("else:")
+            for fn in funcs:
+                export_lines.append(f"    {fn.name} = None")
+            export_lines.append("")
+
+            bindings_code = before.rstrip() + "\n\n" + "\n".join(export_lines)
 
     files.append(OutputFile(path=f"src/{pkg}/_bindings.py", content=bindings_code))
 

@@ -16,7 +16,7 @@ def test_cython_wheel_layout_generation() -> None:
     assert "pyproject.toml" in file_map
     assert "setup.py" in file_map
     assert "src/fastmath/__init__.py" in file_map
-    assert "src/fastmath/fastmath.pxd" in file_map
+    assert "src/fastmath/_fastmath.pxd" in file_map
     assert "src/fastmath/fastmath.pyx" in file_map
     assert "tests/test_tripwire.py" in file_map
     assert "tests/test_fastmath.py" in file_map
@@ -25,7 +25,7 @@ def test_cython_wheel_layout_generation() -> None:
     assert 'requires = ["setuptools>=61.0", "Cython>=3.0.0", "wheel"]' in file_map["pyproject.toml"]
     assert "cythonize" in file_map["setup.py"]
     assert "from fastmath.fastmath import *" in file_map["src/fastmath/__init__.py"]
-    assert "int compute(int val)" in file_map["src/fastmath/fastmath.pxd"]
+    assert "int compute(int val)" in file_map["src/fastmath/_fastmath.pxd"]
     assert "def compute(val):" in file_map["src/fastmath/fastmath.pyx"]
     assert "@pytest.mark.tripwire" in file_map["tests/test_tripwire.py"]
     assert "test_cython_binary_extension_loaded" in file_map["tests/test_tripwire.py"]

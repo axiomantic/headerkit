@@ -56,6 +56,7 @@ def generate_cython_wheel_layout(
             Extension(
                 "{pkg}.{pkg}",
                 sources=["src/{pkg}/{pkg}.pyx"],
+                include_dirs=["."],
             ),
         ]
 
@@ -74,16 +75,16 @@ def generate_cython_wheel_layout(
     """)
     files.append(OutputFile(path=f"src/{pkg}/__init__.py", content=init_py))
 
-    # 4. src/{pkg}/{pkg}.pxd
+    # 4. src/{pkg}/_{pkg}.pxd
     writer = CythonWriter()
     pxd_content = writer.write(unit)
-    files.append(OutputFile(path=f"src/{pkg}/{pkg}.pxd", content=pxd_content))
+    files.append(OutputFile(path=f"src/{pkg}/_{pkg}.pxd", content=pxd_content))
 
     # 5. src/{pkg}/{pkg}.pyx
     funcs = [d for d in getattr(unit, "declarations", []) if isinstance(d, Function) and d.name]
     pyx_lines = [
         "# cython: language_level=3",
-        f"cimport {pkg}.{pkg} as _c",
+        f"cimport {pkg}._{pkg} as _c",
         "",
     ]
     for fn in funcs:

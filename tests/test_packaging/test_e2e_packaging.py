@@ -26,3 +26,9 @@ def test_e2e_wheel_layout_scaffolding(writer_name: str) -> None:
     assert "def test_" in tw_content
     assert "@pytest.mark.tripwire" in tw_content
     assert "compute_hash" in tw_content
+
+    # Unit test verification: must test module structure and callable
+    assert "tests/test_my_hasher.py" in file_map
+    ut_content = file_map["tests/test_my_hasher.py"]
+    assert "def test_module_structure" in ut_content
+    assert "compute_hash" in ut_content

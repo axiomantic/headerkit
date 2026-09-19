@@ -25,6 +25,8 @@ def test_ctypes_wheel_layout_generation() -> None:
     assert "from audiolib._bindings import *" in file_map["src/audiolib/__init__.py"]
     assert "find_library" in file_map["src/audiolib/_loader.py"]
     assert "play_audio" in file_map["src/audiolib/_bindings.py"]
+    assert "if _lib is not None:" in file_map["src/audiolib/_bindings.py"]
+    assert "play_audio = _lib.play_audio" in file_map["src/audiolib/_bindings.py"]
     assert "@pytest.mark.tripwire" in file_map["tests/test_tripwire.py"]
     assert "test_native_library_loaded" in file_map["tests/test_tripwire.py"]
     assert "test_play_audio_binding" in file_map["tests/test_audiolib.py"]

@@ -45,3 +45,19 @@ def test_macro_function_cffi_prototype() -> None:
     writer = CffiWriter()
     out = writer.write(unit)
     assert "int BAR(int x);" in out
+
+
+def test_macro_function_variadic_cython_and_cffi() -> None:
+    macro = MacroFunction(
+        name="LOG",
+        parameters=[MacroParameter("fmt"), MacroParameter("__VA_ARGS__", is_variadic=True)],
+        is_variadic=True,
+    )
+    unit = Header(path="log.h", declarations=[macro])
+    out_cython = CythonWriter().write(unit)
+    assert "int LOG(int fmt, ...)" in out_cython
+    assert "__VA_ARGS__" not in out_cython
+
+    out_cffi = CffiWriter().write(unit)
+    assert "int LOG(int fmt, ...);" in out_cffi
+    assert "__VA_ARGS__" not in out_cffi

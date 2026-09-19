@@ -68,7 +68,8 @@ def generate_cffi_wheel_layout(
         \"\"\")
         ffibuilder.set_source(
             "{pkg}._cffi_backend",
-            '#include "{header_path}"',
+            \"\"\"#include "{header_path}"\"\"\",
+            include_dirs=["."],
         )
 
         if __name__ == "__main__":

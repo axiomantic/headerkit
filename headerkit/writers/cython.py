@@ -1144,10 +1144,12 @@ class PxdWriter:
         """Convert a MacroFunction to Cython cdef extern function or comment stub."""
         if decl.has_token_pasting:
             return [f"# Macro function '{decl.name}' with token pasting skipped"]
-        params = [f"int {p.name}" for p in decl.parameters]
-        if decl.is_variadic:
-            params.append("...")
-        params_str = ", ".join(params)
+        named_params = [
+            f"int {p.name}" for p in decl.parameters if not p.is_variadic and p.name not in ("...", "__VA_ARGS__")
+        ]
+        if decl.is_variadic or any(p.is_variadic or p.name in ("...", "__VA_ARGS__") for p in decl.parameters):
+            named_params.append("...")
+        params_str = ", ".join(named_params)
         return [f"int {decl.name}({params_str})"]
 
     # -----------------------------------------------------------------
