@@ -2204,7 +2204,7 @@ class CythonWriter(BaseWriter):
     default_output_pattern: str = "{dir}/{stem}.pxd"
     default_extension: str = ".pxd"
     min_access_floor: ClassVar[str | None] = "public"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="test_type",
@@ -2310,6 +2310,17 @@ class CythonWriter(BaseWriter):
             files.append(OutputFile(path="tests/test_wrapper.py", content=unit_test))
 
         return ProjectLayout(files=files)
+
+    def _write_custom_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        if options.layout == "wheel":
+            from headerkit.packaging.cython import generate_cython_wheel_layout
+
+            return generate_cython_wheel_layout(unit, options)
+        return self._write_package_layout(unit, options)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Cython comments."""

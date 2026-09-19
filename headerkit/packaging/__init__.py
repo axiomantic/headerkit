@@ -7,6 +7,7 @@ from headerkit.packaging.common import (
     generate_pytest_tripwire,
     generate_pytest_unit_tests,
 )
+from headerkit.packaging.cython import generate_cython_wheel_layout
 from headerkit.packaging.nim import (
     generate_nim_cmake,
     generate_nim_pyproject,
@@ -16,6 +17,7 @@ from headerkit.packaging.nim import (
 )
 
 __all__ = [
+    "generate_cython_wheel_layout",
     "generate_nim_cmake",
     "generate_nim_pyproject",
     "generate_nim_python_wrapper",
