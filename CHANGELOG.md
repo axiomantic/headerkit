@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Python writers feature parity with Nim plugin:
+  - Turnkey binary wheel packaging (`wheel` layout in `headerkit.packaging` for `cython`, `cffi`, and `ctypes`):
+    - `generate_cython_wheel_layout` in `headerkit.packaging.cython`, `generate_cffi_wheel_layout` in `headerkit.packaging.cffi`, and `generate_ctypes_wheel_layout` in `headerkit.packaging.ctypes` generate self-contained Python packages with `pyproject.toml`, source wrappers, build configurations, and anti-green-mirage tripwires and unit test harnesses.
+    - Shared packaging primitives extracted to `headerkit.packaging.common` (`generate_pyproject_toml`, `generate_pytest_tripwire`, `generate_pytest_unit_tests`, `validate_pkg_name`) and unified across `nim.py`, `cython.py`, `cffi.py`, and `ctypes.py` (Zero-Dual-System rule).
+    - Wheel layout dispatch integrated into `CythonWriter.write_layout()`, `CffiWriter.write_layout()`, and `CtypesWriter.write_layout()`.
+  - Multi-target matrix reconciliation across Python writers:
+    - `CythonWriter.write_reconciled()`: compile-time branching using `IF UNAME_SYSNAME == "..."`, hoisting common declarations and `cimport` statements to header level, and partitioning target-divergent definitions into platform blocks.
+    - `CtypesWriter.write_reconciled()`: runtime Python branching with `sys.platform` / machine architecture conditions, hoisting shared definitions, and deduplicating common symbols across platform variants.
+    - `CffiWriter.write_reconciled()`: chunked `ffi.cdef()` blocks wrapped inside runtime platform conditional blocks, allowing platform-specific C declarations to be conditionally registered with CFFI.
+    - Unified `condition_to_python` in `headerkit.reconcile` (exported in `headerkit`) converting `MatrixCondition` / `PlatformCondition` AST guards into executable Python boolean expressions.
+  - Function-like macro translation (`MacroFunction`) across Python writers:
+    - `CythonWriter`: emits `int NAME(...)` declarations in C header extern blocks for expression macros, safely skipping token-pasting macros (`##`) with descriptive comments.
+    - `CtypesWriter`: emits informative comment stubs for preprocessor macro functions documenting omission from ctypes runtime loader.
+    - `CffiWriter`: emits C function prototype declarations in `ffi.cdef()` for expression macros.
+  - Public API exports: `generate_cython_wheel_layout`, `generate_cffi_wheel_layout`, `generate_ctypes_wheel_layout`, and `condition_to_python` in `headerkit/__init__.py` and `__all__`.
+
 - Multi-dimensional configuration matrix framework: `ConfigMatrix`, `MatrixDimension`, and `ConfigCondition` in `headerkit.matrix` (exported in `headerkit`) model multi-axis variations (targets, versions, feature toggles) with constrained Cartesian product resolution and combinatorial explosion safety guards (`MAX_MATRIX_CONFIGURATIONS = 32`, `MatrixExplosionError`).
 - Automated AST dimension discovery and cross-target compiler probing: `discover_dimensions`, `probe_configuration`, `ProbeOptions`, and `SysrootWarning` in `headerkit.matrix` inspect ASTs for version triples (`*_VERSION_MAJOR`, `MINOR`, `PATCH`), monolithic API integers (`*_API_VERSION`, `*_VERSION_NUMBER`), and feature flags (`ENABLE_*`, `USE_*`, `HAS_*`, `WITH_*`, `DISABLE_*`, `NO_*`), evaluating foreign compiler targets with diagnostic sysroot fallbacks.
 - Multi-dimensional topological AST reconciliation: `reconcile_matrix`, `MultiDimensionalReconciledUnit`, `MatrixGuardedBlock`, and `MatrixCondition` in `headerkit.reconcile` perform monotonic LCS anchor alignment across $N$ matrix coordinates, emitting common declarations unconditionally and grouping divergent slices into equivalence classes.

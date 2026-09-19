@@ -246,9 +246,12 @@ def test_target_symbols_in_all():
 
 
 def test_packaging_symbols_in_all():
-    """Nim wheel packaging scaffolding generators should be exported in headerkit.__all__."""
+    """Wheel packaging scaffolding generators should be exported in headerkit.__all__."""
     import headerkit
     from headerkit.packaging import (
+        generate_cffi_wheel_layout,
+        generate_ctypes_wheel_layout,
+        generate_cython_wheel_layout,
         generate_nim_cmake,
         generate_nim_pyproject,
         generate_nim_python_wrapper,
@@ -257,6 +260,9 @@ def test_packaging_symbols_in_all():
     )
 
     for name in (
+        "generate_cffi_wheel_layout",
+        "generate_ctypes_wheel_layout",
+        "generate_cython_wheel_layout",
         "generate_nim_cmake",
         "generate_nim_pyproject",
         "generate_nim_python_wrapper",
@@ -265,6 +271,9 @@ def test_packaging_symbols_in_all():
     ):
         assert name in headerkit.__all__, f"{name} missing from headerkit.__all__"
 
+    assert headerkit.generate_cffi_wheel_layout is generate_cffi_wheel_layout
+    assert headerkit.generate_ctypes_wheel_layout is generate_ctypes_wheel_layout
+    assert headerkit.generate_cython_wheel_layout is generate_cython_wheel_layout
     assert headerkit.generate_nim_cmake is generate_nim_cmake
     assert headerkit.generate_nim_pyproject is generate_nim_pyproject
     assert headerkit.generate_nim_python_wrapper is generate_nim_python_wrapper
@@ -279,9 +288,13 @@ def test_reconcile_symbols_in_all():
         PlatformCondition,
         PlatformGuardedBlock,
         ReconciledUnit,
+        condition_to_python,
         declarations_equal,
         reconcile_units,
     )
+
+    assert "condition_to_python" in headerkit.__all__
+    assert headerkit.condition_to_python is condition_to_python
 
     for name in (
         "PlatformCondition",

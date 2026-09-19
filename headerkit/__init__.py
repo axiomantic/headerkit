@@ -75,6 +75,9 @@ from headerkit.matrix import (
     probe_configuration,
 )
 from headerkit.packaging import (
+    generate_cffi_wheel_layout,
+    generate_ctypes_wheel_layout,
+    generate_cython_wheel_layout,
     generate_nim_cmake,
     generate_nim_pyproject,
     generate_nim_python_wrapper,
@@ -88,6 +91,7 @@ from headerkit.reconcile import (
     PlatformCondition,
     PlatformGuardedBlock,
     ReconciledUnit,
+    condition_to_python,
     declarations_equal,
     minimize_conditions,
     quine_mccluskey_minimize,
@@ -274,6 +278,9 @@ __all__ = [
     "WORK_ORDER_MARKER",
     "DEFINITION_OF_DONE",
     # Packaging API
+    "generate_cffi_wheel_layout",
+    "generate_ctypes_wheel_layout",
+    "generate_cython_wheel_layout",
     "generate_nim_cmake",
     "generate_nim_pyproject",
     "generate_nim_python_wrapper",
@@ -283,6 +290,7 @@ __all__ = [
     "PlatformCondition",
     "PlatformGuardedBlock",
     "ReconciledUnit",
+    "condition_to_python",
     "declarations_equal",
     "reconcile_units",
     "MatrixCondition",
