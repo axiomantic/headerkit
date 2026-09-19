@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `CythonWriter`: emits `int NAME(...)` declarations in C header extern blocks for expression macros, safely skipping token-pasting macros (`##`) with descriptive comments.
     - `CtypesWriter`: emits informative comment stubs for preprocessor macro functions documenting omission from ctypes runtime loader.
     - `CffiWriter`: emits C function prototype declarations in `ffi.cdef()` for expression macros.
+  - End-to-end wheel compilation and execution integration tests in `tests/test_integration/test_wheel_execution.py` validating that generated packages for ctypes, Cython, and CFFI compile real native extensions, resolve symbols, pass generated test suites, and fail tripwires when binaries are missing.
   - Public API exports: `generate_cython_wheel_layout`, `generate_cffi_wheel_layout`, `generate_ctypes_wheel_layout`, and `condition_to_python` in `headerkit/__init__.py` and `__all__`.
 
 - Multi-dimensional configuration matrix framework: `ConfigMatrix`, `MatrixDimension`, and `ConfigCondition` in `headerkit.matrix` (exported in `headerkit`) model multi-axis variations (targets, versions, feature toggles) with constrained Cartesian product resolution and combinatorial explosion safety guards (`MAX_MATRIX_CONFIGURATIONS = 32`, `MatrixExplosionError`).
