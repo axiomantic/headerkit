@@ -218,6 +218,28 @@ ALLOWED_SKIPS: tuple[AllowedSkip, ...] = (
             "and a sibling test asserts that it ran."
         ),
     ),
+    AllowedSkip(
+        nodeid="tests/test_integration/test_cross_platform.py::TestCrossPlatformIntegration::test_reconciled_bindings_typecheck_in_docker",
+        reason="docker CLI not found on PATH",
+        platforms=("darwin", "win32"),
+        why=(
+            "The Docker daemon is not available on hosted macOS or Windows CI runners; this "
+            "test verifies Linux container typechecking and executes fully under Ubuntu "
+            "where Docker is present. Host-level Nim typechecking for macOS and Windows is "
+            "covered by the sibling test."
+        ),
+    ),
+    AllowedSkip(
+        nodeid="tests/test_integration/test_cross_platform.py::TestCrossPlatformIntegration::test_reconciled_bindings_typecheck_in_docker",
+        reason="docker daemon is not running",
+        platforms=("darwin", "win32"),
+        why=(
+            "The Docker daemon is not running on hosted macOS or Windows CI runners; this "
+            "test verifies Linux container typechecking and executes fully under Ubuntu "
+            "where Docker is present. Host-level Nim typechecking for macOS and Windows is "
+            "covered by the sibling test."
+        ),
+    ),
 )
 
 
