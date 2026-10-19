@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.2] - 2026-10-19
+
 - Clang bindings & Linux LTS compatibility (Issue #81):
   - Vendored upstream Clang bindings for LLVM 14 (`14.0.6`), LLVM 15 (`15.0.7`), LLVM 16 (`16.0.6`), and LLVM 17 (`17.0.6`) in `headerkit/_clang/`.
   - Fixes `ValueError: Unknown template argument kind 300` when running with system `libclang` on Debian 12 (bookworm), Ubuntu 22.04 LTS, and Nix. In LLVM 14, `CXCursor_TranslationUnit` was enum ID 300 (shifted to 350 in LLVM 15+); loading `v14` bindings now cleanly resolves kind ID 300 to `CursorKind.TRANSLATION_UNIT`.
