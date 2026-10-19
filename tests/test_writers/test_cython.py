@@ -4,6 +4,7 @@ import textwrap
 
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Enum,
@@ -1255,3 +1256,57 @@ class TestNamespaceStrippingTermination:
         )
         assert "remove_reference[T].type v" in writer.write()
         assert calls[0] <= self.MAX_PASSES
+
+
+class TestCythonAccessSpecifierFiltering:
+    """Private and protected members must never be emitted by CythonWriter.
+
+    Emitting private or protected C++ members causes Cython compilation failures
+    or generates extern declarations that cannot link or access the private symbol.
+    """
+
+    def test_private_and_protected_members_are_excluded(self) -> None:
+        struct = Struct(
+            name="Widget",
+            is_cppclass=True,
+            fields=[
+                Field(name="public_val", type=CType("int"), access="public"),
+                Field(name="secret_val", type=CType("int"), access="private"),
+                Field(name="protected_val", type=CType("int"), access="protected"),
+            ],
+            methods=[
+                Function(name="public_method", return_type=CType("void"), access="public"),
+                Function(name="secret_method", return_type=CType("void"), access="private"),
+                Function(name="protected_method", return_type=CType("void"), access="protected"),
+            ],
+            constructors=[
+                Function(name="Widget", return_type=CType("void"), access="public"),
+                Function(
+                    name="Widget",
+                    return_type=CType("void"),
+                    access="private",
+                    parameters=[Parameter(name="secret", type=CType("int"))],
+                ),
+            ],
+            bases=[
+                BaseSpecifier(name="PublicBase", access="public"),
+                BaseSpecifier(name="SecretBase", access="private"),
+            ],
+        )
+        base_struct = Struct(name="PublicBase", is_cppclass=True)
+        h = Header("widget.h", [base_struct, struct])
+        out = PxdWriter(h).write()
+
+        # Public members must be emitted
+        assert "int public_val" in out
+        assert "void public_method()" in out
+        assert "Widget()" in out
+        assert "Widget(PublicBase)" in out
+
+        # Private and protected members must be absent
+        assert "secret_val" not in out
+        assert "protected_val" not in out
+        assert "secret_method" not in out
+        assert "protected_method" not in out
+        assert "SecretBase" not in out
+        assert "Widget(int secret)" not in out

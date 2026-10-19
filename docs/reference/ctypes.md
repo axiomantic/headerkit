@@ -33,14 +33,17 @@ from headerkit.backends import get_backend
 from headerkit.writers import get_writer
 
 backend = get_backend()
-header = backend.parse("""
+header = backend.parse(
+    """
 typedef struct {
     int x;
     int y;
 } Point;
 
 int distance(Point* a, Point* b);
-""", "geometry.h")
+""",
+    "geometry.h",
+)
 
 writer = get_writer("ctypes", lib_name="_geometry")
 print(writer.write(header))
@@ -59,11 +62,13 @@ import sys
 # Structures and Unions
 # ============================================================
 
+
 class Point(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_int),
         ("y", ctypes.c_int),
     ]
+
 
 # ============================================================
 # Function Prototypes

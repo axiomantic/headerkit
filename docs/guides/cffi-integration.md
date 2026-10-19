@@ -71,8 +71,9 @@ means you can use an umbrella header like:
 
 ```python
 generate(
-    "umbrella.h", "cffi",
-    code='#include <nng/nng.h>\n',
+    "umbrella.h",
+    "cffi",
+    code="#include <nng/nng.h>\n",
     include_dirs=["/path/to/nng/include"],
     writer_options={"define_patterns": [r"NNG_FLAG_\w+"]},
 )

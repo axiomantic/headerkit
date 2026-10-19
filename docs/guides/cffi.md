@@ -97,11 +97,14 @@ print(f"Result: {result.result}, Error: {result.error}")
 The CFFI writer supports `exclude_patterns` to filter out declarations by name. Patterns are Python regular expressions matched against declaration names.
 
 ```python
-writer = get_writer("cffi", exclude_patterns=[
-    "__.*",           # Skip compiler builtins (__builtin_*, __attribute__, etc.)
-    "_private_.*",    # Skip private API functions
-    "internal_.*",    # Skip internal functions
-])
+writer = get_writer(
+    "cffi",
+    exclude_patterns=[
+        "__.*",  # Skip compiler builtins (__builtin_*, __attribute__, etc.)
+        "_private_.*",  # Skip private API functions
+        "internal_.*",  # Skip internal functions
+    ],
+)
 cdef_source = writer.write(header)
 ```
 

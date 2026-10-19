@@ -23,3 +23,7 @@ The `headerkit.scaffold` module provides domain models and the execution engine 
 ::: headerkit.scaffold.scaffold
 
 ::: headerkit.scaffold.prompt_scaffold_options
+
+::: headerkit.scaffold.merge_incremental_tests
+
+::: headerkit.scaffold.extract_header_version

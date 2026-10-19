@@ -51,8 +51,8 @@ def test_padding_does_not_reach_a_c_source_writer(writer_name: str) -> None:
 
     original = type(writer)._prepare
 
-    def spy(self, unit):  # type: ignore[no-untyped-def]
-        prepared = original(self, unit)
+    def spy(self, unit, *args, **kwargs):  # type: ignore[no-untyped-def]
+        prepared = original(self, unit, *args, **kwargs)
         for decl in prepared.declarations:
             if isinstance(decl, Struct):
                 seen.append([f for f in decl.fields if f.is_padding])

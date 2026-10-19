@@ -26,7 +26,9 @@ HeaderKit parses native C and C++ headers into a normalized intermediate represe
 | **Detect breaking API changes between versions** | `DiffWriter(baseline=v1, format="markdown").write(v2)` | [API Diffing](#6-detect-breaking-api-changes) |
 | **Compress headers for LLM prompt windows** | `headerkit mylib.h -w prompt` | [LLM Context](#7-compress-headers-for-llm-prompts) |
 | **Ship wheels without requiring libclang on user machines** | `headerkit cache populate mylib.h -w cffi` | [Build Backend & Cache](#8-ship-wheels-without-requiring-libclang) |
-| **Inspect or transform IR programmatically** | `headerkit mylib.h -w json -o json:ast.json` | [Programmatic IR](#9-inspect-ir-programmatically) |
+| **Inspect IR programmatically** | `headerkit mylib.h -w json -o json:ast.json` | [Programmatic IR](#9-inspect-ir-programmatically) |
+| **Transform IR with composable pipelines** | `unit >> StripPrefix("ma_") >> MakeOpaque("device")` | [IR Pipelines](#10-transform-ir-with-composable-pipelines) |
+| **Reconcile multi-target configuration matrices** | `headerkit add-target bindings.nim --target x86_64-pc-windows-msvc` | [Matrix Reconciliation](#11-reconcile-multi-platform-matrices--incremental-updates) |
 
 ---
 
@@ -222,6 +224,55 @@ for decl in unit.declarations:
 
 *See the [IR Reference](https://axiomantic.github.io/headerkit/reference/ir/) and [JSON Reference](https://axiomantic.github.io/headerkit/reference/json/).*
 
+### 10. Transform IR with Composable Pipelines
+
+Mutate, filter, rename, or splice IR trees between parser extraction and code generation using visitor pipelines and the `>>` operator:
+
+```python
+from headerkit.backends import get_backend
+from headerkit.transforms import MakeOpaque, StripPrefix
+
+backend = get_backend("libclang")
+unit = backend.parse_source("include/miniaudio.h")
+
+# Strip naming prefixes and make internal structs opaque
+pipeline = StripPrefix("ma_") >> MakeOpaque("device")
+transformed_unit = pipeline.transform(unit)
+```
+
+*See the [IR Transformations Guide](https://axiomantic.github.io/headerkit/guides/ir_transformations/) and [Transforms Reference](https://axiomantic.github.io/headerkit/reference/transforms/).*
+
+### 11. Reconcile Multi-Platform Matrices & Incremental Updates
+
+Evaluate headers across multi-dimensional matrices (target platforms, library versions, feature flags), minimize boolean guards algebraically, and evolve bindings incrementally:
+
+```python
+from headerkit.matrix import ConfigMatrix, probe_configuration
+from headerkit.reconcile import reconcile_matrix
+from headerkit.writers import get_writer
+
+# 1. Define configuration matrix
+matrix = ConfigMatrix()
+matrix.add_dimension(
+    "target", ["x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"], dimension_type="target"
+)
+
+# 2. Probe and reconcile
+matrix_units = [(cond, probe_configuration("audio.h", cond)) for cond in matrix.resolve()]
+reconciled = reconcile_matrix(matrix_units, matrix=matrix, target_lang="nim")
+
+# 3. Emit polyglot conditional bindings
+code = get_writer("nim").write(reconciled)
+```
+
+To incrementally add a new platform target to an existing binding file without losing manual edits inside `@headerkit:override` blocks:
+
+```bash
+headerkit add-target bindings/audio.nim --target aarch64-unknown-linux-gnu
+```
+
+*See the [Configuration Matrix Guide](https://axiomantic.github.io/headerkit/guides/configuration_matrix/), [Reconciliation Guide](https://axiomantic.github.io/headerkit/guides/matrix_reconciliation_and_overrides/), and [Reconcile Reference](https://axiomantic.github.io/headerkit/reference/reconcile/).*
+
 ---
 
 ## Installation
@@ -230,7 +281,7 @@ for decl in unit.declarations:
 pip install headerkit
 ```
 
-Requires Python 3.10+.
+Requires Python 3.11+ (zero runtime dependencies).
 
 To install the optional `libclang` parser backend (if not already present on your system):
 
@@ -354,6 +405,7 @@ Or write a custom writer in Python:
 from headerkit.ir import SourceUnit
 from headerkit.writers import BaseWriter, register_writer
 
+
 class RubyFfiWriter(BaseWriter):
     @property
     def name(self) -> str:
@@ -363,6 +415,7 @@ class RubyFfiWriter(BaseWriter):
         lines = ["require 'ffi'", "module MyLib", "  extend FFI::Library"]
         # Iterate over unit.declarations...
         return "\n".join(lines)
+
 
 register_writer("ruby", RubyFfiWriter)
 ```

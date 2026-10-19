@@ -13,6 +13,7 @@ from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     Array,
     BaseSpecifier,
+    Constant,
     CType,
     Declaration,
     Enum,
@@ -21,6 +22,8 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
+    MacroParameter,
     Parameter,
     ParserBackend,
     Pointer,
@@ -518,6 +521,7 @@ class TreeSitterBackend:
         self._pack_regions, self._unknown_pack_ranges = _pack_regions(tree.root_node)
 
         declarations: list[Declaration] = []
+        self._current_declarations = declarations
         for child in tree.root_node.children:
             decls = self._convert_top_level(child, filename, is_cpp=is_cpp)
             # A record synthesized for a named member of an anonymous type must
@@ -528,6 +532,7 @@ class TreeSitterBackend:
             self._lifted_declarations = []
             declarations.extend(d for d in decls if self._keep_typedef(d))
 
+        delattr(self, "_current_declarations")
         return Header(path=filename, declarations=declarations)
 
     def _keep_typedef(self, decl: Declaration) -> bool:
@@ -557,6 +562,7 @@ class TreeSitterBackend:
         namespace: str | None = None,
         template_params: list[str] | None = None,
         is_cpp: bool = False,
+        active_list: list[Declaration] | None = None,
     ) -> list[Declaration]:
         if node.type in ("preproc_ifdef", "preproc_if"):
             results: list[Declaration] = []
@@ -564,15 +570,17 @@ class TreeSitterBackend:
                 # Do not walk mutually exclusive #elif/#else branches when traversing the primary #if branch
                 if child.type in ("preproc_elif", "preproc_else"):
                     continue
-                results.extend(
-                    self._convert_top_level(
-                        child,
-                        filename,
-                        namespace=namespace,
-                        template_params=template_params,
-                        is_cpp=is_cpp,
-                    )
+                decls = self._convert_top_level(
+                    child,
+                    filename,
+                    namespace=namespace,
+                    template_params=template_params,
+                    is_cpp=is_cpp,
+                    active_list=results,
                 )
+                results.extend(self._lifted_declarations)
+                self._lifted_declarations = []
+                results.extend(decls)
             return results
 
         if node.type in ("preproc_elif", "preproc_else"):
@@ -588,6 +596,7 @@ class TreeSitterBackend:
                         namespace=namespace,
                         template_params=template_params,
                         is_cpp=is_cpp,
+                        active_list=results,
                     )
                 )
             return results
@@ -637,7 +646,192 @@ class TreeSitterBackend:
             en = self._convert_enum(node, filename, namespace=namespace)
             return [en] if en else []
 
+        if node.type == "preproc_call":
+            dir_node = node.child_by_field_name("directive")
+            arg_node = node.child_by_field_name("argument")
+            if dir_node and dir_node.text and dir_node.text.decode("utf-8").strip() == "#undef":
+                if arg_node and arg_node.text:
+                    undef_name = arg_node.text.decode("utf-8").strip()
+                    self._undef_macro(undef_name, active_list=active_list)
+            return []
+
+        if node.type == "preproc_function_def":
+            macro = self._convert_preproc_function_def(node, filename, namespace=namespace)
+            if macro:
+                if self._record_macro(macro, active_list=active_list):
+                    return []
+                return [macro]
+            return []
+
         return []
+
+    def _undef_macro(self, name: str, active_list: list[Declaration] | None = None) -> None:
+        """Drop macro declarations matching name from current declarations and active list."""
+        if hasattr(self, "_current_declarations"):
+            self._current_declarations[:] = [
+                d
+                for d in self._current_declarations
+                if not (((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == name)
+            ]
+        if active_list is not None:
+            active_list[:] = [
+                d
+                for d in active_list
+                if not (((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == name)
+            ]
+
+    def _record_macro(
+        self,
+        macro: MacroFunction,
+        active_list: list[Declaration] | None = None,
+    ) -> bool:
+        """Update existing macro in-place if redefined, returning True if updated."""
+        if hasattr(self, "_current_declarations"):
+            for idx, d in enumerate(self._current_declarations):
+                if ((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == macro.name:
+                    self._current_declarations[idx] = macro
+                    return True
+        if active_list is not None:
+            for idx, d in enumerate(active_list):
+                if ((isinstance(d, Constant) and d.is_macro) or isinstance(d, MacroFunction)) and d.name == macro.name:
+                    active_list[idx] = macro
+                    return True
+        return False
+
+    def _convert_preproc_function_def(
+        self,
+        node: Node,
+        filename: str,
+        *,
+        namespace: str | None = None,
+    ) -> MacroFunction | None:
+        """Convert a preproc_function_def node to MacroFunction."""
+        name_node = node.child_by_field_name("name")
+        if not name_node or not name_node.text:
+            return None
+        name = name_node.text.decode("utf-8")
+
+        params_node = node.child_by_field_name("parameters")
+        parameters: list[MacroParameter] = []
+        is_variadic = False
+
+        if params_node:
+            prev_token_type: str | None = None
+            for child in params_node.children:
+                if child.type in ("(", ")"):
+                    continue
+                if child.type == ",":
+                    prev_token_type = ","
+                    continue
+                if child.type == "identifier":
+                    param_name = child.text.decode("utf-8") if child.text else ""
+                    parameters.append(MacroParameter(name=param_name, is_variadic=False))
+                    prev_token_type = "identifier"
+                elif child.type in ("...", "variadic_parameter") or (child.text and child.text.strip() == b"..."):
+                    if prev_token_type == "identifier" and parameters:
+                        # GNU variadic: identifier followed immediately by ... without a comma
+                        parameters[-1] = MacroParameter(name=parameters[-1].name, is_variadic=True)
+                    else:
+                        parameters.append(MacroParameter(name="__VA_ARGS__", is_variadic=True))
+                    is_variadic = True
+                    prev_token_type = "..."
+
+        value_node = node.child_by_field_name("value")
+        body = value_node.text.decode("utf-8").strip() if value_node and value_node.text else ""
+
+        # Token pasting check outside of string/char literals
+        has_token_pasting = False
+        i = 0
+        body_len = len(body)
+        while i < body_len:
+            ch = body[i]
+            if ch == '"':
+                i += 1
+                while i < body_len:
+                    if body[i] == "\\" and i + 1 < body_len:
+                        i += 2
+                    elif body[i] == '"':
+                        i += 1
+                        break
+                    else:
+                        i += 1
+            elif ch == "'":
+                i += 1
+                while i < body_len:
+                    if body[i] == "\\" and i + 1 < body_len:
+                        i += 2
+                    elif body[i] == "'":
+                        i += 1
+                        break
+                    else:
+                        i += 1
+            elif ch == "#" and i + 1 < body_len and body[i + 1] == "#":
+                has_token_pasting = True
+                break
+            else:
+                i += 1
+
+        # Statement vs expression classification
+        is_statement = False
+        trimmed = body.strip()
+        if (trimmed.startswith("do") and "while" in trimmed) or (
+            trimmed.startswith("{") and (trimmed.endswith("}") or trimmed.endswith(";"))
+        ):
+            is_statement = True
+        else:
+            # Check for semicolon outside parens and quotes
+            p_depth = 0
+            idx = 0
+            while idx < body_len:
+                c = body[idx]
+                if c == '"':
+                    idx += 1
+                    while idx < body_len:
+                        if body[idx] == "\\" and idx + 1 < body_len:
+                            idx += 2
+                        elif body[idx] == '"':
+                            idx += 1
+                            break
+                        else:
+                            idx += 1
+                elif c == "'":
+                    idx += 1
+                    while idx < body_len:
+                        if body[idx] == "\\" and idx + 1 < body_len:
+                            idx += 2
+                        elif body[idx] == "'":
+                            idx += 1
+                            break
+                        else:
+                            idx += 1
+                elif c == "(":
+                    p_depth += 1
+                    idx += 1
+                elif c == ")":
+                    p_depth = max(0, p_depth - 1)
+                    idx += 1
+                elif c == ";" and p_depth == 0:
+                    is_statement = True
+                    break
+                else:
+                    idx += 1
+
+        location = SourceLocation(
+            file=filename,
+            line=node.start_point[0] + 1,
+            column=node.start_point[1] + 1,
+        )
+
+        return MacroFunction(
+            name=name,
+            parameters=parameters,
+            is_variadic=is_variadic,
+            body=body,
+            is_statement=is_statement,
+            has_token_pasting=has_token_pasting,
+            namespace=namespace,
+            location=location,
+        )
 
     def _convert_namespace(
         self,

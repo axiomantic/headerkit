@@ -1940,3 +1940,26 @@ class TestElaboratedSpellingIsRecorded:
         unit = LibclangBackend().parse(source, "t.h")
         holder = next(d for d in unit.declarations if isinstance(d, Struct) and d.name == "H")
         assert holder.fields[0].type.is_elaborated is True
+
+
+class TestClangDeductionGuideSuppression:
+    """C++17 deduction guides are compiler deduction hints, not callable functions.
+
+    libclang represents deduction guides as CursorKind.FUNCTION_DECL with the
+    spelling '<deduction guide for ...>'. Because they have no ABI linker symbol
+    and cannot be invoked from foreign runtimes, the backend must not emit them
+    as Function declarations into the IR.
+    """
+
+    def test_deduction_guide_is_suppressed(self) -> None:
+        source = textwrap.dedent("""\
+            template<typename T>
+            struct Span {
+                Span(T* ptr, int len);
+            };
+            template<typename T>
+            Span(T*, int) -> Span<T>;
+        """)
+        unit = LibclangBackend().parse(source, "span.hpp", extra_args=["-std=c++17"])
+        func_names = [d.name for d in unit.declarations if isinstance(d, Function)]
+        assert not any("deduction guide" in name for name in func_names)

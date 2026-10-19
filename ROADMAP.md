@@ -125,15 +125,65 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - `SourceUnit.language` is computed by both backends and then discarded by every production construction, so a C++ unit still reports `language='c'`. `AGENTS.md` carries the full measurement under *WRITERS DO NOT GUESS*; it is not restated here.
   - `Field.access` is populated by both backends (`backends/libclang.py:3346`, `:3369`; `backends/treesitter.py:1435`, `:1460`, `:1486`, `:1497`) and read by exactly one writer, `json` (`writers/json.py:118`). `cshim`, `mojo`, `nim` and `cython` all ignore it -- `cshim` and `mojo` honour `Function.access` and `BaseSpecifier.access`, which are different fields.
   - `extern "C"` blocks are dropped wholesale by the libclang backend, with no diagnostic. Measured on a header declaring one function inside an `extern "C"` block and one outside: libclang returns only the outer function while the tree-sitter backend returns both. The two backends disagree on the same input and nothing reports it.
+  - Compiler synthesis artifacts (such as C++17 deduction guides like `<deduction guide for Span>`) are emitted as standard callable functions, crashing downstream target-language lexers and validators with illegal identifier errors.
 - **Scope & Targets**:
-  - **Type the surface, not merely the name**: A free C function, a C-ABI function, a C++ member function requiring a `this` pointer, a virtual requiring vtable dispatch, and a template requiring instantiation each demand a different binding strategy, and a writer that cannot tell them apart emits wrong code. The `nim` writer's C++ inheritance output is unusable today because an `importcpp` object emitted with `of` (`writers/nim.py:534-536`) is inheritable, so Nim emits RTTI accesses the C++ class does not have -- an object-model question decided with no typed information to decide it on.
+  - **Type the surface, not merely the name**: A free C function, a C-ABI function, a C++ member function requiring a `this` pointer, a virtual requiring vtable dispatch, and a template requiring instantiation each demand a different binding strategy, and a writer that cannot tell them apart emits wrong code. Explicitly type the member surface on `Function`:
+    `surface_kind: Literal["free", "member", "static_member", "virtual_member", "constructor", "destructor", "operator", "conversion"]`.
   - **Linkage**: Record whether a declaration carries C or C++ linkage. `ir.py` has no field for it -- no `linkage`, `extern_c`, `symbol_name`, or `abi`, and no `mangled` (the `mangled` occurrences in `writers/ctypes.py` are Python class-name mangling, an unrelated sense). The tree-sitter backend does recurse through `linkage_specification` nodes (`backends/treesitter.py:581`), which is why it keeps the contents of an `extern "C"` block, but it records nothing about the linkage itself; the fact is discarded at the point it was in hand.
   - **Symbol identity, both names**: A C++ member's source name (`juce::String::length`) and its linker symbol are different strings, and a writer needs both -- the source name to generate readable bindings, the mangled symbol to actually bind. Under C linkage the two coincide; under C++ linkage they do not, and nothing in the IR says which case applies.
+  - **Compiler artifact suppression**: Filter out non-callable C++ template deduction guides (`<deduction guide for ...>`) and compiler intrinsics at the parser backend level. A writer should only receive entities that correspond to callable ABI entry points or bindable types.
+  - **Field- and param-level identity invariants**: Enforce uniqueness of field names within aggregate types and parameter names within function signatures. Nim and other foreign compilers reject duplicate field or parameter identifiers; the IR must validate this invariant at construction time.
   - **Close the closed sets**: `ir.py` uses no `Literal` type anywhere, so `access: str | None` accepts `"pubic"` as readily as `"public"`. Closed value sets become `Literal` or `enum` types, and illegal states become unrepresentable rather than merely undocumented.
   - **Conformance declarations**: Backends declare the surface they can type and the IR fields they populate; writers declare the fields they require; the pipeline **refuses** a pairing whose requirements are unmet, naming the offending field. Today's declarations cover availability and output shape only -- `supports_macros` / `supports_cpp` / `supported_languages` / `supported_classifications` on the backend protocol (`ir.py:1124-1141`), `is_available()` probed by the registry, and `supported_layouts` / `supported_options` on writers -- and nothing declares a single IR field as populated or as required.
 - **Why Refusal Is the Default**: The alternative to refusing is a binding that compiles, links, and calls the wrong thing. This is the project's own principle -- a mechanism whose failure is indistinguishable from its absence is not a mechanism -- applied to the plugin boundary.
 
-#### 2. Unified Hook-Based Pipeline Architecture
+#### 2. Symbol Filtering & Access Specifier Floor (`filter_symbol`)
+- **Concept**: Foreign language binding writers must respect access boundaries. Emitting bindings for private or protected C++ members causes downstream C++ compiler errors (e.g. `'member' is a private member of 'juce::Uuid'`). Callers also need declarative and programmatic filtering to exclude detail namespaces (`detail::`, `internal::`), deprecated symbols, and platform-specific declarations.
+- **The Bug Underneath It (Fix First)**:
+  - `cshim.py` and `mojo.py` correctly skip private and protected functions and bases.
+  - `nim.py` and `cython.py` emit bindings for all members regardless of access.
+  - *Fix*: `nim` and `cython` skip private and protected members by default, establishing a uniform access floor across all binding writers before layering hook configuration on top.
+- **Configurable Hook (`filter_symbol`)**:
+  - Hook signature: `def predicate(decl, *, context: PipelineContext, kind: str) -> bool | None` (`first_result` dispatch).
+  - Declarative configuration in `headerkit.toml`: allow/deny glob lists over qualified symbol names, access floor selection (`public` vs `public,protected`), and deprecated symbol toggle.
+- **Referential Closure Gate**:
+  - A filter that drops a type or struct that is still referenced by an emitted function or method produces output with dangling type references that cannot compile.
+  - The pipeline must verify referential closure over the emitted symbol set and raise a fatal error naming both the dropped symbol and the emitted referent rather than silently emitting broken bindings.
+
+#### 3. Canonical Type Mapping Architecture (`map_type`)
+- **Concept**: C++ frameworks (JUCE, Qt, standard library) depend heavily on custom string and container classes (`juce::String`, `std::vector<T>`, `std::function`). Writers cannot rely on hardcoded, immutable primitive type tables.
+- **Mechanism**:
+  - Hook signature: `def mapper(t: CType, *, context: PipelineContext, kind: str) -> str | None` (`first_result` dispatch).
+  - **Full CType Qualification**: Hand the mapper the complete `CType` including qualifiers (`const`, references, pointers), not a stripped bare name.
+  - **Canonical Integer Representation**: Eliminate multi-word integer ambiguities in IR (`unsigned long int` vs `long unsigned int`) by canonicalizing to unambiguous representations (`uint64_t`, `int32_t`, etc.) before type mapping runs.
+  - **Declarative Type Mappings**: Map C++ types to target-language idioms (e.g. `juce::String` -> `string`, `std::vector<T>` -> `seq[T]`) in `headerkit.toml` alongside custom conversion or bridge procedures.
+
+#### 4. Overload Disambiguation & Operator Binding (`name_overload`)
+- **Concept**: C++ methods and operators overload heavily. Different target languages require diametrically opposed overload strategies: Nim supports native method overloading and requires distinct overloads preserved; Python (`ctypes`) cannot overload and requires distinct synthesized function names.
+- **The Bug Underneath It**:
+  - `_deduplicate_declarations` currently collapses distinct overloads unconditionally on headers with project includes, destroying valid overloads in Nim while leaving colliding function symbols in ctypes.
+- **Mechanism**:
+  - Hook signature: `def namer(overloads: list[Function], *, context: PipelineContext) -> dict[Function, str] | None`.
+  - Nim preserves overloads with distinct signatures, while Python/ctypes synthesizes disambiguated names (`func_1`, `func_2` or parameter-typed suffixes).
+  - **Nim Operator Mapping Correction**: Correct `CPP_OPERATOR_MAP` where C++ assignment (`operator=`) was mapped to `` "`=`" ``, which the Nim lexer strictly rejects. Map assignment operators to lifecycle hooks (`=copy`) or explicit assignment procs (`assign`).
+
+#### 5. C++ Class Inheritance & Nim RTTI Decoupling
+- **Concept**: Binding C++ class hierarchies in Nim without triggering compiler failures from incompatible object runtime models.
+- **The Problem**:
+  - In Nim, declaring `type Derived* {.importcpp.} = object of Base` causes the Nim compiler to emit C++ RTTI lookups (`Derived::m_type`), which C++ classes do not possess.
+  - Compiling generated Nim bindings against C++ headers fails with `no member named 'm_type'`.
+- **Solution**:
+  - Emit pure `{.importcpp.}` struct/object definitions without Nim object inheritance (`of Base`), providing subtype conversion procs, upcasting converters, or C++ member dispatch pragmas (`{.importcpp: "((Base*)#)->method(@)".}`) to preserve polymorphism safely.
+
+#### 6. JUCE Turnkey Verification Ladder
+- **Concept**: Step-by-step end-to-end verification of HeaderKit against the pinned JUCE 9.0.2 framework in `nim-juce`.
+- **Progression Ladder**:
+  1. `juce::Uuid`: Value struct, multiple constructors, copy assignment, private member filtering, byte buffer access. Proves value class emission, constructor dispatch, and operator mapping.
+  2. `juce::String`: Memory-managed UTF-8/UTF-16 string class, copy-on-write, operator overloads. Proves `map_type` integration and lifecycle management.
+  3. `juce::Timer`: Subclassing, virtual callback methods (`timerCallback()`), dispatch loops. Proves C++ virtual method inheritance and callback bridging from foreign runtimes.
+  4. `juce_core`: Full module generation (376+ classes, namespaces, nested templates). Proves large-scale module compilation and `nim check` exit 0.
+
+#### 7. Unified Hook-Based Pipeline Architecture
 - **Concept**: Refactor Headerkit so that the plugin and backend systems *are* the hook system, rather than stacking hooks on top of rigid legacy registries.
 - **Mechanism**:
   - **Single Pipeline Lifecycle**:
@@ -163,7 +213,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - **Glob Pattern Matching**:
     - Match on backend names (`backend="tree-sitter*"`), target triples (`target="*windows*"`), writer names (`writer="ctypes*"`), and languages (`language="c*"`).
 
-#### 3. Polyglot Input & Classification System (Core IR Renaming)
+#### 8. Polyglot Input & Classification System (Core IR Renaming)
 - **Concept**: Headerkit is not limited to C/C++ headers. It can extract interface surfaces, declarations, and metadata from any language supported by AST or Tree-sitter parsers.
 - **Core IR Evolution (`Header` $\rightarrow$ `SourceUnit` / `InterfaceUnit`)**:
   - Direct rename of the core `Header` container class to `SourceUnit` (or `InterfaceUnit`) across the core IR for the next major release, clarifying that it represents any compilation unit, interface, or source file.
@@ -174,7 +224,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - Backends separate **cheap static declarations** (`supported_languages`, `supported_classifications`) from **dynamic availability probes** (`is_available()`). Implemented: the declarations are on the backend protocol (`ir.py:1124-1141`) and carried by both backends, and `is_available()` is probed by the registry.
   - Probing for a language like `rust` immediately matches `TreeSitterBackend` without ever touching `libclang`, eliminating spurious warnings, disk searches, or auto-install prompts.
 
-#### 4. Tree-sitter Parser Backend (`headerkit.backends.treesitter`)
+#### 9. Tree-sitter Parser Backend (`headerkit.backends.treesitter`)
 - **Concept**: Provide a lightweight, zero-system-dependency parser backend for C headers and polyglot sources that works out of the box without requiring LLVM or `libclang` installed on the host.
 - **User Experience (Zero libclang requirement)**:
   - Users who select the Tree-sitter backend (`--backend tree-sitter`) or install the optional extra (`pip install "headerkit[treesitter]"`) require **no system LLVM, no Xcode command line tools, and no shared library discovery** (`libclang.so`/`.dylib`/`.dll`).
@@ -185,7 +235,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
   - Map concrete syntax tree nodes into normalized Headerkit IR (`Struct`, `Function`, `Typedef`, `Enum`, `CType`).
   - Lightweight preprocessor handling for macro and `#define` constant extraction where feasible.
 
-#### 5. Nim $\rightarrow$ C Header $\rightarrow$ Python Bridge
+#### 10. Nim $\rightarrow$ C Header $\rightarrow$ Python Bridge
 - **Concept**: Enable writing high-performance modules in Nim and consuming them natively in Python with zero hand-written FFI boilerplate.
 - **Mechanism**:
   - Ingest C headers generated by Nim (`nim c --app:lib --header:mylib.h ...`).
@@ -195,27 +245,27 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
     - Align with Nim's `--mm:orc` (deterministic ARC + cycle collector) so Python object lifecycles can tie cleanly into Nim destructors via wrapper finalizers (`__del__` / capsule destructors) without GC deadlock.
     - Safe cross-thread invocation: emit `setupForeignThreadGc()` / `tearDownForeignThreadGc()` guards for calls originating from Python threads, ensuring compatibility with multi-threaded runtimes and Python 3.13+ free-threading (PEP 703).
 
-#### 6. Scikit-build / Wheel Packaging Template
+#### 11. Scikit-build / Wheel Packaging Template
 - **Concept**: Provide end-to-end packaging infrastructure for compiling Nim-based Python extensions into distributable binary wheels.
 - **Mechanism**:
   - Build-backend helper / template (leveraging `scikit-build-core` or standard PEP 517 hooks).
   - Automate calling `nim c`, linking necessary runtime libraries, exporting C symbols, and tagging platform wheels correctly across Linux, macOS, and Windows.
 
-#### 7. Mojo C++ Interoperability Bridge (CShim + Mojo FFI)
+#### 12. Mojo C++ Interoperability Bridge (CShim + Mojo FFI)
 - **Concept**: Open C++ ecosystems to Modular's Mojo without requiring manual C wrapper maintenance.
 - **Mechanism**:
   - Mojo natively supports standard C calling conventions (`sys.ffi.DLHandle`), but cannot directly bind complex C++ classes, templates, or mangled symbols.
   - Leverage Headerkit's `cshim` writer to generate an `extern "C"` flat ABI shim for C++ headers.
   - Concurrently emit corresponding Mojo struct definitions and `sys.ffi` wrapper calls to consume the shimmed library cleanly in Mojo code.
 
-#### 8. Comprehensive Documentation Sweep & Verification
+#### 13. Comprehensive Documentation Sweep & Verification
 - **Concept**: With foundational architectural changes (hooks, polyglot inputs, IR renaming), ensure that documentation and real-world examples never lag behind implementation.
 - **Plan**:
   - Author dedicated documentation guides for the unified hook system, custom hook registration, priority ordering, and glob matching.
   - Full documentation sweep to fact-check all existing tutorials, guides, and API references against new behaviors.
   - Update all example projects and tests to adopt the new `SourceUnit` conventions.
 
-#### 9. Polyglot Project & Extension Scaffolding (Unified Layouts & BYOScaffolder)
+#### 14. Polyglot Project & Extension Scaffolding (Unified Layouts & BYOScaffolder)
 - **Concept**: Expand beyond standalone binding files into full, idiomatic polyglot project structures with automated test suites and failing TDD/tripwire stubs, unified under a single layout model.
 - **Architectural Tenets**:
   - **Unified Output Model ("A Single File is Just a Project of One File")**:
@@ -238,7 +288,7 @@ To uphold rigorous quality standards and keep the codebase pristine across all i
     - Dedicated scaffolding guide (`docs/guides/scaffolding.md`) covering package topologies, BYOScaffolder plugin development, and Copier integration examples.
     - Full update across all writer documentation and tutorials to present the unified layout mechanism as the standard way to generate projects and bindings.
 
-#### 10. Grammar-Based Polyglot Source AST Extraction (Rust, Zig, Nim)
+#### 15. Grammar-Based Polyglot Source AST Extraction (Rust, Zig, Nim)
 - **Concept**: Extract C-ABI interface surfaces (`extern "C"` functions, `#[repr(C)]` structs/enums, exported types) directly from foreign source code (Rust `.rs`, Zig `.zig`, Nim `.nim`) into normalized `SourceUnit` IR.
 - **Strict Grammar Invariant (Zero Regex Rule)**:
   - Context-free and structured programming languages *cannot* be parsed with regular expressions. Hand-rolled regex tokenizers and regex AST extractors are strictly forbidden across the project.

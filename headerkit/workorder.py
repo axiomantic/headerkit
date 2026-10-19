@@ -726,7 +726,13 @@ def _render_nim_stub(stub: Stub) -> list[str]:
 
 _TEST_COMMANDS = {
     "python": "pytest -q",
+    "ctypes": "pytest -q",
+    "cffi": "pytest -q",
+    "cython": "pytest -q",
     "nim": "nim c -r tests/test_workorder.nim",
+    "mojo": "mojo test",
+    "lua": "luajit tests/test_bindings.lua",
+    "cshim": "cmake -B build && cmake --build build && ctest --test-dir build",
 }
 
 
@@ -840,42 +846,32 @@ def render_suggestions_md(language: str = "python") -> str:
 
 def render_agents_md(package_name: str, language: str = "python") -> str:
     """Render the scaffolded project's AGENTS.md."""
-    command = _TEST_COMMANDS.get(language, _TEST_COMMANDS["python"])
+    command = _TEST_COMMANDS.get(language.lower(), _TEST_COMMANDS["python"])
     return f"""\
 # Agents
 
 Instructions for AI coding agents working on `{package_name}`.
 
-This project was scaffolded by headerkit from a C/C++ header. The bindings are
-generated; the tests are partly generated and partly outstanding.
+This project was scaffolded by HeaderKit from a C/C++ header. The bindings are
+generated; the tests and wrappers are partly generated and partly outstanding.
 
 ## Outstanding work
 
-`WORK_ORDER.md` lists tests that headerkit could not write, because they depend on
-what this library means rather than on what its header declares. Every one of them is
-a test that fails right now, and each failure message carries its own instruction.
+`WORK_ORDER.md` (if present) lists tests that HeaderKit could not write automatically,
+because they depend on what this library means rather than on what its header declares.
+Every one of them is a test that fails right now, and each failure message carries its own instruction.
 
-Run `{command}` to see the current state. The failures are the list; `WORK_ORDER.md`
-is the same list in prose.
+Run `{command}` to see the current test suite state.
 
-**Before working through them, ask the user whether they want that done.** It is
+**Before working through test stubs, ask the user whether they want that done.** It is
 optional work, it can be large, and the user may have scaffolded this project only to
 get the bindings. Do not start on it unattended.
 
-When every stub is written, `WORK_ORDER.md` has served its purpose -- ask the user
-whether to delete it.
+## Invariants & Quality Standards
 
-## Suggestions
-
-`SUGGESTIONS.md` holds generic ideas for making the generated wrapper nicer to use.
-It is informational and identical for every scaffolded project. Ignoring it entirely
-is fine.
-
-## Regenerating
-
-Re-running headerkit will not overwrite `WORK_ORDER.md`, `SUGGESTIONS.md`, this file,
-or any generated test file that already exists on disk, so work written into a stub
-survives regeneration. The generated bindings module *is* overwritten.
+1. **Zero Tautological Assertions**: Never write or accept dummy assertions like `assert True` or bare prints. Tests must exercise real functions, types, and return values.
+2. **Tripwire Preservation**: Tripwire tests verify that native dynamic libraries link and foreign C ABI symbols resolve at runtime. Never disable or hollow out tripwires.
+3. **Regeneration Safety**: Re-running HeaderKit preserves `AGENTS.md`, `WORK_ORDER.md`, `SUGGESTIONS.md`, and existing test files. Only generated bindings modules are updated.
 """
 
 

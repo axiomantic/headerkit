@@ -7,7 +7,7 @@ import re
 import shutil
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -60,7 +60,7 @@ def download_cindex(tag: str) -> bytes:
 
 def write_provenance(provenance_path: Path, tag: str, sha256_hex: str) -> None:
     """Write a PROVENANCE file matching the existing format."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     source_url = f"https://github.com/llvm/llvm-project/blob/llvmorg-{tag}/clang/bindings/python/clang/cindex.py"
     content = (
         f"source: {source_url}\n"

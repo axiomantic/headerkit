@@ -49,6 +49,8 @@ from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import (
     BaseWriter,
     WriterOption,
+    canonicalize_type_brackets,
+    split_template_args,
 )
 from headerkit.writers.base import (
     coerce_writer_options as _coerce_writer_options_helper,
@@ -58,6 +60,7 @@ __all__ = [
     "BaseWriter",
     "WriterBackend",
     "WriterOption",
+    "canonicalize_type_brackets",
     "coerce_writer_options",
     "get_default_writer",
     "get_writer",
@@ -67,6 +70,7 @@ __all__ = [
     "list_writer_options",
     "list_writers",
     "register_writer",
+    "split_template_args",
 ]
 
 # =============================================================================

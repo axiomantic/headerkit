@@ -26,6 +26,8 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
+    MacroParameter,
     Parameter,
     Pointer,
     Reference,
@@ -275,6 +277,26 @@ def _dict_to_constant(d: dict[str, Any]) -> Constant:
     )
 
 
+def _dict_to_macro_parameter(d: dict[str, Any]) -> MacroParameter:
+    return MacroParameter(
+        name=d["name"],
+        is_variadic=d.get("is_variadic", False),
+    )
+
+
+def _dict_to_macro_function(d: dict[str, Any]) -> MacroFunction:
+    return MacroFunction(
+        name=d["name"],
+        parameters=[_dict_to_macro_parameter(p) for p in d.get("parameters", [])],
+        is_variadic=d.get("is_variadic", False),
+        body=d.get("body", ""),
+        is_statement=d.get("is_statement", False),
+        has_token_pasting=d.get("has_token_pasting", False),
+        namespace=d.get("namespace"),
+        location=_dict_to_location(d["location"]) if "location" in d else None,
+    )
+
+
 _DECL_DESERIALIZERS: dict[str, Callable[[dict[str, Any]], Declaration]] = {
     "struct": _dict_to_struct,
     "union": _dict_to_struct,
@@ -283,6 +305,7 @@ _DECL_DESERIALIZERS: dict[str, Callable[[dict[str, Any]], Declaration]] = {
     "typedef": _dict_to_typedef,
     "variable": _dict_to_variable,
     "constant": _dict_to_constant,
+    "macro_function": _dict_to_macro_function,
 }
 
 

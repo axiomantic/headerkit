@@ -88,6 +88,10 @@ nav:
     - Nim to Python Packaging: guides/nim-python-packaging.md
     - Project Scaffolding: guides/scaffolding.md
     - Test Work Orders: guides/work-orders.md
+    - Configuration Matrix: guides/configuration_matrix.md
+    - Matrix Reconciliation & Overrides: guides/matrix_reconciliation_and_overrides.md
+    - Platform Guarded Store Merge: guides/platform_guarded_store_merge.md
+    - IR Transformations: guides/ir_transformations.md
   - Tutorials:
     - PXD Writer (Cython): tutorials/pxd-writer.md
     - ctypes Writer: tutorials/ctypes-writer.md
@@ -114,6 +118,9 @@ nav:
     - Work Order API: reference/workorder.md
     - Generate Pipeline: reference/generate.md
     - Install Libclang CLI: reference/install-libclang.md
+    - Matrix API: reference/matrix.md
+    - Reconciliation API: reference/reconcile.md
+    - Transforms API: reference/transforms.md
 
 extra:
   version:

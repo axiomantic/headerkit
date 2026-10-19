@@ -28,17 +28,17 @@ Hooks can filter invocation contexts by specifying attribute matchers:
 from headerkit.hooks import hook, Priority, PipelineContext
 from headerkit.ir import SourceUnit
 
+
 @hook("parse_unit", backend="tree-sitter", priority=Priority.STANDARD)
-def custom_parser(code: str, filename: str, context: PipelineContext) -> SourceUnit | None:
-    ...
+def custom_parser(code: str, filename: str, context: PipelineContext) -> SourceUnit | None: ...
+
 
 @hook("write_output", writer="ctypes", priority=Priority.STANDARD)
-def write_ctypes(unit: SourceUnit, context: PipelineContext) -> str:
-    ...
+def write_ctypes(unit: SourceUnit, context: PipelineContext) -> str: ...
+
 
 @hook("write_output", writer="*", target="*windows*", priority=Priority.PROJECT)
-def windows_override(unit: SourceUnit, context: PipelineContext) -> str:
-    ...
+def windows_override(unit: SourceUnit, context: PipelineContext) -> str: ...
 ```
 
 ## Backend and Writer Unification
@@ -66,6 +66,16 @@ spec = InputSpec.from_path("api.h", content="int compute(int x);")
 ctx = PipelineContext(backend="tree-sitter", writer="json", runtime="nim")
 unit, output = execute_pipeline(spec, context=ctx)
 ```
+
+## Scaffolding Lifecycle Hooks
+
+When project scaffolding is invoked (`--layout package`), HeaderKit executes specialized lifecycle hook points:
+
+1. **`resolve_version`** (`first_result`): Queries plugins to extract library version from custom metadata or AST declarations.
+2. **`scaffold_project`** (`first_result`): Allows Bring-Your-Own-Scaffolder plugins to replace the default `StdlibScaffolder` layout engine.
+3. **`scaffold_tests`** (`waterfall`): Post-processes and enriches test suites (e.g. generating 1:1 unit tests, tripwires, or test work orders).
+4. **`transform_layout`** (`waterfall`): Passes the complete `ProjectLayout` through sequential transformations (e.g. injecting platform frameworks, precompiled objects, or custom compiler flags into `nim.cfg` or `CMakeLists.txt`).
+5. **`merge_file`** (`first_result`): Allows plugins to handle custom file merging (e.g. AST-aware merge engines). Falls back to `merge_incremental_tests` when `OutputFile.merge_strategy` is set.
 
 ## API Reference
 

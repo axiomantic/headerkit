@@ -124,17 +124,13 @@ def _struct_to_pxd(decl: Struct, indent: str = "    ") -> list[str]:
     for field in decl.fields:
         if isinstance(field.type, Array):
             size_str = str(field.type.size) if field.type.size is not None else ""
-            lines.append(
-                f"{indent}    {type_to_pxd(field.type.element_type)} {field.name}[{size_str}]"
-            )
+            lines.append(f"{indent}    {type_to_pxd(field.type.element_type)} {field.name}[{size_str}]")
         elif isinstance(field.type, FunctionPointer):
             fp = field.type
             fp_params = ", ".join(_param_to_pxd(p) for p in fp.parameters)
             if fp.is_variadic:
                 fp_params = f"{fp_params}, ..." if fp_params else "..."
-            lines.append(
-                f"{indent}    {type_to_pxd(fp.return_type)} (*{field.name})({fp_params})"
-            )
+            lines.append(f"{indent}    {type_to_pxd(fp.return_type)} (*{field.name})({fp_params})")
         else:
             lines.append(f"{indent}    {type_to_pxd(field.type)} {field.name}")
 
@@ -172,16 +168,12 @@ def _typedef_to_pxd(decl: Typedef, indent: str = "    ") -> list[str]:
     underlying = decl.underlying_type
 
     # Function pointer typedef
-    if isinstance(underlying, Pointer) and isinstance(
-        underlying.pointee, FunctionPointer
-    ):
+    if isinstance(underlying, Pointer) and isinstance(underlying.pointee, FunctionPointer):
         fp = underlying.pointee
         fp_params = ", ".join(_param_to_pxd(p) for p in fp.parameters)
         if fp.is_variadic:
             fp_params = f"{fp_params}, ..." if fp_params else "..."
-        return [
-            f"{indent}ctypedef {type_to_pxd(fp.return_type)} (*{decl.name})({fp_params})"
-        ]
+        return [f"{indent}ctypedef {type_to_pxd(fp.return_type)} (*{decl.name})({fp_params})"]
 
     return [f"{indent}ctypedef {type_to_pxd(underlying)} {decl.name}"]
 

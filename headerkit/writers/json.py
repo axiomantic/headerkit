@@ -22,6 +22,8 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
+    MacroParameter,
     Parameter,
     Pointer,
     Reference,
@@ -95,6 +97,14 @@ def _param_to_dict(p: Parameter) -> dict[str, Any]:
         d["name"] = p.name
     if p.default_value is not None:
         d["default_value"] = p.default_value
+    return d
+
+
+def _macro_parameter_to_dict(p: MacroParameter) -> dict[str, Any]:
+    """Convert a MacroParameter to a dict."""
+    d: dict[str, Any] = {"name": p.name}
+    if p.is_variadic:
+        d["is_variadic"] = True
     return d
 
 
@@ -287,8 +297,31 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
+    elif isinstance(decl, MacroFunction):
+        return _macro_function_to_dict(decl)
     else:
         return {"kind": "unknown", "repr": repr(decl)}
+
+
+def _macro_function_to_dict(decl: MacroFunction) -> dict[str, Any]:
+    """Convert a MacroFunction to a dict."""
+    d: dict[str, Any] = {
+        "kind": "macro_function",
+        "name": decl.name,
+        "parameters": [_macro_parameter_to_dict(p) for p in decl.parameters],
+        "body": decl.body,
+    }
+    if decl.is_variadic:
+        d["is_variadic"] = True
+    if decl.is_statement:
+        d["is_statement"] = True
+    if decl.has_token_pasting:
+        d["has_token_pasting"] = True
+    if decl.namespace:
+        d["namespace"] = decl.namespace
+    if decl.location is not None:
+        d["location"] = _location_to_dict(decl.location)
+    return d
 
 
 def _enum_value_to_dict(v: EnumValue) -> dict[str, Any]:

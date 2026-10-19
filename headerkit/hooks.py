@@ -77,12 +77,14 @@ class HookImpl:
 
 
 class HookRegistry:
-    """Registry maintaining registered hooks organized by hook point."""
+    """Registry maintaining registered hooks organized by hook point with O(1) indexing."""
 
     _global_hooks: list[HookImpl] = []
+    _global_by_point: dict[str, list[HookImpl]] = {}
 
     def __init__(self) -> None:
         self._hooks: list[HookImpl] = []
+        self._by_point: dict[str, list[HookImpl]] = {}
 
     def register(
         self,
@@ -94,25 +96,7 @@ class HookRegistry:
         """Register a hook implementation."""
         impl = HookImpl(point=point, func=func, priority=priority, matchers=matchers)
         self._hooks.append(impl)
-
-    def get_matching(self, point: str, context: PipelineContext) -> list[HookImpl]:
-        """Return matching hooks sorted by priority descending and specificity descending.
-
-        For ties in priority and specificity, later registered hooks take precedence.
-        """
-        candidates = [
-            (idx, impl) for idx, impl in enumerate(self._hooks) if impl.point == point and impl.matches(context)
-        ]
-        candidates.sort(key=lambda item: (item[1].priority, item[1].specificity, item[0]), reverse=True)
-        return [impl for _, impl in candidates]
-
-    @classmethod
-    def get_global_matching(cls, point: str, context: PipelineContext) -> list[HookImpl]:
-        candidates = [
-            (idx, impl) for idx, impl in enumerate(cls._global_hooks) if impl.point == point and impl.matches(context)
-        ]
-        candidates.sort(key=lambda item: (item[1].priority, item[1].specificity, item[0]), reverse=True)
-        return [impl for _, impl in candidates]
+        self._by_point.setdefault(point, []).append(impl)
 
     @classmethod
     def register_global(
@@ -122,8 +106,33 @@ class HookRegistry:
         priority: int = Priority.STANDARD,
         **matchers: str,
     ) -> None:
+        """Register a hook implementation globally."""
         impl = HookImpl(point=point, func=func, priority=priority, matchers=matchers)
         cls._global_hooks.append(impl)
+        cls._global_by_point.setdefault(point, []).append(impl)
+
+    @classmethod
+    def has_point(cls, point: str) -> bool:
+        """Fast O(1) check if any hook is registered globally for the given point."""
+        return bool(cls._global_by_point.get(point))
+
+    def get_matching(self, point: str, context: PipelineContext) -> list[HookImpl]:
+        """Return matching hooks sorted by priority descending and specificity descending.
+
+        For ties in priority and specificity, later registered hooks take precedence.
+        """
+        candidates = [(idx, impl) for idx, impl in enumerate(self._by_point.get(point, [])) if impl.matches(context)]
+        candidates.sort(key=lambda item: (item[1].priority, item[1].specificity, item[0]), reverse=True)
+        return [impl for _, impl in candidates]
+
+    @classmethod
+    def get_global_matching(cls, point: str, context: PipelineContext) -> list[HookImpl]:
+        """Return matching global hooks sorted by priority descending and specificity descending."""
+        candidates = [
+            (idx, impl) for idx, impl in enumerate(cls._global_by_point.get(point, [])) if impl.matches(context)
+        ]
+        candidates.sort(key=lambda item: (item[1].priority, item[1].specificity, item[0]), reverse=True)
+        return [impl for _, impl in candidates]
 
     @classmethod
     def snapshot(cls) -> list[HookImpl]:
@@ -132,13 +141,17 @@ class HookRegistry:
 
     @classmethod
     def restore(cls, snapshot: list[HookImpl]) -> None:
-        """Restore global hooks from a snapshot."""
+        """Restore global hooks from a snapshot, synchronizing fast-path lookup indices."""
         cls._global_hooks = list(snapshot)
+        cls._global_by_point.clear()
+        for impl in cls._global_hooks:
+            cls._global_by_point.setdefault(impl.point, []).append(impl)
 
     @classmethod
     def clear(cls) -> None:
-        """Clear all globally registered hooks."""
+        """Clear all globally registered hooks and fast-path lookup indices."""
         cls._global_hooks.clear()
+        cls._global_by_point.clear()
 
 
 def hook(

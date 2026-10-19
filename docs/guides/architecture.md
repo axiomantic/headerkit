@@ -27,6 +27,7 @@ A backend implements the [`ParserBackend`][headerkit.ir.ParserBackend] protocol 
 from headerkit import ParserBackend
 from headerkit.ir import Header
 
+
 class ParserBackend(Protocol):
     def parse(
         self,
@@ -228,6 +229,7 @@ Writers convert [`SourceUnit`][headerkit.ir.SourceUnit] IR into code, definition
 from headerkit.ir import SourceUnit
 from headerkit.scaffold import ProjectLayout, ScaffoldOptions
 from headerkit.writers import BaseWriter, WriterOption
+
 
 class MyWriter(BaseWriter):
     name: str = "mywriter"

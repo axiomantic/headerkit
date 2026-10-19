@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import re
 import textwrap
+from collections import defaultdict
 from collections.abc import Sequence
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from headerkit.ir import (
     Array,
@@ -24,6 +25,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
     Parameter,
     Pointer,
     SourceUnit,
@@ -31,6 +33,13 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
     Variable,
+)
+from headerkit.reconcile import (
+    MatrixGuardedBlock,
+    MultiDimensionalReconciledUnit,
+    PlatformGuardedBlock,
+    ReconciledUnit,
+    condition_to_python,
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
 from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
@@ -194,8 +203,23 @@ def decl_to_cffi(
         return _constant_to_cffi(decl)
     elif isinstance(decl, Variable):
         return _variable_to_cffi(decl, tag_kinds)
+    elif isinstance(decl, MacroFunction):
+        return _macro_function_to_cffi(decl)
     else:
         return None
+
+
+def _macro_function_to_cffi(decl: MacroFunction) -> str | None:
+    """Convert a MacroFunction to CFFI prototype declaration."""
+    if decl.has_token_pasting:
+        return f"/* Macro function '{decl.name}' with token pasting skipped */"
+    named_params = [
+        f"int {p.name}" for p in decl.parameters if not p.is_variadic and p.name not in ("...", "__VA_ARGS__")
+    ]
+    if decl.is_variadic or any(p.is_variadic or p.name in ("...", "__VA_ARGS__") for p in decl.parameters):
+        named_params.append("...")
+    params_str = ", ".join(named_params) if named_params else "void"
+    return f"int {decl.name}({params_str});"
 
 
 def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | None:
@@ -552,7 +576,7 @@ class CffiWriter(BaseWriter):
     format_description: str = "CFFI cdef declarations for ffibuilder.cdef()"
     default_output_pattern: str = "{dir}/{stem}.cdef.txt"
     default_extension: str = ".py"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="test_type",
@@ -607,9 +631,81 @@ class CffiWriter(BaseWriter):
 
         return output
 
-    def write(self, header: Header) -> str:
-        """Convert header IR to CFFI cdef string."""
+    def write(self, header: Any) -> str:
+        """Convert header IR to CFFI cdef string or reconciled Python script."""
+        if isinstance(header, (ReconciledUnit, MultiDimensionalReconciledUnit)):
+            return self.write_reconciled(header)
         return self._render(self._prepare(header))
+
+    def write_reconciled(
+        self,
+        unit: ReconciledUnit | MultiDimensionalReconciledUnit,
+    ) -> str:
+        """Render a ReconciledUnit containing common declarations and platform-guarded cdef blocks."""
+        header_path = unit.path or "header.h"
+        sections: list[str] = []
+        decl_accumulator: list[Declaration] = []
+
+        def flush_accumulator() -> None:
+            if decl_accumulator:
+                rendered = self._render(Header(path=header_path, declarations=decl_accumulator)).strip()
+                if rendered:
+                    cdef_lines = ['ffi.cdef("""']
+                    cdef_lines.extend(rendered.splitlines())
+                    cdef_lines.append('""")')
+                    sections.append("\n".join(cdef_lines))
+                decl_accumulator.clear()
+
+        domain_matrix: dict[str, set[Any]] = defaultdict(set)
+        for item in unit.items:
+            if isinstance(item, MatrixGuardedBlock):
+                for m_cond, _ in item.branches:
+                    if hasattr(m_cond, "raw_conditions"):
+                        for rc in m_cond.raw_conditions:
+                            for k, v in rc.items():
+                                domain_matrix[k].add(v)
+
+        for item in unit.items:
+            if isinstance(item, (PlatformGuardedBlock, MatrixGuardedBlock)):
+                flush_accumulator()
+                block_lines: list[str] = []
+                branches: Sequence[tuple[Any, list[Declaration]]] = item.branches
+                for idx, (b_cond, b_decls) in enumerate(branches):
+                    py_cond = condition_to_python(b_cond, domain_matrix)
+                    kw = "if" if idx == 0 else "elif"
+                    block_lines.append(f"{kw} {py_cond}:")
+                    rendered_b = self._render(Header(path=header_path, declarations=b_decls)).strip()
+                    if not rendered_b:
+                        block_lines.append("    pass")
+                    else:
+                        block_lines.append('    ffi.cdef("""')
+                        for line in rendered_b.splitlines():
+                            block_lines.append(f"    {line}")
+                        block_lines.append('    """)')
+                block_lines.append("else:")
+                block_lines.append('    raise OSError(f"Unsupported platform: {sys.platform}")')
+                sections.append("\n".join(block_lines))
+            else:
+                decl_accumulator.append(item)
+
+        flush_accumulator()
+
+        output_lines: list[str] = [
+            '"""CFFI bindings generated by headerkit."""',
+            "",
+            "from __future__ import annotations",
+            "",
+            "import sys",
+            "from cffi import FFI",
+            "",
+            "ffi = FFI()",
+            "",
+        ]
+
+        if sections:
+            output_lines.append("\n\n".join(sections))
+
+        return "\n".join(output_lines).rstrip() + "\n"
 
     def _write_package_layout(
         self,
@@ -721,6 +817,17 @@ class CffiWriter(BaseWriter):
             files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
 
         return ProjectLayout(files=files)
+
+    def _write_custom_layout(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions,
+    ) -> ProjectLayout:
+        if options.layout == "wheel":
+            from headerkit.packaging.cffi import generate_cffi_wheel_layout
+
+            return generate_cffi_wheel_layout(unit, options)
+        return self._write_package_layout(unit, options)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping cache metadata in C-style comments."""

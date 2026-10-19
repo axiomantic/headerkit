@@ -33,6 +33,7 @@ def test_type_aliases_are_unions():
         Enum,
         Function,
         FunctionPointer,
+        MacroFunction,
         Pointer,
         Reference,
         Struct,
@@ -45,7 +46,7 @@ def test_type_aliases_are_unions():
     assert type_expr_members == {CType, Pointer, Reference, Array, FunctionPointer}
 
     decl_members = set(typing.get_args(headerkit.Declaration))
-    assert decl_members == {Enum, Struct, Function, Typedef, Variable, Constant}
+    assert decl_members == {Enum, Struct, Function, Typedef, Variable, Constant, MacroFunction}
 
 
 def test_ir_types_match_direct_import():
@@ -68,6 +69,8 @@ def test_ir_types_match_direct_import():
     assert headerkit.Typedef is ir.Typedef
     assert headerkit.Variable is ir.Variable
     assert headerkit.Constant is ir.Constant
+    assert headerkit.MacroParameter is ir.MacroParameter
+    assert headerkit.MacroFunction is ir.MacroFunction
     assert headerkit.Header is ir.Header
     assert headerkit.SourceUnit is ir.SourceUnit
     assert headerkit.InputSpec is ir.InputSpec
@@ -243,9 +246,12 @@ def test_target_symbols_in_all():
 
 
 def test_packaging_symbols_in_all():
-    """Nim wheel packaging scaffolding generators should be exported in headerkit.__all__."""
+    """Wheel packaging scaffolding generators should be exported in headerkit.__all__."""
     import headerkit
     from headerkit.packaging import (
+        generate_cffi_wheel_layout,
+        generate_ctypes_wheel_layout,
+        generate_cython_wheel_layout,
         generate_nim_cmake,
         generate_nim_pyproject,
         generate_nim_python_wrapper,
@@ -254,6 +260,9 @@ def test_packaging_symbols_in_all():
     )
 
     for name in (
+        "generate_cffi_wheel_layout",
+        "generate_ctypes_wheel_layout",
+        "generate_cython_wheel_layout",
         "generate_nim_cmake",
         "generate_nim_pyproject",
         "generate_nim_python_wrapper",
@@ -262,8 +271,83 @@ def test_packaging_symbols_in_all():
     ):
         assert name in headerkit.__all__, f"{name} missing from headerkit.__all__"
 
+    assert headerkit.generate_cffi_wheel_layout is generate_cffi_wheel_layout
+    assert headerkit.generate_ctypes_wheel_layout is generate_ctypes_wheel_layout
+    assert headerkit.generate_cython_wheel_layout is generate_cython_wheel_layout
     assert headerkit.generate_nim_cmake is generate_nim_cmake
     assert headerkit.generate_nim_pyproject is generate_nim_pyproject
     assert headerkit.generate_nim_python_wrapper is generate_nim_python_wrapper
     assert headerkit.generate_nim_source is generate_nim_source
     assert headerkit.generate_nim_wheel_layout is generate_nim_wheel_layout
+
+
+def test_reconcile_symbols_in_all():
+    """Topological reconciliation engine symbols should be exported in headerkit.__all__."""
+    import headerkit
+    from headerkit.reconcile import (
+        PlatformCondition,
+        PlatformGuardedBlock,
+        ReconciledUnit,
+        condition_to_python,
+        declarations_equal,
+        reconcile_units,
+    )
+
+    assert "condition_to_python" in headerkit.__all__
+    assert headerkit.condition_to_python is condition_to_python
+
+    for name in (
+        "PlatformCondition",
+        "PlatformGuardedBlock",
+        "ReconciledUnit",
+        "declarations_equal",
+        "reconcile_units",
+    ):
+        assert name in headerkit.__all__, f"{name} missing from headerkit.__all__"
+
+    assert headerkit.PlatformCondition is PlatformCondition
+    assert headerkit.PlatformGuardedBlock is PlatformGuardedBlock
+    assert headerkit.ReconciledUnit is ReconciledUnit
+    assert headerkit.declarations_equal is declarations_equal
+    assert headerkit.reconcile_units is reconcile_units
+
+
+def test_transforms_and_matrix_public_exports() -> None:
+    """IR transforms and configuration matrix symbols should be exported in headerkit.__all__."""
+    import headerkit
+
+    expected_symbols = [
+        "IRTransformer",
+        "PipelineFilter",
+        "ChainedFilter",
+        "StripPrefix",
+        "MakeOpaque",
+        "RenameTypes",
+        "StripPaddingFields",
+        "FilterByHeader",
+        "rewrite_type_references",
+        "ConfigCondition",
+        "MatrixDimension",
+        "ConfigMatrix",
+        "MatrixExplosionError",
+        "MAX_MATRIX_CONFIGURATIONS",
+        "discover_dimensions",
+        "probe_configuration",
+        "ProbeOptions",
+        "SysrootWarning",
+        "MatrixManifest",
+        "emit_manifest_comment",
+        "extract_manifest",
+        "extract_overrides",
+        "inject_overrides",
+        "MalformedOverrideError",
+        "MatrixCondition",
+        "MatrixGuardedBlock",
+        "MultiDimensionalReconciledUnit",
+        "reconcile_matrix",
+        "minimize_conditions",
+        "quine_mccluskey_minimize",
+    ]
+    for sym in expected_symbols:
+        assert hasattr(headerkit, sym), f"Expected symbol {sym!r} in headerkit"
+        assert sym in headerkit.__all__, f"Symbol {sym!r} missing from headerkit.__all__"
