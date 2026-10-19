@@ -24,6 +24,6 @@ repos:
     hooks:
       - id: mypy
         args: [--strict]
-        additional_dependencies: [tomli]
+        additional_dependencies: []
         pass_filenames: false
         entry: mypy headerkit/

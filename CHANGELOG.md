@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.46.0] - 2026-10-18
 
+- Dropped support for sunset Python 3.10 (minimum supported Python version is now >=3.11). Removed `tomli` fallback dependency, making HeaderKit 100% zero runtime dependencies on all supported Python versions (3.11-3.14).
+- Windows CI robustness: normalized backslashes to forward slashes for header paths in `NimWriter`, added Docker Linux container daemon probe in cross-platform integration tests, and resolved Windows CPython extension link flags using `tests.native_build.link_extension_command` in wheel execution tests.
 - Python writers feature parity with Nim plugin:
   - Turnkey binary wheel packaging (`wheel` layout in `headerkit.packaging` for `cython`, `cffi`, and `ctypes`):
     - `generate_cython_wheel_layout` in `headerkit.packaging.cython`, `generate_cffi_wheel_layout` in `headerkit.packaging.cffi`, and `generate_ctypes_wheel_layout` in `headerkit.packaging.ctypes` generate self-contained Python packages with `pyproject.toml`, source wrappers, build configurations, and anti-green-mirage tripwires and unit test harnesses.

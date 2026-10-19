@@ -28,7 +28,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ${{ fromJSON(inputs.full-matrix && '["3.10", "3.11", "3.12", "3.13", "3.14"]' || '["3.10", "3.14"]') }}
+        python-version: ${{ fromJSON(inputs.full-matrix && '["3.11", "3.12", "3.13", "3.14"]' || '["3.11", "3.14"]') }}
         include:
           # Note: macOS and Windows legs run exclusively on GitHub Actions because
           # our self-hosted Forgejo CI runner is Linux/Podman-only (no private macOS/Windows capacity).

@@ -185,10 +185,12 @@ app_shutdown(addr ctx)
         if not shutil.which("docker"):
             pytest.skip("docker CLI not found on PATH")
 
-        # Verify docker daemon is alive
-        probe = subprocess.run(["docker", "info"], capture_output=True, text=True)
+        # Verify docker daemon is alive and supports Linux containers
+        probe = subprocess.run(["docker", "info", "--format", "{{.OSType}}"], capture_output=True, text=True)
         if probe.returncode != 0:
             pytest.skip("docker daemon is not running")
+        if probe.stdout.strip().lower() != "linux":
+            pytest.skip("docker daemon is not in Linux container mode")
 
         u_mac, u_linux, u_win = parsed_platforms
         reconciled = reconcile_units(

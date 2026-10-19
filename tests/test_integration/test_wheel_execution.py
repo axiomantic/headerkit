@@ -15,7 +15,6 @@ import os
 import shutil
 import subprocess
 import sys
-import sysconfig
 from pathlib import Path
 
 import pytest
@@ -25,7 +24,13 @@ from headerkit.packaging.cffi import generate_cffi_wheel_layout
 from headerkit.packaging.ctypes import generate_ctypes_wheel_layout
 from headerkit.packaging.cython import generate_cython_wheel_layout
 from headerkit.scaffold import ScaffoldOptions
-from tests.native_build import shared_library_command, shared_library_filename
+from tests.native_build import (
+    PYTHON_INCLUDE_DIR,
+    extension_filename,
+    link_extension_command,
+    shared_library_command,
+    shared_library_filename,
+)
 from tests.skip_policy import CC_INSTALL, CYTHON_INSTALL, require_program
 
 
@@ -158,23 +163,17 @@ def test_cython_wheel_execution_and_tripwire(tmp_path: Path) -> None:
     assert res_cy.returncode == 0, f"Cython conversion failed: {res_cy.stderr}"
 
     # 4. Compile binary extension (.so / .pyd)
-    py_inc = sysconfig.get_path("include")
-    ext_suffix = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
-    out_ext = pkg_dir / "src" / "calcpkg" / f"calcpkg{ext_suffix}"
+    out_ext = pkg_dir / "src" / "calcpkg" / extension_filename("calcpkg")
 
-    cmd = [
+    cmd = link_extension_command(
         compiler,
-        "-shared",
-        "-fPIC",
-        f"-I{py_inc}",
-        "-Isrc/calcpkg",
-        str(cy_c_out),
-        str(pkg_dir / "src" / "calcpkg" / "calcpkg_impl.c"),
-        "-o",
-        str(out_ext),
-    ]
-    if sys.platform == "darwin":
-        cmd.extend(["-undefined", "dynamic_lookup"])
+        inputs=[
+            str(cy_c_out),
+            str(pkg_dir / "src" / "calcpkg" / "calcpkg_impl.c"),
+        ],
+        stem=str(pkg_dir / "src" / "calcpkg" / "calcpkg"),
+        includes=[PYTHON_INCLUDE_DIR, "src/calcpkg"],
+    )
 
     res_cc = subprocess.run(cmd, cwd=pkg_dir, capture_output=True, text=True, check=False)  # noqa: S603
     assert res_cc.returncode == 0, f"Extension compilation failed: {res_cc.stderr}"

@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-import headerkit._config as config_module
 from headerkit._config import (
     HeaderkitConfig,
     WriterConfig,
@@ -182,14 +181,6 @@ class TestLoadConfig:
         config_file = tmp_path / ".headerkit.toml"
         config_file.write_text('writers = ["cffi:output.h"]\n')
         with pytest.raises(ValueError, match="no :path syntax"):
-            load_config(config_file)
-
-    def test_load_config_no_tomllib(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Raises ValueError with install hint when tomllib is unavailable."""
-        config_file = tmp_path / ".headerkit.toml"
-        config_file.write_text('backend = "libclang"\n')
-        monkeypatch.setattr(config_module, "tomllib", None)
-        with pytest.raises(ValueError, match="pip install tomli"):
             load_config(config_file)
 
 

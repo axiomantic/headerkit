@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [[package]]
 name = "babel"
@@ -43,18 +43,6 @@ dependencies = [
 ]
 sdist = { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-macosx_10_15_x86_64.whl", hash = "sha256:baed1e86cc735622097354b9d1281406caf42ff42a886d29faa8e8d1630333be" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:ca82be1a1d406ecfe1d25dc16cb33488e5a16bf4438c9fb590484ea29d92478b" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-manylinux1_i686.manylinux2014_i686.manylinux_2_17_i686.manylinux_2_5_i686.whl", hash = "sha256:42e2f76b9455f5a9a844f770bf3e200ed3da0e15f5df3db9c31fe80b04b3d004" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:5a59cc1c4442bc3d5c703bf720b51138d0bfc173618807c9ee2490a7541dd3d9" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:9f8d177621de5cb38ee3e731eda45d421db093ec0739f46a5594babda7987a98" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:75f80557d1389eddbd0de2681f6a390a0c5338c31ddaa821381c203fc3fd50d9" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:194cffa889098ced9976c3fc6340305e43f6303657d298da55366907c05c22d6" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:5bb4e7ea95dcd6a014a6fef62e62467d67d8e582326443f3d68e71d6320a9fcf" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:3d22a20b1fb1632cc72c22f95f7b0d2961c3e1c235f245ba4c606c4771035659" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:1dea0e4d7d4f11f619fe8c1d76caf49e24405b4b5743c0e3be16a500ecd930c9" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-win32.whl", hash = "sha256:7ce713ace7c0e4520535b42b77eaa742c16dab813978064913e5a3cf82973b41" },
-    { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp310-cp310-win_amd64.whl", hash = "sha256:a48d62ab9d6f4f98c983223a547af44be6ca3691074c31cecced6facd3ba2dc1" },
     { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp311-cp311-macosx_10_15_x86_64.whl", hash = "sha256:c8d2c9fd1f2d16f780d15127abb050d13d1a76c03a4bd87d7e4980e45e511e12" },
     { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:398aff33cee2767e3e781d2554c54bd0dff386bb437581e0d8011fde1a942ec1" },
     { url = "http://proxpi.flanopticon.lan/index/cffi/cffi-2.1.1-cp311-cp311-manylinux1_i686.manylinux2014_i686.manylinux_2_17_i686.manylinux_2_5_i686.whl", hash = "sha256:154852545011f779917b11c78db2358d095da62a9a172b78ad0a583ee5adc0d0" },
@@ -150,22 +138,6 @@ version = "3.4.4"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 sdist = { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4.tar.gz", hash = "sha256:94537985111c35f28720e43603b8e7b43a6ecfb2ce1d3058bbe955b73404e21a" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:e824f1492727fa856dd6eda4f7cee25f8518a12f3c4a56a74e8095695089cf6d" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4bd5d4137d500351a30687c2d3971758aac9a19208fc110ccb9d7188fbe709e8" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:027f6de494925c0ab2a55eab46ae5129951638a49a34d87f4c3eda90f696b4ad" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl", hash = "sha256:f820802628d2694cb7e56db99213f930856014862f3fd943d290ea8438d07ca8" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl", hash = "sha256:798d75d81754988d2565bff1b97ba5a44411867c0cf32b77a7e8f8d84796b10d" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9d1bb833febdff5c8927f922386db610b49db6e0d4f4ee29601d71e7c2694313" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-manylinux_2_31_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:9cd98cdc06614a2f768d2b7286d66805f94c48cde050acdbbb7db2600ab3197e" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:077fbb858e903c73f6c9db43374fd213b0b6a778106bc7032446a8e8b5b38b93" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:244bfb999c71b35de57821b8ea746b24e863398194a4014e4c76adc2bbdfeff0" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-musllinux_1_2_ppc64le.whl", hash = "sha256:64b55f9dce520635f018f907ff1b0df1fdc31f2795a922fb49dd14fbcdf48c84" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-musllinux_1_2_riscv64.whl", hash = "sha256:faa3a41b2b66b6e50f84ae4a68c64fcd0c44355741c6374813a800cd6695db9e" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-musllinux_1_2_s390x.whl", hash = "sha256:6515f3182dbe4ea06ced2d9e8666d97b46ef4c75e326b79bb624110f122551db" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:cc00f04ed596e9dc0da42ed17ac5e596c6ccba999ba6bd92b0e0aef2f170f2d6" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-win32.whl", hash = "sha256:f34be2938726fc13801220747472850852fe6b1ea75869a048d6f896838c896f" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-win_amd64.whl", hash = "sha256:a61900df84c667873b292c3de315a786dd8dac506704dea57bc957bd31e22c7d" },
-    { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp310-cp310-win_arm64.whl", hash = "sha256:cead0978fc57397645f12578bfd2d5ea9138ea0fac82b2f63f7f7c6877986a69" },
     { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:6e1fcf0720908f200cd21aa4e6750a48ff6ce4afe7ff5a79a90d5ed8a08296f8" },
     { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5f819d5fe9234f9f82d75bdfa9aef3a3d72c4d24a6e57aeaebba32a704553aa0" },
     { url = "http://proxpi.flanopticon.lan/index/charset-normalizer/charset_normalizer-3.4.4-cp311-cp311-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:a59cb51917aa591b1c4e6a43c132f0cdc3c76dbad6155df4e28ee626cc77a0a3" },
@@ -260,10 +232,6 @@ version = "3.3.0"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 sdist = { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0.tar.gz", hash = "sha256:eed0d93fbca7087f143b42c34b05a825849bdf17f101572c2105acfa49aa88b8" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:0507d9caf7dc35f1212627145d5d13dbc5dd7128529a6608ab72690472fa688e" },
-    { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:de883ec6764b61547c1e7674c0d8a8a875d398bd6bb684e46b93d83e4f13b260" },
-    { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:eda47eb7731c3b41180b58bb83de423f43aa58a677677e3390e8d332b003859e" },
-    { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0-cp310-cp310-win_amd64.whl", hash = "sha256:bf411da3ef1af8763781c219108860f7de33f1100038da35d6bf1b4d83fcb2c0" },
     { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:ec09dbf73ff4f7be2b339b995fadae9c4bb517bbbed7ec11d6fe99c2092b48fd" },
     { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:11e437f086affee8051cec4bb531be3edb646ab66e325154aa6849377f365033" },
     { url = "http://proxpi.flanopticon.lan/index/cython/cython-3.3.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e6035b5231a9316edc19d6415f4296fd1d0370e2a165a714b3edc167b9ca00e1" },
@@ -306,18 +274,6 @@ wheels = [
 ]
 
 [[package]]
-name = "exceptiongroup"
-version = "1.3.1"
-source = { registry = "http://proxpi.flanopticon.lan/index/" }
-dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
-]
-sdist = { url = "http://proxpi.flanopticon.lan/index/exceptiongroup/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219" }
-wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/exceptiongroup/exceptiongroup-1.3.1-py3-none-any.whl", hash = "sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598" },
-]
-
-[[package]]
 name = "ghp-import"
 version = "2.1.0"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
@@ -342,9 +298,6 @@ wheels = [
 name = "headerkit"
 version = "0.46.0"
 source = { editable = "." }
-dependencies = [
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
 
 [package.optional-dependencies]
 dev = [
@@ -406,7 +359,6 @@ requires-dist = [
     { name = "pytest-tripwire", marker = "extra == 'test'", specifier = ">=0.20,<1" },
     { name = "ruff", marker = "extra == 'lint'", specifier = "==0.16.8" },
     { name = "setuptools", marker = "extra == 'test'", specifier = ">=65" },
-    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=1.1.0" },
     { name = "tree-sitter", marker = "extra == 'treesitter'", specifier = ">=0.23" },
     { name = "tree-sitter-c", marker = "extra == 'treesitter'", specifier = ">=0.23" },
     { name = "tree-sitter-cpp", marker = "extra == 'treesitter'", specifier = ">=0.23" },
@@ -470,18 +422,6 @@ version = "0.8.1"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 sdist = { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1.tar.gz", hash = "sha256:be46a14693955b3bd96014ccbdb8339ee8c9346fbe11c1b78901b55125f14c73" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:81fd938344fecb9373ba1b155968c8a329491d2ce38e7ddb76f30ffb938f12dc" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:5db05697c82b3a2ec53f6e72b2ed373132b0c2e05135f0696784e97d7f5d48e7" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-manylinux1_i686.manylinux_2_28_i686.manylinux_2_5_i686.whl", hash = "sha256:d56bc4011975f7460bea7b33e1ff425d2f1adf419935ff6707273c77f8a4ada6" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5cdc0f588ff4b663ea96c26d2a230c525c6fc62b28314edaaaca8ed5af931ad0" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:97c2b54ff6717a7a563b72627990bec60d8029df17df423f0ed37d56a17a176b" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-manylinux_2_31_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:8f1125e6bbf2f1657d9a2f3ccc4a2c9b0c8b176965bb565dd4d86be67eddb4b6" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:8f4bb453f408137d7581be309b2fbc6868a80e7ef60c88e689078ee3a296ae71" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:c336d61d2fe74a3195edc1646d53ff1cddd3a9600b09fa6ab75e5514ba4862a7" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-musllinux_1_2_riscv64.whl", hash = "sha256:eb5656019db7c4deacf0c1a55a898c5bb8f989be904597fcb5232a2f4828fa05" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:c25d9e338d5bed46c1632f851babf3d13c78f49a225462017cf5e11e845c5891" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-win32.whl", hash = "sha256:aaab0e307e344cb28d800957ef3ec16605146ef0e59e059a60a176d19543d1b7" },
-    { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp310-cp310-win_amd64.whl", hash = "sha256:56e04c14b696300d47b3bc5f1d10a00e86ae978886d0cee14e5714fafb5df5d2" },
     { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:681dc2451d6d846794a828c16c22dc452d924e9f700a485b7ecb887a30aad1fd" },
     { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:a3b4350b13cc0e6f5bec8fa7caf29a8fb8cdc051a3bae45cfbfd7ce64f009965" },
     { url = "http://proxpi.flanopticon.lan/index/librt/librt-0.8.1-cp311-cp311-manylinux1_i686.manylinux_2_28_i686.manylinux_2_5_i686.whl", hash = "sha256:ac1e7817fd0ed3d14fd7c5df91daed84c48e4c2a11ee99c0547f9f62fdae13da" },
@@ -564,17 +504,6 @@ version = "3.0.3"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 sdist = { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3.tar.gz", hash = "sha256:722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:2f981d352f04553a7171b8e44369f2af4055f888dfb147d55e42d29e29e74559" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e1c1493fb6e50ab01d20a22826e57520f1284df32f2d8601fdd90b6304601419" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1ba88449deb3de88bd40044603fafffb7bc2b055d626a330323a9ed736661695" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f42d0984e947b8adf7dd6dde396e720934d12c506ce84eea8476409563607591" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-manylinux_2_31_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:c0c0b3ade1c0b13b936d7970b1d37a57acde9199dc2aecc4c336773e1d86049c" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:0303439a41979d9e74d18ff5e2dd8c43ed6c6001fd40e5bf2e43f7bd9bbc523f" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-musllinux_1_2_riscv64.whl", hash = "sha256:d2ee202e79d8ed691ceebae8e0486bd9a2cd4794cec4824e1c99b6f5009502f6" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:177b5253b2834fe3678cb4a5f0059808258584c559193998be2601324fdeafb1" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-win32.whl", hash = "sha256:2a15a08b17dd94c53a1da0438822d70ebcd13f8c3a95abe3a9ef9f11a94830aa" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-win_amd64.whl", hash = "sha256:c4ffb7ebf07cfe8931028e3e4c85f0357459a3f9f9490886198848f4fa002ec8" },
-    { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp310-cp310-win_arm64.whl", hash = "sha256:e2103a929dfa2fcaf9bb4e7c091983a49c9ac3b19c9061b6d5427dd7d14d81a1" },
     { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:1cc7ea17a6824959616c525620e387f6dd30fec8cb44f649e31712db02123dad" },
     { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:4bd4cd07944443f5a265608cc6aab442e4f74dff8088b0dfc8238647b8f6ae9a" },
     { url = "http://proxpi.flanopticon.lan/index/markupsafe/markupsafe-3.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:6b5420a1d9450023228968e7e6a9ce57f65d148ab56d2313fcd589eee96a7a50" },
@@ -784,7 +713,6 @@ dependencies = [
     { name = "griffelib" },
     { name = "mkdocs-autorefs" },
     { name = "mkdocstrings" },
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "http://proxpi.flanopticon.lan/index/mkdocstrings-python/mkdocstrings_python-2.0.3.tar.gz", hash = "sha256:c518632751cc869439b31c9d3177678ad2bfa5c21b79b863956ad68fc92c13b8" }
 wheels = [
@@ -799,17 +727,10 @@ dependencies = [
     { name = "librt", marker = "platform_python_implementation != 'PyPy'" },
     { name = "mypy-extensions" },
     { name = "pathspec" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typing-extensions" },
 ]
 sdist = { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1.tar.gz", hash = "sha256:19d88bb05303fe63f71dd2c6270daca27cb9401c4ca8255fe50d1d920e0eb9ba" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5f05aa3d375b385734388e844bc01733bd33c644ab48e9684faa54e5389775ec" },
-    { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:022ea7279374af1a5d78dfcab853fe6a536eebfda4b59deab53cd21f6cd9f00b" },
-    { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ee4c11e460685c3e0c64a4c5de82ae143622410950d6be863303a1c4ba0e36d6" },
-    { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:de759aafbae8763283b2ee5869c7255391fbc4de3ff171f8f030b5ec48381b74" },
-    { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:ab43590f9cd5108f41aacf9fca31841142c786827a74ab7cc8a2eacb634e09a1" },
-    { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp310-cp310-win_amd64.whl", hash = "sha256:2899753e2f61e571b3971747e302d5f420c3fd09650e1951e99f823bc3089dac" },
     { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:d8dfc6ab58ca7dda47d9237349157500468e404b17213d44fc1cb77bce532288" },
     { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e3f276d8493c3c97930e354b2595a44a21348b320d859fb4a2b9f66da9ed27ab" },
     { url = "http://proxpi.flanopticon.lan/index/mypy/mypy-1.19.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:2abb24cf3f17864770d18d673c85235ba52456b36a06b6afc1e07c1fdcd3d0e6" },
@@ -937,12 +858,10 @@ version = "9.0.2"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
-    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
     { name = "pygments" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "http://proxpi.flanopticon.lan/index/pytest/pytest-9.0.2.tar.gz", hash = "sha256:75186651a92bd89611d1d9fc20f0b4345fd827c41ccd5c299a868a05d70edf11" }
 wheels = [
@@ -965,10 +884,6 @@ wheels = [
 name = "pytest-tripwire"
 version = "0.21.0"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
-dependencies = [
-    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
 sdist = { url = "http://proxpi.flanopticon.lan/index/pytest-tripwire/pytest_tripwire-0.21.0.tar.gz", hash = "sha256:77fc7042902c8b624053bb7565529e32f38892209bea85df7e0c4d5f807ab60a" }
 wheels = [
     { url = "http://proxpi.flanopticon.lan/index/pytest-tripwire/pytest_tripwire-0.21.0-py3-none-any.whl", hash = "sha256:b4313529aa4f37fc8f22bb5876328194d32d2ae065729fed44d7d10f51a6f4dd" },
@@ -992,15 +907,6 @@ version = "6.0.3"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 sdist = { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3.tar.gz", hash = "sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:214ed4befebe12df36bcc8bc2b64b396ca31be9304b8f59e25c11cf94a4c033b" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:02ea2dfa234451bbb8772601d7b8e426c2bfa197136796224e50e35a78777956" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b30236e45cf30d2b8e7b3e85881719e98507abed1011bf463a8fa23e9c3e98a8" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl", hash = "sha256:66291b10affd76d76f54fad28e22e51719ef9ba22b29e1d7d03d6777a9174198" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9c7708761fccb9397fe64bbc0395abcae8c4bf7b0eac081e12b809bf47700d0b" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:418cf3f2111bc80e0933b2cd8cd04f286338bb88bdc7bc8e6dd775ebde60b5e0" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:5e0b74767e5f8c593e8c9b5912019159ed0533c70051e9cce3e8b6aa699fcd69" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-win32.whl", hash = "sha256:28c8d926f98f432f88adc23edf2e6d4921ac26fb084b028c733d01868d19007e" },
-    { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp310-cp310-win_amd64.whl", hash = "sha256:bdb2c67c6c1390b63c6ff89f210c8fd09d9a1217a465701eac7316313c915e4c" },
     { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp311-cp311-macosx_10_13_x86_64.whl", hash = "sha256:44edc647873928551a01e7a563d7452ccdebee747728c1080d881d68af7b997e" },
     { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:652cb6edd41e718550aad172851962662ff2681490a8a711af6a4d288dd96824" },
     { url = "http://proxpi.flanopticon.lan/index/pyyaml/pyyaml-6.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:10892704fc220243f5305762e276552a0395f7beb4dbf9b14ec8fd43b57f126c" },
@@ -1121,73 +1027,11 @@ wheels = [
 ]
 
 [[package]]
-name = "tomli"
-version = "2.4.1"
-source = { registry = "http://proxpi.flanopticon.lan/index/" }
-sdist = { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1.tar.gz", hash = "sha256:7c7e1a961a0b2f2472c1ac5b69affa0ae1132c39adcb67aba98568702b9cc23f" }
-wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:f8f0fc26ec2cc2b965b7a3b87cd19c5c6b8c5e5f436b984e85f486d652285c30" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:4ab97e64ccda8756376892c53a72bd1f964e519c77236368527f758fbc36a53a" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:96481a5786729fd470164b47cdb3e0e58062a496f455ee41b4403be77cb5a076" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5a881ab208c0baf688221f8cecc5401bd291d67e38a1ac884d6736cbcd8247e9" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:47149d5bd38761ac8be13a84864bf0b7b70bc051806bc3669ab1cbc56216b23c" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:ec9bfaf3ad2df51ace80688143a6a4ebc09a248f6ff781a9945e51937008fcbc" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-win32.whl", hash = "sha256:ff2983983d34813c1aeb0fa89091e76c3a22889ee83ab27c5eeb45100560c049" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-win_amd64.whl", hash = "sha256:5ee18d9ebdb417e384b58fe414e8d6af9f4e7a0ae761519fb50f721de398dd4e" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp311-cp311-win_arm64.whl", hash = "sha256:c2541745709bad0264b7d4705ad453b76ccd191e64aa6f0fc66b69a293a45ece" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:c742f741d58a28940ce01d58f0ab2ea3ced8b12402f162f4d534dfe18ba1cd6a" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:7f86fd587c4ed9dd76f318225e7d9b29cfc5a9d43de44e5754db8d1128487085" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ff18e6a727ee0ab0388507b89d1bc6a22b138d1e2fa56d1ad494586d61d2eae9" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:136443dbd7e1dee43c68ac2694fde36b2849865fa258d39bf822c10e8068eac5" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:5e262d41726bc187e69af7825504c933b6794dc3fbd5945e41a79bb14c31f585" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:5cb41aa38891e073ee49d55fbc7839cfdb2bc0e600add13874d048c94aadddd1" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-win32.whl", hash = "sha256:da25dc3563bff5965356133435b757a795a17b17d01dbc0f42fb32447ddfd917" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-win_amd64.whl", hash = "sha256:52c8ef851d9a240f11a88c003eacb03c31fc1c9c4ec64a99a0f922b93874fda9" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp312-cp312-win_arm64.whl", hash = "sha256:f758f1b9299d059cc3f6546ae2af89670cb1c4d48ea29c3cacc4fe7de3058257" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:36d2bd2ad5fb9eaddba5226aa02c8ec3fa4f192631e347b3ed28186d43be6b54" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:eb0dc4e38e6a1fd579e5d50369aa2e10acfc9cace504579b2faabb478e76941a" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c7f2c7f2b9ca6bdeef8f0fa897f8e05085923eb091721675170254cbc5b02897" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f3c6818a1a86dd6dca7ddcaaf76947d5ba31aecc28cb1b67009a5877c9a64f3f" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:d312ef37c91508b0ab2cee7da26ec0b3ed2f03ce12bd87a588d771ae15dcf82d" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:51529d40e3ca50046d7606fa99ce3956a617f9b36380da3b7f0dd3dd28e68cb5" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-win32.whl", hash = "sha256:2190f2e9dd7508d2a90ded5ed369255980a1bcdd58e52f7fe24b8162bf9fedbd" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-win_amd64.whl", hash = "sha256:8d65a2fbf9d2f8352685bc1364177ee3923d6baf5e7f43ea4959d7d8bc326a36" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp313-cp313-win_arm64.whl", hash = "sha256:4b605484e43cdc43f0954ddae319fb75f04cc10dd80d830540060ee7cd0243cd" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:fd0409a3653af6c147209d267a0e4243f0ae46b011aa978b1080359fddc9b6cf" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:a120733b01c45e9a0c34aeef92bf0cf1d56cfe81ed9d47d562f9ed591a9828ac" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:559db847dc486944896521f68d8190be1c9e719fced785720d2216fe7022b662" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:01f520d4f53ef97964a240a035ec2a869fe1a37dde002b57ebc4417a27ccd853" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:7f94b27a62cfad8496c8d2513e1a222dd446f095fca8987fceef261225538a15" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:ede3e6487c5ef5d28634ba3f31f989030ad6af71edfb0055cbbd14189ff240ba" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-win32.whl", hash = "sha256:3d48a93ee1c9b79c04bb38772ee1b64dcf18ff43085896ea460ca8dec96f35f6" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-win_amd64.whl", hash = "sha256:88dceee75c2c63af144e456745e10101eb67361050196b0b6af5d717254dddf7" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314-win_arm64.whl", hash = "sha256:b8c198f8c1805dc42708689ed6864951fd2494f924149d3e4bce7710f8eb5232" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:d4d8fe59808a54658fcc0160ecfb1b30f9089906c50b23bcb4c69eddc19ec2b4" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:7008df2e7655c495dd12d2a4ad038ff878d4ca4b81fccaf82b714e07eae4402c" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1d8591993e228b0c930c4bb0db464bdad97b3289fb981255d6c9a41aedc84b2d" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:734e20b57ba95624ecf1841e72b53f6e186355e216e5412de414e3c51e5e3c41" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:8a650c2dbafa08d42e51ba0b62740dae4ecb9338eefa093aa5c78ceb546fcd5c" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:504aa796fe0569bb43171066009ead363de03675276d2d121ac1a4572397870f" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-win32.whl", hash = "sha256:b1d22e6e9387bf4739fbe23bfa80e93f6b0373a7f1b96c6227c32bef95a4d7a8" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-win_amd64.whl", hash = "sha256:2c1c351919aca02858f740c6d33adea0c5deea37f9ecca1cc1ef9e884a619d26" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-cp314-cp314t-win_arm64.whl", hash = "sha256:eab21f45c7f66c13f2a9e0e1535309cee140182a9cdae1e041d02e47291e8396" },
-    { url = "http://proxpi.flanopticon.lan/index/tomli/tomli-2.4.1-py3-none-any.whl", hash = "sha256:0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe" },
-]
-
-[[package]]
 name = "tree-sitter"
 version = "0.26.0"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 sdist = { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0.tar.gz", hash = "sha256:b40c219edccc4564530c96f8f1556f6202b37cda964d1cbd7bd2b7e68b40a245" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:ff527388df14cb5009f9274faf78cc69a7393ae6acf3b04784b8acca249519c5" },
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:7bcbadfa614326debef581957d5c780a9d7f66065c13deea61aa21d1dd36263f" },
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:2f941cea06128c1f74f8937a8e2a90c7db49cf4be6647cd9e07d92a306d91517" },
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e9e46b664887d8c1014f1fb33e09454bbdd9ec1fe29b7fd02dde7b46bc1bb81a" },
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-manylinux_2_31_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:763627db05db34f12333081bd7422cc1c675893d373cc870b3e9249e200700e4" },
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:17a1c5cfd3a05d5c7c86bf4282b6ef8092c91dc0a98390499669c3fedb7d1814" },
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-win_amd64.whl", hash = "sha256:f289be0225ba2ace8e87d6c9639b2bc9ff2b5271afb7c5d39282a4a00e248682" },
-    { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp310-cp310-win_arm64.whl", hash = "sha256:526a165a2cb1d1f79e247d400f0e0acd8d49a817d6f312d543513af200b1f886" },
     { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:1d6fe0e8fb4df77b5ee816228e2c4475a63d8cc1d4d3a7ffd7097b2b87fc3e95" },
     { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:514a9bf8993e5210e7970736aaf6020d1759b670e195ef17b1c48f586aa30736" },
     { url = "http://proxpi.flanopticon.lan/index/tree-sitter/tree_sitter-0.26.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:10f0d4eb94aa7242dcb7f554bcd24dd7ba1c114f00d58759ba08c7a46c8ec51a" },
@@ -1286,9 +1130,6 @@ version = "6.0.0"
 source = { registry = "http://proxpi.flanopticon.lan/index/" }
 sdist = { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0.tar.gz", hash = "sha256:9ddf7c82fda3ae8e24decda1338ede66e1c99883db93711d8fb941eaa2d8c282" }
 wheels = [
-    { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:d1cdb490583ebd691c012b3d6dae011000fe42edb7a82ece80965b42abd61f26" },
-    { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:bc64ab3bdb6a04d69d4023b29422170b74681784ffb9463ed4870cf2f3e66112" },
-    { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c897ac1b55c5a1461e16dae288d22bb2e412ba9807df8397a635d88f671d36c3" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:6eb11feb5a0d452ee41f824e271ca311a09e250441c262ca2fd7ebcf2461a06c" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:ef810fbf7b781a5a593894e4f439773830bdecb885e6880d957d5b9382a960d2" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:afd0fe1b2270917c5e23c2a65ce50c2a4abb63daafb0d419fde368e272a76b7c" },
@@ -1298,8 +1139,6 @@ wheels = [
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:490ab2ef84f11129844c23fb14ecf30ef3d8a6abafd3754a6f75ca1e6654136c" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:76aae96b00ae814b181bb25b1b98076d5fc84e8a53cd8885a318b42b6d3a5134" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:a175f755fc2279e0b7312c0035d52e27211a5bc39719dd529625b1930917345b" },
-    { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-pp310-pypy310_pp73-macosx_10_15_x86_64.whl", hash = "sha256:c7ac31a19f4545dd92fc25d200694098f42c9a8e391bc00bdd362c5736dbf881" },
-    { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-pp310-pypy310_pp73-macosx_11_0_arm64.whl", hash = "sha256:9513f27a1a582d9808cf21a07dae516f0fab1cf2d7683a742c498b93eedabb11" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:7607498efa04a3542ae3e05e64da8202e58159aa1fa4acddf7678d34a35d4f13" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-py3-none-manylinux2014_armv7l.whl", hash = "sha256:9041567ee8953024c83343288ccc458fd0a2d811d6a0fd68c4c22609e3490379" },
     { url = "http://proxpi.flanopticon.lan/index/watchdog/watchdog-6.0.0-py3-none-manylinux2014_i686.whl", hash = "sha256:82dc3e3143c7e38ec49d61af98d6558288c415eac98486a5c581726e0737c00e" },

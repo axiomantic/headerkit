@@ -240,6 +240,16 @@ ALLOWED_SKIPS: tuple[AllowedSkip, ...] = (
             "covered by the sibling test."
         ),
     ),
+    AllowedSkip(
+        nodeid="tests/test_integration/test_cross_platform.py::TestCrossPlatformIntegration::test_reconciled_bindings_typecheck_in_docker",
+        reason="docker daemon is not in Linux container mode",
+        platforms=("darwin", "win32"),
+        why=(
+            "The Docker daemon on Windows CI runners runs in Windows container mode rather "
+            "than Linux container mode, so it cannot run the Linux nimlang/nim container image. "
+            "Host-level Nim typechecking is covered by the sibling test."
+        ),
+    ),
 )
 
 
