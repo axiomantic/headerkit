@@ -33,7 +33,7 @@ The `Merge gate` workflow is the one exception that triggers by itself. It repor
 
 ## Vendored clang bindings
 
-`headerkit/_clang/` contains vendored upstream clang Python bindings for LLVM 18-23. These are excluded from ruff and mypy. Do not modify, refactor, or lint them.
+`headerkit/_clang/` contains vendored upstream clang Python bindings for LLVM 14-23. These are excluded from ruff and mypy. Do not modify, refactor, or lint them.
 
 ## Registry pattern & unified hooks
 

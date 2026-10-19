@@ -22,9 +22,9 @@ _NEEDS_INTEROP_STRING_PATCH = platform.python_implementation() != "CPython"
 
 _cached_cindex: ModuleType | None = None
 
-VENDORED_VERSIONS = ("18", "19", "20", "21", "22", "23")
+VENDORED_VERSIONS = ("14", "15", "16", "17", "18", "19", "20", "21", "22", "23")
 LATEST_VENDORED = "23"
-OLDEST_VENDORED = "18"
+OLDEST_VENDORED = "14"
 
 
 class _compat_c_interop_string(c_void_p):
