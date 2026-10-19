@@ -1443,7 +1443,7 @@ class ClangASTConverter:
 
         return Header(path=self.filename, declarations=self.declarations)
 
-    def _collect_used_types(self, cursor: Any) -> set[str]:
+    def _collect_used_types(self, cursor: Any, include_pointers: bool = True) -> set[str]:
         """Recursively collect all typedef names used by a cursor."""
         used: set[str] = set()
 
@@ -1455,21 +1455,21 @@ class ClangASTConverter:
 
         # Check result type for functions
         if cursor.kind == CursorKind.FUNCTION_DECL:
-            used.update(self._extract_typedef_names_from_type(cursor.result_type))
+            used.update(self._extract_typedef_names_from_type(cursor.result_type, include_pointers=include_pointers))
             for arg in cursor.get_arguments():
-                used.update(self._extract_typedef_names_from_type(arg.type))
+                used.update(self._extract_typedef_names_from_type(arg.type, include_pointers=include_pointers))
 
         # Recursively check children
         for child in cursor.get_children():
             # Check field types
             if child.kind == CursorKind.FIELD_DECL or child.kind == CursorKind.PARM_DECL:
-                used.update(self._extract_typedef_names_from_type(child.type))
+                used.update(self._extract_typedef_names_from_type(child.type, include_pointers=include_pointers))
             # Recurse
-            used.update(self._collect_used_types(child))
+            used.update(self._collect_used_types(child, include_pointers=include_pointers))
 
         return used
 
-    def _extract_typedef_names_from_type(self, clang_type: Any) -> set[str]:
+    def _extract_typedef_names_from_type(self, clang_type: Any, include_pointers: bool = True) -> set[str]:
         """Extract typedef names from a type, including through pointers/arrays."""
         names: set[str] = set()
         kind = clang_type.kind
@@ -1485,8 +1485,9 @@ class ClangASTConverter:
                 if udecl.spelling:
                     names.add(udecl.spelling)
         elif kind == TypeKind.POINTER:
-            pointee = clang_type.get_pointee()
-            names.update(self._extract_typedef_names_from_type(pointee))
+            if include_pointers:
+                pointee = clang_type.get_pointee()
+                names.update(self._extract_typedef_names_from_type(pointee, include_pointers=include_pointers))
         elif kind in (
             TypeKind.CONSTANTARRAY,
             TypeKind.INCOMPLETEARRAY,
@@ -1494,10 +1495,16 @@ class ClangASTConverter:
             TypeKind.DEPENDENTSIZEDARRAY,
         ):
             element = clang_type.element_type
-            names.update(self._extract_typedef_names_from_type(element))
+            names.update(self._extract_typedef_names_from_type(element, include_pointers=include_pointers))
         elif kind == TypeKind.ELABORATED:
             named = clang_type.get_named_type()
-            names.update(self._extract_typedef_names_from_type(named))
+            names.update(self._extract_typedef_names_from_type(named, include_pointers=include_pointers))
+        elif kind in (TypeKind.FUNCTIONPROTO, TypeKind.FUNCTIONNOPROTO):
+            names.update(
+                self._extract_typedef_names_from_type(clang_type.get_result(), include_pointers=include_pointers)
+            )
+            for arg in clang_type.argument_types():
+                names.update(self._extract_typedef_names_from_type(arg, include_pointers=include_pointers))
 
         return names
 
@@ -1523,7 +1530,7 @@ class ClangASTConverter:
         needed_types: set[str],
     ) -> None:
         """Find and process typedefs from included files for needed types."""
-        # Build a map of typedef name -> cursor for all non-main-file typedefs
+        # Build a map of type name -> cursor for all non-main-file type declarations
         typedef_map: dict[str, Any] = {}
 
         for child in root_cursor.get_children():
@@ -1532,28 +1539,24 @@ class ClangASTConverter:
                     typedef_map[child.spelling] = child
 
         # Build dependency graph and process in topological order
-        def get_dependencies(type_name: str) -> set[str]:
-            """Get types that this typedef depends on.
-
-            This includes:
-            1. Types referenced directly in the typedef's underlying type
-            2. Types used by structs/unions that the typedef aliases
-            """
+        def get_dependencies(type_name: str, include_pointers: bool = True) -> set[str]:
+            """Get types that this typedef depends on."""
             if type_name not in typedef_map:
                 return set()
             cursor = typedef_map[type_name]
             underlying = cursor.underlying_typedef_type
-            deps = self._extract_typedef_names_from_type(underlying)
-
-            # If the underlying type is a struct/union, also collect types used by it
-            # This handles cases like: typedef struct foo_s { bar_t field; } foo_t;
-            # where bar_t needs to be resolved before foo_t
+            deps = self._extract_typedef_names_from_type(underlying, include_pointers=include_pointers)
             decl = underlying.get_declaration()
-            if decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
-                deps.update(self._collect_used_types(decl))
+            if decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.ENUM_DECL):
+                deps.update(self._collect_used_types(decl, include_pointers=include_pointers))
 
-            # Only return deps that are also in typedef_map (defined in included files)
+            # Discard self-references and return only deps that are in typedef_map
+            deps.discard(type_name)
             return deps & set(typedef_map.keys())
+
+        def _emit_resolved_type(type_name: str) -> None:
+            if type_name in typedef_map:
+                self._process_typedef(typedef_map[type_name])
 
         # System types that should not be emitted but can satisfy dependencies
         system_types_not_to_emit = {
@@ -1596,46 +1599,70 @@ class ClangASTConverter:
                 continue
             if type_name in typedef_map:
                 all_needed.add(type_name)
-                deps = get_dependencies(type_name)
+                deps = get_dependencies(type_name, include_pointers=True)
                 to_expand.extend(deps - all_needed)
 
         # Filter out system types that shouldn't be emitted
         all_needed -= system_types_not_to_emit
 
-        # Process in dependency order using simple topological sort
+        # Process in dependency order using cycle-breaking topological sort
         processed: set[str] = set(system_types_not_to_emit)  # Treat system types as already processed
-        # Sort alphabetically for deterministic output
         to_process = deque(sorted(all_needed))
-        max_iterations = len(to_process) * len(to_process) + 1  # Safety limit
 
-        iterations = 0
-        while to_process and iterations < max_iterations:
-            iterations += 1
-            type_name = to_process.popleft()
-            if type_name in processed:
+        while to_process:
+            # 1. Try to process an item whose full dependencies (including pointers) are met
+            progress = False
+            for _ in range(len(to_process)):
+                type_name = to_process.popleft()
+                if type_name in processed:
+                    continue
+                deps = get_dependencies(type_name, include_pointers=True)
+                unmet_deps = deps - processed - system_types_not_to_emit
+                if not unmet_deps:
+                    processed.add(type_name)
+                    _emit_resolved_type(type_name)
+                    progress = True
+                    break
+                else:
+                    to_process.append(type_name)
+
+            if progress:
                 continue
 
-            # Check if all dependencies are processed (system types count as processed)
-            deps = get_dependencies(type_name)
-            unmet_deps = deps - processed - system_types_not_to_emit
-            if unmet_deps:
-                # Re-queue and try again later
-                to_process.append(type_name)
+            # 2. If no item could make progress, relax pointer dependencies to break cycles
+            # (e.g. mutual pointer references between structs like droneEntity and shieldEntity)
+            for _ in range(len(to_process)):
+                type_name = to_process.popleft()
+                if type_name in processed:
+                    continue
+                strong_deps = get_dependencies(type_name, include_pointers=False)
+                unmet_strong = strong_deps - processed - system_types_not_to_emit
+                if not unmet_strong:
+                    processed.add(type_name)
+                    _emit_resolved_type(type_name)
+                    progress = True
+                    break
+                else:
+                    to_process.append(type_name)
+
+            if progress:
                 continue
 
-            # All dependencies met, process this typedef
-            processed.add(type_name)
-            if type_name in typedef_map:
-                self._process_typedef(typedef_map[type_name])
+            # 3. As a last resort if a cycle exists even in strong dependencies,
+            # pick the item with the fewest unmet strong dependencies to break the cycle.
+            # Never drop declarations from all_needed.
+            if to_process:
 
-        if iterations >= max_iterations:
-            import logging
+                def unmet_count(name: str) -> int:
+                    s_deps = get_dependencies(name, include_pointers=False)
+                    return len(s_deps - processed - system_types_not_to_emit)
 
-            logging.getLogger(__name__).warning(
-                "Topological sort hit iteration limit (%d); %d declarations may be missing",
-                max_iterations,
-                len(to_process),
-            )
+                best_idx = min(range(len(to_process)), key=lambda i: unmet_count(to_process[i]))
+                to_process.rotate(-best_idx)
+                type_name = to_process.popleft()
+                if type_name not in processed:
+                    processed.add(type_name)
+                    _emit_resolved_type(type_name)
 
     def _process_children(self, cursor: Any) -> None:
         """Process all children of a cursor."""
@@ -3514,28 +3541,25 @@ class ClangASTConverter:
         if underlying_spelling.startswith("__builtin_"):
             return
 
-        # Special handling for struct/union typedefs that have inline definitions
-        # e.g., typedef struct foo { int x; } foo_t;
-        # We need to emit the struct definition first, then the typedef
-        if underlying.kind in (TypeKind.RECORD, TypeKind.ELABORATED):
-            # Get the actual record type
+        # Special handling for struct/union/enum typedefs that have inline definitions
+        # e.g., typedef struct foo { int x; } foo_t; or typedef enum bar { A, B } bar_t;
+        # We need to emit the struct/enum definition first, then the typedef
+        if underlying.kind in (TypeKind.RECORD, TypeKind.ELABORATED, TypeKind.ENUM):
+            # Get the actual record or enum type
             record_type = underlying
             if underlying.kind == TypeKind.ELABORATED:
                 record_type = underlying.get_named_type()
 
             if record_type.kind == TypeKind.RECORD:
                 decl = record_type.get_declaration()
+                struct_name = decl.spelling
+                is_typedef_pattern = struct_name == name
+                key_prefix = "union" if decl.kind == CursorKind.UNION_DECL else "struct"
+                struct_key = self._record_key(key_prefix, struct_name)
+                definition_key = f"{struct_key}:definition"
+
                 # Check if this is a struct/union with a definition (not forward decl)
                 if decl.is_definition():
-                    struct_name = decl.spelling
-                    # Only emit the struct if we haven't emitted a definition
-                    key_prefix = "union" if decl.kind == CursorKind.UNION_DECL else "struct"
-                    struct_key = self._record_key(key_prefix, struct_name)
-                    definition_key = f"{struct_key}:definition"
-
-                    # Check if this is typedef struct Foo {...} Foo; pattern
-                    is_typedef_pattern = struct_name == name
-
                     # Check if we already have a definition - if so, update it
                     if definition_key in self._seen:
                         # Struct was already processed - update its is_typedef flag if needed
@@ -3579,12 +3603,6 @@ class ClangASTConverter:
                     # If struct name == typedef name, we've already handled it above
                     # Only create separate typedef if names differ
                     if struct_name and struct_name != name:
-                        # The tag is dropped from the name, so the flag is the
-                        # only remaining record that the source wrote ``struct
-                        # Gauge`` rather than a bare ``Gauge``. Without it the
-                        # writer cannot tell this alias from one naming an
-                        # ordinary identifier of the same spelling, and refuses
-                        # a ``typedef struct Gauge GaugeRef;`` that main bound.
                         underlying_type: TypeExpr = CType(name=struct_name, is_elaborated=True)
                         attrs, is_deprecated = self._get_attributes(cursor)
                         typedef = Typedef(
@@ -3596,6 +3614,54 @@ class ClangASTConverter:
                             location=self._get_location(cursor),
                         )
                         self.declarations.append(typedef)
+                    return
+                else:
+                    # Forward-declaration / opaque struct
+                    if struct_name and struct_key not in self._seen:
+                        self._seen.add(struct_key)
+                        is_union = decl.kind == CursorKind.UNION_DECL
+                        struct = Struct(
+                            name=struct_name,
+                            fields=[],
+                            methods=[],
+                            is_union=is_union,
+                            is_cppclass=False,
+                            namespace=self._current_namespace,
+                            location=self._get_location(decl),
+                            is_typedef=is_typedef_pattern,
+                        )
+                        self.declarations.append(struct)
+
+                    if struct_name and struct_name != name:
+                        underlying_type = CType(name=struct_name, is_elaborated=True)
+                        attrs, is_deprecated = self._get_attributes(cursor)
+                        typedef = Typedef(
+                            name=name,
+                            underlying_type=underlying_type,
+                            namespace=self._current_namespace,
+                            attributes=attrs,
+                            is_deprecated=is_deprecated,
+                            location=self._get_location(cursor),
+                        )
+                        self.declarations.append(typedef)
+                    return
+
+            elif record_type.kind == TypeKind.ENUM:
+                decl = record_type.get_declaration()
+                enum_name = decl.spelling
+                self._process_enum(decl)
+                if enum_name and enum_name != name:
+                    underlying_type = CType(name=enum_name, is_elaborated=True)
+                    attrs, is_deprecated = self._get_attributes(cursor)
+                    typedef = Typedef(
+                        name=name,
+                        underlying_type=underlying_type,
+                        namespace=self._current_namespace,
+                        attributes=attrs,
+                        is_deprecated=is_deprecated,
+                        location=self._get_location(cursor),
+                    )
+                    self.declarations.append(typedef)
                     return
 
         # Resolve compile-time expressions (decltype, sizeof) to canonical types

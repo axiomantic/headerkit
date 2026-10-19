@@ -1963,3 +1963,193 @@ class TestClangDeductionGuideSuppression:
         unit = LibclangBackend().parse(source, "span.hpp", extra_args=["-std=c++17"])
         func_names = [d.name for d in unit.declarations if isinstance(d, Function)]
         assert not any("deduction guide" in name for name in func_names)
+
+
+class TestLibclangDependencies:
+    """Tests for libclang dependency resolution and cycle handling."""
+
+    def test_mutual_pointer_cycle_between_structs(self, tmp_path: Path) -> None:
+        """Structs with mutual pointer fields must not deadlock or be dropped."""
+        sub_h = tmp_path / "entities.h"
+        sub_h.write_text(
+            textwrap.dedent("""\
+            typedef struct droneEntity droneEntity;
+            typedef struct shieldEntity shieldEntity;
+
+            struct droneEntity {
+                shieldEntity *shield;
+                droneEntity *parent;
+            };
+
+            struct shieldEntity {
+                droneEntity *drone;
+            };
+        """)
+        )
+
+        main_h = tmp_path / "main.h"
+        main_h.write_text(
+            textwrap.dedent("""\
+            #include "entities.h"
+            void updateDrone(droneEntity *drone);
+            void updateShield(shieldEntity *shield);
+        """)
+        )
+
+        unit = LibclangBackend().parse(
+            main_h.read_text(),
+            str(main_h),
+            include_dirs=[str(tmp_path)],
+        )
+        struct_names = {d.name for d in unit.declarations if isinstance(d, Struct)}
+        assert "droneEntity" in struct_names
+        assert "shieldEntity" in struct_names
+
+    def test_enum_typedef_in_included_file_emitted_as_enum(self, tmp_path: Path) -> None:
+        """Enum typedefs in included headers must emit the enum declaration."""
+        sub_h = tmp_path / "types.h"
+        sub_h.write_text("typedef enum b2BodyType { b2_staticBody = 0, b2_dynamicBody = 1 } b2BodyType;\n")
+
+        main_h = tmp_path / "main.h"
+        main_h.write_text(
+            textwrap.dedent("""\
+            #include "types.h"
+            void setBodyType(b2BodyType t);
+        """)
+        )
+
+        unit = LibclangBackend().parse(
+            main_h.read_text(),
+            str(main_h),
+            include_dirs=[str(tmp_path)],
+        )
+        enums = [d for d in unit.declarations if isinstance(d, Enum)]
+        assert any(e.name == "b2BodyType" for e in enums)
+        body_type_enum = next(e for e in enums if e.name == "b2BodyType")
+        val_names = [v.name for v in body_type_enum.values]
+        assert "b2_staticBody" in val_names
+        assert "b2_dynamicBody" in val_names
+
+    def test_function_prototype_typedef_resolves_argument_typedefs(self, tmp_path: Path) -> None:
+        """Function prototype typedefs must extract and resolve argument typedefs."""
+        sub_h = tmp_path / "tasks.h"
+        sub_h.write_text(
+            textwrap.dedent("""\
+            typedef void b2TaskCallback(int index, void* context);
+            typedef void* b2EnqueueTaskCallback(b2TaskCallback* task, int itemCount);
+        """)
+        )
+
+        main_h = tmp_path / "main.h"
+        main_h.write_text(
+            textwrap.dedent("""\
+            #include "tasks.h"
+            void registerEnqueue(b2EnqueueTaskCallback *cb);
+        """)
+        )
+
+        unit = LibclangBackend().parse(
+            main_h.read_text(),
+            str(main_h),
+            include_dirs=[str(tmp_path)],
+        )
+        typedef_names = {d.name for d in unit.declarations if isinstance(d, Typedef)}
+        assert "b2TaskCallback" in typedef_names
+        assert "b2EnqueueTaskCallback" in typedef_names
+
+
+@libclang
+class TestMutualPointerStructDependencyResolution:
+    """Mutually referential structs via pointers must be resolved without dropping declarations."""
+
+    def test_mutual_pointer_typedefs_in_included_header(self, tmp_path: Path) -> None:
+        sub_h = tmp_path / "entities.h"
+        sub_h.write_text(
+            textwrap.dedent("""\
+            typedef struct droneEntity droneEntity;
+            typedef struct shieldEntity {
+                droneEntity *drone;
+            } shieldEntity;
+            typedef struct droneEntity {
+                shieldEntity *shield;
+            } droneEntity;
+        """)
+        )
+
+        main_h = tmp_path / "game.h"
+        main_h.write_text(
+            textwrap.dedent("""\
+            #include "entities.h"
+            void updateDrone(droneEntity *d);
+        """)
+        )
+
+        unit = LibclangBackend().parse(
+            main_h.read_text(),
+            str(main_h),
+            include_dirs=[str(tmp_path)],
+        )
+        struct_names = {d.name for d in unit.declarations if isinstance(d, Struct)}
+        assert "droneEntity" in struct_names
+        assert "shieldEntity" in struct_names
+
+
+@libclang
+class TestIncludedEnumResolution:
+    """Enums from included headers must be resolved and emitted with their values."""
+
+    def test_included_bare_enum_resolved(self, tmp_path: Path) -> None:
+        sub_h = tmp_path / "types.h"
+        sub_h.write_text(
+            textwrap.dedent("""\
+            enum weaponType {
+                WEAPON_A = 1,
+                WEAPON_B = 2,
+            };
+        """)
+        )
+
+        main_h = tmp_path / "main.h"
+        main_h.write_text(
+            textwrap.dedent("""\
+            #include "types.h"
+            void fire(enum weaponType w);
+        """)
+        )
+
+        unit = LibclangBackend().parse(
+            main_h.read_text(),
+            str(main_h),
+            include_dirs=[str(tmp_path)],
+        )
+        enums = [d for d in unit.declarations if isinstance(d, Enum) and d.name == "weaponType"]
+        assert len(enums) == 1
+        assert [v.name for v in enums[0].values] == ["WEAPON_A", "WEAPON_B"]
+
+    def test_included_typedef_enum_resolved(self, tmp_path: Path) -> None:
+        sub_h = tmp_path / "types.h"
+        sub_h.write_text(
+            textwrap.dedent("""\
+            typedef enum statusType {
+                STATUS_OK = 0,
+                STATUS_FAIL = 1,
+            } statusType;
+        """)
+        )
+
+        main_h = tmp_path / "main.h"
+        main_h.write_text(
+            textwrap.dedent("""\
+            #include "types.h"
+            statusType get_status(void);
+        """)
+        )
+
+        unit = LibclangBackend().parse(
+            main_h.read_text(),
+            str(main_h),
+            include_dirs=[str(tmp_path)],
+        )
+        enums = [d for d in unit.declarations if isinstance(d, Enum) and d.name == "statusType"]
+        assert len(enums) == 1
+        assert [v.name for v in enums[0].values] == ["STATUS_OK", "STATUS_FAIL"]
