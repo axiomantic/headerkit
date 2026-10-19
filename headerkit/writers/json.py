@@ -113,6 +113,8 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["bit_width"] = f.bit_width
     if f.anonymous_struct is not None:
         d["anonymous_struct"] = _decl_to_dict(f.anonymous_struct)
+    if f.is_padding:
+        d["is_padding"] = True
     if f.is_anonymous_transparent:
         d["is_anonymous_transparent"] = True
     if f.access is not None:
@@ -148,6 +150,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["notes"] = decl.notes
         if decl.inner_typedefs:
             d["inner_typedefs"] = decl.inner_typedefs
+        if decl.nested_records:
+            d["nested_records"] = [_decl_to_dict(r) for r in decl.nested_records]
         if decl.bases:
             d["bases"] = [_base_to_dict(b) for b in decl.bases]
         if decl.is_abstract:
@@ -181,6 +185,12 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["underlying_type_known"] = False
         if decl.is_typedef:
             d["is_typedef"] = True
+        if decl.is_scoped:
+            d["is_scoped"] = True
+        if decl.namespace:
+            d["namespace"] = decl.namespace
+        if decl.cpp_name:
+            d["cpp_name"] = decl.cpp_name
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
