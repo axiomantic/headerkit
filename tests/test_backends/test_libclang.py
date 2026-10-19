@@ -614,6 +614,17 @@ class TestLibclangParsing:
         assert s.is_typedef is True
         assert len(s.fields) == 2
 
+    def test_parse_forward_decl_typedef_struct(self, backend):
+        """Forward-declared struct with typedef sets is_typedef=True."""
+        code = "typedef struct Opaque Opaque;\n"
+        header = backend.parse(code, "test.h")
+        struct_decls = [d for d in header.declarations if isinstance(d, Struct)]
+        assert len(struct_decls) == 1
+        s = struct_decls[0]
+        assert s.name == "Opaque"
+        assert s.is_typedef is True
+        assert len(s.fields) == 0
+
     def test_forward_decl_replaced_by_definition(self, backend):
         """Forward declaration should be replaced by full definition."""
         code = "struct Opaque;\nstruct Opaque { int x; };\n"

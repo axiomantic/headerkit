@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Vendored upstream Clang bindings for LLVM 14 (`14.0.6`), LLVM 15 (`15.0.7`), LLVM 16 (`16.0.6`), and LLVM 17 (`17.0.6`) in `headerkit/_clang/`.
   - Fixes `ValueError: Unknown template argument kind 300` when running with system `libclang` on Debian 12 (bookworm), Ubuntu 22.04 LTS, and Nix. In LLVM 14, `CXCursor_TranslationUnit` was enum ID 300 (shifted to 350 in LLVM 15+); loading `v14` bindings now cleanly resolves kind ID 300 to `CursorKind.TRANSLATION_UNIT`.
   - Updated `scripts/vendor_clang.py` to support vendoring pre-LLVM 19 releases with `enumerations.py` and tracking `OLDEST_VENDORED`.
+- `LibclangBackend` forward-declared struct typedefs:
+  - In `_process_typedef`, when encountering a forward-declared struct with a same-name typedef (`typedef struct foo foo;`), update any previously registered forward-declared struct in `self.declarations` to set `is_typedef=True`.
+- `CffiWriter` anonymous enum typedefs & opaque struct typedefs (Issue #81):
+  - In `_build_tag_kinds`, exclude typedef-only enums (`Enum.is_typedef=True`) from tag kinds and register their names in `typedef_names`. This prevents spurious `enum ` prefixes (e.g. `enum nng_pipe_ev`) on anonymous enum typedefs that caused downstream C compiler errors (`invalid application of 'sizeof' to incomplete type 'enum ...'`).
+  - Correctly emits `typedef struct foo foo;` for forward-declared struct typedefs rather than incomplete `struct foo { ...; };` blocks, ensuring CFFI compilation against opaque pointer handles succeeds without requiring struct definitions.
 
 ## [0.46.1] - 2026-10-19
 
