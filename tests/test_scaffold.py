@@ -21,7 +21,7 @@ from headerkit.scaffold import (
     ProjectLayout,
     PythonTestExtractor,
     ScaffoldOptions,
-    TestBlockExtractor,
+    ScaffoldTestExtractor,
     extract_header_version,
     get_test_extractor,
     merge_incremental_tests,
@@ -654,7 +654,7 @@ class TestTestExtractors:
     def test_default_extractors_registered(self) -> None:
         c_ext = get_test_extractor("c")
         assert isinstance(c_ext, CTestExtractor)
-        assert isinstance(c_ext, TestBlockExtractor)
+        assert isinstance(c_ext, ScaffoldTestExtractor)
         assert isinstance(get_test_extractor("nim"), NimTestExtractor)
         assert isinstance(get_test_extractor("python"), PythonTestExtractor)
         assert isinstance(get_test_extractor("py"), PythonTestExtractor)

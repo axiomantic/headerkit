@@ -253,7 +253,9 @@ from headerkit.writers import get_writer
 
 # 1. Define configuration matrix
 matrix = ConfigMatrix()
-matrix.add_dimension("target", ["x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"], dimension_type="target")
+matrix.add_dimension(
+    "target", ["x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"], dimension_type="target"
+)
 
 # 2. Probe and reconcile
 matrix_units = [(cond, probe_configuration("audio.h", cond)) for cond in matrix.resolve()]

@@ -41,22 +41,13 @@ backend = LibclangBackend()
 header_code = Path("cross_platform.h").read_text()
 
 # macOS (Darwin)
-u_mac = backend.parse(
-    header_code, "cross_platform.h",
-    extra_args=["-target", "arm64-apple-darwin"]
-)
+u_mac = backend.parse(header_code, "cross_platform.h", extra_args=["-target", "arm64-apple-darwin"])
 
 # Linux (GNU ABI)
-u_linux = backend.parse(
-    header_code, "cross_platform.h",
-    extra_args=["-target", "x86_64-unknown-linux-gnu"]
-)
+u_linux = backend.parse(header_code, "cross_platform.h", extra_args=["-target", "x86_64-unknown-linux-gnu"])
 
 # Windows (MSVC ABI)
-u_win = backend.parse(
-    header_code, "cross_platform.h",
-    extra_args=["-target", "x86_64-pc-windows-msvc"]
-)
+u_win = backend.parse(header_code, "cross_platform.h", extra_args=["-target", "x86_64-pc-windows-msvc"])
 ```
 
 Each parsed unit (`Header` / `SourceUnit`) reflects only the preprocessor branches active for that target.
@@ -70,11 +61,13 @@ The `headerkit.reconcile` module provides `reconcile_units`:
 ```python
 from headerkit.reconcile import reconcile_units
 
-reconciled = reconcile_units([
-    ("darwin", u_mac),
-    ("linux", u_linux),
-    ("windows", u_win),
-])
+reconciled = reconcile_units(
+    [
+        ("darwin", u_mac),
+        ("linux", u_linux),
+        ("windows", u_win),
+    ]
+)
 ```
 
 ### How the Reconciliation Algorithm Works:

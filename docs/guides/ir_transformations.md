@@ -61,10 +61,12 @@ Applies an arbitrary dictionary mapping to rename types and systematically updat
 from headerkit.transforms import RenameTypes
 
 # Rename legacy C types to modern idiomatic identifiers
-transformed_unit = unit >> RenameTypes({
-    "c_int32": "int32_t",
-    "old_handle": "NewHandle",
-})
+transformed_unit = unit >> RenameTypes(
+    {
+        "c_int32": "int32_t",
+        "old_handle": "NewHandle",
+    }
+)
 ```
 
 ### FilterByHeader
@@ -83,11 +85,7 @@ Multiple filters can be combined fluently using the `>>` operator:
 ```python
 from headerkit.transforms import FilterByHeader, MakeOpaque, StripPrefix
 
-pipeline = (
-    FilterByHeader(["sound.h"])
-    >> StripPrefix("ma_")
-    >> MakeOpaque("device")
-)
+pipeline = FilterByHeader(["sound.h"]) >> StripPrefix("ma_") >> MakeOpaque("device")
 
 final_unit = pipeline.transform(unit)
 ```
@@ -110,6 +108,7 @@ from dataclasses import replace
 from headerkit.ir import Function, SourceUnit
 from headerkit.transforms import IRTransformer
 
+
 class DeprecateAliases(IRTransformer):
     def visit_Function(self, node: Function) -> Function | list[Function] | None:
         # If function starts with 'legacy_', emit both modern and deprecated alias
@@ -119,6 +118,7 @@ class DeprecateAliases(IRTransformer):
             deprecated_func = replace(node, docstring="[Deprecated] Use modern alias.")
             return [modern_func, deprecated_func]
         return self.generic_visit(node)
+
 
 transformer = DeprecateAliases()
 updated_unit = transformer.transform(unit)
@@ -133,6 +133,7 @@ Plugins can hook into node-level transformations dynamically without modifying e
 ```python
 from headerkit.hooks import PipelineContext, hook
 from headerkit.ir import Function
+
 
 @hook("transform:Function", priority=10, writer="nim")
 def custom_nim_proc_transform(node: Function, context: PipelineContext | None = None) -> Function:

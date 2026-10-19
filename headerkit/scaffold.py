@@ -129,7 +129,7 @@ def extract_header_version(unit: SourceUnit | Header) -> str | None:
 
 
 @runtime_checkable
-class TestBlockExtractor(Protocol):
+class ScaffoldTestExtractor(Protocol):
     """Protocol for language-specific test suite extraction without regex."""
 
     def extract_tests(self, content: str) -> tuple[str, list[tuple[str, str]]]:
@@ -137,7 +137,7 @@ class TestBlockExtractor(Protocol):
         ...
 
 
-TestBlockExtractor.__test__ = False  # type: ignore[attr-defined]
+TestBlockExtractor = ScaffoldTestExtractor
 
 
 class NimTestExtractor:

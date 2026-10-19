@@ -46,7 +46,7 @@ Documentation = "https://axiomantic.github.io/headerkit/"
 headerkit = "headerkit._cli:main"
 
 [project.optional-dependencies]
-test = ["pytest>=9,<10", "pytest-timeout>=2,<3", "pytest-tripwire>=0.20,<1", "dirty-equals>=0.11,<1", "cython>=3,<4"]
+test = ["pytest>=9,<10", "pytest-timeout>=2,<3", "pytest-tripwire>=0.20,<1", "dirty-equals>=0.11,<1", "cython>=3,<4", "cffi>=1.15", "setuptools>=65"]
 # Pinned to exact versions, not a range: ruff's and mypy's own release notes
 # both document formatting/rule changes between minor versions. A floating
 # range makes `ruff format --check` and `mypy --strict` pass or fail
@@ -84,6 +84,7 @@ strict = true
 module = [
     "headerkit._config",
     "headerkit.backends.treesitter",
+    "headerkit.build_backend",
 ]
 warn_unused_ignores = false
 
@@ -95,6 +96,8 @@ module = [
     "tree_sitter_c.*",
     "tree_sitter_cpp",
     "tree_sitter_cpp.*",
+    "tomli",
+    "tomli.*",
 ]
 ignore_missing_imports = true
 

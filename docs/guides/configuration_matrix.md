@@ -75,11 +75,13 @@ matrix = ConfigMatrix()
 matrix.add_dimension("target", ["x86_64-apple-darwin", "x86_64-pc-windows-msvc"], dimension_type="target")
 matrix.add_dimension("USE_DIRECTSOUND", [True, False], dimension_type="feature")
 
+
 # Constraint: DirectSound cannot be enabled on non-Windows targets
 def validate_audio_backend(cond: ConfigCondition) -> bool:
     if cond.get("USE_DIRECTSOUND") and "windows" not in cond.get("target", ""):
         return False
     return True
+
 
 matrix.add_constraint(validate_audio_backend)
 valid_configs = matrix.resolve()
