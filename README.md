@@ -281,7 +281,7 @@ headerkit add-target bindings/audio.nim --target aarch64-unknown-linux-gnu
 pip install headerkit
 ```
 
-Requires Python 3.10+.
+Requires Python 3.11+ (zero runtime dependencies).
 
 To install the optional `libclang` parser backend (if not already present on your system):
 

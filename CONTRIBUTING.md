@@ -48,13 +48,13 @@ HeaderKit employs a dual-CI architecture with shared script execution:
 
 ## CI on GitHub is manual
 
-The GitHub test matrix spans four operating systems and five Python versions. Running it on
+The GitHub test matrix spans four operating systems and four Python versions (3.11 to 3.14). Running it on
 every push costs real money and holds the macOS runner that every other pull request
 is queued behind, so **no workflow on GitHub runs automatically on `push` or
 `pull_request`.** You start GitHub CI manually:
 
 ```bash
-# The boundary Python versions (3.10 and 3.14) on Linux, macOS and Windows.
+# The boundary Python versions (3.11 and 3.14) on Linux, macOS and Windows.
 gh workflow run CI --ref <your-branch>
 
 # Every Python version. Dispatch this before a release, or when a change is

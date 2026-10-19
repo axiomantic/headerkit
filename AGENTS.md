@@ -175,7 +175,7 @@ All code must pass before committing:
 
 - `ruff check .` and `ruff format --check .`
 - `mypy --strict` on `headerkit/`
-- `pytest` across Python 3.10-3.14 on Linux, macOS, and Windows
+- `pytest` across Python 3.11-3.14 on Linux, macOS, and Windows
 
 Pre-commit hooks enforce these automatically.
 
@@ -218,4 +218,4 @@ This applies anywhere a multi-line string literal appears: assertions, expected-
 
 ## Runtime dependencies
 
-The project has one conditional runtime dependency: `tomli` for Python 3.10 (before `tomllib` was added to stdlib). All other functionality is zero-dependency. If a feature needs an external package, make it an optional dependency with graceful degradation when absent.
+The project has 100% zero runtime dependencies. All core functionality is built on the Python 3.11+ standard library. If a feature needs an external package, make it an optional dependency with graceful degradation when absent.

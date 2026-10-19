@@ -80,7 +80,7 @@ build-backend = "headerkit.build_backend"
 [project]
 name = "mylib-bindings"
 version = "1.0.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [tool.headerkit]
 backend = "libclang"
@@ -109,7 +109,7 @@ build-backend = "headerkit.build_backend"
 [project]
 name = "mylib-bindings"
 version = "1.0.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [tool.headerkit]
 backend = "libclang"
