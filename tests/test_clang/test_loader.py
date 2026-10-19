@@ -54,7 +54,7 @@ class TestGetCindex:
 
     def test_vendored_versions_tuple(self):
         assert isinstance(VENDORED_VERSIONS, tuple)
-        assert VENDORED_VERSIONS == ("18", "19", "20", "21", "22", "23")
+        assert VENDORED_VERSIONS == ("14", "15", "16", "17", "18", "19", "20", "21", "22", "23")
 
     def test_latest_is_newer_than_oldest(self):
         """LATEST_VENDORED and OLDEST_VENDORED should be consistent with VENDORED_VERSIONS."""
@@ -81,7 +81,7 @@ class TestGetCindex:
     def test_fallback_to_oldest_for_old_version(self):
         """When detected version is below oldest, emit exactly one warning and fall back to oldest."""
         with (
-            patch("headerkit._clang._version.detect_llvm_version", return_value="15"),
+            patch("headerkit._clang._version.detect_llvm_version", return_value="12"),
             warnings.catch_warnings(record=True) as w,
         ):
             warnings.simplefilter("always")
@@ -90,9 +90,17 @@ class TestGetCindex:
             user_warnings = [x for x in w if issubclass(x.category, UserWarning)]
             assert len(user_warnings) == 1
             assert str(user_warnings[0].message) == (
-                f"LLVM 15 is older than oldest vendored version ({OLDEST_VENDORED}). "
+                f"LLVM 12 is older than oldest vendored version ({OLDEST_VENDORED}). "
                 f"Using {OLDEST_VENDORED}. Set CIR_CLANG_VERSION to override."
             )
+
+    def test_llvm14_cursor_kind_300_translation_unit(self):
+        """Regression test for Issue #81: LLVM 14 TranslationUnit kind ID 300 resolves cleanly."""
+        import importlib
+
+        v14_cindex = importlib.import_module("headerkit._clang.v14.cindex")
+        kind = v14_cindex.CursorKind.from_id(300)
+        assert kind == v14_cindex.CursorKind.TRANSLATION_UNIT
 
     def test_fallback_to_latest_for_new_version(self):
         """When detected version is above latest, emit exactly one warning and fall back to latest."""

@@ -390,12 +390,13 @@ def _build_tag_kinds(declarations: list[Declaration]) -> TagKinds:
             kind = "union" if decl.is_union else "struct"
             tags[decl.name] = kind
         elif isinstance(decl, Enum) and decl.name and not _is_anonymous_name(decl.name):
-            tags[decl.name] = "enum"
+            if not decl.is_typedef:
+                tags[decl.name] = "enum"
 
     # Collect all typedef names
     typedef_names: set[str] = set()
     for decl in declarations:
-        if isinstance(decl, Typedef):
+        if decl.name and (isinstance(decl, Typedef) or (isinstance(decl, Enum) and decl.is_typedef)):
             typedef_names.add(decl.name)
 
     # Only keep tags whose names are NOT also typedef'd with the same name.

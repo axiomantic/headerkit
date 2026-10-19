@@ -278,6 +278,19 @@ class TestHeaderToCffi:
             };
             typedef enum nng_pipe_ev nng_pipe_ev;""")
 
+    def test_typedef_only_enum_parameter_type_not_prefixed(self):
+        """Anonymous enum typedef used as param type should not be prefixed with 'enum'."""
+        header = Header(
+            "test.h",
+            [
+                Enum("nng_pipe_ev", [EnumValue("NNG_PIPE_EV_ADD", 0)], is_typedef=True),
+                Function("nng_pipe_notify", CType("int"), [Parameter("ev", CType("nng_pipe_ev"))]),
+            ],
+        )
+        result = header_to_cffi(header)
+        assert "int nng_pipe_notify(nng_pipe_ev ev);" in result
+        assert "enum nng_pipe_ev" not in result
+
     def test_tag_kind_qualification(self):
         """Bare struct name in typedef should get 'struct' prefix."""
         header = Header(

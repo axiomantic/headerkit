@@ -3631,6 +3631,15 @@ class ClangASTConverter:
                             is_typedef=is_typedef_pattern,
                         )
                         self.declarations.append(struct)
+                    elif is_typedef_pattern:
+                        for i, existing_decl in enumerate(self.declarations):
+                            if (
+                                isinstance(existing_decl, Struct)
+                                and existing_decl.name == struct_name
+                                and existing_decl.namespace == self._current_namespace
+                            ):
+                                self.declarations[i] = replace(existing_decl, is_typedef=True)
+                                break
 
                     if struct_name and struct_name != name:
                         underlying_type = CType(name=struct_name, is_elaborated=True)
