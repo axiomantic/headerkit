@@ -374,6 +374,15 @@ class PxdWriter:
                             if isinstance(dep_decl, Typedef):
                                 dependencies[i].add(dep_idx)
 
+            elif isinstance(decl, Variable):
+                deps = self._extract_type_names(decl.type)
+                for dep_name in deps:
+                    if dep_name in decl_names:
+                        for dep_idx in decl_names[dep_name]:
+                            dep_decl = decls[dep_idx]
+                            if isinstance(dep_decl, (Struct, Enum, Typedef)):
+                                dependencies[i].add(dep_idx)
+
         # Topological sort (Kahn's algorithm)
         in_degree: dict[int, int] = {i: len(dependencies[i]) for i in range(len(decls))}
         queue = [i for i in range(len(decls)) if in_degree[i] == 0]
@@ -627,9 +636,9 @@ class PxdWriter:
         decls: list[Declaration],
         lines: list[str],
     ) -> None:
-        """Emit declarations in 5 phases to break circular dependencies."""
-        typedef_struct_names: set[str] = {
-            decl.name for decl in decls if isinstance(decl, Struct) and decl.is_typedef and decl.name
+        """Emit declarations in phases to break circular dependencies."""
+        struct_bodies_names: set[str] = {
+            decl.name for decl in decls if isinstance(decl, Struct) and (decl.fields or decl.methods) and decl.name
         }
 
         # Phase 1: Forward declarations for ALL structs with bodies
@@ -659,16 +668,16 @@ class PxdWriter:
             lines.append("")
             lines.extend(typedef_decls)
 
-        # Phase 3: Enums and forward-declaration-only structs (NOT functions)
+        # Phase 3: Enums and forward-declaration-only structs (NOT functions or variables)
         other_decls: list[str] = []
         for decl in decls:
             if isinstance(decl, Typedef):
                 continue
             if isinstance(decl, Struct) and (decl.fields or decl.methods):
                 continue
-            if isinstance(decl, Struct) and decl.name in typedef_struct_names:
+            if isinstance(decl, Struct) and decl.name in struct_bodies_names:
                 continue
-            if isinstance(decl, (Function, MacroFunction)):
+            if isinstance(decl, (Function, MacroFunction, Variable)):
                 continue
             decl_lines = self._write_declaration(decl)
             for line in decl_lines:
@@ -742,7 +751,19 @@ class PxdWriter:
             lines.append("")
             lines.extend(struct_bodies)
 
-        # Phase 5: Functions and MacroFunctions
+        # Phase 5: Global variables (after struct bodies so types are complete)
+        var_decls: list[str] = []
+        for decl in decls:
+            if isinstance(decl, Variable):
+                decl_lines = self._write_declaration(decl)
+                for line in decl_lines:
+                    var_decls.append(f"{self.INDENT}{line}" if line else "")
+                var_decls.append("")
+        if var_decls:
+            lines.append("")
+            lines.extend(var_decls)
+
+        # Phase 6: Functions and MacroFunctions
         func_decls: list[str] = []
         for decl in decls:
             if isinstance(decl, (Function, MacroFunction)):
@@ -1690,6 +1711,35 @@ class PxdWriter:
             f"union {bare_name}",
             f"enum {bare_name}",
         ):
+            if isinstance(typedef.underlying_type, CType):
+                raw_name = typedef.underlying_type.name
+                if raw_name.startswith("struct "):
+                    tag = raw_name[7:]
+                    if tag in self._record_names:
+                        return []
+                    self._record_names.add(bare_name)
+                    return [f"ctypedef struct {bare_name}"]
+                elif raw_name.startswith("union "):
+                    tag = raw_name[6:]
+                    if tag in self.known_unions:
+                        return []
+                    self.known_unions.add(bare_name)
+                    return [f"ctypedef union {bare_name}"]
+                elif raw_name.startswith("enum "):
+                    tag = raw_name[5:]
+                    if tag in self.known_enums:
+                        return []
+                    self.known_enums.add(bare_name)
+                    return [f"ctypedef enum {bare_name}"]
+                elif typedef.underlying_type.is_elaborated:
+                    if (
+                        bare_name in self._record_names
+                        or bare_name in self.known_enums
+                        or bare_name in self.known_unions
+                    ):
+                        return []
+                    self._record_names.add(bare_name)
+                    return [f"ctypedef struct {bare_name}"]
             return []
 
         return [f"ctypedef {underlying} {name}"]

@@ -1310,3 +1310,99 @@ class TestCythonAccessSpecifierFiltering:
         assert "protected_method" not in out
         assert "SecretBase" not in out
         assert "Widget(int secret)" not in out
+
+
+class TestCythonVariableOrdering:
+    """Variables must be emitted after struct bodies so their types are complete."""
+
+    def test_variable_emitted_after_struct_acyclic(self) -> None:
+        struct = Struct(
+            name="Point",
+            fields=[Field("x", CType("int")), Field("y", CType("int"))],
+            is_typedef=True,
+        )
+        var = Variable(name="origin", type=CType("Point"))
+        header = Header("test.h", [var, struct])
+        out = write_pxd(header)
+        assert out.find("struct Point:") < out.find("origin")
+
+    def test_variable_emitted_after_struct_cyclic(self) -> None:
+        t1 = Typedef("T1", CType("T2"))
+        t2 = Typedef("T2", CType("T1"))
+        struct_a = Struct(
+            name="NodeA",
+            fields=[Field("val", CType("int"))],
+            is_typedef=True,
+        )
+        struct_b = Struct(
+            name="NodeB",
+            fields=[Field("val", CType("int"))],
+            is_typedef=True,
+        )
+        var = Variable(name="root", type=CType("NodeA"))
+        header = Header("test.h", [var, struct_a, struct_b, t1, t2])
+        out = write_pxd(header)
+        assert out.find("struct NodeA:") < out.find("root")
+        assert out.find("struct NodeB:") < out.find("root")
+
+
+class TestCythonOpaqueTypedefStructEmission:
+    """Opaque struct typedefs without bodies must not be suppressed."""
+
+    def test_opaque_typedef_struct_emitted_as_forward_declaration(self) -> None:
+        opaque = Struct(name="OpaqueBuffer", fields=[], is_typedef=True)
+        fn = Function(
+            name="process_buffer",
+            return_type=CType("void"),
+            parameters=[Parameter(name="buf", type=Pointer(CType("OpaqueBuffer")))],
+        )
+        header = Header("test.h", [opaque, fn])
+        out = write_pxd(header)
+        assert "ctypedef struct OpaqueBuffer" in out
+        assert "void process_buffer(OpaqueBuffer* buf)" in out
+
+    def test_self_aliasing_typedef_without_struct_emits_forward_decl(self) -> None:
+        typedef = Typedef(name="OpaqueTag", underlying_type=CType("struct OpaqueTag"))
+        fn = Function(
+            name="use_tag",
+            return_type=CType("void"),
+            parameters=[Parameter(name="t", type=Pointer(CType("OpaqueTag")))],
+        )
+        header = Header("test.h", [typedef, fn])
+        out = write_pxd(header)
+        assert "ctypedef struct OpaqueTag" in out
+        assert "void use_tag(OpaqueTag* t)" in out
+
+
+class TestCythonVariableAndOpaqueStructOrdering:
+    """Tests for variable ordering after struct bodies and opaque struct typedefs."""
+
+    def test_variable_of_struct_type_emitted_after_struct_body(self) -> None:
+        """Global variables typed with a struct must be emitted after the struct body."""
+        struct_decl = Struct(
+            name="weaponInformation",
+            fields=[Field(name="damage", type=CType("float"))],
+        )
+        var_decl = Variable(
+            name="standard",
+            type=CType("weaponInformation", qualifiers=["const"]),
+        )
+        h = Header("weapons.h", [var_decl, struct_decl])
+        out = PxdWriter(h).write()
+
+        assert "cdef struct weaponInformation:" in out
+        assert "const weaponInformation standard" in out
+        struct_idx = out.index("cdef struct weaponInformation:")
+        var_idx = out.index("const weaponInformation standard")
+        assert struct_idx < var_idx
+
+    def test_opaque_struct_typedef_emits_ctypedef_struct(self) -> None:
+        """Self-aliased opaque struct typedefs must emit ctypedef struct Tag."""
+        typedef_decl = Typedef(
+            name="rAudioBuffer",
+            underlying_type=CType(name="struct rAudioBuffer", is_elaborated=True),
+        )
+        h = Header("audio.h", [typedef_decl])
+        out = PxdWriter(h).write()
+
+        assert "ctypedef struct rAudioBuffer" in out

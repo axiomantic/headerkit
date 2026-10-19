@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `LibclangBackend` dependency resolution and cycle-breaking topological sort:
+  - Replaced iteration-limited while loop in `_resolve_dependencies` with a multi-tier cycle-breaking topological sort. Drops 0 declarations on complex cyclic dependencies (such as mutual pointer struct references) while ensuring all required typedefs, structs, and enums from included headers are cleanly resolved.
+  - In `_process_typedef`, properly preserve inline enum definitions and their enumerator values when encountering typedef enums (`typedef enum foo { ... } foo_t;`).
+- `CythonWriter` variable ordering and phase separation:
+  - Added dependency tracking for global `Variable` declarations in `_sort_declarations`, guaranteeing variables typed with user-defined structs are emitted after their corresponding struct declarations.
+  - In circular dependency multi-phase emission (`_write_cycle_phases`), moved `Variable` declarations to Phase 5 (after Phase 4 struct bodies), preventing Cython compilation failures when global variables are typed with structs defined in the same translation unit.
+  - Fixed circular typedef handling in `_write_typedef` to distinguish enums, unions, and structs when checking elaborated type specifiers, ensuring self-aliased typedef enums are not erroneously emitted as `ctypedef struct`.
+
 ## [0.46.0] - 2026-10-18
 
 - Dropped support for sunset Python 3.10 (minimum supported Python version is now >=3.11). Removed `tomli` fallback dependency, making HeaderKit 100% zero runtime dependencies on all supported Python versions (3.11-3.14).
