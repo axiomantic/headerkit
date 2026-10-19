@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-10-18
+
 - Python writers feature parity with Nim plugin:
   - Turnkey binary wheel packaging (`wheel` layout in `headerkit.packaging` for `cython`, `cffi`, and `ctypes`):
     - `generate_cython_wheel_layout` in `headerkit.packaging.cython`, `generate_cffi_wheel_layout` in `headerkit.packaging.cffi`, and `generate_ctypes_wheel_layout` in `headerkit.packaging.ctypes` generate self-contained Python packages with `pyproject.toml`, source wrappers, build configurations, and anti-green-mirage tripwires and unit test harnesses.
@@ -1136,8 +1138,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.42.0...HEAD
-[0.42.3]: https://github.com/axiomantic/headerkit/compare/v0.42.0...v0.42.3
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/axiomantic/headerkit/compare/v0.42.3...v0.46.0
+[0.42.3]: https://github.com/axiomantic/headerkit/compare/v0.42.2...v0.42.3
+[0.42.2]: https://github.com/axiomantic/headerkit/compare/v0.42.0...v0.42.2
 [0.42.0]: https://github.com/axiomantic/headerkit/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/axiomantic/headerkit/compare/v0.40.1...v0.41.0
 [0.40.1]: https://github.com/axiomantic/headerkit/compare/v0.40.0...v0.40.1
