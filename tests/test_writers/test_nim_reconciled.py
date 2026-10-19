@@ -59,6 +59,8 @@ class TestNimWriterReconciled:
             h_path.write_text(
                 "#ifdef __APPLE__\n"
                 "typedef struct { void *queue; } AudioEngine;\n"
+                "#elif defined(_WIN32)\n"
+                "typedef struct { void *endpoint; } AudioEngine;\n"
                 "#else\n"
                 "typedef struct { int pcm_fd; } AudioEngine;\n"
                 "#endif\n"
@@ -67,14 +69,17 @@ class TestNimWriterReconciled:
 
             mac_cond = PlatformCondition(frozenset({"darwin"}), "defined(macosx)")
             linux_cond = PlatformCondition(frozenset({"linux"}), "defined(linux)")
+            win_cond = PlatformCondition(frozenset({"windows"}), "defined(windows)")
 
             mac_struct = Struct(name="AudioEngine", fields=[Field(name="queue", type=CType("pointer"))])
             linux_struct = Struct(name="AudioEngine", fields=[Field(name="pcm_fd", type=CType("int"))])
+            win_struct = Struct(name="AudioEngine", fields=[Field(name="endpoint", type=CType("pointer"))])
 
             block = PlatformGuardedBlock(
                 branches=[
                     (mac_cond, [mac_struct]),
                     (linux_cond, [linux_struct]),
+                    (win_cond, [win_struct]),
                 ]
             )
             init_func = Function(
@@ -95,6 +100,8 @@ class TestNimWriterReconciled:
                 + "  eng.queue = nil\n"
                 + "elif defined(linux):\n"
                 + "  eng.pcm_fd = 0\n"
+                + "elif defined(windows):\n"
+                + "  eng.endpoint = nil\n"
             )
 
             cmd = ["nim", "check", "--hints:off", str(nim_file)]
