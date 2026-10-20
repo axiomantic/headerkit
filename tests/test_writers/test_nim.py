@@ -1084,7 +1084,7 @@ class TestNimLexicalCorrectness:
         saved = HookRegistry.snapshot()
         try:
 
-            def resolver(collided, _target, *, _context, **_):
+            def resolver(collided, _target, *, context=None, **_):
                 mapping = {}
                 for sym in collided:
                     if sym.kind == "enumerator":
