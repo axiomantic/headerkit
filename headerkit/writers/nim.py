@@ -2297,8 +2297,9 @@ class NimWriter(BaseWriter):
                 if base_t not in ("auto", "pointer", "void"):
                     base_str = f" of {base_t}"
                 base_notes.extend(self._describe_base(s, primary, dropped=False))
-                for extra in valid_bases[1:]:
-                    base_notes.extend(self._describe_base(s, extra, dropped=True, primary_name=primary.name))
+                for extra in s.bases:
+                    if extra is not primary:
+                        base_notes.extend(self._describe_base(s, extra, dropped=True, primary_name=primary.name))
         is_inheritable = not base_str and (
             (s.destructor and s.destructor.is_virtual)
             or any(m.is_virtual for m in s.methods)

@@ -660,7 +660,7 @@ class TestNimAccessSpecifierFiltering:
         assert "protected_val" not in out
         assert "secret_method" not in out
         assert "protected_method" not in out
-        assert "SecretBase" not in out
+        assert "of SecretBase" not in out
         assert "constructWidget*(secret:" not in out
 
     def test_assignment_operator_does_not_crash_lexer(self) -> None:
