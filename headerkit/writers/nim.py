@@ -2297,8 +2297,8 @@ class NimWriter(BaseWriter):
                 if base_t not in ("auto", "pointer", "void"):
                     base_str = f" of {base_t}"
                 base_notes.extend(self._describe_base(s, primary, dropped=False))
-                for extra in s.bases[1:]:
-                    base_notes.extend(self._describe_base(s, extra, dropped=True))
+                for extra in valid_bases[1:]:
+                    base_notes.extend(self._describe_base(s, extra, dropped=True, primary_name=primary.name))
         is_inheritable = not base_str and (
             (s.destructor and s.destructor.is_virtual)
             or any(m.is_virtual for m in s.methods)
@@ -2636,7 +2636,7 @@ class NimWriter(BaseWriter):
         return ["", f"proc {proc_name}*{t_params}({', '.join(params)}): {ret_type} {{.{pragma}.}}"]
 
     @staticmethod
-    def _describe_base(s: Struct, base: BaseSpecifier, *, dropped: bool) -> list[str]:
+    def _describe_base(s: Struct, base: BaseSpecifier, *, dropped: bool, primary_name: str = "") -> list[str]:
         """Report what a base contributes that the emitted declaration cannot say.
 
         Nim has neither multiple inheritance nor access specifiers nor virtual
@@ -2651,9 +2651,10 @@ class NimWriter(BaseWriter):
             traits.append("virtual")
         described = f"{' '.join(traits)} {base.name}" if traits else base.name
         if dropped:
+            chosen = primary_name or (s.bases[0].name if s.bases else "the first base")
             return [
                 f"# UNSUPPORTED: base '{described}' of '{s.name}' is not emitted; "
-                f"Nim objects have a single base and '{s.bases[0].name}' takes it"
+                f"Nim objects have a single base and '{chosen}' takes it"
             ]
         if traits:
             return [f"# NOTE: base '{described}' of '{s.name}' is emitted as a plain Nim base"]

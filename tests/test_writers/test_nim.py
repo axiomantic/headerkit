@@ -952,7 +952,7 @@ class TestNimLexicalCorrectness:
         saved = HookRegistry.snapshot()
         try:
 
-            def resolver(collided, _target, *, _context, **_):
+            def resolver(collided, _target, **_):
                 return {sym: f"{sym.name}_2" if i > 0 else sym.name for i, sym in enumerate(collided)}
 
             HookRegistry.register_global("resolve_collision", resolver, priority=Priority.PROJECT, writer="nim")
@@ -1084,7 +1084,7 @@ class TestNimLexicalCorrectness:
         saved = HookRegistry.snapshot()
         try:
 
-            def resolver(collided, _target, *, context=None, **_):
+            def resolver(collided, _target, **_):
                 mapping = {}
                 for sym in collided:
                     if sym.kind == "enumerator":
