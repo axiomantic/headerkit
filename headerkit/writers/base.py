@@ -125,7 +125,16 @@ class WriterOption:
         if self.type is list:
             if isinstance(val, list):
                 return val
-            if isinstance(val, tuple | set):
+            if isinstance(val, set | frozenset):
+                # Sorted, not iteration-ordered: an unordered value would otherwise
+                # reorder generated output between runs and defeat regenerate-and-diff.
+                #
+                # Sorted by the string form, because the members need not be
+                # mutually comparable: `sorted({1, "a"})` is a TypeError, where
+                # `list()` -- what this replaced -- accepted it and returned an
+                # order that changed between runs.
+                return sorted(val, key=str)
+            if isinstance(val, tuple):
                 return list(val)
             if isinstance(val, str):
                 return [val]
@@ -283,6 +292,7 @@ class BaseWriter:
         return self._write_package_layout(unit, options)
 
     min_access_floor: ClassVar[str | None] = None
+    filter_bases_by_access_floor: ClassVar[bool] = True
 
     def _prepare(
         self,
@@ -305,7 +315,11 @@ class BaseWriter:
             floor = str(raw_floor) if raw_floor is not None else None
 
         if floor and floor.lower() not in ("private", "all", "none"):
-            unit = filter_access_floor(unit, floor=floor)
+            unit = filter_access_floor(
+                unit,
+                floor=floor,
+                filter_bases=self.filter_bases_by_access_floor,
+            )
         if not self.consumes_padding_fields:
             return StripPaddingFields().transform(unit)
         return unit

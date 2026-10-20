@@ -15,11 +15,23 @@ Features
 from __future__ import annotations
 
 import textwrap
+import unicodedata
+from collections.abc import Sequence
 from dataclasses import replace
+from pathlib import Path, PureWindowsPath
 from typing import Any, ClassVar
 
+from headerkit._rename import (
+    MODULE_SCOPE_KINDS,
+    RenameError,
+    Symbol,
+    dispatch_rename,
+    enforce_injectivity,
+)
+from headerkit.hooks import HookRegistry, PipelineContext, Priority
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Declaration,
@@ -28,6 +40,7 @@ from headerkit.ir import (
     FunctionPointer,
     Header,
     MacroFunction,
+    Parameter,
     Pointer,
     Reference,
     SourceUnit,
@@ -271,6 +284,7 @@ STANDARD_NIM_TYPES: set[str] = {
     "UniquePtr",
     "WeakPtr",
     "CppVector",
+    "CppString",
     "std_optional",
     "initializer_list",
 }
@@ -334,7 +348,7 @@ def _escape_ident(name: str, is_type: bool = False) -> str:
     consecutive underscores ('__').
     """
     if not name:
-        return "anon"
+        raise RenameError("the empty string is not a Nim identifier")
     if name in CPP_OPERATOR_MAP:
         return CPP_OPERATOR_MAP[name]
     if name.startswith('operator""'):
@@ -389,18 +403,492 @@ def _escape_ident(name: str, is_type: bool = False) -> str:
     return clean
 
 
-def _normalize_nim_ident(name: str) -> str:
-    """Normalize a Nim identifier according to Nim's case- and underscore-insensitivity rules.
+def _template_param_ident(name: str) -> str:
+    """Escape a template parameter and hold the result to Nim's grammar.
 
-    In Nim, identifiers are compared case-insensitively and underscore-insensitively
-    (except for the first character which differentiates type vs non-type).
+    A generic parameter is scoped to the declaration that introduces it, so it is
+    not part of the module-scope injectivity set -- but it is still a token the
+    Nim lexer has to accept, and ``_escape_ident`` alone has never proved that.
     """
-    clean = name.strip("`")
-    if not clean:
-        return ""
-    first = clean[0]
-    rest = clean[1:].replace("_", "").lower()
-    return first + rest
+    out = _escape_ident(name)
+    validate_nim_ident(out)
+    return out
+
+
+def nim_ident_identity(name: str) -> str:
+    """Return Nim's identity spelling for *name* -- what the compiler compares.
+
+    Nim considers two identifiers the same when their first characters match
+    exactly and the rest match after removing underscores and folding case. So
+    ``foo_bar`` and ``fooBar`` are one identifier and redefining across them is a
+    compile error, while ``Foo_bar`` and ``fooBar`` are two.
+
+    Equality on the emitted spelling is therefore the wrong test for a name
+    collision, and equality on the *source* spelling is the wrong test twice
+    over. This is the function every collision check in this writer runs under.
+    """
+    bare = name.strip("`")
+    if not bare:
+        return bare
+    return bare[0] + bare[1:].replace("_", "").lower()
+
+
+#: The characters a Nim operator may be built from -- the Nim manual's ``OPR``
+#: production. Backtick-quoted content is accepted when it is a sequence of these
+#: runs and identifier runs, which covers every operator the writer emits
+#: (``+``, ``==``, ``shl=``) and every keyword-as-identifier (``\`type\```).
+NIM_OPERATOR_CHARS: frozenset[str] = frozenset("=+-*/<>@$~&%|!?^.:\\")
+
+#: The bracket operators, which Nim spells with characters ``OPR`` does not
+#: contain. They are an enumerated set rather than an admitted character class
+#: because ``}`` is how a pragma ends: admitting it would leave the floor open to
+#: exactly the payload this validator exists to refuse.
+NIM_BRACKET_OPERATORS: frozenset[str] = frozenset({"[]", "[]=", "{}", "{}="})
+
+
+def _validate_bare_nim_ident(name: str, bare: str) -> None:
+    """Raise unless *bare* satisfies Nim's ordinary identifier grammar.
+
+    ``name`` is the spelling to quote in the message, which differs from ``bare``
+    when the caller stripped a pair of backticks off it.
+
+    Composed characters are compared in NFC. Nim accepts ``café`` written either
+    way, and the decomposed form puts a combining acute -- a mark, not a letter or
+    a digit -- in the name, so the character check refused a name the compiler
+    would have taken. Which normalisation a header arrives in is a property of
+    the editor that wrote it, and a floor that rejects on it rejects the wrong
+    thing.
+    """
+    bare = unicodedata.normalize("NFC", bare)
+    if bare.startswith("_") or bare.endswith("_"):
+        raise RenameError(f"{name!r} is not a legal Nim identifier: it may not begin or end with an underscore")
+    if not bare[0].isalpha():
+        raise RenameError(f"{name!r} is not a legal Nim identifier: it must start with a letter")
+    if "__" in bare:
+        raise RenameError(f"{name!r} is not a legal Nim identifier: it may not contain consecutive underscores")
+    if not all(ch.isalnum() or ch == "_" for ch in bare):
+        raise RenameError(f"{name!r} is not a legal Nim identifier: only letters, digits and underscores are allowed")
+
+
+def _validate_quoted_nim_ident(name: str, bare: str) -> None:
+    """Raise unless *bare* is legal between a pair of backticks.
+
+    Nim's own accent-quoted grammar is far wider than this -- it concatenates the
+    tokens between the quotes, so it accepts ``\\`foo bar\\``` and ``\\`a.}b\\```
+    as identifiers. This is deliberately narrower: a **floor**, admitting the
+    keyword, operator and identifier spellings a binding actually needs and
+    nothing else. The characters it refuses are the ones that end a pragma, close
+    a string literal or a line, which is the whole of the injection this exists to
+    stop; a name outside the floor is refused rather than emitted, which is the
+    conservative direction for a generator.
+    """
+    tokens: list[str] = []
+    current = ""
+    kind: str | None = None
+    for ch in bare:
+        if ch.isalnum() or ch == "_":
+            ch_kind = "ident"
+        elif ch in NIM_OPERATOR_CHARS:
+            ch_kind = "operator"
+        else:
+            raise RenameError(
+                f"{name!r} is not a legal Nim identifier: {ch!r} may not appear between backticks. "
+                "A backtick-quoted name may spell a keyword, an operator or an identifier, and "
+                "nothing that could end the pragma or the line it is emitted into."
+            )
+        if ch_kind != kind:
+            if current:
+                tokens.append(current)
+            current, kind = ch, ch_kind
+        else:
+            current += ch
+    if current:
+        tokens.append(current)
+    if bare in {".", ":", "="} or ":" in bare:
+        raise RenameError(
+            f"{name!r} is not a legal Nim identifier: {bare!r} may not appear between backticks. "
+            f"{bare!r} is rejected by the Nim lexer."
+        )
+    for token in tokens:
+        if token[0] in NIM_OPERATOR_CHARS or token in NIM_KEYWORDS:
+            continue
+        _validate_bare_nim_ident(name, token)
+
+
+def validate_nim_ident(name: str) -> None:
+    """Raise unless *name* is something the Nim lexer will accept.
+
+    A backtick-quoted name is how Nim spells a keyword or an operator as an
+    identifier -- ``\\`type\\```, ``\\`+\\```. The quotes suspend the *identifier*
+    grammar; they do not suspend the grammar altogether, and the content between
+    them is still checked here. Returning early on any backticked string is what
+    made this floor bypassable: a ``rename_symbol`` hook at ``PROJECT`` -- which
+    is exactly what a ``[rename]`` section of ``.headerkit.toml`` registers --
+    could answer with a backticked payload carrying ``".}`` and a newline and
+    have arbitrary Nim emitted into the generated module, under a validator whose
+    whole purpose is that no configuration can reach past it.
+
+    :raises RenameError: if *name* is not a legal Nim identifier.
+    """
+    if not name:
+        raise RenameError("the empty string is not a Nim identifier")
+    if name.startswith("`") and name.endswith("`") and len(name) >= 2:
+        bare = name[1:-1]
+        if not bare:
+            raise RenameError(f"{name!r} is not a Nim identifier: the backticks quote nothing")
+        if bare in NIM_BRACKET_OPERATORS:
+            return
+        _validate_quoted_nim_ident(name, bare)
+        return
+    if "`" in name:
+        raise RenameError(
+            f"{name!r} is not a legal Nim identifier: a backtick may only appear as the pair quoting the whole name"
+        )
+    if name in NIM_KEYWORDS:
+        raise RenameError(f"{name!r} is a Nim keyword; it must be quoted with backticks to be used as an identifier")
+    _validate_bare_nim_ident(name, name)
+
+
+def nim_legality_renamer(name: str, *, context: PipelineContext, kind: str, **_: object) -> str:  # noqa: ARG001
+    """The ``rename_symbol`` implementation that enforces Nim's own grammar.
+
+    Registered at :attr:`~headerkit.hooks.Priority.FALLBACK`, which is the whole
+    point of the tier choice: the waterfall runs highest priority first, so every
+    project renamer at ``PROJECT`` has already had the name by the time this sees
+    it. Whatever a project renames a symbol to must still survive Nim's lexer,
+    and no configuration can bypass that floor.
+    """
+    return _escape_ident(name)
+
+
+HookRegistry.register_global(
+    "rename_symbol",
+    nim_legality_renamer,
+    priority=Priority.FALLBACK,
+    writer="nim",
+)
+
+
+#: The Nim declaration, and any companion procs, for each C++ helper type
+#: :meth:`NimWriter._format_type` can produce. The renderer records which helpers it
+#: emitted and this table turns that record into declarations, so the set declared is
+#: the set referenced by construction rather than by a second predicate that has to
+#: agree with the first.
+CPP_HELPER_DECLARATIONS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "CppString": ('CppString* {.importcpp: "std::string", header: "<string>".} = object', ()),
+    "CppVector": ('CppVector*[T] {.importcpp: "std::vector<\'0>", header: "<vector>".} = object', ()),
+    "UniquePtr": (
+        'UniquePtr*[T] {.importcpp: "std::unique_ptr<\'0>", header: "<memory>".} = object',
+        (
+            'proc `=copy`*[T](dst: var UniquePtr[T], src: UniquePtr[T]) {.error: "std::unique_ptr cannot be copied in Nim; use std/moves.move() or sink".}',
+            'proc move*[T](p: var UniquePtr[T]): UniquePtr[T] {.importcpp: "std::move(@)", header: "<utility>".}',
+            'proc get*[T](p: UniquePtr[T]): ptr T {.importcpp: "#.get()", header: "<memory>".}',
+            'proc reset*[T](p: var UniquePtr[T]) {.importcpp: "#.reset()", header: "<memory>".}',
+        ),
+    ),
+    "SharedPtr": (
+        'SharedPtr*[T] {.importcpp: "std::shared_ptr<\'0>", header: "<memory>".} = object',
+        (
+            'proc get*[T](p: SharedPtr[T]): ptr T {.importcpp: "#.get()", header: "<memory>".}',
+            'proc reset*[T](p: var SharedPtr[T]) {.importcpp: "#.reset()", header: "<memory>".}',
+            'proc useCount*[T](p: SharedPtr[T]): clong {.importcpp: "#.use_count()", header: "<memory>".}',
+        ),
+    ),
+    "WeakPtr": (
+        'WeakPtr*[T] {.importcpp: "std::weak_ptr<\'0>", header: "<memory>".} = object',
+        ('proc lock*[T](p: WeakPtr[T]): SharedPtr[T] {.importcpp: "#.lock()", header: "<memory>".}',),
+    ),
+}
+
+#: Helpers whose companion procs name another helper, which must therefore be
+#: declared alongside them.
+_CPP_HELPER_REQUIRES: dict[str, tuple[str, ...]] = {"WeakPtr": ("SharedPtr",)}
+
+#: Tag keywords that mark a name as a C record or enumeration rather than a C++ one.
+_C_TAG_PREFIXES: tuple[str, ...] = ("struct ", "union ", "enum ")
+
+#: The module-scope kinds a *type reference* can denote. A use of a type carries
+#: no kind -- ``status x;`` says nothing about whether ``status`` is a struct, an
+#: enum or a typedef -- so a reference is resolved against these and only these.
+_TYPE_KINDS: frozenset[str] = frozenset({"struct", "union", "enum", "typedef"})
+
+#: The identifier of an anonymous record, invented by this writer rather than
+#: renamed from the header. Every site that needs to name such a record uses
+#: this constant so the declaration and every reference agree by construction.
+ANONYMOUS_RECORD_NAME: str = "AnonObject"
+
+# =============================================================================
+# Identity
+#
+# Module-scope declarations and type references are resolved using the complete
+# set of identity axes recorded in the IR.
+# =============================================================================
+
+#: Every axis a *module-scope declaration* is identified by. Declarations that
+#: agree on all of them are one entity spelled twice -- an opaque record and its
+#: definition, a forward declaration and the class. Declarations differing on any
+#: of them are distinct symbols competing for one Nim identifier, and the naming
+#: pass must see every one of them.
+#:
+#: The axes are named here and read by :func:`_decl_identity` only. Adding one is
+#: an entry here and a component there; tests pin the two against each other so
+#: they cannot drift.
+DECL_IDENTITY_AXES: tuple[str, ...] = ("name", "kind", "namespace")
+
+#: The identity of one module-scope declaration, in :data:`DECL_IDENTITY_AXES` order.
+DeclIdentity = tuple[str, str, str | None]
+
+
+def _decl_identity(name: str, kind: str, namespace: str | None) -> DeclIdentity:
+    """Build the identity tuple for a module-scope declaration.
+
+    An empty namespace and a missing one are the same fact -- global scope -- and
+    are normalised to ``None`` so two spellings of it cannot key two entries.
+    """
+    return (name, kind, namespace or None)
+
+
+def _decl_namespace(decl: object) -> str | None:
+    """The enclosing C++ namespace a declaration records, or ``None``.
+
+    ``Constant`` carries none at all, which is not an oversight in the IR: a
+    macro has no C++ scope to be in.
+    """
+    return getattr(decl, "namespace", None) or None
+
+
+#: Every axis a *type reference* is resolved by. A reference names no kind and no
+#: scope, so the answer is assembled from the type expression itself plus the
+#: facts the unit records around it.
+TYPE_REFERENCE_AXES: tuple[str, ...] = (
+    "name",
+    "qualifiers",
+    "is_elaborated",
+    "unit language",
+    "declared in this unit",
+)
+
+
+def _typedef_aliases_its_own_tag(t: Typedef) -> bool:
+    """Whether ``t`` is the ``typedef struct foo foo;`` idiom: one entity, two kinds.
+
+    The comparison is against the typedef's *own* underlying type, so a typedef
+    that merely shares a name with an unrelated tag -- ``enum status {...};``
+    beside ``typedef int status;``, two distinct entities in two C namespaces --
+    is not mistaken for it.
+    """
+    if not t.name or not isinstance(t.underlying_type, CType):
+        return False
+    raw = t.underlying_type.name
+    for tag in _C_TAG_PREFIXES:
+        raw = raw.removeprefix(tag)
+    return raw.strip() == t.name
+
+
+#: Qualifiers that describe *mutability* rather than the type itself. They never
+#: form part of a primitive's spelling, so they are dropped before the lookup.
+_CV_QUALIFIERS: frozenset[str] = frozenset({"const", "volatile", "restrict"})
+
+
+def _qualified_type_name(name: str, qualifiers: Sequence[str]) -> str:
+    """Re-join type-level qualifiers with ``name``, dropping cv-qualifiers."""
+    type_level = [q for q in qualifiers if q not in _CV_QUALIFIERS]
+    return " ".join([*type_level, name]) if type_level else name
+
+
+def _nim_string_path(path: str) -> str:
+    """Render ``path`` so it survives inside a Nim string literal.
+
+    Normalised with PureWindowsPath rather than PurePath so the result depends on
+    the path rather than on the host that generated it.
+    """
+    return PureWindowsPath(path).as_posix()
+
+
+def _cfg_path_flag(flag: str, path: str) -> str:
+    """Render a ``-I``/``-L`` flag for ``nim.cfg`` so a path with spaces survives.
+
+    Nim strips the outer quotes from a config value and passes the result to the C
+    compiler after word-splitting it, so ``--passC:"-I/opt/na me"`` reaches clang as
+    ``-I/opt/na`` and ``me`` and fails with ``no such file or directory: 'me'``. An
+    inner quote survives that split and the compiler driver removes it.
+
+    That inner quote must be a **double** quote, escaped. A config file is read by
+    Nim's own lexer, where ``'`` opens a character literal, so a single-quoted path
+    is a syntax error in the generated file rather than a flag -- ``nim.cfg(5, 18)
+    Error: invalid character constant``, on every Nim invocation the package makes.
+
+    The path is emitted with forward slashes for the same reason: a Windows path
+    inside a Nim string literal would put ``\\U`` in front of ``Users`` and be read
+    as an escape. Every compiler in the matrix accepts ``/`` as a separator on
+    Windows, so this costs nothing and removes the escape question entirely.
+    """
+    if '"' in path:
+        raise ValueError(
+            f"cannot place {path!r} in nim.cfg: a double quote in an include or library "
+            f"path cannot be quoted in Nim's config format"
+        )
+    # PureWindowsPath, not PurePath: the separator to normalise is a property of the
+    # path, not of the host generating the config, and it leaves a POSIX path alone.
+    return f'"{flag}\\"{PureWindowsPath(path).as_posix()}\\""'
+
+
+def _bare_type_head(raw: str) -> str:
+    """Strip qualifiers, tag keywords and template arguments down to the head name."""
+    name = raw.strip()
+    for qualifier in ("const ", "volatile "):
+        while name.startswith(qualifier):
+            name = name[len(qualifier) :].strip()
+    for tag in _C_TAG_PREFIXES:
+        if name.startswith(tag):
+            name = name[len(tag) :].strip()
+            break
+    return name.split("<", 1)[0].rsplit("::", 1)[-1].strip()
+
+
+#: Standard-library names the writer renders as a C++ helper type (``CppString``,
+#: ``UniquePtr``, ``SharedPtr``, ``WeakPtr``, ``CppVector``) or as an ``importcpp``
+#: base object.
+CPP_STDLIB_MARKERS: frozenset[str] = frozenset(
+    {
+        "exception",
+        "string",
+        "wstring",
+        "basic_string",
+        "unique_ptr",
+        "shared_ptr",
+        "weak_ptr",
+        "vector",
+    }
+)
+
+
+def _type_name_requires_cpp(
+    raw: str,
+    *,
+    unit_is_cpp: bool,
+    is_elaborated: bool | None = None,
+) -> bool:
+    """Whether a type *name* requires the C++ backend."""
+    name = raw.strip()
+    if "<" in name or "::" in name:
+        return True
+    if not unit_is_cpp:
+        return False
+    if is_elaborated is True or name.startswith(_C_TAG_PREFIXES):
+        return False
+    return _bare_type_head(name) in CPP_STDLIB_MARKERS
+
+
+def _type_requires_cpp(t: TypeExpr, *, unit_is_cpp: bool) -> bool:
+    """Whether rendering ``t`` produces Nim that only the C++ backend can build."""
+    if isinstance(t, Reference):
+        # Rendered as `var T`, which is a C++ reference. C has no such parameter.
+        return True
+    if isinstance(t, CType):
+        return _type_name_requires_cpp(t.name, unit_is_cpp=unit_is_cpp, is_elaborated=t.is_elaborated)
+    if isinstance(t, Pointer):
+        return _type_requires_cpp(t.pointee, unit_is_cpp=unit_is_cpp)
+    if isinstance(t, Array):
+        return _type_requires_cpp(t.element_type, unit_is_cpp=unit_is_cpp)
+    if isinstance(t, FunctionPointer):
+        return _type_requires_cpp(t.return_type, unit_is_cpp=unit_is_cpp) or any(
+            _type_requires_cpp(p.type, unit_is_cpp=unit_is_cpp) for p in t.parameters
+        )
+    return False
+
+
+def _signature_requires_cpp(f: Function, *, unit_is_cpp: bool) -> bool:
+    """Whether a function's return type or any parameter type is C++-only."""
+    return _type_requires_cpp(f.return_type, unit_is_cpp=unit_is_cpp) or any(
+        _type_requires_cpp(p.type, unit_is_cpp=unit_is_cpp) for p in f.parameters
+    )
+
+
+def _struct_requires_cpp(s: Struct) -> bool:
+    """Whether this record is rendered with ``importcpp`` rather than ``importc``.
+
+    ``namespace`` belongs here rather than only in :func:`unit_requires_cpp`: a
+    record in a namespace has no C tag to import, and the emitter already spells
+    its ``importcpp`` pattern as ``ns::Name`` once it takes this branch.
+    """
+    return bool(
+        s.is_cppclass or s.methods or s.bases or s.constructors or s.destructor or s.template_params or s.namespace
+    )
+
+
+def _function_requires_cpp(f: Function, *, unit_is_cpp: bool) -> bool:
+    """Whether this free function is rendered with ``importcpp`` rather than ``importc``.
+
+    A C++-only *signature* belongs here alongside namespace and template, because
+    the pragma and the rendered parameter types have to agree. An ``int&``
+    parameter renders as ``var cint``; under ``importc`` Nim passes ``int*`` and
+    the C++ compiler rejects the call, while ``importcpp`` passes an lvalue and it
+    binds.
+
+    ``unit_is_cpp`` has no default on purpose. It defaulted to ``True``, and the
+    renderer took that default while the unit said ``c``: a C function taking a
+    ``typedef char string *`` came out ``importcpp``, in a package built with the
+    C backend.
+    """
+    return bool(
+        f.namespace
+        or f.template_params
+        or '"' in f.name
+        or f.name.startswith("operator")
+        or _signature_requires_cpp(f, unit_is_cpp=unit_is_cpp)
+    )
+
+
+def unit_requires_cpp(unit: SourceUnit | Header) -> bool:
+    """Whether the Nim bindings for ``unit`` need the C++ backend to compile.
+
+    The answer is read off the IR, never off the file extension: a ``.h`` may
+    declare a class and a ``.hpp`` may declare nothing but C functions.
+
+    This is deliberately a **superset** of the ``importc``/``importcpp`` pragma
+    decision, because the two questions are different. A record whose pragma is
+    ``importc`` still forces the C++ backend if one of its fields is a
+    ``std::string``, since the field renders as ``CppString``; and a free function
+    keeps its ``importc`` pragma while taking an ``int&``, which renders as
+    ``var cint``. Both are C++-only Nim emitted under a C pragma, so asking only
+    "which pragma" would answer C for a unit the C backend cannot build.
+
+    The test is structural rather than an enumerated list of shapes: any
+    reference, any template-id, any qualified name, any namespace, any scoped
+    enumeration. A shape nobody thought to enumerate is still caught if it is one
+    of those. The one test that spelling cannot settle -- a bare ``string`` being
+    ``std::string`` or a C typedef of that name -- is settled by the language the
+    parser recorded for the unit; see :func:`_type_name_requires_cpp`.
+    """
+    unit_is_cpp = getattr(unit, "language", None) == "cpp"
+    for decl in unit.declarations:
+        if isinstance(decl, Struct):
+            if _struct_requires_cpp(decl):
+                return True
+            if any(_type_requires_cpp(f.type, unit_is_cpp=unit_is_cpp) for f in decl.fields):
+                return True
+            if any(_signature_requires_cpp(m, unit_is_cpp=unit_is_cpp) for m in decl.methods + decl.constructors):
+                return True
+        elif isinstance(decl, Function):
+            if _function_requires_cpp(decl, unit_is_cpp=unit_is_cpp):
+                return True
+        elif isinstance(decl, Enum):
+            # `enum class` has no C spelling at all, scoped or otherwise.
+            if decl.is_scoped or decl.namespace:
+                return True
+        elif isinstance(decl, Typedef):
+            if _type_requires_cpp(decl.underlying_type, unit_is_cpp=unit_is_cpp):
+                return True
+        elif isinstance(decl, Variable):
+            if _type_requires_cpp(decl.type, unit_is_cpp=unit_is_cpp):
+                return True
+        if getattr(decl, "namespace", None):
+            return True
+    return False
+
+
+_normalize_nim_ident = nim_ident_identity
 
 
 def _split_template_args(arg_str: str) -> list[str]:
@@ -494,6 +982,7 @@ class NimWriter(BaseWriter):
     default_output_pattern: str = "{dir}/{stem}.nim"
     default_extension: str = ".nim"
     min_access_floor: ClassVar[str | None] = "public"
+    filter_bases_by_access_floor: ClassVar[bool] = False
     supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel", "scikit-build")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
@@ -507,6 +996,18 @@ class NimWriter(BaseWriter):
             description="Header path to reference in {.header.} pragmas",
             default=None,
             type=str,
+        ),
+        WriterOption(
+            name="library",
+            description="Native library to link, without the 'lib' prefix or extension (emits --passL:-l<name>)",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="library_dirs",
+            description="Directories to search for the native library (emits --passL:-L<dir>)",
+            default=None,
+            type=list,
         ),
         WriterOption(
             name="access_floor",
@@ -532,9 +1033,21 @@ class NimWriter(BaseWriter):
         self,
         *,
         header_path: str | None = None,
+        context: PipelineContext | None = None,
         macro_types: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.header_path = header_path.replace("\\", "/") if header_path else None
+        self._used_helpers: set[str] = set()
+        # ``writer="nim"`` is what makes this writer's own legality renamer
+        # match; a caller-supplied context is honoured otherwise so a rename can
+        # be scoped to a backend, a target or a layout like any other hook.
+        self._context = context or PipelineContext(writer="nim")
+        if self._context.writer != "nim":
+            self._context = replace(self._context, writer="nim")
+        self._unit_is_cpp = False
+        self._name_map: dict[DeclIdentity, str] = {}
+        self._type_refs: dict[str, dict[str, str]] = {}
+        self._identity_owners: dict[str, Symbol] = {}
         self.macro_types: dict[str, dict[str, Any]] = dict(macro_types) if macro_types else {}
 
     def _prepare(
@@ -551,6 +1064,127 @@ class NimWriter(BaseWriter):
                 self.header_path = str(options.options["header_path"]).replace("\\", "/")
         return super()._prepare(unit, options=options)
 
+    def _ident(self, name: str, *, kind: str, namespace: str | None = None) -> str:
+        """Return the Nim identifier for the source symbol *name* of *kind*."""
+        if kind in MODULE_SCOPE_KINDS:
+            mapped = self._name_map.get(_decl_identity(name, kind, namespace))
+            if mapped is not None:
+                return mapped
+            if namespace is None and "::" in name:
+                ns, bare = name.rsplit("::", 1)
+                mapped = self._name_map.get(_decl_identity(bare, kind, ns))
+                if mapped is not None:
+                    return mapped
+            if kind in _TYPE_KINDS:
+                mapped = self._resolve_type_ref(name)
+                if mapped is not None:
+                    return mapped
+        out = dispatch_rename(name, kind=kind, context=self._context)
+        validate_nim_ident(out)
+        return out
+
+    def _resolve_type_ref(self, name: str) -> str | None:
+        """The identifier a bare type reference to *name* denotes, if the unit declares it."""
+        candidates = self._type_refs.get(name)
+        if not candidates:
+            return None
+        idents = set(candidates.values())
+        if len(idents) == 1:
+            return next(iter(idents))
+        described = ", ".join(f"{kind} -> {ident!r}" for kind, ident in sorted(candidates.items()))
+        raise RenameError(
+            f"the type reference {name!r} is ambiguous in the generated module: the unit declares it as "
+            f"{len(candidates)} distinct types ({described}), and a collision policy gave them different "
+            "identifiers. headerkit will not guess which one a use of the bare name meant: rename one at "
+            "the source, or add a rename_symbol rule that distinguishes them."
+        )
+
+    def _synthesized_ident(self, name: str, *, what: str) -> str:
+        """Check a name the writer invented against the same floor a renamed one passes."""
+        validate_nim_ident(name)
+        owner = self._identity_owners.get(nim_ident_identity(name))
+        if owner is not None:
+            raise RenameError(
+                f"the Nim identifier {name!r}, which this writer generates for {what}, is the same identifier "
+                f"as the one assigned to {owner.name!r} ({owner.kind}) declared in this unit "
+                f"(identity {nim_ident_identity(name)!r}). Emitting both is 'attempt to redefine' at compile "
+                "time: rename the declaration at the source, or add a rename_symbol rule for it."
+            )
+        return name
+
+    @staticmethod
+    def _declaration_kind(decl: object) -> str | None:
+        """Map an IR declaration to its :data:`~headerkit._rename.RENAME_KINDS` kind."""
+        if isinstance(decl, Struct):
+            return "union" if decl.is_union else "struct"
+        if isinstance(decl, Enum):
+            return "enum"
+        if isinstance(decl, Typedef):
+            return "typedef"
+        if isinstance(decl, Function):
+            return "function"
+        if isinstance(decl, Constant | MacroFunction):
+            return "macro"
+        if isinstance(decl, Variable):
+            return "function"
+        return None
+
+    def _build_name_map(self, header: Header | SourceUnit) -> dict[DeclIdentity, str]:
+        """Rename every module-scope symbol, then prove the result is injective."""
+        assigned: dict[Symbol, str] = {}
+        taken: set[DeclIdentity] = set()
+        index = 0
+
+        def take(name: str, kind: str, location: object, namespace: str | None = None) -> None:
+            nonlocal index
+            if not name or "(anonymous" in name or "(unnamed" in name:
+                return
+            identity = _decl_identity(name, kind, namespace)
+            if identity in taken:
+                return
+            taken.add(identity)
+            file = getattr(location, "file", "") or ""
+            sym = Symbol(index=index, name=name, kind=kind, header=str(file), namespace=namespace)
+            index += 1
+            assigned[sym] = dispatch_rename(name, kind=kind, context=self._context)
+
+        declarations = list(header.declarations)
+        declared_tags = {
+            decl.name for decl in declarations if isinstance(decl, Struct | Enum) and decl.name and not decl.namespace
+        }
+
+        for decl in declarations:
+            kind = self._declaration_kind(decl)
+            if kind is None:
+                continue
+            ns = _decl_namespace(decl)
+            if isinstance(decl, Typedef) and _typedef_aliases_its_own_tag(decl) and decl.name in declared_tags:
+                continue
+            take(getattr(decl, "name", "") or "", kind, getattr(decl, "location", None), namespace=ns)
+            if isinstance(decl, Enum):
+                for value in decl.values:
+                    take(value.name, "enumerator", getattr(decl, "location", None), namespace=ns)
+
+        for name in assigned.values():
+            validate_nim_ident(name)
+
+        resolved = enforce_injectivity(
+            assigned,
+            identity=nim_ident_identity,
+            context=self._context,
+            validate=validate_nim_ident,
+        )
+
+        self._type_refs = {}
+        self._identity_owners = {}
+        for sym, ident in sorted(resolved.items()):
+            self._identity_owners.setdefault(nim_ident_identity(ident), sym)
+            if sym.kind in _TYPE_KINDS:
+                self._type_refs.setdefault(sym.name, {})[f"{sym.kind}:{sym.namespace}"] = ident
+                if sym.namespace:
+                    self._type_refs.setdefault(f"{sym.namespace}::{sym.name}", {})[sym.kind] = ident
+        return {_decl_identity(sym.name, sym.kind, sym.namespace): ident for sym, ident in sorted(resolved.items())}
+
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Nim comments."""
         return "# {line}"
@@ -563,9 +1197,21 @@ class NimWriter(BaseWriter):
         if not header.declarations:
             return "# Generated by headerkit\n"
 
-        header_file = (self.header_path or header.path or "header.h").replace("\\", "/")
+        header_file = _nim_string_path(self.header_path or header.path or "header.h")
         lines.append("# Generated by headerkit")
         lines.append("")
+
+        # The language the parser recorded for the unit, read once and threaded
+        # through every decision that needs it. A C header declaring
+        # `typedef char string;` and a C++ header using `std::string` reach the
+        # writer as the byte-identical `CType(name="string")`; the IR settles
+        # which is which and no predicate over the spelling can.
+        self._unit_is_cpp = getattr(unit, "language", None) == "cpp"
+
+        # Every module-scope name is renamed and checked for collisions before a
+        # single line is emitted, so a rejected unit is rejected whole rather
+        # than half-written.
+        self._name_map = self._build_name_map(header)
 
         has_call_operator = any(
             isinstance(decl, Struct) and any(m.name == "operator()" for m in decl.methods)
@@ -633,10 +1279,13 @@ class NimWriter(BaseWriter):
                 all_base_names.update(_collect_polymorphic_and_base_names(decl))
         known_base_classes: set[str] = all_base_names
         self._normalized_base_names = {_normalize_nim_ident(b) for b in all_base_names}
-        emitted_types: set[str] = set()
+        emitted_types: set[DeclIdentity | str] = set()
         types_section: list[str] = []
         procs_section: list[str] = []
         consts_section: list[str] = []
+        # Reset per render: the helper declarations emitted below are exactly the
+        # helpers `_format_type` reports having produced while rendering this unit.
+        self._used_helpers = set()
 
         self._struct_type_param_counts: dict[str, int] = {}
 
@@ -659,9 +1308,11 @@ class NimWriter(BaseWriter):
         )
 
         if has_std_exception:
+            self._synthesized_ident("std_exception", what="the base object for std::exception")
             types_section.append(
                 'std_exception* {.importcpp: "std::exception", header: "<exception>", inheritable.} = object'
             )
+            emitted_types.add(_decl_identity("std_exception", "struct", None))
             emitted_types.add("std_exception")
 
         def _type_contains(t: TypeExpr, target_prefix: str) -> bool:
@@ -715,43 +1366,6 @@ class NimWriter(BaseWriter):
                     return True
             return False
 
-        has_cpp_string = any(_decl_contains(decl, "string") for decl in header.declarations)
-        if has_cpp_string and "CppString" not in emitted_types:
-            types_section.append('CppString* {.importcpp: "std::string", header: "<string>".} = object')
-            emitted_types.add("CppString")
-
-        has_unique_ptr = any(_decl_contains(decl, "unique_ptr") for decl in header.declarations)
-        if has_unique_ptr and "UniquePtr" not in emitted_types:
-            types_section.append('UniquePtr*[T] {.importcpp: "std::unique_ptr<\'0>", header: "<memory>".} = object')
-            emitted_types.add("UniquePtr")
-            procs_section.extend(
-                [
-                    "",
-                    'proc `=copy`*[T](dst: var UniquePtr[T], src: UniquePtr[T]) {.error: "std::unique_ptr cannot be copied in Nim; use std/moves.move() or sink".}',
-                    "",
-                    'proc move*[T](p: var UniquePtr[T]): UniquePtr[T] {.importcpp: "std::move(@)", header: "<utility>".}',
-                    "",
-                    'proc get*[T](p: UniquePtr[T]): ptr T {.importcpp: "#.get()", header: "<memory>".}',
-                    "",
-                    'proc reset*[T](p: var UniquePtr[T]) {.importcpp: "#.reset()", header: "<memory>".}',
-                ]
-            )
-
-        has_shared_ptr = any(_decl_contains(decl, "shared_ptr") for decl in header.declarations)
-        if has_shared_ptr and "SharedPtr" not in emitted_types:
-            types_section.append('SharedPtr*[T] {.importcpp: "std::shared_ptr<\'0>", header: "<memory>".} = object')
-            emitted_types.add("SharedPtr")
-            procs_section.extend(
-                [
-                    "",
-                    'proc get*[T](p: SharedPtr[T]): ptr T {.importcpp: "#.get()", header: "<memory>".}',
-                    "",
-                    'proc reset*[T](p: var SharedPtr[T]) {.importcpp: "#.reset()", header: "<memory>".}',
-                    "",
-                    'proc useCount*[T](p: SharedPtr[T]): clong {.importcpp: "#.use_count()", header: "<memory>".}',
-                ]
-            )
-
         has_atomic = any(_decl_contains(decl, "atomic") for decl in header.declarations)
         if has_atomic and "Atomic" not in emitted_types:
             types_section.append('Atomic*[T] {.importcpp: "std::atomic<\'0>", header: "<atomic>".} = object')
@@ -767,11 +1381,6 @@ class NimWriter(BaseWriter):
             types_section.append('std_optional*[T] {.importcpp: "std::optional<\'0>", header: "<optional>".} = object')
             types_section.append("optional*[T] = std_optional[T]")
             emitted_types.update({"std_optional", "optional"})
-
-        has_vector = any(_decl_contains(decl, "vector") for decl in header.declarations)
-        if has_vector and "CppVector" not in emitted_types:
-            types_section.append('CppVector*[T] {.importcpp: "std::vector<\'0>", header: "<vector>".} = object')
-            emitted_types.add("CppVector")
 
         has_map = any(_decl_contains(decl, "map") for decl in header.declarations)
         if has_map and "std_map" not in emitted_types:
@@ -864,7 +1473,7 @@ class NimWriter(BaseWriter):
                     known_decl_names.update(m.template_params)
             elif isinstance(decl, Function):
                 known_decl_names.update(decl.template_params)
-        known_decl_names.update(emitted_types)
+        known_decl_names.update(t if isinstance(t, str) else t[0] for t in emitted_types)
         known_decl_names.update(C_TO_NIM_PRIMITIVES.keys())
 
         def _collect_opaque_pointer_names(t: TypeExpr) -> set[str]:
@@ -904,7 +1513,7 @@ class NimWriter(BaseWriter):
 
         if not getattr(self, "_in_reconciled", False):
             self._emitted_proc_sigs = set()
-            self._emitted_normalized_types = {_normalize_nim_ident(st): st for st in STANDARD_NIM_TYPES}
+            self._emitted_normalized_types = {}
             self._type_renames = {}
             self._type_aliases = {}
             self._known_types = set(STANDARD_NIM_TYPES)
@@ -912,7 +1521,7 @@ class NimWriter(BaseWriter):
             if not hasattr(self, "_emitted_proc_sigs"):
                 self._emitted_proc_sigs = set()
             if not hasattr(self, "_emitted_normalized_types"):
-                self._emitted_normalized_types = {_normalize_nim_ident(st): st for st in STANDARD_NIM_TYPES}
+                self._emitted_normalized_types = {}
             if not hasattr(self, "_type_renames"):
                 self._type_renames = {}
             if not hasattr(self, "_type_aliases"):
@@ -980,23 +1589,33 @@ class NimWriter(BaseWriter):
 
         for decl in header.declarations:
             if isinstance(decl, Struct):
-                name = decl.name or "AnonObject"
-                if name not in emitted_types:
-                    emitted_types.add(name)
+                ident = _decl_identity(
+                    decl.name or ANONYMOUS_RECORD_NAME, "union" if decl.is_union else "struct", decl.namespace
+                )
+                if ident not in emitted_types:
+                    emitted_types.add(ident)
+                    if decl.name:
+                        emitted_types.add(decl.name)
                     t_lines, m_lines = self._write_struct(
                         decl, header_file, known_base_classes, emitted_types=emitted_types
                     )
                     types_section.extend(t_lines)
                     procs_section.extend(m_lines)
             elif isinstance(decl, Enum):
-                t_lines, c_lines = self._write_enum(decl, header_file, func_names)
-                types_section.extend(t_lines)
-                consts_section.extend(c_lines)
-            elif isinstance(decl, Typedef):
-                t_lines = self._write_typedef(decl, emitted_types)
-                if t_lines:
-                    emitted_types.add(decl.name)
+                ident = _decl_identity(decl.name or "", "enum", decl.namespace)
+                if not decl.name or ident not in emitted_types:
+                    if decl.name:
+                        emitted_types.add(ident)
+                    t_lines, c_lines = self._write_enum(decl, header_file, func_names)
                     types_section.extend(t_lines)
+                    consts_section.extend(c_lines)
+            elif isinstance(decl, Typedef):
+                ident = _decl_identity(decl.name, "typedef", decl.namespace)
+                if ident not in emitted_types:
+                    t_lines = self._write_typedef(decl)
+                    if t_lines:
+                        emitted_types.add(ident)
+                        types_section.extend(t_lines)
             elif isinstance(decl, Function):
                 procs_section.extend(self._write_function(decl, header_file))
             elif isinstance(decl, Constant):
@@ -1005,6 +1624,25 @@ class NimWriter(BaseWriter):
                 procs_section.extend(self._write_variable(decl, header_file))
             elif isinstance(decl, MacroFunction):
                 procs_section.extend(self._write_macro_function(decl, header_file))
+
+        # Helper declarations come from the render itself, not from a second
+        # predicate over the IR: whatever `_format_type` produced is declared, and
+        # nothing else. They are prepended so a helper is declared before the
+        # record whose field names it.
+        helper_types: list[str] = []
+        helper_procs: list[str] = []
+        for helper in sorted(self._used_helpers):
+            ident = _decl_identity(helper, "struct", None)
+            if ident in emitted_types or helper in emitted_types:
+                continue
+            declaration, companions = CPP_HELPER_DECLARATIONS[helper]
+            helper_types.append(declaration)
+            emitted_types.add(ident)
+            emitted_types.add(helper)
+            for companion in companions:
+                helper_procs.extend(["", companion])
+        types_section = helper_types + types_section
+        procs_section = helper_procs + procs_section
 
         if types_section:
             lines.append("type")
@@ -1032,6 +1670,18 @@ class NimWriter(BaseWriter):
 
         output = "\n".join(lines).rstrip() + "\n"
         return output
+
+    def _use_helper(self, helper: str) -> str:
+        """Record that this render referenced ``helper``, and return its name.
+
+        The declaration set is built from these records, so a helper cannot be
+        referenced without also being declared.
+        """
+        self._used_helpers.add(helper)
+        for required in _CPP_HELPER_REQUIRES.get(helper, ()):
+            self._used_helpers.add(required)
+            self._synthesized_ident(required, what=f"the companion of the C++ helper type {helper}")
+        return self._synthesized_ident(helper, what="a C++ standard-library type")
 
     def _format_type(self, t: TypeExpr, *, in_param: bool = False) -> str:
         """Convert IR TypeExpr to a Nim type representation."""
@@ -1118,20 +1768,22 @@ class NimWriter(BaseWriter):
                 return "auto"
 
             # C++ Smart Pointers & Containers mapping
-            if name.startswith("std::shared_ptr<") or name.startswith("shared_ptr<"):
+            if not _type_name_requires_cpp(t.name, unit_is_cpp=self._unit_is_cpp, is_elaborated=t.is_elaborated):
+                pass
+            elif name.startswith("std::shared_ptr<") or name.startswith("shared_ptr<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
-                return f"SharedPtr[{self._format_type(CType(inner))}]"
+                return f"{self._use_helper('SharedPtr')}[{self._format_type(CType(inner))}]"
             elif name.startswith("std::unique_ptr<") or name.startswith("unique_ptr<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
-                return f"UniquePtr[{self._format_type(CType(inner))}]"
+                return f"{self._use_helper('UniquePtr')}[{self._format_type(CType(inner))}]"
             elif name.startswith("std::weak_ptr<") or name.startswith("weak_ptr<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
-                return f"WeakPtr[{self._format_type(CType(inner))}]"
+                return f"{self._use_helper('WeakPtr')}[{self._format_type(CType(inner))}]"
             elif name.startswith("std::vector<") or name.startswith("vector<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
-                return f"CppVector[{self._format_type(CType(inner))}]"
+                return f"{self._use_helper('CppVector')}[{self._format_type(CType(inner))}]"
             elif name in ("std::vector", "vector"):
-                return "CppVector[pointer]"
+                return f"{self._use_helper('CppVector')}[pointer]"
             elif name.startswith("std::array<") or name.startswith("array<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
                 args = _split_template_args(inner)
@@ -1213,7 +1865,7 @@ class NimWriter(BaseWriter):
             elif name in ("std::nullopt_t", "nullopt_t", "std::nullptr_t", "nullptr_t", "decltype(nullptr)"):
                 return "pointer"
             elif name.startswith("std::string") or name == "string":
-                return "CppString"
+                return self._use_helper("CppString")
             elif (
                 name in ("std::function", "function")
                 or name.startswith("std::chrono::time_point")
@@ -1288,6 +1940,10 @@ class NimWriter(BaseWriter):
             if "::" in name:
                 name = name.replace("::", "_")
 
+            qualified = _qualified_type_name(name, t.qualifiers)
+            if qualified in C_TO_NIM_PRIMITIVES:
+                return C_TO_NIM_PRIMITIVES[qualified]
+
             if hasattr(self, "_current_nested_records") and name in self._current_nested_records:
                 return str(self._current_nested_records[name])
 
@@ -1307,7 +1963,7 @@ class NimWriter(BaseWriter):
 
             if name in C_TO_NIM_PRIMITIVES:
                 return C_TO_NIM_PRIMITIVES[name]
-            return _escape_ident(name, is_type=True)
+            return self._ident(name, kind="struct")
 
         elif isinstance(t, Pointer):
             if isinstance(t.pointee, CType):
@@ -1351,7 +2007,7 @@ class NimWriter(BaseWriter):
         elif isinstance(t, FunctionPointer):
             ret = self._format_type(t.return_type)
             params = [
-                f"{_escape_ident(p.name or f'a{i}')}: {self._format_type(p.type, in_param=True)}"
+                f"{self._ident(p.name or f'a{i}', kind='param')}: {self._format_type(p.type, in_param=True)}"
                 for i, p in enumerate(t.parameters)
             ]
             params_str = f"({', '.join(params)})" if params else "()"
@@ -1382,14 +2038,18 @@ class NimWriter(BaseWriter):
         s: Struct,
         header_file: str,
         known_base_classes: set[str] | None = None,
-        emitted_types: set[str] | None = None,
+        emitted_types: set[DeclIdentity | str] | None = None,
     ) -> tuple[list[str], list[str]]:
         """Render a Struct or class as a Nim type declaration and its methods."""
         type_lines: list[str] = []
         methods_lines: list[str] = []
 
-        name = s.name or "AnonObject"
-        t_name = _escape_ident(name, is_type=True)
+        if s.name:
+            name = s.name
+            t_name = self._ident(name, kind="union" if s.is_union else "struct", namespace=s.namespace)
+        else:
+            name = ANONYMOUS_RECORD_NAME
+            t_name = self._synthesized_ident(name, what="an anonymous record")
         norm = _normalize_nim_ident(t_name)
         if hasattr(self, "_emitted_normalized_types"):
             if norm in self._emitted_normalized_types:
@@ -1582,14 +2242,14 @@ class NimWriter(BaseWriter):
             gen_params = f"[{', '.join(tp_parts)}]"
         elif s.template_params:
             valid_tps = [tp for tp in s.template_params if tp]
-            gen_params = f"[{', '.join(_escape_ident(tp) for tp in valid_tps)}]" if valid_tps else ""
+            gen_params = f"[{', '.join(_template_param_ident(tp) for tp in valid_tps)}]" if valid_tps else ""
         else:
             gen_params = ""
         if gen_params == "[]":
             gen_params = ""
 
         pragma_parts: list[str] = []
-        is_cpp = s.is_cppclass or bool(s.methods or s.bases or s.constructors or s.destructor)
+        is_cpp = _struct_requires_cpp(s)
 
         if is_cpp:
             cpp_pattern = s.cpp_name or (f"{s.namespace}::{s.name}" if s.namespace else s.name)
@@ -1607,15 +2267,20 @@ class NimWriter(BaseWriter):
         if s.is_packed:
             pragma_parts.append("packed")
 
-        # Inheritance
+        # Inheritance. Nim objects have one base, so a class with several keeps
+        # its first and the rest are reported rather than dropped: the binding
+        # describes the header, and a reader who cannot see that `Timer` is gone
+        # will look for its members on this type and not find them.
         base_str = ""
+        base_notes: list[str] = []
         if s.bases:
             # Single primary base in Nim object inheritance (skip private/protected bases)
             public_bases = [b for b in s.bases if b.access not in ("private", "protected")]
             tps = self._get_struct_type_params(s)
             valid_bases = [b for b in public_bases if b.name and b.name not in tps]
             if valid_bases:
-                raw_base = valid_bases[0].name.strip("`")
+                primary = valid_bases[0]
+                raw_base = primary.name.strip("`")
                 if hasattr(self, "_current_nested_records") and raw_base in self._current_nested_records:
                     raw_base = self._current_nested_records[raw_base]
                 elif hasattr(self, "_current_struct_name") and self._current_struct_name:
@@ -1631,6 +2296,10 @@ class NimWriter(BaseWriter):
                 base_t = self._format_type(CType(raw_base))
                 if base_t not in ("auto", "pointer", "void"):
                     base_str = f" of {base_t}"
+                base_notes.extend(self._describe_base(s, primary, dropped=False))
+                for extra in s.bases:
+                    if extra is not primary:
+                        base_notes.extend(self._describe_base(s, extra, dropped=True, primary_name=primary.name))
         is_inheritable = not base_str and (
             (s.destructor and s.destructor.is_virtual)
             or any(m.is_virtual for m in s.methods)
@@ -1655,14 +2324,14 @@ class NimWriter(BaseWriter):
                 base_str = " of RootObj"
 
         pragma_str = f" {{.{', '.join(pragma_parts)}.}}" if pragma_parts else ""
-        lines = [f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
+        lines = [*base_notes, f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
 
         visible_fields = [f for f in s.fields if not f.is_static and f.access not in ("private", "protected")]
         if not visible_fields:
             lines[0] += ""
         else:
             for f in visible_fields:
-                f_name = _escape_ident(f.name)
+                f_name = self._ident(f.name, kind="field")
                 f_type = self._format_type(f.type)
                 tokens = _extract_type_identifiers(f_type)
                 all_known = getattr(self, "_known_types", set()) | set(tps)
@@ -1808,7 +2477,7 @@ class NimWriter(BaseWriter):
         old_struct_name = getattr(self, "_current_struct_name", None)
         if s.name:
             self._current_struct_name = s.name
-        m_name = _escape_ident(m.name)
+        m_name = self._ident(m.name, kind="function", namespace=s.namespace)
         params: list[str] = []
 
         # 'this' parameter or typedesc for static methods
@@ -1834,7 +2503,7 @@ class NimWriter(BaseWriter):
         all_known = getattr(self, "_known_types", set()) | set(all_tp) | set(tps)
 
         for i, p in enumerate(m.parameters):
-            p_name = _escape_ident(p.name or f"a{i}")
+            p_name = self._ident(p.name or f"a{i}", kind="param")
             p_type = self._format_type(p.type, in_param=True)
             tokens = _extract_type_identifiers(p_type)
             if any(tok not in all_known for tok in tokens):
@@ -1871,7 +2540,9 @@ class NimWriter(BaseWriter):
             cpp_pattern = f"{struct_cpp}::{m.name}(@)"
         elif m.name == "operator[]":
             cpp_pattern = "#[@]"
-        elif m.name.startswith("operator"):
+        elif m.name == "operator()":
+            cpp_pattern = "#(@)"
+        elif m.name in CPP_OPERATOR_MAP:
             op_sym = m.name[8:]
             if len(params) == 2:
                 cpp_pattern = f"(# {op_sym} @)"
@@ -1891,25 +2562,33 @@ class NimWriter(BaseWriter):
 
     def _write_destructor(self, s: Struct, dtor: Function, header_file: str) -> list[str]:
         """Render a C++ destructor as a Nim destroy proc."""
-        s_name = s.name or "Object"
+        s_name = s.name or ANONYMOUS_RECORD_NAME
         raw_cpp_name = s.cpp_name or s_name
         if hasattr(self, "_type_renames"):
             s_name = self._type_renames.get(s_name, s_name)
         tps = self._get_struct_type_params(s)
         struct_type = self._get_struct_nim_type(s)
-        t_params = f"[{', '.join(_escape_ident(tp) for tp in tps)}]" if tps else ""
+        t_params = f"[{', '.join(_template_param_ident(tp) for tp in tps)}]" if tps else ""
         decl = f'proc destroy*{t_params}(this: var {struct_type}) {{.importcpp: "#.~{raw_cpp_name}()", header: "{header_file}".}}'
         return ["", decl]
+
+    def _constructor_proc_name(self, s: Struct) -> str:
+        """The ``constructFoo`` proc name for a record, built from its *renamed* identifier."""
+        if s.name:
+            base = self._ident(s.name, kind="struct", namespace=s.namespace).strip("`")
+            what = f"the constructor of {s.name!r}"
+        else:
+            base = self._synthesized_ident(ANONYMOUS_RECORD_NAME, what="an anonymous record").strip("`")
+            what = "the constructor of an anonymous record"
+        return self._synthesized_ident(f"construct{base}", what=what)
 
     def _write_constructor(self, s: Struct, ctor: Function, header_file: str) -> list[str]:
         """Render a C++ constructor as a Nim constructProc."""
         if ctor.is_deleted:
             return []
-        s_name = s.name or "Object"
+        s_name = s.name or ANONYMOUS_RECORD_NAME
         raw_cpp_name = s.cpp_name or s_name
-        if hasattr(self, "_type_renames"):
-            s_name = self._type_renames.get(s_name, s_name)
-        proc_name = _escape_ident(f"construct{s_name}")
+        proc_name = self._constructor_proc_name(s)
         params: list[str] = []
 
         tps = self._get_struct_type_params(s)
@@ -1926,7 +2605,7 @@ class NimWriter(BaseWriter):
         all_known = getattr(self, "_known_types", set()) | set(all_tps)
 
         for i, p in enumerate(ctor.parameters):
-            p_name = _escape_ident(p.name or f"a{i}")
+            p_name = self._ident(p.name or f"a{i}", kind="param")
             p_type = self._format_type(p.type, in_param=True)
             tokens = _extract_type_identifiers(p_type)
             if any(tok not in all_known for tok in tokens):
@@ -1946,7 +2625,7 @@ class NimWriter(BaseWriter):
             self._emitted_proc_sigs.add(sig)
 
         if all_tps:
-            t_params = f"[{', '.join(_escape_ident(tp) for tp in all_tps)}]"
+            t_params = f"[{', '.join(_template_param_ident(tp) for tp in all_tps)}]"
             t_args = ", ".join(f"'*{i}" for i in range(len(tps)))
             cpp_pattern = f"{raw_cpp_name}<{t_args}>(@)" if t_args else f"{raw_cpp_name}(@)"
         else:
@@ -1957,6 +2636,68 @@ class NimWriter(BaseWriter):
 
         return ["", f"proc {proc_name}*{t_params}({', '.join(params)}): {ret_type} {{.{pragma}.}}"]
 
+    @staticmethod
+    def _describe_base(s: Struct, base: BaseSpecifier, *, dropped: bool, primary_name: str = "") -> list[str]:
+        """Report what a base contributes that the emitted declaration cannot say.
+
+        Nim has neither multiple inheritance nor access specifiers nor virtual
+        bases, so three properties the header states have nowhere to go in the
+        declaration itself. Silence would make them look absent rather than
+        inexpressible.
+        """
+        traits = []
+        if base.access and base.access != "public":
+            traits.append(base.access)
+        if base.is_virtual:
+            traits.append("virtual")
+        described = f"{' '.join(traits)} {base.name}" if traits else base.name
+        if dropped:
+            chosen = primary_name or (s.bases[0].name if s.bases else "the first base")
+            return [
+                f"# UNSUPPORTED: base '{described}' of '{s.name}' is not emitted; "
+                f"Nim objects have a single base and '{chosen}' takes it"
+            ]
+        if traits:
+            return [f"# NOTE: base '{described}' of '{s.name}' is emitted as a plain Nim base"]
+        return []
+
+    def _enum_size_type(self, e: Enum) -> str:
+        """The Nim type whose ``sizeof`` is the enum's width.
+
+        ``{.size.}`` decides how many bytes every value of this enum occupies as
+        it crosses the ABI, so a wrong answer is a wrong layout rather than a
+        cosmetic difference. A fixed underlying type gives it exactly: `enum class
+        A : unsigned char` is one byte and `: long long` is eight, where a
+        hardcoded `cint` claims four for both.
+
+        ``cint`` remains the answer when there is no underlying type to read, which
+        covers two situations the width cannot distinguish: a header that declares
+        none, leaving an unscoped C enum int-compatible, and a parser that failed to
+        see a clause that is there. They differ in whether the answer is *known*,
+        not in what it is, so that distinction is carried by
+        :meth:`_enum_width_notes` rather than by a second branch here.
+        """
+        if not e.underlying_type:
+            return "cint"
+        return self._format_type(CType(e.underlying_type))
+
+    @staticmethod
+    def _enum_width_notes(e: Enum) -> list[str]:
+        """Report a width the parser could not establish, rather than claiming one.
+
+        ``underlying_type_known=False`` means the parser may have *missed* a clause
+        that is there -- tree-sitter's C grammar has no production for
+        ``enum E : long long``, so in a ``.h`` it parses as an ``ERROR`` node and the
+        type comes back ``None``. The emitted ``sizeof(cint)`` is a guess in that
+        case, and it is four bytes wide whatever the header actually said.
+        """
+        if e.underlying_type_known:
+            return []
+        return [
+            f"# UNSUPPORTED: the underlying type of '{e.name}' was not established by the "
+            f"parser, so its width is assumed to be that of cint; verify it against the header"
+        ]
+
     def _write_enum(self, e: Enum, header_file: str, func_names: set[str] | None = None) -> tuple[list[str], list[str]]:
         """Render an Enum declaration, returning (type_lines, const_lines)."""
         name = e.name or ""
@@ -1965,18 +2706,8 @@ class NimWriter(BaseWriter):
         if is_anonymous:
             # Emit anonymous enum values as constants
             const_lines: list[str] = []
-            ns_prefix = ""
-            if e.namespace:
-                ns_parts = [p.strip() for p in e.namespace.split("::") if p.strip()]
-                if len(ns_parts) > 1 and ns_parts[-1] != "std":
-                    ns_prefix = f"{_escape_ident(ns_parts[-1])}_"
             for v in e.values:
-                v_name = _escape_ident(v.name)
-                if func_names and (v.name in func_names or v_name in func_names):
-                    if ns_prefix:
-                        v_name = f"{ns_prefix}{v_name}"
-                    else:
-                        v_name = f"{v_name}_val"
+                v_name = self._ident(v.name, kind="enumerator", namespace=e.namespace)
                 if v.value is not None:
                     const_lines.append(f"{v_name}* = {v.value}")
                 else:
@@ -1991,39 +2722,25 @@ class NimWriter(BaseWriter):
             if "::" in q:
                 qualified_name = _escape_ident(q.replace("::", "_"))
 
-        # Disambiguate if enum name collides with a function
-        nim_name = f"{name}_enum" if func_names and name in func_names else name
         if name.lower() in ("type", "set", "pointer", "object", "string", "int", "bool") and qualified_name:
-            nim_name = qualified_name
-        e_name = _escape_ident(nim_name, is_type=True)
-        norm = _normalize_nim_ident(e_name)
-        if hasattr(self, "_emitted_normalized_types"):
-            if norm in self._emitted_normalized_types:
-                if qualified_name and _normalize_nim_ident(qualified_name) not in self._emitted_normalized_types:
-                    e_name = qualified_name
-                else:
-                    clean_base = e_name.strip("`")
-                    suffix_idx = 2
-                    candidate = _escape_ident(f"{clean_base}_{suffix_idx}", is_type=True)
-                    while _normalize_nim_ident(candidate) in self._emitted_normalized_types:
-                        suffix_idx += 1
-                        candidate = _escape_ident(f"{clean_base}_{suffix_idx}", is_type=True)
-                    if hasattr(self, "_type_renames"):
-                        self._type_renames[name] = candidate
-                    e_name = candidate
-                norm = _normalize_nim_ident(e_name)
-            self._emitted_normalized_types[norm] = e_name
+            e_name = qualified_name
+        else:
+            e_name = self._ident(name, kind="enum", namespace=e.namespace)
 
         if e.cpp_name:
             import_pragma = f'importcpp: "{e.cpp_name}", header: "{header_file}"'
         else:
             spelling = _c_type_spelling(name, e.is_typedef, "enum")
             import_pragma = f'importc: "{spelling}", header: "{header_file}"'
-        lines = [f"{e_name}* {{.size: sizeof(cint), {import_pragma}.}} = enum"]
+        size_type = self._enum_size_type(e)
+        lines = [
+            *self._enum_width_notes(e),
+            f"{e_name}* {{.size: sizeof({size_type}), {import_pragma}.}} = enum",
+        ]
         const_lines = []
         seen_values: dict[int | str, str] = {}
         for v in e.values:
-            v_name = _escape_ident(v.name)
+            v_name = self._ident(v.name, kind="enumerator", namespace=e.namespace)
             if v.value is not None:
                 if v.value in seen_values:
                     first_name = seen_values[v.value]
@@ -2034,46 +2751,43 @@ class NimWriter(BaseWriter):
             else:
                 lines.append(f"  {v_name}")
         if qualified_name and qualified_name != e_name:
-            q_norm = _normalize_nim_ident(qualified_name)
-            if hasattr(self, "_emitted_normalized_types"):
-                if q_norm not in self._emitted_normalized_types:
-                    lines.append(f"{qualified_name}* = {e_name}")
-                    self._emitted_normalized_types[q_norm] = qualified_name
-            else:
-                lines.append(f"{qualified_name}* = {e_name}")
+            lines.append(f"{qualified_name}* = {e_name}")
         return lines, const_lines
 
-    def _write_typedef(self, t: Typedef, emitted_types: set[str] | None = None) -> list[str]:
+    def _write_typedef(self, t: Typedef, emitted_types: set[DeclIdentity | str] | None = None) -> list[str]:
         """Render a Typedef declaration."""
         if not t.name:
             return []
 
-        if t.name in STANDARD_NIM_TYPES or t.name.lower() in STANDARD_NIM_TYPES:
+        if _typedef_aliases_its_own_tag(t):
+            return []
+
+        if t.name in (
+            "uint",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+            "int",
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "float32",
+            "float64",
+        ):
             return []
 
         if emitted_types and t.name in emitted_types:
             return []
 
-        # Check self-referential typedefs (e.g. typedef struct foo foo;)
-        if isinstance(t.underlying_type, CType):
-            raw = t.underlying_type.name
-            clean = raw.removeprefix("struct ").removeprefix("union ").removeprefix("enum ").strip()
-            if clean == t.name:
-                return []
-
-        t_name = _escape_ident(t.name)
+        t_name = self._ident(t.name, kind="typedef", namespace=t.namespace)
         underlying = self._format_type(t.underlying_type)
         if t_name == underlying or t.name == underlying:
             return []
 
         if _normalize_nim_ident(t_name) == _normalize_nim_ident(underlying):
             return []
-
-        norm = _normalize_nim_ident(t_name)
-        if hasattr(self, "_emitted_normalized_types"):
-            if norm in self._emitted_normalized_types:
-                return []
-            self._emitted_normalized_types[norm] = t_name
 
         if emitted_types is not None:
             emitted_types.add(t.name)
@@ -2085,7 +2799,7 @@ class NimWriter(BaseWriter):
         """Render a function declaration."""
         if f.access in ("private", "protected") or f.is_deleted:
             return []
-        f_name = _escape_ident(f.name)
+        f_name = self._ident(f.name, kind="function", namespace=f.namespace)
         params: list[str] = []
         all_tp = set(
             [tp.name for tp in f.template_parameters if tp.is_type and tp.name]
@@ -2094,7 +2808,7 @@ class NimWriter(BaseWriter):
         all_known = getattr(self, "_known_types", set()) | all_tp
 
         for i, p in enumerate(f.parameters):
-            p_name = _escape_ident(p.name or f"a{i}")
+            p_name = self._ident(p.name or f"a{i}", kind="param")
             p_type = self._format_type(p.type, in_param=True)
             tokens = _extract_type_identifiers(p_type)
             if any(tok not in all_known for tok in tokens):
@@ -2121,14 +2835,14 @@ class NimWriter(BaseWriter):
         ret_str = f": {ret_type}" if ret_type != "void" else ""
 
         pragmas: list[str] = []
-        if f.namespace:
+        if not _function_requires_cpp(f, unit_is_cpp=self._unit_is_cpp):
+            pragmas.append(f'importc: "{f.name}", header: "{header_file}"')
+        elif f.namespace:
             cpp_pattern = f"{f.namespace}::{f.name}(@)".replace('"', '\\"')
             pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
-        elif f.template_params or '"' in f.name:
+        else:
             cpp_pattern = f"{f.name}(@)".replace('"', '\\"')
             pragmas.append(f'importcpp: "{cpp_pattern}", header: "{header_file}"')
-        else:
-            pragmas.append(f'importc: "{f.name}", header: "{header_file}"')
 
         if f.is_variadic:
             pragmas.append("varargs")
@@ -2138,12 +2852,12 @@ class NimWriter(BaseWriter):
         else:
             pragmas.append("cdecl")
 
-        t_params = f"[{', '.join(_escape_ident(tp) for tp in f.template_params)}]" if f.template_params else ""
+        t_params = f"[{', '.join(_template_param_ident(tp) for tp in f.template_params)}]" if f.template_params else ""
         return [f"proc {f_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"]
 
     def _write_variable(self, v: Variable, header_file: str) -> list[str]:
         """Render an extern global variable."""
-        v_name = _escape_ident(v.name)
+        v_name = self._ident(v.name, kind="function", namespace=v.namespace)
         v_type = self._format_type(v.type)
         if v_type in ("`type`", "type", "c_type", "auto"):
             v_type = "pointer"
@@ -2153,7 +2867,7 @@ class NimWriter(BaseWriter):
         """Render a constant."""
         if c.value is None:
             return []
-        c_name = _escape_ident(c.name)
+        c_name = self._ident(c.name, kind="macro")
         return [f"{c_name}* = {c.value}"]
 
     def _write_macro_function(self, m: MacroFunction, header_file: str) -> list[str]:
@@ -2218,6 +2932,275 @@ class NimWriter(BaseWriter):
             f"  {c_bridge_name}({call_params})",
         ]
 
+    @staticmethod
+    def _as_list(value: object) -> list[str]:
+        """Normalise a writer option that may arrive as a scalar, list, or ``None``."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value] if value else []
+        if isinstance(value, set | frozenset):
+            # Sorted, not iteration-ordered: an unordered option would reorder the
+            # generated flags between runs and defeat regenerate-and-diff.
+            return sorted(str(v) for v in value if str(v))
+        if isinstance(value, list | tuple):
+            return [str(v) for v in value if str(v)]
+        return [str(value)]
+
+    def _build_nim_cfg(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> str:
+        """Render ``nim.cfg`` -- the flags the generated package needs to compile.
+
+        Every flag here is either invariant, derived from the IR, or supplied by
+        the caller. Nothing is guessed: a package whose library the caller did not
+        name links against nothing and says so, rather than carrying a plausible
+        ``-l`` that resolves to the wrong library or to none.
+        """
+        lines = ["--mm:orc", "--threads:on", "--styleCheck:hint"]
+
+        # `$config` is the directory holding this file, so the package builds with a
+        # bare `nim c tests/...` and not only under `nimble`, which supplies srcDir.
+        lines.append('--path:"$config/src"')
+
+        if unit_requires_cpp(unit):
+            # The bindings carry `importcpp` pragmas and `#include` a C++ header.
+            # The default C backend hands both to the C compiler, which rejects
+            # `class` outright. Set in nim.cfg rather than in the .nimble test task
+            # because a config backend selection also overrides a plain `nim c`.
+            lines.append("--backend:cpp")
+
+        include_dirs = [str(Path(d).resolve()) for d in self._as_list(options.extra_context.get("include_dirs"))]
+        # The header's own directory: the one include path the writer always knows,
+        # and the one a header's quoted includes of its siblings need. Compared
+        # after resolving both sides, or a relatively-passed `-I` naming the same
+        # directory is emitted twice.
+        unit_path = getattr(unit, "path", "") or ""
+        if unit_path:
+            parent = str(Path(unit_path).resolve().parent)
+            if parent not in include_dirs:
+                include_dirs = [*include_dirs, parent]
+
+        lines.extend(f"--passC:{_cfg_path_flag('-I', d)}" for d in include_dirs)
+        lines.extend(f'--passC:"-D{d}"' for d in self._as_list(options.extra_context.get("defines")))
+
+        # Resolved for the same reason include_dirs are: a relative -L resolves
+        # against the linker's working directory, not the package's.
+        library_dirs = [str(Path(d).resolve()) for d in self._as_list(options.get_option("library_dirs"))]
+        libraries = self._as_list(options.get_option("library"))
+        lines.extend(f"--passL:{_cfg_path_flag('-L', d)}" for d in library_dirs)
+        lines.extend(f'--passL:"-l{lib}"' for lib in libraries)
+        if not libraries:
+            lines.append(
+                "# No native library to link: pass --writer-opt nim:library=<name> "
+                "(and nim:library_dirs=<dir>) to add the -l/-L flags this package needs."
+            )
+
+        return "\n".join(lines) + "\n"
+
+    def _probe_param(self, type_expr: TypeExpr) -> str:
+        """Render ``type_expr`` as the pointer a link probe takes it by.
+
+        A probe takes every argument by pointer so that a call site can name the
+        probe with ``nil`` whatever the argument type is. Without that, probing an
+        entry point would mean inventing a value of each parameter's type -- and a
+        C++ class with no default constructor has no value to invent.
+        """
+        formatted = self._format_type(type_expr, in_param=True)
+        # `ptr (var T)` is not a type; `T` is, and `x[]` on a `ptr T` is the lvalue
+        # a `var T` parameter binds to.
+        formatted = formatted.removeprefix("var ")
+        return f"ptr {formatted}"
+
+    def _link_probe(self, name: str, index: int, self_type: str | None, params: list[Parameter], returns: str) -> str:
+        """Render one probe proc that references ``name`` so the linker must resolve it."""
+        probe_params: list[str] = []
+        call_args: list[str] = []
+        if self_type is not None:
+            probe_params.append(f"self: ptr {self_type}")
+            call_args.append("self[]")
+        for i, p in enumerate(params):
+            arg = f"a{i}"
+            probe_params.append(f"{arg}: {self._probe_param(p.type)}")
+            call_args.append(f"{arg}[]")
+        call = f"{name}({', '.join(call_args)})"
+        body = f"discard {call}" if returns != "void" else call
+        return f"proc hkLinkProbe{index}({', '.join(probe_params)}) =\n  {body}"
+
+    @staticmethod
+    def _is_probeable(f: Function) -> bool:
+        """Whether a link probe may reference this member.
+
+        A probe referencing a non-public member fails to **compile**, not to link,
+        which takes the whole generated package down. The writer declares such a
+        member regardless of access, so the collector declines instead. An access
+        the backend left unset is public, which is what C members are.
+
+        A template is skipped for a different reason: a generic emits no symbol
+        until it is instantiated, so probing one establishes nothing.
+        """
+        if (f.access or "public") != "public":
+            return False
+        return not (f.template_params or f.name in CPP_OPERATOR_MAP)
+
+    def _collect_link_probes(self, unit: SourceUnit | Header) -> tuple[list[str], list[str], list[str]]:
+        """Return the probe definitions, their call sites, and the complete C++ types."""
+        self._unit_is_cpp = getattr(unit, "language", None) == "cpp"
+        if not self._name_map:
+            self._name_map = self._build_name_map(unit)
+        probes: list[str] = []
+        calls: list[str] = []
+        complete_types: list[str] = []
+
+        def add(name: str, self_type: str | None, params: list[Parameter], returns: str) -> None:
+            index = len(probes)
+            probes.append(self._link_probe(name, index, self_type, params, returns))
+            args = ["nil"] * (len(params) + (1 if self_type is not None else 0))
+            calls.append(f"hkLinkProbe{index}({', '.join(args)})")
+
+        for decl in unit.declarations:
+            if isinstance(decl, Function) and not decl.template_params and not decl.is_variadic and decl.name:
+                add(
+                    self._ident(decl.name, kind="function", namespace=decl.namespace),
+                    None,
+                    decl.parameters,
+                    self._format_type(decl.return_type),
+                )
+            elif isinstance(decl, Struct) and _struct_requires_cpp(decl) and decl.name and not decl.template_params:
+                struct_type = self._ident(decl.name, kind="struct", namespace=decl.namespace)
+                complete_types.append(struct_type)
+                for m in decl.methods:
+                    if not self._is_probeable(m):
+                        continue
+                    self_type = None if m.is_static else struct_type
+                    add(
+                        self._ident(m.name, kind="function", namespace=decl.namespace),
+                        self_type,
+                        m.parameters,
+                        self._format_type(m.return_type),
+                    )
+                for ctor in decl.constructors:
+                    if not self._is_probeable(ctor):
+                        continue
+                    add(self._constructor_proc_name(decl), None, ctor.parameters, struct_type)
+
+        return probes, calls, complete_types
+
+    def _build_cpp_tripwire(self, pkg: str, unit: SourceUnit | Header) -> str:
+        """Render the tripwire for a package whose bindings use ``importcpp``.
+
+        ``loadLib``/``symAddr`` cannot serve a C++ target. It looks for an
+        unmangled name in a shared object, and an ``importcpp`` binding has neither:
+        the C++ name is mangled, and a header-only or statically-linked library has
+        no shared object at all. Such a tripwire fails for a reason unrelated to
+        whether the bindings work.
+
+        What this tripwire establishes instead is a build-time property, and the
+        build is where it fails: the bindings compile under the C++ backend against
+        the real header, every non-generic entry point resolves at link time, and
+        every bound C++ class is a complete type rather than a forward declaration.
+        It does not establish that a shared library is findable at run time -- a
+        statically linked package has none to find.
+        """
+        probes, calls, complete_types = self._collect_link_probes(unit)
+
+        if not probes and not complete_types:
+            return self._build_inconclusive_tripwire(pkg)
+
+        probe_block = "\n\n".join(probes) if probes else ""
+        call_block = "\n".join(f"    {call}" for call in calls) if calls else "    discard"
+        # No fallback assertion when a unit binds entry points but no complete class:
+        # the probes carry the claim, and `check declared(pkg)` is true by
+        # construction, so adding it would weaken the suite rather than strengthen it.
+        size_checks = "\n".join(f"    check sizeof({t}) > 0" for t in complete_types)
+        title = "every bound entry point compiles and links against"
+        if not probes:
+            title = "every bound class is a complete type in"
+
+        # The template is dedented before the blocks go in: dedent() strips the
+        # common prefix of every line it is given, and an interpolated block that
+        # starts at column zero would leave it with nothing to strip.
+        template = textwrap.dedent("""\
+            # Tripwire for a C++ target.
+            #
+            # The assertion this file makes is its own build. Compiling it proves the
+            # bindings are valid C++ against the real header; linking it proves every
+            # bound entry point resolves against the real native library. A missing
+            # library fails the link with undefined symbols and the test never runs.
+            #
+            # The probes below are never executed -- `hkRunLinkProbes` is false. They
+            # exist so the C++ compiler must emit a reference to each entry point and
+            # the linker must resolve it. Every probe argument is a pointer so a call
+            # site can pass `nil` without inventing a value of a type that may have no
+            # default constructor.
+            import std/unittest
+            import {pkg}
+
+            var hkRunLinkProbes = false
+
+            {probe_block}
+
+            proc hkForceLinkage() =
+              if hkRunLinkProbes:
+            {call_block}
+
+            suite "Tripwire Compile & Link Verification":
+              test "{title} '{pkg}'":
+                hkForceLinkage()
+            {size_checks}
+            """)
+        return template.format(
+            pkg=pkg,
+            probe_block=probe_block,
+            call_block=call_block,
+            size_checks=size_checks,
+            title=title,
+        )
+
+    @staticmethod
+    def _build_inconclusive_tripwire(pkg: str) -> str:
+        """Render a tripwire for a unit that offers nothing a tripwire can check.
+
+        A unit binding only templates has no symbol to link -- a generic emits none
+        until it is instantiated -- and no complete class to size.
+
+        It **fails**, loudly, rather than reporting skipped. A skip is not a
+        failure to ``std/unittest``, so the generated file exited 0, and a tripwire
+        that exits 0 without establishing linkage is exactly the green mirage the
+        tripwire invariant in ``AGENTS.md`` forbids: the package's own test command
+        reported success while nothing anywhere had checked that the native library
+        resolves. The two states a caller must be able to tell apart -- "the
+        entry points link" and "nobody established that they link" -- were the same
+        exit status, and the second is the one that needs a person to act.
+
+        Acting on it is a few lines: instantiate the generics the package binds in a
+        test of your own, and that test establishes the linkage this one cannot.
+        """
+        return textwrap.dedent(f"""\
+            # Tripwire for a C++ target that binds no linkable entry point.
+            #
+            # Every binding in this package is a template or has no complete class
+            # behind it. A generic emits no symbol until it is instantiated, so there
+            # is nothing here whose linkage a tripwire could establish.
+            #
+            # This file therefore FAILS. It is not reporting that the bindings are
+            # broken -- it is reporting that nothing has checked them, which a
+            # passing or skipped tripwire would have been unable to say. A tripwire
+            # exists to fail when the native library is missing or an entry point
+            # does not resolve; one that exits 0 without having established either is
+            # indistinguishable from one that verified them.
+            #
+            # To resolve it: instantiate the generics you use in a test of your own,
+            # and delete this file. That test establishes the linkage this one cannot.
+            import std/unittest
+            import {pkg}
+
+            suite "Tripwire Compile & Link Verification":
+              test "linkage of '{pkg}' is not established by this tripwire":
+                echo "TRIPWIRE INCONCLUSIVE: no non-generic entry point and no complete class is bound by '{pkg}'"
+                echo "TRIPWIRE INCONCLUSIVE: nothing here establishes that the native library links"
+                echo "TRIPWIRE INCONCLUSIVE: failing rather than exiting 0, so this cannot be read as verification"
+                fail()
+            """)
+
     def _write_package_layout(
         self,
         unit: SourceUnit | Header,
@@ -2260,15 +3243,12 @@ class NimWriter(BaseWriter):
         files.append(OutputFile(path=f"src/{pkg}/bindings.nim", content=bindings_code))
 
         # 4. nim.cfg compiler flags
-        nim_cfg = textwrap.dedent("""\
-            --mm:orc
-            --threads:on
-            --styleCheck:hint
-        """)
-        files.append(OutputFile(path="nim.cfg", content=nim_cfg))
+        files.append(OutputFile(path="nim.cfg", content=self._build_nim_cfg(unit, options)))
 
         # 5. Tests
-        if test_type in ("tripwire", "both"):
+        if test_type in ("tripwire", "both") and unit_requires_cpp(unit):
+            files.append(OutputFile(path="tests/test_tripwire.nim", content=self._build_cpp_tripwire(pkg, unit)))
+        elif test_type in ("tripwire", "both"):
             stub_lines = []
             for fn in fn_names:
                 stub_lines.append(
@@ -2369,7 +3349,7 @@ class NimWriter(BaseWriter):
 
         # Pre-seed known types across the entire ReconciledUnit so cross-chunk references resolve
         self._emitted_proc_sigs = set()
-        self._emitted_normalized_types = {_normalize_nim_ident(st): st for st in STANDARD_NIM_TYPES}
+        self._emitted_normalized_types = {}
         self._type_renames = {}
         self._type_aliases = {}
         known: set[str] = set(STANDARD_NIM_TYPES)

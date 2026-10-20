@@ -40,6 +40,7 @@ from headerkit._cache_store import (
     write_output_entry,
 )
 from headerkit._config import _TOML_DECODE_ERROR, _find_project_root, _parse_toml
+from headerkit._rename import rename_cache_fingerprint
 from headerkit._resolve import check_output_collisions, resolve_headers, resolve_output_path
 from headerkit._slug import build_slug, load_index, lookup_slug
 from headerkit._target import resolve_target
@@ -443,6 +444,7 @@ def _compute_output_cache_info(
         writer_name=writer_name,
         writer_options=writer_options,
         writer_cache_version=_writer_cache_version(writer_inst),
+        rename_fingerprint=rename_cache_fingerprint(),
     )
     output_ext = _writer_output_ext(writer_inst, writer_name)
     return writer_inst, output_cache_key, output_ext

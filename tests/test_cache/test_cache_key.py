@@ -301,6 +301,15 @@ class TestIrSchemaVersion:
         the weakest mechanism available: it fails silently and exactly like an
         absent one. AGENTS.md permits a checked-in number precisely when
         something reads and verifies it, which is what this does.
+
+        It is a floor, not a complete guard, and the version may legitimately
+        move without the fingerprint moving. A field that already existed and was
+        never populated has exactly the hazard this describes the moment a
+        backend starts populating it -- the shape did not change, and every
+        document written before then still deserialises to the default. That is
+        what happened to ``SourceUnit.language``: writing it made every warm
+        entry from an earlier release read back a C++ unit as ``language="c"``,
+        silently taking the C++ codegen off. The version moved to ``"5"`` for it.
         """
         assert self._ir_shape_fingerprint() == self.IR_SHAPE_FINGERPRINT, (
             "The IR dataclasses changed shape. A cached document written by an older headerkit is "

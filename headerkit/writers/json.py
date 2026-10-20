@@ -131,6 +131,8 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["access"] = f.access
     if f.is_static:
         d["is_static"] = True
+    if f.is_padding:
+        d["is_padding"] = True
     return d
 
 
@@ -354,6 +356,10 @@ def header_to_json_dict(header: Header) -> dict[str, Any]:
     }
     if header.included_headers:
         data["included_headers"] = sorted(header.included_headers)
+    if header.language != "c":
+        data["language"] = header.language
+    if header.classification != "header":
+        data["classification"] = header.classification
     return data
 
 

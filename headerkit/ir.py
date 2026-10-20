@@ -1241,13 +1241,20 @@ def _access_allowed(item_access: str | None, floor: str) -> bool:
     return item_level <= floor_level
 
 
-def _filter_struct_access(st: Struct, floor: str) -> Struct:
+def _filter_struct_access(st: Struct, floor: str, filter_bases: bool = True) -> Struct:
     """Filter struct members, bases, and nested records below access floor."""
-    new_bases = [b for b in st.bases if _access_allowed(b.access, floor)]
+    if filter_bases:
+        new_bases = [b for b in st.bases if _access_allowed(b.access, floor)]
+    else:
+        new_bases = list(st.bases)
     new_methods = [m for m in st.methods if _access_allowed(m.access, floor)]
     new_constructors = [c for c in st.constructors if _access_allowed(c.access, floor)]
     new_destructor = st.destructor if _access_allowed(st.destructor.access if st.destructor else None, floor) else None
-    new_nested = [_filter_struct_access(nr, floor) for nr in st.nested_records if _access_allowed(nr.access, floor)]
+    new_nested = [
+        _filter_struct_access(nr, floor, filter_bases=filter_bases)
+        for nr in st.nested_records
+        if _access_allowed(nr.access, floor)
+    ]
     new_fields = [f for f in st.fields if _access_allowed(f.access, floor)]
 
     return replace(
@@ -1264,12 +1271,14 @@ def _filter_struct_access(st: Struct, floor: str) -> Struct:
 def filter_access_floor(
     unit: SourceUnit | Header,
     floor: str = "public",
+    filter_bases: bool = True,
 ) -> SourceUnit | Header:
     """Filter declarations, members, and base classes below the specified access floor.
 
     :param unit: The IR unit (Header or SourceUnit) to filter.
     :param floor: Access floor - ``"public"`` (default, keeps public and unannotated),
         ``"protected"`` (keeps public and protected), ``"private"`` or ``"all"`` (keeps all without pruning).
+    :param filter_bases: Whether to filter base classes below the access floor (default True).
     """
     if not floor or floor.lower() in ("private", "all", "none"):
         return unit
@@ -1280,7 +1289,7 @@ def filter_access_floor(
         if not _access_allowed(decl_access, floor):
             continue
         if isinstance(decl, Struct):
-            new_decls.append(_filter_struct_access(decl, floor))
+            new_decls.append(_filter_struct_access(decl, floor, filter_bases=filter_bases))
         else:
             new_decls.append(decl)
 

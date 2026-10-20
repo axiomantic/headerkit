@@ -1,0 +1,157 @@
+name: Downstream Integration Tests
+
+# Manual or callable from CI. Validates that the current HeaderKit version
+# satisfies real-world downstream consumers (pynng and python-autopxd2).
+#
+#   gh workflow run "Downstream Integration Tests" --ref <branch>
+#
+on:
+  workflow_dispatch:
+    inputs:
+      pynng-repo:
+        description: "Repository for pynng"
+        type: string
+        default: "codypiersall/pynng"
+      pynng-ref:
+        description: "Branch/ref for pynng"
+        type: string
+        default: "master"
+      autopxd2-repo:
+        description: "Repository for python-autopxd2"
+        type: string
+        default: "elijahr/python-autopxd2"
+      autopxd2-ref:
+        description: "Branch/ref for python-autopxd2"
+        type: string
+        default: "master"
+  workflow_call:
+    inputs:
+      pynng-repo:
+        type: string
+        default: "codypiersall/pynng"
+      pynng-ref:
+        type: string
+        default: "master"
+      autopxd2-repo:
+        type: string
+        default: "elijahr/python-autopxd2"
+      autopxd2-ref:
+        type: string
+        default: "master"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-pynng:
+    name: Downstream pynng (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.14"]
+    steps:
+      - name: Checkout HeaderKit
+        uses: actions/checkout@v7
+        with:
+          path: headerkit
+
+      - name: Checkout pynng
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.pynng-repo || 'codypiersall/pynng' }}
+          ref: ${{ inputs.pynng-ref || 'master' }}
+          path: downstream/pynng
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y libclang-dev llvm
+          LLVM_LIB_DIR=$(llvm-config --libdir 2>/dev/null || echo "/usr/lib/llvm-14/lib")
+          echo "LD_LIBRARY_PATH=${LLVM_LIB_DIR}:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Clone NNG C headers for CFFI testing
+        run: |
+          git clone --depth 1 https://github.com/nanomsg/nng.git /tmp/nng
+          echo "NNG_INCLUDE_DIR=/tmp/nng/include" >> "$GITHUB_ENV"
+
+      - name: Install HeaderKit from source
+        run: |
+          pip install -e ./headerkit
+
+      - name: Install pynng dependencies
+        working-directory: downstream/pynng
+        run: |
+          pip install cffi sniffio pytest pytest-asyncio pytest-trio trio
+
+      - name: Run pynng CFFI header generation with HeaderKit
+        working-directory: downstream/pynng
+        run: |
+          python build_pynng.py
+
+      - name: Run pynng build and FFI tests
+        working-directory: downstream/pynng
+        run: |
+          python -m pytest test/test_build.py -v
+
+  test-autopxd2:
+    name: Downstream python-autopxd2 (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.14"]
+    steps:
+      - name: Checkout HeaderKit
+        uses: actions/checkout@v7
+        with:
+          path: headerkit
+
+      - name: Checkout python-autopxd2
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.autopxd2-repo || 'elijahr/python-autopxd2' }}
+          ref: ${{ inputs.autopxd2-ref || 'master' }}
+          path: downstream/python-autopxd2
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y libclang-dev llvm
+          LLVM_LIB_DIR=$(llvm-config --libdir 2>/dev/null || echo "/usr/lib/llvm-14/lib")
+          echo "LD_LIBRARY_PATH=${LLVM_LIB_DIR}:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Install HeaderKit with tree-sitter
+        run: |
+          pip install -e './headerkit[treesitter]'
+
+      - name: Install python-autopxd2 and test dependencies
+        working-directory: downstream/python-autopxd2
+        run: |
+          pip install -e . --no-deps
+          pip install pytest pytest-timeout cython click
+
+      - name: Run python-autopxd2 test suite
+        working-directory: downstream/python-autopxd2
+        run: |
+          python -m pytest test/test_autopxd.py test/test_types.py test/test_parsing.py -v

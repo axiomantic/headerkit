@@ -207,12 +207,12 @@ def _dict_to_enum(d: dict[str, Any]) -> Enum:
         name=d.get("name"),
         values=[_dict_to_enum_value(v) for v in d.get("values", [])],
         is_typedef=d.get("is_typedef", False),
+        namespace=d.get("namespace"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        is_scoped=d.get("is_scoped", _default(Enum, "is_scoped")),
+        cpp_name=d.get("cpp_name"),
         underlying_type=d.get("underlying_type"),
         underlying_type_known=d.get("underlying_type_known", _default(Enum, "underlying_type_known")),
-        is_scoped=d.get("is_scoped", _default(Enum, "is_scoped")),
-        namespace=d.get("namespace"),
-        cpp_name=d.get("cpp_name"),
     )
 
 
@@ -349,4 +349,6 @@ def json_to_header(data: str | dict[str, Any]) -> Header:
         path=d["path"],
         declarations=[_dict_to_decl(decl) for decl in d.get("declarations", [])],
         included_headers=set(d.get("included_headers", [])),
+        language=d.get("language", "c"),
+        classification=d.get("classification", "header"),
     )
