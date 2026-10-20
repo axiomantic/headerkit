@@ -67,8 +67,8 @@ ctx = PipelineContext(backend="tree-sitter", writer="json", runtime="nim")
 unit, output = execute_pipeline(spec, context=ctx)
 ```
 
-<<<<<<< HEAD
 ## Symbol Renaming: `rename_symbol` and `resolve_collision`
+
 
 Two hook points govern the identifiers a writer emits.
 

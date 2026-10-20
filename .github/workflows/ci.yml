@@ -19,6 +19,10 @@ on:
         description: "Run the full Python version matrix instead of the boundary versions"
         type: boolean
         default: false
+      downstream:
+        description: "Run downstream integration tests (pynng, python-autopxd2)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -46,3 +50,7 @@ jobs:
     uses: ./.github/workflows/test.yml
     with:
       full-matrix: ${{ inputs.full-matrix }}
+
+  downstream:
+    if: inputs.downstream
+    uses: ./.github/workflows/test-downstream.yml
