@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+import dataclasses
 
 from headerkit.ir import (
     Array,
@@ -24,6 +24,15 @@ from headerkit.ir import (
     Variable,
 )
 from headerkit.writers.json import header_to_json, header_to_json_dict
+
+
+def _default_of(f: dataclasses.Field[object]) -> object:
+    """The dataclass default for ``f``, or a sentinel for a required field."""
+    if f.default is not dataclasses.MISSING:
+        return f.default
+    if f.default_factory is not dataclasses.MISSING:
+        return f.default_factory()
+    return object()
 
 
 def _round_trip(header: Header) -> Header:
@@ -468,340 +477,133 @@ class TestTriStateFieldsSurviveTheRoundTrip:
         assert restored.declarations[0].underlying_type_known is False
 
 
-class TestExhaustiveFieldRoundTrip:
-    """Every non-default field across all IR dataclasses must survive round-trip serialization."""
+class TestEveryIrFieldSurvivesTheRoundTrip:
+    """The invariant this module's docstring claims, asserted rather than stated.
 
-    def test_all_fields_populated_round_trip(self) -> None:
-        loc = SourceLocation(file="comprehensive.hpp", line=42, column=7)
+    ``json_to_header(header_to_json_dict(h)) == h`` was prose, and prose fails
+    silently. Executed on a real parse of either backend it was False: the
+    serializer never wrote ``Field.is_padding``, ``Struct.nested_records``,
+    ``Enum.is_scoped``, ``Enum.namespace`` or ``Enum.cpp_name``, so a cache hit
+    returned a different IR than the parse that filled it.
+    """
 
-        inner_struct = Struct(
-            name="Inner",
-            fields=[
-                Field(
-                    name="inner_f",
-                    type=CType("float", qualifiers=["const"], is_elaborated=False),
-                    bit_width=2,
-                    anonymous_struct=None,
-                    is_anonymous_transparent=False,
-                    access="public",
-                    is_static=False,
-                    is_padding=False,
-                )
-            ],
-            methods=[],
-            is_union=False,
-            is_cppclass=True,
-            is_typedef=False,
-            is_packed=False,
-            namespace="outer_ns",
-            template_params=[],
-            cpp_name="outer_ns::Inner",
-            notes=[],
-            inner_typedefs={},
-            nested_records=[],
-            bases=[],
-            is_abstract=False,
-            constructors=[],
-            destructor=None,
-            conversions=[],
-            vtable_entries=[],
-            attributes=[],
-            is_deprecated=False,
-            alignment=None,
-            location=loc,
-        )
+    @staticmethod
+    def _maximal_header() -> Header:
+        """A header exercising every field this serializer is meant to carry.
 
-        test_struct = Struct(
-            name="Widget",
-            fields=[
-                Field(
-                    name="flags",
-                    type=CType("unsigned int", qualifiers=["volatile"], is_elaborated=True),
-                    bit_width=4,
-                    anonymous_struct=None,
-                    is_anonymous_transparent=True,
-                    access="protected",
-                    is_static=True,
-                    is_padding=False,
-                ),
-                Field(
-                    name="",
-                    type=CType("int"),
-                    bit_width=3,
-                    anonymous_struct=None,
-                    is_anonymous_transparent=False,
-                    access=None,
-                    is_static=False,
-                    is_padding=True,
-                ),
-                Field(
-                    name="nested_obj",
-                    type=CType("Inner"),
-                    bit_width=None,
-                    anonymous_struct=inner_struct,
-                    is_anonymous_transparent=False,
-                    access="private",
-                    is_static=False,
-                    is_padding=False,
-                ),
-            ],
-            methods=[
-                Function(
-                    name="get_id",
-                    return_type=CType("int"),
-                    parameters=[Parameter(name="opt", type=CType("int"), default_value="0")],
-                    is_variadic=False,
-                    calling_convention=None,
-                    namespace="outer_ns",
-                    template_params=[],
-                    is_static=False,
-                    is_const=True,
-                    is_virtual=True,
-                    is_pure_virtual=False,
-                    is_explicit=False,
-                    access="public",
-                    is_deleted=False,
-                    is_defaulted=False,
-                    is_noexcept=True,
-                    is_inline=True,
-                    body="{ return 1; }",
-                    attributes=["nodiscard"],
-                    is_deprecated=False,
+        Values are chosen to differ from the dataclass default, because a field
+        left at its default round-trips whether or not it is written -- which is
+        exactly how five of them stayed broken.
+        """
+        loc = SourceLocation(file="h.h", line=3, column=9)
+        inner = Struct("Inner", [Field("q", CType("int"))])
+        method = Function("m", CType("void"), [Parameter("p", CType("int"))], location=loc)
+        return Header(
+            "h.h",
+            [
+                Struct(
+                    "S",
+                    methods=[method],
+                    constructors=[method],
+                    destructor=method,
+                    conversions=[method],
+                    vtable_entries=[method],
+                    attributes=["deprecated"],
+                    is_abstract=True,
+                    is_deprecated=True,
+                    fields=[
+                        Field("a", CType("const unsigned int", qualifiers=["const"], is_elaborated=True), bit_width=4),
+                        Field("", CType("unsigned int"), bit_width=3, is_padding=True),
+                        Field("st", CType("int"), is_static=True, access="private"),
+                        Field("an", CType("int"), anonymous_struct=inner, is_anonymous_transparent=True),
+                    ],
+                    is_typedef=True,
+                    is_cppclass=True,
+                    namespace="ns",
+                    template_params=["T"],
+                    cpp_name="ns::S",
+                    is_packed=True,
+                    notes=["n1"],
+                    inner_typedefs={"A": "int"},
+                    nested_records=[inner],
+                    bases=[BaseSpecifier("B", access="protected", is_virtual=True)],
+                    alignment=16,
                     location=loc,
-                )
-            ],
-            is_union=False,
-            is_cppclass=True,
-            is_typedef=True,
-            is_packed=True,
-            namespace="outer_ns",
-            template_params=["T", "U"],
-            cpp_name="outer_ns::Widget",
-            notes=["generated binding"],
-            inner_typedefs={"Index": "unsigned long"},
-            nested_records=[inner_struct],
-            bases=[BaseSpecifier(name="BaseWidget", access="public", is_virtual=True)],
-            is_abstract=True,
-            constructors=[
-                Function(
-                    name="Widget",
-                    return_type=CType("void"),
-                    parameters=[Parameter(name="val", type=CType("int"), default_value="10")],
-                    is_variadic=False,
-                    calling_convention=None,
-                    namespace="outer_ns",
-                    template_params=[],
-                    is_static=False,
-                    is_const=False,
-                    is_virtual=False,
-                    is_pure_virtual=False,
-                    is_explicit=True,
-                    access="public",
-                    is_deleted=False,
-                    is_defaulted=False,
-                    is_noexcept=False,
-                    is_inline=False,
-                    body=None,
-                    attributes=[],
-                    is_deprecated=False,
-                    location=loc,
-                )
-            ],
-            destructor=Function(
-                name="~Widget",
-                return_type=CType("void"),
-                parameters=[],
-                is_variadic=False,
-                calling_convention=None,
-                namespace="outer_ns",
-                template_params=[],
-                is_static=False,
-                is_const=False,
-                is_virtual=True,
-                is_pure_virtual=False,
-                is_explicit=False,
-                access="public",
-                is_deleted=False,
-                is_defaulted=True,
-                is_noexcept=True,
-                is_inline=False,
-                body=None,
-                attributes=[],
-                is_deprecated=False,
-                location=loc,
-            ),
-            conversions=[
-                Function(
-                    name="operator bool",
-                    return_type=CType("bool"),
-                    parameters=[],
-                    is_variadic=False,
-                    calling_convention=None,
-                    namespace="outer_ns",
-                    template_params=[],
-                    is_static=False,
-                    is_const=True,
-                    is_virtual=False,
-                    is_pure_virtual=False,
-                    is_explicit=True,
-                    access="public",
-                    is_deleted=False,
-                    is_defaulted=False,
-                    is_noexcept=True,
-                    is_inline=False,
-                    body=None,
-                    attributes=[],
-                    is_deprecated=False,
-                    location=loc,
-                )
-            ],
-            vtable_entries=[
-                Function(
-                    name="render",
-                    return_type=CType("void"),
-                    parameters=[],
-                    is_variadic=False,
-                    calling_convention=None,
-                    namespace="outer_ns",
-                    template_params=[],
-                    is_static=False,
-                    is_const=False,
-                    is_virtual=True,
-                    is_pure_virtual=True,
-                    is_explicit=False,
-                    access="public",
-                    is_deleted=False,
-                    is_defaulted=False,
-                    is_noexcept=False,
-                    is_inline=False,
-                    body=None,
-                    attributes=[],
-                    is_deprecated=False,
-                    location=loc,
-                )
-            ],
-            attributes=["aligned(16)"],
-            is_deprecated=True,
-            alignment=16,
-            location=loc,
-        )
-
-        test_enum = Enum(
-            name="Color",
-            values=[
-                EnumValue(name="Red", value=1),
-                EnumValue(name="Green", value="1 << 1"),
-                EnumValue(name="Blue", value=None),
-            ],
-            is_typedef=True,
-            namespace="outer_ns",
-            location=loc,
-            is_scoped=True,
-            cpp_name="outer_ns::Color",
-            underlying_type="uint8_t",
-            underlying_type_known=False,
-        )
-
-        test_fn = Function(
-            name="process",
-            return_type=Reference(
-                target=Pointer(
-                    pointee=CType("char", qualifiers=["const"], is_elaborated=False),
-                    qualifiers=["const"],
                 ),
-                is_rvalue=True,
-                qualifiers=["const"],
-            ),
-            parameters=[
-                Parameter(
-                    name="buffer",
-                    type=Array(element_type=CType("char"), size=256),
-                    default_value=None,
-                ),
-                Parameter(
-                    name="callback",
-                    type=FunctionPointer(
-                        return_type=CType("int"),
-                        parameters=[Parameter(name="code", type=CType("int"), default_value=None)],
-                        is_variadic=True,
-                        calling_convention="cdecl",
-                    ),
-                    default_value="nullptr",
+                Enum(
+                    "E",
+                    [EnumValue("X", 1)],
+                    is_scoped=True,
+                    underlying_type="int",
+                    underlying_type_known=False,
+                    is_typedef=True,
+                    namespace="ns",
+                    cpp_name="ns::E",
+                    location=loc,
                 ),
             ],
-            is_variadic=True,
-            calling_convention="fastcall",
-            namespace="outer_ns",
-            template_params=["V"],
-            is_static=True,
-            is_const=False,
-            is_virtual=False,
-            is_pure_virtual=False,
-            is_explicit=False,
-            access="public",
-            is_deleted=True,
-            is_defaulted=False,
-            is_noexcept=True,
-            is_inline=True,
-            body="{ return nullptr; }",
-            attributes=["deprecated", "hot"],
-            is_deprecated=True,
-            location=loc,
         )
 
-        test_typedef = Typedef(
-            name="Callback",
-            underlying_type=Pointer(
-                FunctionPointer(
-                    return_type=CType("void"),
-                    parameters=[Parameter(name="arg", type=CType("void*"))],
-                    is_variadic=False,
-                    calling_convention=None,
-                )
-            ),
-            namespace="outer_ns",
-            attributes=["may_alias"],
-            is_deprecated=True,
-            location=loc,
+    def test_a_maximal_header_round_trips_unchanged(self) -> None:
+        header = self._maximal_header()
+        assert _round_trip(header) == header
+
+    def test_every_dataclass_field_is_written_or_declared_unwritten(self) -> None:
+        """Closes the class, not the five instances.
+
+        A field the serializer never writes is invisible to the round trip
+        whenever the fixture happens to leave it at its default, and invisible
+        to the IR fingerprint too -- that hashes the dataclasses, which know
+        nothing about what gets serialized. This walks the objects beside the
+        dicts they produced and fails on any field absent from both the output
+        and the allowlist below, so a newly added field has to be handled
+        rather than silently dropped.
+        """
+        #: Fields deliberately not serialized, each with the reason it is safe.
+        unwritten: dict[str, set[str]] = {
+            # Reconstructed from the "kind" discriminator on the way back in.
+            "Struct": {"is_union"},
+        }
+        header = self._maximal_header()
+        data = header_to_json_dict(header)
+
+        seen: dict[str, tuple[set[str], object]] = {}
+
+        def walk(obj: object, d: object) -> None:
+            if not dataclasses.is_dataclass(obj) or not isinstance(d, dict):
+                return
+            name = type(obj).__name__
+            keys, _ = seen.setdefault(name, (set(), obj))
+            keys.update(d)
+            seen[name] = (keys, obj)
+            for f in dataclasses.fields(obj):
+                value = getattr(obj, f.name)
+                rendered = d.get(f.name)
+                if isinstance(value, list) and isinstance(rendered, list):
+                    for item, sub in zip(value, rendered, strict=False):
+                        walk(item, sub)
+                else:
+                    walk(value, rendered)
+
+        for decl, rendered in zip(header.declarations, data["declarations"], strict=False):
+            walk(decl, rendered)
+
+        # Only a field carrying a *non-default* value is required to appear:
+        # the serializer omits defaults by design, so demanding a key for one
+        # would assert the format rather than the invariant. Which is why the
+        # fixture above sets every field away from its default.
+        missing: dict[str, list[str]] = {}
+        for name, (keys, obj) in seen.items():
+            gap = sorted(
+                f.name
+                for f in dataclasses.fields(type(obj))
+                if f.name not in keys
+                and f.name not in unwritten.get(name, set())
+                and getattr(obj, f.name) != _default_of(f)
+            )
+            if gap:
+                missing[name] = gap
+        assert not missing, (
+            f"these IR fields are never written by the serializer: {missing}. A cache hit will "
+            "return the dataclass default for each of them instead of what the parser reported."
         )
-
-        test_var = Variable(
-            name="global_counter",
-            type=CType("long long", qualifiers=["volatile"]),
-            namespace="outer_ns",
-            attributes=["thread_local"],
-            is_deprecated=True,
-            alignment=8,
-            location=loc,
-        )
-
-        test_const = Constant(
-            name="BUFFER_LIMIT",
-            value=4096,
-            evaluated_value=4096,
-            raw_expression="1 << 12",
-            type=CType("int"),
-            is_macro=True,
-            location=loc,
-        )
-
-        header = Header(
-            path="comprehensive.hpp",
-            declarations=[
-                test_struct,
-                test_enum,
-                test_fn,
-                test_typedef,
-                test_var,
-                test_const,
-            ],
-            included_headers={"header1.h", "header2.h"},
-            language="cpp",
-            classification="header",
-        )
-
-        restored_from_dict = _round_trip(header)
-        assert asdict(restored_from_dict) == asdict(header)
-
-        restored_from_str = _round_trip_json_str(header)
-        assert asdict(restored_from_str) == asdict(header)

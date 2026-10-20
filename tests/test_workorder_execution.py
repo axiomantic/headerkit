@@ -168,6 +168,7 @@ def test_generated_python_suite_executes_against_a_real_library(tmp_path: Path) 
 
     env = dict(os.environ)
     env["PYTHONPATH"] = str(tmp_path / "src")
+    env["PYTEST_ADDOPTS"] = ""
     env[CTYPES_LIBRARY_PATH_ENV] = str(lib)
 
     # The generated suite never calls a C function -- Tier 1 is Python-local and every

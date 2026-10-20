@@ -56,7 +56,8 @@ The naive approach is to ask the system what platform it is:
 
 ```python
 import sys, platform
-sys.platform      # "darwin", "linux", "win32"
+
+sys.platform  # "darwin", "linux", "win32"
 platform.machine()  # "x86_64", "arm64", "AMD64"
 ```
 

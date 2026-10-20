@@ -2,6 +2,7 @@
 
 from headerkit.ir import (
     Array,
+    BaseSpecifier,
     Constant,
     CType,
     Enum,
@@ -13,10 +14,14 @@ from headerkit.ir import (
     Parameter,
     ParserBackend,
     Pointer,
+    Reference,
     SourceLocation,
     Struct,
     Typedef,
+    TypeHierarchy,
     Variable,
+    filter_access_floor,
+    is_cpp_value_type,
 )
 
 
@@ -483,3 +488,114 @@ class TestParserBackendProtocol:
             "allowlist",
             "denylist",
         ]
+
+
+class TestFilterAccessFloor:
+    def test_filter_public_floor_drops_private_and_protected(self):
+        st = Struct(
+            name="MyClass",
+            fields=[
+                Field("pub_f", CType("int"), access="public"),
+                Field("prot_f", CType("int"), access="protected"),
+                Field("priv_f", CType("int"), access="private"),
+            ],
+            methods=[
+                Function("pub_m", CType("void"), access="public"),
+                Function("prot_m", CType("void"), access="protected"),
+                Function("priv_m", CType("void"), access="private"),
+            ],
+            bases=[
+                BaseSpecifier("PubBase", access="public"),
+                BaseSpecifier("PrivBase", access="private"),
+            ],
+        )
+        h = Header(path="test.h", declarations=[st])
+        filtered = filter_access_floor(h, floor="public")
+        res_st = [d for d in filtered.declarations if isinstance(d, Struct)][0]
+
+        assert [f.name for f in res_st.fields] == ["pub_f"]
+        assert [m.name for m in res_st.methods] == ["pub_m"]
+        assert [b.name for b in res_st.bases] == ["PubBase"]
+
+    def test_filter_protected_floor_keeps_public_and_protected(self):
+        st = Struct(
+            name="MyClass",
+            fields=[
+                Field("pub_f", CType("int"), access="public"),
+                Field("prot_f", CType("int"), access="protected"),
+                Field("priv_f", CType("int"), access="private"),
+            ],
+        )
+        h = Header(path="test.h", declarations=[st])
+        filtered = filter_access_floor(h, floor="protected")
+        res_st = [d for d in filtered.declarations if isinstance(d, Struct)][0]
+
+        assert [f.name for f in res_st.fields] == ["pub_f", "prot_f"]
+
+    def test_filter_private_floor_keeps_all(self):
+        st = Struct(
+            name="MyClass",
+            fields=[
+                Field("pub_f", CType("int"), access="public"),
+                Field("priv_f", CType("int"), access="private"),
+            ],
+        )
+        h = Header(path="test.h", declarations=[st])
+        assert filter_access_floor(h, floor="private") is h
+        assert filter_access_floor(h, floor="all") is h
+
+
+class TestTypeHierarchy:
+    def test_polymorphism_detection(self):
+        base = Struct(
+            name="Base",
+            methods=[Function("draw", CType("void"), is_virtual=True)],
+        )
+        derived = Struct(
+            name="Derived",
+            bases=[BaseSpecifier("Base")],
+            methods=[Function("draw", CType("void"))],
+        )
+        plain = Struct(name="Plain", fields=[Field("x", CType("int"))])
+
+        h = Header(path="test.h", declarations=[base, derived, plain])
+        hierarchy = TypeHierarchy(h)
+
+        assert hierarchy.is_polymorphic(base) is True
+        assert hierarchy.is_polymorphic(derived) is True
+        assert hierarchy.is_polymorphic(plain) is False
+        assert hierarchy.is_polymorphic("Base") is True
+        assert hierarchy.is_polymorphic("Derived") is True
+        assert hierarchy.is_polymorphic("Plain") is False
+
+    def test_root_base_detection(self):
+        root = Struct(name="Widget")
+        child = Struct(name="Button", bases=[BaseSpecifier("Widget")])
+        h = Header(path="test.h", declarations=[root, child])
+        hierarchy = TypeHierarchy(h)
+
+        assert hierarchy.is_root_base(root) is True
+        assert hierarchy.is_root_base(child) is False
+
+    def test_find_struct_scoped_resolution(self):
+        inner = Struct(name="Config", namespace="App::Settings")
+        h = Header(path="test.h", declarations=[inner])
+        hierarchy = TypeHierarchy(h)
+
+        assert hierarchy.find_struct("Config", enclosing_namespace="App::Settings") is inner
+        assert hierarchy.find_struct("App::Settings::Config") is inner
+
+
+class TestIsCppValueType:
+    def test_primitives_are_not_value_types(self):
+        assert is_cpp_value_type(CType("int")) is False
+        assert is_cpp_value_type(CType("float")) is False
+        assert is_cpp_value_type(CType("size_t")) is False
+        assert is_cpp_value_type(Pointer(CType("char"))) is False
+        assert is_cpp_value_type(Reference(CType("int"))) is False
+
+    def test_aggregates_are_value_types(self):
+        assert is_cpp_value_type(CType("std::string")) is True
+        assert is_cpp_value_type(CType("juce::String")) is True
+        assert is_cpp_value_type(CType("std::vector<int>")) is True
+        assert is_cpp_value_type(CType("AudioBuffer")) is True

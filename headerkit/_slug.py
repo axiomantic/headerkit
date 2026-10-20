@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
@@ -232,7 +232,7 @@ def register_slug(
     if existing is not None:
         return existing
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     candidate = slug
     if candidate not in index["entries"]:
         index["entries"][candidate] = {"cache_key": cache_key, "created": now}

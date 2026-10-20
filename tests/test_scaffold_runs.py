@@ -1115,7 +1115,7 @@ def _run_pytest(target: str, *extra_args: str, root: Path, env: dict[str, str]) 
     return subprocess.run(  # noqa: S603
         [sys.executable, "-m", "pytest", target, "-p", "no:cacheprovider", "-q", *extra_args],
         cwd=root,
-        env={**os.environ, "PYTHONPATH": str(root / "src"), **env},
+        env={**os.environ, "PYTHONPATH": str(root / "src"), "PYTEST_ADDOPTS": "", **env},
         capture_output=True,
         text=True,
         check=False,

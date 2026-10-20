@@ -22,6 +22,8 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    MacroFunction,
+    MacroParameter,
     Parameter,
     Pointer,
     Reference,
@@ -98,6 +100,14 @@ def _param_to_dict(p: Parameter) -> dict[str, Any]:
     return d
 
 
+def _macro_parameter_to_dict(p: MacroParameter) -> dict[str, Any]:
+    """Convert a MacroParameter to a dict."""
+    d: dict[str, Any] = {"name": p.name}
+    if p.is_variadic:
+        d["is_variadic"] = True
+    return d
+
+
 def _base_to_dict(b: BaseSpecifier) -> dict[str, Any]:
     """Convert a BaseSpecifier to a dict."""
     d: dict[str, Any] = {"name": b.name, "access": b.access}
@@ -113,6 +123,8 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["bit_width"] = f.bit_width
     if f.anonymous_struct is not None:
         d["anonymous_struct"] = _decl_to_dict(f.anonymous_struct)
+    if f.is_padding:
+        d["is_padding"] = True
     if f.is_anonymous_transparent:
         d["is_anonymous_transparent"] = True
     if f.access is not None:
@@ -151,7 +163,7 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
         if decl.inner_typedefs:
             d["inner_typedefs"] = decl.inner_typedefs
         if decl.nested_records:
-            d["nested_records"] = [_decl_to_dict(nr) for nr in decl.nested_records]
+            d["nested_records"] = [_decl_to_dict(r) for r in decl.nested_records]
         if decl.bases:
             d["bases"] = [_base_to_dict(b) for b in decl.bases]
         if decl.is_abstract:
@@ -287,8 +299,31 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         return d
+    elif isinstance(decl, MacroFunction):
+        return _macro_function_to_dict(decl)
     else:
         return {"kind": "unknown", "repr": repr(decl)}
+
+
+def _macro_function_to_dict(decl: MacroFunction) -> dict[str, Any]:
+    """Convert a MacroFunction to a dict."""
+    d: dict[str, Any] = {
+        "kind": "macro_function",
+        "name": decl.name,
+        "parameters": [_macro_parameter_to_dict(p) for p in decl.parameters],
+        "body": decl.body,
+    }
+    if decl.is_variadic:
+        d["is_variadic"] = True
+    if decl.is_statement:
+        d["is_statement"] = True
+    if decl.has_token_pasting:
+        d["has_token_pasting"] = True
+    if decl.namespace:
+        d["namespace"] = decl.namespace
+    if decl.location is not None:
+        d["location"] = _location_to_dict(decl.location)
+    return d
 
 
 def _enum_value_to_dict(v: EnumValue) -> dict[str, Any]:

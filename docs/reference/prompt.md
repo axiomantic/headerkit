@@ -36,7 +36,8 @@ from headerkit.backends import get_backend
 from headerkit.writers import get_writer
 
 backend = get_backend()
-header = backend.parse("""
+header = backend.parse(
+    """
 #define MAX_SIZE 256
 
 typedef struct {
@@ -45,7 +46,9 @@ typedef struct {
 } Point;
 
 int distance(const Point* a, const Point* b);
-""", "geometry.h")
+""",
+    "geometry.h",
+)
 
 # Compact (most token-efficient)
 writer = get_writer("prompt", verbosity="compact")

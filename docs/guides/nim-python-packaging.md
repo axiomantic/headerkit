@@ -121,7 +121,7 @@ build-backend = "scikit_build_core.build"
 name = "fastmath"
 version = "0.1.0"
 description = "Nim extension packaged with Headerkit"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [tool.scikit-build]
 cmake.version = ">=3.18"

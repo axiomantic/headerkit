@@ -12,7 +12,7 @@ import importlib.metadata
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -100,7 +100,7 @@ def write_ir_entry(
     ir_path.write_text(json.dumps(ir_data, indent=2, sort_keys=True), encoding="utf-8")
 
     # Write metadata.json atomically
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     metadata: dict[str, Any] = {
         "cache_key": cache_key,
         "ir_schema_version": _IR_SCHEMA_VERSION,
@@ -211,7 +211,7 @@ def write_output_entry(
     output_file.write_text(output, encoding="utf-8")
 
     # Write metadata.json atomically
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     metadata: dict[str, Any] = {
         "cache_key": cache_key,
         "ir_cache_key": ir_cache_key,

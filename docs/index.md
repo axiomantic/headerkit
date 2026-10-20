@@ -28,11 +28,11 @@ writer = get_writer("cffi")
 cdef_source = writer.write(header)
 
 # Or pick another built-in writer
-ctypes_writer = get_writer("ctypes")      # Python ctypes bindings
-cython_writer = get_writer("cython")      # Cython .pxd declarations
-lua_writer = get_writer("lua")            # LuaJIT FFI bindings
+ctypes_writer = get_writer("ctypes")  # Python ctypes bindings
+cython_writer = get_writer("cython")  # Cython .pxd declarations
+lua_writer = get_writer("lua")  # LuaJIT FFI bindings
 json_writer = get_writer("json", indent=2)  # JSON for inspection
-prompt_writer = get_writer("prompt")      # Token-optimized LLM context
+prompt_writer = get_writer("prompt")  # Token-optimized LLM context
 
 print(json_writer.write(header))
 ```

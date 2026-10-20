@@ -11,11 +11,14 @@ import argparse
 import io
 import os
 import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
 from headerkit._rename import RenameConfig, RenameError, parse_rename_config
+
+_TOML_DECODE_ERROR = tomllib.TOMLDecodeError
 
 
 def _find_project_root(start: Path) -> Path:
@@ -40,21 +43,6 @@ def _find_project_root(start: Path) -> Path:
         if current == current.parent or current == home:
             return start
         current = current.parent
-
-
-try:
-    import tomllib  # type: ignore[import-not-found]
-except ImportError:
-    try:
-        import tomli as tomllib  # type: ignore[import-not-found,no-redef]
-    except ImportError:
-        tomllib = None  # type: ignore[assignment]
-
-# TOMLDecodeError for narrowed exception handling in both branches.
-if tomllib is not None:
-    _TOML_DECODE_ERROR: type[Exception] = tomllib.TOMLDecodeError  # type: ignore[attr-defined]
-else:
-    _TOML_DECODE_ERROR = Exception  # placeholder; unreachable when tomllib is None
 
 
 @dataclass
@@ -103,9 +91,7 @@ class HeaderkitConfig:
 
 
 def _parse_toml(data: bytes) -> dict[str, object]:
-    """Parse TOML bytes. Caller must verify tomllib is available first."""
-    if tomllib is None:
-        raise RuntimeError("tomllib not available")  # should not reach here
+    """Parse TOML bytes."""
     return cast(dict[str, object], tomllib.load(io.BytesIO(data)))  # type: ignore[arg-type]
 
 
@@ -122,14 +108,15 @@ def find_config_file(start: Path | None = None) -> Path | None:
     home = Path.home()
 
     while True:
-        # Check .headerkit.toml first
-        headerkit_toml = current / ".headerkit.toml"
-        if headerkit_toml.exists():
-            return headerkit_toml
+        # Check .headerkit.toml and headerkit.toml first
+        for name in (".headerkit.toml", "headerkit.toml"):
+            headerkit_toml = current / name
+            if headerkit_toml.exists():
+                return headerkit_toml
 
         # Check pyproject.toml — only if it has [tool.headerkit] section
         pyproject = current / "pyproject.toml"
-        if pyproject.exists() and tomllib is not None:
+        if pyproject.exists():
             try:
                 raw = _parse_toml(pyproject.read_bytes())
             except _TOML_DECODE_ERROR:
@@ -337,7 +324,6 @@ def load_config(path: Path | str) -> HeaderkitConfig:
     """Load and validate config from `path`.
 
     Raises ValueError on:
-    - tomllib is None (cannot parse TOML)
     - tomllib.TOMLDecodeError
     - Type validation failures (wrong TOML value types)
 
@@ -345,12 +331,6 @@ def load_config(path: Path | str) -> HeaderkitConfig:
     [tool.headerkit] section.
     """
     path = Path(path)
-    if tomllib is None:
-        raise ValueError(
-            f"headerkit: TOML config found at {path} but no TOML parser available.\n"
-            "Install: pip install tomli  (Python 3.10 only)"
-        )
-
     try:
         raw = _parse_toml(path.read_bytes())
     except _TOML_DECODE_ERROR as exc:

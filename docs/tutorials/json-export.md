@@ -173,9 +173,7 @@ data = header_to_json_dict(header)
 functions = [d for d in data["declarations"] if d["kind"] == "function"]
 for fn in functions:
     params = ", ".join(
-        f"{p['type']['name']} {p.get('name', '')}"
-        for p in fn["parameters"]
-        if p["type"]["kind"] == "ctype"
+        f"{p['type']['name']} {p.get('name', '')}" for p in fn["parameters"] if p["type"]["kind"] == "ctype"
     )
     print(f"{fn['name']}({params})")
 ```
@@ -185,10 +183,7 @@ for fn in functions:
 ```python
 for decl in data["declarations"]:
     if decl["kind"] == "struct" and decl.get("fields"):
-        pointer_fields = [
-            f for f in decl["fields"]
-            if f["type"]["kind"] == "pointer"
-        ]
+        pointer_fields = [f for f in decl["fields"] if f["type"]["kind"] == "pointer"]
         if pointer_fields:
             names = ", ".join(f["name"] for f in pointer_fields)
             print(f"{decl['name']} has pointer fields: {names}")
@@ -241,11 +236,7 @@ def get_api_surface(header_path: str) -> dict[str, str]:
         header = backend.parse(f.read(), header_path)
     data = header_to_json_dict(header)
 
-    return {
-        decl["name"]: decl["kind"]
-        for decl in data["declarations"]
-        if decl.get("name")
-    }
+    return {decl["name"]: decl["kind"] for decl in data["declarations"] if decl.get("name")}
 
 
 def diff_apis(old_path: str, new_path: str) -> None:

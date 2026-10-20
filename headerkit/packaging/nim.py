@@ -16,8 +16,12 @@ from headerkit.ir import (
     SourceUnit,
     TypeExpr,
 )
+from headerkit.packaging.common import (
+    generate_pyproject_toml,
+    generate_pytest_tripwire,
+    generate_pytest_unit_tests,
+)
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import DEDENT_BLOCK, render_block_template
 from headerkit.writers.ctypes import CTYPES_TYPE_MAP
 from headerkit.writers.nim import C_TO_NIM_PRIMITIVES, NimWriter
 
@@ -67,24 +71,19 @@ def generate_nim_pyproject(
     description: str = "Nim extension packaged with HeaderKit",
 ) -> str:
     """Generate pyproject.toml configured for scikit-build-core wheel distribution."""
-    _validate_pkg_name(pkg)
-    desc = description or f"Nim extension {pkg} packaged with HeaderKit"
-    return textwrap.dedent(f"""\
-        [build-system]
-        requires = ["scikit-build-core>=0.9.0"]
-        build-backend = "scikit_build_core.build"
-
-        [project]
-        name = "{pkg}"
-        version = "{version}"
-        description = "{desc}"
-        readme = "README.md"
-        requires-python = ">=3.10"
-
+    extra = textwrap.dedent(f"""\
         [tool.scikit-build]
         cmake.version = ">=3.18"
         wheel.packages = ["{pkg}"]
     """)
+    return generate_pyproject_toml(
+        pkg,
+        version=version,
+        description=description or f"Nim extension {pkg} packaged with HeaderKit",
+        build_requires=["scikit-build-core>=0.9.0"],
+        build_backend="scikit_build_core.build",
+        extra_sections=extra,
+    )
 
 
 def _escape_nim_ident(name: str) -> str:
@@ -400,78 +399,12 @@ def generate_nim_wheel_layout(
 
     # 6. Tests
     if test_type in ("tripwire", "both"):
-        tw_checks: list[str] = []
-        for fn in funcs:
-            tw_checks.append(
-                textwrap.dedent(f"""\
-                @pytest.mark.tripwire
-                def test_entrypoint_{fn.name}() -> None:
-                    assert hasattr({pkg}._lib, "{fn.name}"), "Entry point '{fn.name}' missing from compiled library"
-                    assert callable(getattr({pkg}, "{fn.name}"))
-            """)
-            )
-
-        checks_str = "\n".join(tw_checks) if tw_checks else ""
-
-        tripwire = render_block_template(
-            f'''\
-            """Tripwire test verifying native dynamic library resolution and ABI entrypoints."""
-
-            from __future__ import annotations
-
-            import pytest
-            import {pkg}
-
-
-            @pytest.mark.tripwire
-            def test_native_library_loaded() -> None:
-                """Tripwire: verify that the compiled Nim dynamic library is present and loaded."""
-                assert {pkg}._lib is not None, "Native dynamic library '{pkg}' not found in package directory"
-
-
-            {DEDENT_BLOCK}
-        ''',
-            checks_str,
-        )
+        tripwire = generate_pytest_tripwire(pkg, funcs, loader_kind="ctypes_cdll", library_var="_lib")
         files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
 
     if test_type in ("unit", "both"):
-        unit_checks: list[str] = []
-        for fn in funcs:
-            param_names = [p.name or f"arg{idx}" for idx, p in enumerate(fn.parameters)]
-            unit_checks.append(
-                textwrap.dedent(f"""\
-                def test_{fn.name}_wrapper_signature() -> None:
-                    assert hasattr({pkg}, "{fn.name}")
-                    fn_obj = getattr({pkg}, "{fn.name}")
-                    assert callable(fn_obj)
-                    sig = inspect.signature(fn_obj)
-                    assert len(sig.parameters) == {len(fn.parameters)}
-                    assert list(sig.parameters.keys()) == {repr(param_names)}
-            """)
-            )
-
-        u_checks_str = "\n".join(unit_checks) if unit_checks else ""
-
-        unit_test = render_block_template(
-            f'''\
-            """Unit tests for {pkg} Python wrapper."""
-
-            from __future__ import annotations
-
-            import inspect
-            import {pkg}
-
-
-            def test_module_structure() -> None:
-                assert inspect.ismodule({pkg})
-                assert hasattr({pkg}, "init_nim")
-                assert callable({pkg}.init_nim)
-
-
-            {DEDENT_BLOCK}
-        ''',
-            u_checks_str,
+        unit_test = generate_pytest_unit_tests(
+            pkg, funcs, binding_model="wrapper_functions", extra_init_callables=["init_nim"]
         )
         files.append(OutputFile(path=f"tests/test_{pkg}.py", content=unit_test))
 

@@ -100,12 +100,12 @@ class TestNimIdentifierGrammar:
     @pytest.mark.parametrize(
         ("source", "expected"),
         [
-            ("__sig", "u_sig"),
+            ("__sig", "uu_sig"),
             ("_sig", "u_sig"),
             ("a__b", "a_b"),
             ("x__y__z", "x_y_z"),
             ("_a_", "u_a_u"),
-            ("___", "u_u"),
+            ("___", "u3"),
             ("a_", "a_u"),
         ],
     )

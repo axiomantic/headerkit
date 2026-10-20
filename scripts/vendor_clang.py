@@ -7,7 +7,7 @@ import re
 import shutil
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -60,7 +60,7 @@ def download_cindex(tag: str) -> bytes:
 
 def write_provenance(provenance_path: Path, tag: str, sha256_hex: str) -> None:
     """Write a PROVENANCE file matching the existing format."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     source_url = f"https://github.com/llvm/llvm-project/blob/llvmorg-{tag}/clang/bindings/python/clang/cindex.py"
     content = (
         f"source: {source_url}\n"
@@ -108,11 +108,17 @@ def update_init_py(init_path: Path, major: str) -> None:
         flags=re.DOTALL,
     )
 
-    # Update LATEST_VENDORED if this is the newest
+    # Update LATEST_VENDORED and OLDEST_VENDORED
     latest = max(versions, key=int)
+    oldest = min(versions, key=int)
     content = re.sub(
         r'LATEST_VENDORED\s*=\s*"[^"]+"',
         f'LATEST_VENDORED = "{latest}"',
+        content,
+    )
+    content = re.sub(
+        r'OLDEST_VENDORED\s*=\s*"[^"]+"',
+        f'OLDEST_VENDORED = "{oldest}"',
         content,
     )
 
@@ -136,6 +142,17 @@ def vendor(major: str, tag: str, repo_root: Path) -> None:
 
     # Download cindex.py
     cindex_bytes = download_cindex(tag)
+
+    # In LLVM < 19, cindex.py uses `import clang.enumerations`
+    if b"import clang.enumerations" in cindex_bytes:
+        cindex_text = cindex_bytes.decode("utf-8")
+        cindex_text = cindex_text.replace(
+            "import clang.enumerations",
+            f"from headerkit._clang.v{major} import enumerations as _enumerations",
+        )
+        cindex_text = cindex_text.replace("clang.enumerations.TokenKinds", "_enumerations.TokenKinds")
+        cindex_bytes = cindex_text.encode("utf-8")
+
     sha256_hex = hashlib.sha256(cindex_bytes).hexdigest()
 
     # Create directory structure
@@ -145,6 +162,14 @@ def vendor(major: str, tag: str, repo_root: Path) -> None:
     # Write cindex.py
     (version_dir / "cindex.py").write_bytes(cindex_bytes)
     print(f"Wrote cindex.py ({len(cindex_bytes)} bytes, sha256: {sha256_hex})")
+
+    # If LLVM < 19, ensure enumerations.py is present
+    if int(major) < 19:
+        v18_dir = clang_dir / "v18"
+        if (v18_dir / "enumerations.py").exists():
+            shutil.copy2(v18_dir / "enumerations.py", version_dir / "enumerations.py")
+        if (v18_dir / "enumerations.pyi").exists():
+            shutil.copy2(v18_dir / "enumerations.pyi", version_dir / "enumerations.pyi")
 
     # Write empty __init__.py
     (version_dir / "__init__.py").write_text("")
