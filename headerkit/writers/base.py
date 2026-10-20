@@ -292,6 +292,7 @@ class BaseWriter:
         return self._write_package_layout(unit, options)
 
     min_access_floor: ClassVar[str | None] = None
+    filter_bases_by_access_floor: ClassVar[bool] = True
 
     def _prepare(
         self,
@@ -314,7 +315,11 @@ class BaseWriter:
             floor = str(raw_floor) if raw_floor is not None else None
 
         if floor and floor.lower() not in ("private", "all", "none"):
-            unit = filter_access_floor(unit, floor=floor)
+            unit = filter_access_floor(
+                unit,
+                floor=floor,
+                filter_bases=self.filter_bases_by_access_floor,
+            )
         if not self.consumes_padding_fields:
             return StripPaddingFields().transform(unit)
         return unit

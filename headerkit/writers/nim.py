@@ -982,6 +982,7 @@ class NimWriter(BaseWriter):
     default_output_pattern: str = "{dir}/{stem}.nim"
     default_extension: str = ".nim"
     min_access_floor: ClassVar[str | None] = "public"
+    filter_bases_by_access_floor: ClassVar[bool] = False
     supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel", "scikit-build")
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
