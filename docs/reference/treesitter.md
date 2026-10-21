@@ -33,6 +33,17 @@ pip install "headerkit[treesitter]"
     header = backend.parse(code, "mylib.h")
     ```
 
+## Limitations
+
+Compared to the default `libclang` backend, the tree-sitter backend is syntactic and more limited:
+
+- **No `#include` Expansion**: Parses the given file or code string only. It does not resolve or follow `#include` directives; declarations from included headers do not appear in the resulting IR.
+- **No Preprocessor Macro Extraction**: Does not evaluate or extract `#define` macros into IR `Constant` or `MacroFunction` nodes.
+- **No System Include Discovery**: Does not query system compilers for include search paths.
+- **Single Translation Unit Context**: Operates without a compiler semantic engine or cross-file type resolution.
+
+Use `tree-sitter` for self-contained headers, minimal/headless build environments without system LLVM libraries, or fast syntax extraction. For umbrella headers, full macro extraction, or compiler-accurate type layouts, use `libclang`.
+
 ## API Reference
 
 ::: headerkit.backends.treesitter.TreeSitterBackend
