@@ -841,6 +841,12 @@ def main(argv: list[str] | None = None) -> int:
 
         exclude_pats: list[str] = list(getattr(args, "exclude_patterns", None) or [])
 
+        cli_project_root = (
+            config.source_path.parent
+            if (use_config_headers and config is not None and config.source_path is not None)
+            else Path.cwd()
+        )
+
         try:
             batch_result = batch_generate(
                 patterns=input_files,
@@ -861,6 +867,7 @@ def main(argv: list[str] | None = None) -> int:
                 no_output_cache=resolved_no_output_cache,
                 auto_install_libclang=None,
                 target=args.target,
+                project_root=cli_project_root,
                 header_overrides=batch_header_overrides,
             )
         except (ValueError, RuntimeError, FileNotFoundError) as exc:

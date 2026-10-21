@@ -953,7 +953,7 @@ def batch_generate(
     exclude_patterns = exclude_patterns or []
 
     if project_root is None:
-        project_root = _find_project_root(Path.cwd())
+        project_root = Path.cwd()
 
     # Resolve header paths from patterns
     sorted_paths, pattern_mapping = resolve_headers(

@@ -76,19 +76,27 @@ def detect_llvm_version() -> str | None:
     return None
 
 
+def _safe_which(name: str) -> str | None:
+    """Safe wrapper around shutil.which handling platform quirks and mocks."""
+    try:
+        return shutil.which(name)
+    except (AttributeError, OSError):
+        return None
+
+
 def _find_versioned_binary(base_name: str) -> str | None:
     """Find a binary by name, trying unversioned first then versioned variants.
 
     On Debian/Ubuntu, tools are often only available as e.g. llvm-config-18
     or clang-18 without an unversioned symlink.
     """
-    path = shutil.which(base_name)
+    path = _safe_which(base_name)
     if path:
         return path
 
     # Try versioned names in descending order (prefer newest)
     for suffix in range(30, 13, -1):
-        path = shutil.which(f"{base_name}-{suffix}")
+        path = _safe_which(f"{base_name}-{suffix}")
         if path:
             return path
 
