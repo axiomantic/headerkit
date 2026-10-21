@@ -2164,3 +2164,66 @@ class TestIncludedEnumResolution:
         enums = [d for d in unit.declarations if isinstance(d, Enum) and d.name == "statusType"]
         assert len(enums) == 1
         assert [v.name for v in enums[0].values] == ["STATUS_OK", "STATUS_FAIL"]
+
+
+class TestLibclangDiscoveryAndIncludes:
+    """Tests for enhanced libclang discovery and system include resolution."""
+
+    def test_env_libclang_path_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LIBCLANG_PATH pointing to a file is included in search paths."""
+        fake_lib = tmp_path / "libclang.so.21"
+        fake_lib.write_text("")
+        monkeypatch.setenv("LIBCLANG_PATH", str(fake_lib))
+
+        paths = _get_libclang_search_paths()
+        assert str(fake_lib) in paths
+
+    def test_env_libclang_path_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LIBCLANG_PATH pointing to a directory is searched for library files."""
+        fake_lib = tmp_path / "libclang.so.21"
+        fake_lib.write_text("")
+        monkeypatch.setenv("LIBCLANG_PATH", str(tmp_path))
+        monkeypatch.setattr("headerkit.backends.libclang.sys.platform", "linux")
+
+        paths = _get_libclang_search_paths()
+        assert str(fake_lib) in paths
+
+    def test_llvm_config_libclang_discovery(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """llvm-config --libdir is queried and candidate libraries added."""
+        fake_libdir = tmp_path / "llvm-lib"
+        fake_libdir.mkdir()
+        fake_so = fake_libdir / "libclang.so.21"
+        fake_so.write_text("")
+
+        monkeypatch.setattr("headerkit.backends.libclang.sys.platform", "linux")
+        monkeypatch.setattr(
+            "headerkit.backends.libclang._find_versioned_binary",
+            lambda name: "/usr/bin/llvm-config" if name == "llvm-config" else None,
+        )
+
+        def mock_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            if cmd == ["/usr/bin/llvm-config", "--libdir"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout=f"{fake_libdir}\n", stderr="")
+            raise FileNotFoundError
+
+        monkeypatch.setattr("subprocess.run", mock_run)
+
+        paths = _get_libclang_search_paths()
+        assert str(fake_so) in paths
+
+    def test_find_libclang_builtin_include_dirs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_find_libclang_builtin_include_dirs locates directory with stddef.h next to libclang."""
+        fake_lib = tmp_path / "lib" / "libclang.so"
+        fake_lib.parent.mkdir(parents=True)
+        fake_lib.write_text("")
+        resource_inc = tmp_path / "lib" / "clang" / "21" / "include"
+        resource_inc.mkdir(parents=True)
+        (resource_inc / "stddef.h").write_text("/* stddef.h */\n")
+
+        monkeypatch.setattr(
+            "headerkit.backends.libclang._get_libclang_search_paths",
+            lambda: [str(fake_lib)],
+        )
+
+        dirs = mod._find_libclang_builtin_include_dirs()
+        assert str(resource_inc) in dirs

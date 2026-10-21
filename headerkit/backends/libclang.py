@@ -51,6 +51,7 @@ from dataclasses import replace
 from typing import Any
 
 from headerkit._clang import get_cindex as _get_cindex
+from headerkit._clang._version import _find_versioned_binary
 from headerkit.backends import (
     register_backend,
 )
@@ -294,6 +295,57 @@ def _add_versioned_so_paths(paths: list[str], base_dir: str) -> None:
     paths.append(f"{base_dir}/libclang.so")
 
 
+def _get_env_libclang_paths() -> list[str]:
+    """Inspect LIBCLANG_PATH environment variable for candidates."""
+    env_path = os.environ.get("LIBCLANG_PATH")
+    if not env_path:
+        return []
+    if os.path.isfile(env_path):
+        return [env_path]
+    if os.path.isdir(env_path):
+        paths: list[str] = []
+        if sys.platform == "darwin":
+            paths.append(os.path.join(env_path, "libclang.dylib"))
+            paths.extend(sorted(glob.glob(os.path.join(env_path, "libclang.*.dylib")), reverse=True))
+        elif sys.platform == "win32":
+            paths.append(os.path.join(env_path, "libclang.dll"))
+            paths.append(os.path.join(os.path.dirname(env_path), "bin", "libclang.dll"))
+        else:
+            _add_versioned_so_paths(paths, env_path)
+        return paths
+    return []
+
+
+def _get_llvm_config_libclang_paths() -> list[str]:
+    """Query llvm-config for libclang library paths."""
+    llvm_config = _find_versioned_binary("llvm-config")
+    if not llvm_config:
+        return []
+    try:
+        result = subprocess.run(
+            [llvm_config, "--libdir"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            libdir = result.stdout.strip()
+            if os.path.isdir(libdir):
+                paths: list[str] = []
+                if sys.platform == "darwin":
+                    paths.append(os.path.join(libdir, "libclang.dylib"))
+                    paths.extend(sorted(glob.glob(os.path.join(libdir, "libclang.*.dylib")), reverse=True))
+                elif sys.platform == "win32":
+                    paths.append(os.path.join(libdir, "libclang.dll"))
+                    paths.append(os.path.join(os.path.dirname(libdir), "bin", "libclang.dll"))
+                else:
+                    _add_versioned_so_paths(paths, libdir)
+                return paths
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return []
+
+
 def _get_libclang_search_paths() -> list[str]:
     """Get platform-specific paths to search for libclang.
 
@@ -301,6 +353,9 @@ def _get_libclang_search_paths() -> list[str]:
     ordered by preference (most common/preferred locations first).
     """
     paths: list[str] = []
+
+    paths.extend(_get_env_libclang_paths())
+    paths.extend(_get_llvm_config_libclang_paths())
 
     if sys.platform == "darwin":
         # Homebrew on Apple Silicon (most common modern setup)
@@ -369,7 +424,7 @@ def _get_libclang_search_paths() -> list[str]:
     except (ImportError, ValueError):
         pass
 
-    return paths
+    return list(dict.fromkeys(paths))
 
 
 def _reset_cindex_config() -> None:
@@ -509,6 +564,46 @@ def is_system_libclang_available() -> bool:
 # Cache for system include directories (computed once per process)
 _system_include_cache_c: list[str] | None = None
 _system_include_cache_cxx: list[str] | None = None
+
+
+def _find_libclang_builtin_include_dirs() -> list[str]:
+    """Find clang builtin include directories containing stddef.h, stdint.h, etc."""
+    include_dirs: list[str] = []
+    candidates: list[str] = []
+
+    # Check if a library file is already loaded by cindex
+    try:
+        cindex_mod = _cindex
+        lib_file = getattr(getattr(cindex_mod, "Config", None), "library_file", None)
+        if lib_file:
+            candidates.append(lib_file)
+    except Exception:  # noqa: BLE001
+        pass
+
+    candidates.extend(_get_libclang_search_paths())
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or not os.path.exists(candidate):
+            continue
+        lib_dir = os.path.dirname(os.path.abspath(candidate))
+        patterns = [
+            os.path.join(lib_dir, "clang", "*", "include"),
+            os.path.join(lib_dir, "..", "lib", "clang", "*", "include"),
+            os.path.join(lib_dir, "..", "include"),
+            os.path.join(lib_dir, "include"),
+        ]
+        for pat in patterns:
+            for d in sorted(glob.glob(pat), reverse=True):
+                if os.path.isfile(os.path.join(d, "stddef.h")):
+                    norm = os.path.normpath(d)
+                    if norm not in seen:
+                        seen.add(norm)
+                        include_dirs.append(norm)
+        if include_dirs:
+            break
+
+    return include_dirs
 
 
 def get_system_include_dirs(cplus: bool = False) -> list[str]:
@@ -4568,6 +4663,12 @@ class LibclangBackend:
         # Always add them when use_default_includes=True, regardless of other -I flags
         if use_default_includes:
             args.extend(get_system_include_dirs(cplus=is_cplus))
+            has_stddef = any(
+                os.path.isfile(os.path.join(p.removeprefix("-isystem").removeprefix("-I"), "stddef.h")) for p in args
+            )
+            if not has_stddef:
+                for builtin_inc in _find_libclang_builtin_include_dirs():
+                    args.append(f"-isystem{builtin_inc}")
 
         # Add extra arguments
         if extra_args:

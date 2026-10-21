@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.3] - 2026-10-21
+
+### Fixed
+
+- Fixed relative output path hijacking in subdirectories (such as Meson, CMake, or build directories inside a Git repository): when `-o` specifies a relative output file, it is now placed directly in the current working directory rather than escaping to the parent `.git` repository root.
+- Fixed relative header path resolution from subdirectories when passed as literal CLI arguments.
+- Added discovery for custom `libclang` installations: `LIBCLANG_PATH` environment variable is now checked (both file and directory paths), and `llvm-config --libdir` (including versioned binaries `llvm-config-N`) is queried to locate `libclang.so`, `libclang.dylib`, and `libclang.dll` in non-standard environments such as Nix or custom LLVM prefixes.
+- Fixed `'stddef.h' file not found` parse errors when bare `clang` is uninstalled or versioned: `get_system_include_dirs()` now checks versioned `clang-N` binaries, falls back to `gcc`/`cc`, and automatically locates and includes Clang's resource directory containing builtin headers (`stddef.h`, `stdint.h`, `stdarg.h`, etc.).
+
 ## [0.47.2] - 2026-10-21
 
 ### Fixed
@@ -1236,7 +1245,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.47.1...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.47.3...HEAD
+[0.47.3]: https://github.com/axiomantic/headerkit/compare/v0.47.2...v0.47.3
+[0.47.2]: https://github.com/axiomantic/headerkit/compare/v0.47.1...v0.47.2
 [0.47.1]: https://github.com/axiomantic/headerkit/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/axiomantic/headerkit/compare/v0.46.2...v0.47.0
 [0.46.2]: https://github.com/axiomantic/headerkit/compare/v0.46.1...v0.46.2

@@ -36,7 +36,12 @@ def resolve_headers(
         elif any(ch in pattern for ch in ("*", "?", "[")):
             hits = list(project_root.glob(pattern))
         else:
-            hits = [project_root / pattern]
+            cand = project_root / pattern
+            cwd_cand = Path.cwd() / pattern
+            if not cand.exists() and cwd_cand.exists():
+                hits = [cwd_cand]
+            else:
+                hits = [cand]
 
         for path in hits:
             matched.add(path)

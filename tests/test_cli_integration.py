@@ -712,3 +712,68 @@ class TestScaffoldCarriesTheParseFlags:
         cfg = (out_dir / "nim.cfg").read_text()
         assert f'-I\\"{include_dir.resolve().as_posix()}\\"' in cfg, cfg
         assert '--passC:"-DHK_FEATURE=1"' in cfg, cfg
+
+
+class TestCliSubdirectoryExecution:
+    """Verify that running headerkit from a subdirectory inside a repository behaves properly."""
+
+    def test_subdirectory_relative_output_stays_in_cwd(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Relative -o output in a build subdirectory must be created in CWD, not repo root.
+
+        Reproduces the pyrime/Meson build scenario where headerkit is invoked
+        from <builddir>/src/pyrime with '-orime_api.pxd'.
+        """
+        repo_root = tmp_path / "project"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()  # Git marker at repo root
+
+        include_dir = repo_root / "include"
+        include_dir.mkdir()
+        header = include_dir / "rime_api.h"
+        header.write_text("int rime_get_version(void);\n")
+
+        build_dir = repo_root / "build" / "src" / "pyrime"
+        build_dir.mkdir(parents=True)
+        monkeypatch.chdir(build_dir)
+
+        rc = main(["--no-config", str(header), "-orime_api.pxd"])
+        assert rc == 0
+
+        # Must be created in CWD (build_dir), NOT in repo_root!
+        assert (build_dir / "rime_api.pxd").exists(), "rime_api.pxd was not written to CWD build dir"
+        assert not (repo_root / "rime_api.pxd").exists(), "rime_api.pxd escaped to .git repo root!"
+        content = (build_dir / "rime_api.pxd").read_text()
+        assert "rime_get_version" in content
+
+    def test_subdirectory_relative_header_input(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Relative input headers from a subdirectory must resolve relative to CWD."""
+        repo_root = tmp_path / "project"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()
+
+        include_dir = repo_root / "include"
+        include_dir.mkdir()
+        header = include_dir / "api.h"
+        header.write_text("int add(int a, int b);\n")
+
+        build_dir = repo_root / "build" / "sub"
+        build_dir.mkdir(parents=True)
+        monkeypatch.chdir(build_dir)
+
+        # Pass relative path from build_dir to header
+        rel_header = "../../include/api.h"
+        rc = main(["--no-config", rel_header, "-oapi.pxd"])
+        assert rc == 0
+
+        assert (build_dir / "api.pxd").exists()
+        assert not (repo_root / "api.pxd").exists()
+        content = (build_dir / "api.pxd").read_text()
+        assert "add" in content
