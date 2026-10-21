@@ -14,13 +14,70 @@ Usage::
 import ctypes
 import importlib
 import platform
+import sys
 import warnings
 from ctypes import c_void_p
 from types import ModuleType
 
 _NEEDS_INTEROP_STRING_PATCH = platform.python_implementation() != "CPython"
 
+_NEEDS_BIG_ENDIAN_CALLBACK_PATCH = (
+    sys.byteorder == "big" and ctypes.sizeof(ctypes.c_void_p) == 8 and sys.version_info < (3, 14)
+)
+
 _cached_cindex: ModuleType | None = None
+
+
+def _patch_big_endian_callbacks(cindex: ModuleType) -> None:
+    """Work around CPython issue gh-156933 on 64-bit big-endian architectures (e.g. s390x).
+
+    In Python < 3.14 on 64-bit big-endian architectures, ctypes.CFUNCTYPE callbacks
+    returning 32-bit integers (such as c_int) fail to widen narrow return values per
+    the libffi contract. Writing 4 bytes to an 8-byte buffer writes into the high-order
+    bits on big-endian machines, leaving the low-order bits as 0 or stack garbage.
+    In the s390x ELF ABI, 32-bit return values are evaluated in the low 32 bits of register
+    r2. When clang_visitChildren evaluates CXChildVisitResult, it reads 0
+    (CXChildVisit_Break), immediately aborting AST traversal on the very first node.
+
+    Widening the visitor callbacks' return type to ctypes.c_ssize_t (64-bit integer)
+    ensures ctypes writes all 8 bytes, correctly placing the return value in the low 32
+    bits of r2 for native callers across both endiannesses.
+    """
+    new_cursor_cb = ctypes.CFUNCTYPE(ctypes.c_ssize_t, cindex.Cursor, cindex.Cursor, ctypes.py_object)
+    new_fields_cb = ctypes.CFUNCTYPE(ctypes.c_ssize_t, cindex.Cursor, ctypes.py_object)
+
+    if hasattr(cindex, "cursor_visit_callback"):
+        cindex.cursor_visit_callback = new_cursor_cb  # type: ignore[attr-defined]
+    if hasattr(cindex, "fields_visit_callback"):
+        cindex.fields_visit_callback = new_fields_cb  # type: ignore[attr-defined]
+
+    callbacks = getattr(cindex, "callbacks", None)
+    if isinstance(callbacks, dict):
+        if "cursor_visit" in callbacks:
+            callbacks["cursor_visit"] = new_cursor_cb
+        if "fields_visit" in callbacks:
+            callbacks["fields_visit"] = new_fields_cb
+
+    fn_list = getattr(cindex, "FUNCTION_LIST", getattr(cindex, "functionList", None))
+    if fn_list is not None:
+        for idx, entry in enumerate(fn_list):
+            name = entry[0]
+            if name == "clang_visitChildren":
+                fn_list[idx] = (name, [cindex.Cursor, new_cursor_cb, ctypes.py_object], entry[2])
+            elif name in ("clang_visitCXXBaseClasses", "clang_visitCXXMethods", "clang_Type_visitFields"):
+                fn_list[idx] = (name, [cindex.Type, new_fields_cb, ctypes.py_object], entry[2])
+
+    if hasattr(cindex, "conf") and hasattr(cindex.conf, "lib"):
+        lib = cindex.conf.lib
+        for attr, cb, target_type in [
+            ("clang_visitChildren", new_cursor_cb, cindex.Cursor),
+            ("clang_visitCXXBaseClasses", new_fields_cb, cindex.Type),
+            ("clang_visitCXXMethods", new_fields_cb, cindex.Type),
+            ("clang_Type_visitFields", new_fields_cb, cindex.Type),
+        ]:
+            if hasattr(lib, attr):
+                getattr(lib, attr).argtypes = [target_type, cb, ctypes.py_object]
+
 
 VENDORED_VERSIONS = ("14", "15", "16", "17", "18", "19", "20", "21", "22", "23")
 LATEST_VENDORED = "23"
@@ -132,6 +189,9 @@ def get_cindex() -> ModuleType:
 
     if _NEEDS_INTEROP_STRING_PATCH:
         cindex.c_interop_string = _compat_c_interop_string  # type: ignore[attr-defined]
+
+    if _NEEDS_BIG_ENDIAN_CALLBACK_PATCH:
+        _patch_big_endian_callbacks(cindex)
 
     _cached_cindex = cindex
     return cindex
