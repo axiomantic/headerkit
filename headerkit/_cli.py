@@ -21,7 +21,7 @@ from headerkit._generate import batch_generate, generate
 from headerkit._rename import register_config_hooks as register_rename_config
 from headerkit.backends import _load_backend_plugins
 from headerkit.hooks import _load_hook_plugins
-from headerkit.writers import _load_writer_plugins, coerce_writer_options
+from headerkit.writers import _load_writer_plugins, coerce_writer_options, get_default_writer
 
 
 def parse_writer_options(
@@ -220,8 +220,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         dest="output_specs",
         action="append",
-        metavar="WRITER:TEMPLATE",
-        help="Output path template for a writer (e.g., cffi:{dir}/{stem}_cffi.py)",
+        metavar="[WRITER:]TEMPLATE",
+        help="Output path template (e.g., -o librime.pxd or -o cython:librime.pxd)",
     )
     parser.add_argument(
         "--exclude",
@@ -405,14 +405,68 @@ def _parse_writer_specs(
     return specs
 
 
-def _parse_output_specs(raw_specs: list[str]) -> dict[str, str]:
-    """Parse -o WRITER:TEMPLATE arguments into a writer->template dict."""
+_EXTENSION_TO_WRITER: dict[str, str] = {
+    ".pxd": "cython",
+    ".pyx": "cython",
+    ".json": "json",
+    ".lua": "lua",
+    ".txt": "prompt",
+    ".nim": "nim",
+    ".py": "cffi",
+    ".pyi": "cffi",
+}
+
+
+def _infer_writer_from_path(path: str) -> str | None:
+    """Infer writer name from output file extension."""
+    suffix = Path(path).suffix.lower()
+    return _EXTENSION_TO_WRITER.get(suffix)
+
+
+def _parse_output_specs(
+    raw_specs: list[str],
+    active_writers: list[str] | None = None,
+) -> dict[str, str]:
+    """Parse -o arguments into a writer->template dict.
+
+    Supports both ``WRITER:TEMPLATE`` syntax and bare ``TEMPLATE`` syntax when
+    the writer can be unambiguously determined (either from a single active writer
+    or inferred from the file extension).
+
+    :param raw_specs: Raw ``-o`` arguments from the command line.
+    :param active_writers: List of active writers specified via ``-w``.
+    :returns: Dict mapping writer name to output path template.
+    :raises ValueError: If a spec is malformed or ambiguous.
+    """
     result: dict[str, str] = {}
     for item in raw_specs:
-        writer_name, sep, template = item.partition(":")
-        if not sep or not template:
-            raise ValueError(f"headerkit: malformed --output: {item!r}; use WRITER:TEMPLATE format")
-        result[writer_name] = template
+        has_writer_prefix = ":" in item
+        if has_writer_prefix:
+            prefix, _, rest = item.partition(":")
+            # On Windows, drive letters like "C:\path" or "C:/path" are paths, not writer prefixes.
+            if len(prefix) == 1 and prefix.isalpha() and (rest.startswith("\\") or rest.startswith("/")):
+                has_writer_prefix = False
+
+        if has_writer_prefix:
+            writer_name, sep, template = item.partition(":")
+            if not template:
+                raise ValueError(f"headerkit: malformed --output: {item!r}; use WRITER:TEMPLATE format")
+            result[writer_name] = template
+        else:
+            if active_writers and len(active_writers) == 1:
+                writer_name = active_writers[0]
+            elif active_writers and len(active_writers) > 1:
+                raise ValueError(
+                    f"headerkit: bare --output {item!r} requires exactly one active writer; "
+                    "use WRITER:TEMPLATE when multiple writers are active"
+                )
+            else:
+                inferred = _infer_writer_from_path(item)
+                if inferred is not None:
+                    writer_name = inferred
+                else:
+                    raise ValueError(f"headerkit: malformed --output: {item!r}; use WRITER:TEMPLATE format")
+            result[writer_name] = item
     return result
 
 
@@ -641,16 +695,25 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"headerkit: {exc}", file=sys.stderr)
         return 1
-    if not specs:
-        specs = [WriterSpec(name="default", output_template=None, options={})]
 
     # Parse --output specs and apply to writer specs
     output_specs_raw: list[str] = getattr(args, "output_specs", None) or []
     try:
-        output_templates = _parse_output_specs(output_specs_raw)
+        output_templates = _parse_output_specs(output_specs_raw, active_writers=writers_raw or None)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+
+    # Auto-activate any writers specified in output_templates that weren't in -w
+    existing_spec_names = {s.name for s in specs}
+    for writer_name, template in output_templates.items():
+        if writer_name not in existing_spec_names:
+            specs.append(WriterSpec(name=writer_name, output_template=template, options={}))
+            existing_spec_names.add(writer_name)
+
+    if not specs:
+        specs = [WriterSpec(name=get_default_writer(), output_template=None, options={})]
+
     for spec in specs:
         if spec.name in output_templates:
             spec.output_template = output_templates[spec.name]

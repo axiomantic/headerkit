@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.1] - 2026-10-21
+
+### Added
+
+- Flexible CLI output syntax: `-o` now supports bare file paths (e.g. `-o librime.pxd`) when a single writer is active or when the writer can be unambiguously inferred from the file extension (`.pxd`/`.pyx` -> `cython`, `.json` -> `json`, `.lua` -> `lua`, `.txt` -> `prompt`, `.nim` -> `nim`, `.py`/`.pyi` -> `cffi`).
+- Auto-activating writers from output specs: specifying `-o cython:librime.pxd` or `-o librime.pxd` on the CLI automatically activates the corresponding writer without requiring a redundant `-w cython` flag.
+- Support for external and absolute header paths outside the project root directory in `resolve_headers()`, `resolve_output_path()`, and cache key computation (`_relative_header_path()`).
+
+### Changed
+
+- CFFI and Cython writers no longer generate synthetic `int foo(int, ...)` function declarations for function-like preprocessor macros. C macros frequently reference variables from outer scope, evaluate to non-integer types, or represent syntax snippets, causing out-of-line compilation failures (such as `_cffi_d_NNG_PROTOCOL_NUMBER` in downstream `pynng`). Function-like macros are now skipped with a clear comment in generated bindings, aligning with the ctypes writer and the "writers do not guess" principle. Only evaluated pure constant macros are emitted as declarations.
+
+### Fixed
+
+- Fixed crash when passing absolute or external header paths outside the project root directory (`ValueError: Header path XXX is outside project root`) in `resolve_headers()` and `resolve_output_path()` (Fixes #95).
+- Fixed CLI redundancy requirement where both `-w cython` and `-o cython:librime.pxd` were strictly required together (Fixes #95).
+
 ## [0.47.0] - 2026-10-20
 
 ### Added
@@ -1212,7 +1229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.47.1...HEAD
+[0.47.1]: https://github.com/axiomantic/headerkit/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/axiomantic/headerkit/compare/v0.46.2...v0.47.0
 [0.46.2]: https://github.com/axiomantic/headerkit/compare/v0.46.1...v0.46.2
 [0.46.1]: https://github.com/axiomantic/headerkit/compare/v0.46.0...v0.46.1

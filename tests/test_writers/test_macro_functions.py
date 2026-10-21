@@ -6,7 +6,7 @@ from headerkit.writers.ctypes import CtypesWriter
 from headerkit.writers.cython import CythonWriter
 
 
-def test_macro_function_cython_cdef_extern() -> None:
+def test_macro_function_cython_comment_stub() -> None:
     macro = MacroFunction(
         name="MAX",
         parameters=[MacroParameter("a"), MacroParameter("b")],
@@ -15,7 +15,8 @@ def test_macro_function_cython_cdef_extern() -> None:
     unit = Header(path="math.h", declarations=[macro])
     writer = CythonWriter()
     out = writer.write(unit)
-    assert "int MAX(int a, int b)" in out
+    assert "# Macro function 'MAX(a, b)' skipped (preprocessor macro)" in out
+    assert "int MAX" not in out
 
 
 def test_macro_function_cython_token_pasting_skipped() -> None:
@@ -39,12 +40,12 @@ def test_macro_function_ctypes_comment_stub() -> None:
     assert "# Macro function 'FOO(x)' skipped" in out
 
 
-def test_macro_function_cffi_prototype() -> None:
+def test_macro_function_cffi_comment_stub() -> None:
     macro = MacroFunction(name="BAR", parameters=[MacroParameter("x")])
     unit = Header(path="util.h", declarations=[macro])
     writer = CffiWriter()
     out = writer.write(unit)
-    assert "int BAR(int x);" in out
+    assert "/* Macro function 'BAR(x)' skipped (preprocessor macro) */" in out
 
 
 def test_macro_function_variadic_cython_and_cffi() -> None:
@@ -55,9 +56,9 @@ def test_macro_function_variadic_cython_and_cffi() -> None:
     )
     unit = Header(path="log.h", declarations=[macro])
     out_cython = CythonWriter().write(unit)
-    assert "int LOG(int fmt, ...)" in out_cython
-    assert "__VA_ARGS__" not in out_cython
+    assert "# Macro function 'LOG(fmt, __VA_ARGS__...)' skipped (preprocessor macro)" in out_cython
+    assert "int LOG" not in out_cython
 
     out_cffi = CffiWriter().write(unit)
-    assert "int LOG(int fmt, ...);" in out_cffi
-    assert "__VA_ARGS__" not in out_cffi
+    assert "/* Macro function 'LOG(fmt, __VA_ARGS__...)' skipped (preprocessor macro) */" in out_cffi
+    assert "int LOG" not in out_cffi

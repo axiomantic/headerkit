@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from headerkit._resolve import resolve_headers
+from headerkit._resolve import resolve_headers, resolve_output_path
 
 
 def _make_tree(tmp_path: Path, files: list[str]) -> None:
     """Create a directory tree with .h files and a .git marker."""
-    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
     for f in files:
         p = tmp_path / f
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -113,15 +113,25 @@ class TestResolveHeaders:
         assert paths == [tmp_path / "src" / "mylib.h"]
         assert mapping[tmp_path / "src" / "mylib.h"] == ["src/mylib.h"]
 
-    def test_resolve_literal_outside_project_root_raises(self, tmp_path: Path) -> None:
-        """A literal path escaping project_root raises ValueError."""
-        _make_tree(tmp_path, ["foo.h"])
-        with pytest.raises(ValueError, match="outside project root"):
-            resolve_headers(
-                patterns=["../../etc/passwd"],
-                exclude_patterns=[],
-                project_root=tmp_path,
-            )
+    def test_resolve_relative_outside_project_root(self, tmp_path: Path) -> None:
+        """A relative path outside project_root resolves and handles output paths."""
+        proj = tmp_path / "proj"
+        other = tmp_path / "other"
+        proj.mkdir()
+        other.mkdir()
+        (other / "lib.h").write_text("void f(void);")
+        paths, mapping = resolve_headers(
+            patterns=["../other/lib.h"],
+            exclude_patterns=[],
+            project_root=proj,
+        )
+        assert len(paths) == 1
+        assert paths[0].resolve() == (other / "lib.h").resolve()
+        assert mapping[paths[0]] == ["../other/lib.h"]
+
+        # Output template defaults dir to "." for headers outside project root
+        out = resolve_output_path("{dir}/{stem}.pxd", paths[0], proj)
+        assert out == Path("./lib.pxd")
 
     def test_resolve_pattern_mapping_all_patterns(self, tmp_path: Path) -> None:
         """The mapping dict maps each path to ALL matching patterns, not just the last."""
@@ -137,3 +147,40 @@ class TestResolveHeaders:
         # only matches root-level files, not files in subdirectories)
         assert "include/*.h" in mapping[target]
         assert "**/*.h" in mapping[target]
+
+    def test_resolve_absolute_external_header(self, tmp_path: Path) -> None:
+        """An absolute path to a header outside project_root resolves successfully."""
+        project_root = tmp_path / "project"
+        _make_tree(project_root, ["internal.h"])
+        external_dir = tmp_path / "external"
+        external_dir.mkdir(parents=True, exist_ok=True)
+        ext_h = external_dir / "external.h"
+        ext_h.write_text("/* external */\n")
+
+        paths, mapping = resolve_headers(
+            patterns=[str(ext_h)],
+            exclude_patterns=[],
+            project_root=project_root,
+        )
+        assert paths == [ext_h]
+        assert mapping[ext_h] == [str(ext_h)]
+
+    def test_resolve_absolute_glob_external(self, tmp_path: Path) -> None:
+        """An absolute glob pattern outside project_root resolves matching headers."""
+        project_root = tmp_path / "project"
+        _make_tree(project_root, ["internal.h"])
+        external_dir = tmp_path / "external"
+        external_dir.mkdir(parents=True, exist_ok=True)
+        ext1 = external_dir / "a.h"
+        ext2 = external_dir / "b.h"
+        ext1.write_text("/* a */\n")
+        ext2.write_text("/* b */\n")
+
+        pattern = str(external_dir / "*.h")
+        paths, mapping = resolve_headers(
+            patterns=[pattern],
+            exclude_patterns=[str(external_dir / "b.h")],
+            project_root=project_root,
+        )
+        assert paths == [ext1]
+        assert mapping[ext1] == [pattern]

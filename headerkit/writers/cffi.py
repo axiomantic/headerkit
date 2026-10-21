@@ -210,16 +210,15 @@ def decl_to_cffi(
 
 
 def _macro_function_to_cffi(decl: MacroFunction) -> str | None:
-    """Convert a MacroFunction to CFFI prototype declaration."""
-    if decl.has_token_pasting:
-        return f"/* Macro function '{decl.name}' with token pasting skipped */"
-    named_params = [
-        f"int {p.name}" for p in decl.parameters if not p.is_variadic and p.name not in ("...", "__VA_ARGS__")
-    ]
-    if decl.is_variadic or any(p.is_variadic or p.name in ("...", "__VA_ARGS__") for p in decl.parameters):
-        named_params.append("...")
-    params_str = ", ".join(named_params) if named_params else "void"
-    return f"int {decl.name}({params_str});"
+    """Convert a MacroFunction to CFFI cdef comment stub.
+
+    Function-like preprocessor macros do not possess C ABI symbols in compiled
+    libraries and cannot be safely represented as function prototypes without
+    knowing parameter and return types. Emit a descriptive comment stub.
+    """
+    params_str = ", ".join(str(p) for p in decl.parameters)
+    sig = f"{decl.name}({params_str})"
+    return f"/* Macro function '{sig}' skipped (preprocessor macro) */"
 
 
 def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | None:
