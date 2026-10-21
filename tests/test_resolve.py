@@ -11,7 +11,7 @@ from headerkit._resolve import resolve_headers
 
 def _make_tree(tmp_path: Path, files: list[str]) -> None:
     """Create a directory tree with .h files and a .git marker."""
-    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
     for f in files:
         p = tmp_path / f
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -137,3 +137,40 @@ class TestResolveHeaders:
         # only matches root-level files, not files in subdirectories)
         assert "include/*.h" in mapping[target]
         assert "**/*.h" in mapping[target]
+
+    def test_resolve_absolute_external_header(self, tmp_path: Path) -> None:
+        """An absolute path to a header outside project_root resolves successfully."""
+        project_root = tmp_path / "project"
+        _make_tree(project_root, ["internal.h"])
+        external_dir = tmp_path / "external"
+        external_dir.mkdir(parents=True, exist_ok=True)
+        ext_h = external_dir / "external.h"
+        ext_h.write_text("/* external */\n")
+
+        paths, mapping = resolve_headers(
+            patterns=[str(ext_h)],
+            exclude_patterns=[],
+            project_root=project_root,
+        )
+        assert paths == [ext_h]
+        assert mapping[ext_h] == [str(ext_h)]
+
+    def test_resolve_absolute_glob_external(self, tmp_path: Path) -> None:
+        """An absolute glob pattern outside project_root resolves matching headers."""
+        project_root = tmp_path / "project"
+        _make_tree(project_root, ["internal.h"])
+        external_dir = tmp_path / "external"
+        external_dir.mkdir(parents=True, exist_ok=True)
+        ext1 = external_dir / "a.h"
+        ext2 = external_dir / "b.h"
+        ext1.write_text("/* a */\n")
+        ext2.write_text("/* b */\n")
+
+        pattern = str(external_dir / "*.h")
+        paths, mapping = resolve_headers(
+            patterns=[pattern],
+            exclude_patterns=[str(external_dir / "b.h")],
+            project_root=project_root,
+        )
+        assert paths == [ext1]
+        assert mapping[ext1] == [pattern]

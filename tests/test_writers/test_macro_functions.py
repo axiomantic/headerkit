@@ -39,12 +39,12 @@ def test_macro_function_ctypes_comment_stub() -> None:
     assert "# Macro function 'FOO(x)' skipped" in out
 
 
-def test_macro_function_cffi_prototype() -> None:
+def test_macro_function_cffi_comment_stub() -> None:
     macro = MacroFunction(name="BAR", parameters=[MacroParameter("x")])
     unit = Header(path="util.h", declarations=[macro])
     writer = CffiWriter()
     out = writer.write(unit)
-    assert "int BAR(int x);" in out
+    assert "/* Macro function 'BAR(x)' skipped (preprocessor macro) */" in out
 
 
 def test_macro_function_variadic_cython_and_cffi() -> None:
@@ -59,5 +59,5 @@ def test_macro_function_variadic_cython_and_cffi() -> None:
     assert "__VA_ARGS__" not in out_cython
 
     out_cffi = CffiWriter().write(unit)
-    assert "int LOG(int fmt, ...);" in out_cffi
-    assert "__VA_ARGS__" not in out_cffi
+    assert "/* Macro function 'LOG(fmt, __VA_ARGS__...)' skipped (preprocessor macro) */" in out_cffi
+    assert "int LOG" not in out_cffi

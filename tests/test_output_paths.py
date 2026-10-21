@@ -49,6 +49,20 @@ class TestResolveOutputPath:
         # Path normalizes "./" so the stem portion is correct
         assert result.name == "mylib_cffi.py"
 
+    def test_resolve_external_header_outside_project_root(self, tmp_path: Path) -> None:
+        """When header is outside project_root, {dir} defaults to '.' and resolution succeeds."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        external_header = tmp_path / "nix" / "store" / "rime_api.h"
+        external_header.parent.mkdir(parents=True)
+        external_header.touch()
+
+        result = resolve_output_path("{stem}.pxd", external_header, project_root)
+        assert result == Path("rime_api.pxd")
+
+        result_with_dir = resolve_output_path("{dir}/{stem}.pxd", external_header, project_root)
+        assert result_with_dir == Path("./rime_api.pxd")
+
     def test_resolve_unknown_variable_raises(self, tmp_path: Path) -> None:
         header = tmp_path / "test.h"
         header.touch()
@@ -121,3 +135,18 @@ class TestParseOutputSpecs:
     def test_parse_output_specs_empty_list(self) -> None:
         result = _parse_output_specs([])
         assert result == {}
+
+    def test_parse_output_specs_bare_with_single_active_writer(self) -> None:
+        """Bare -o template binds to the single active writer."""
+        result = _parse_output_specs(["librime.pxd"], active_writers=["cython"])
+        assert result == {"cython": "librime.pxd"}
+
+    def test_parse_output_specs_bare_inferred_from_extension(self) -> None:
+        """Bare -o template infers writer from file extension when no active writers given."""
+        result = _parse_output_specs(["librime.pxd"])
+        assert result == {"cython": "librime.pxd"}
+
+    def test_parse_output_specs_bare_multiple_active_writers_raises(self) -> None:
+        """Bare -o template with multiple active writers raises ValueError."""
+        with pytest.raises(ValueError, match="requires exactly one active writer"):
+            _parse_output_specs(["librime.pxd"], active_writers=["cython", "cffi"])

@@ -93,13 +93,18 @@ def parse_extra_args(
 def _relative_header_path(header_path: Path, project_root: Path) -> str:
     """Return header path relative to the project root for cache key hashing.
 
+    If header_path is outside project_root (e.g. system or external header),
+    returns the resolved absolute POSIX path.
+
     :param header_path: Absolute or relative path to the header file.
     :param project_root: Project root directory (contains .headerkit/ or is git root).
-    :returns: POSIX-style relative path string.
-    :raises ValueError: If header_path is not under project_root.
+    :returns: POSIX-style relative path string, or absolute POSIX path if external.
     """
     resolved = header_path.resolve()
-    return resolved.relative_to(project_root.resolve()).as_posix()
+    try:
+        return resolved.relative_to(project_root.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
 
 
 def compute_ir_cache_key(

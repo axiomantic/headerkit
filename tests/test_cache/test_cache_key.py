@@ -177,6 +177,17 @@ class TestComputeIrCacheKey:
         rel = _relative_header_path(h, tmp_path)
         assert rel == "include/test.h"
 
+    def test_external_header_relative_path_fallback(self, tmp_path: Path) -> None:
+        """External header outside project root falls back to absolute POSIX path."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        ext_dir = tmp_path / "external"
+        ext_dir.mkdir()
+        h = ext_dir / "test.h"
+        h.write_text("int x;")
+        rel = _relative_header_path(h, project_root)
+        assert rel == h.resolve().as_posix()
+
 
 class TestComputeOutputCacheKey:
     """Tests for output cache key computation."""

@@ -362,6 +362,126 @@ class TestMain:
         call_kwargs = mock_batch.call_args
         assert call_kwargs.kwargs["output_templates"] == {"mock": str(output_file)}
 
+    def test_main_single_writer_bare_output(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Single writer with bare -o output binds output template to that writer."""
+        header_file = tmp_path / "test.h"
+        header_file.write_text("// test\n")
+        output_file = tmp_path / "out.pxd"
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["headerkit", "--no-config", "-w", "cython", "-o", str(output_file), str(header_file)],
+        )
+        from headerkit._cli import main
+
+        with patch("headerkit._cli.batch_generate") as mock_batch:
+            from headerkit._generate import BatchResult, GenerateResult
+
+            mock_batch.return_value = BatchResult(
+                results=[
+                    GenerateResult(
+                        writer_name="cython",
+                        output="mock-output",
+                        output_path=output_file,
+                        from_cache=False,
+                    )
+                ],
+                headers_processed=1,
+                headers_skipped=0,
+            )
+            result = main()
+        assert result == 0
+        mock_batch.assert_called_once()
+        call_kwargs = mock_batch.call_args
+        assert call_kwargs.kwargs["writers"] == ["cython"]
+        assert call_kwargs.kwargs["output_templates"] == {"cython": str(output_file)}
+
+    def test_main_output_auto_activates_writer(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """-o WRITER:PATH activates the specified writer even without -w."""
+        header_file = tmp_path / "test.h"
+        header_file.write_text("// test\n")
+        output_file = tmp_path / "out.pxd"
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["headerkit", "--no-config", "-o", f"cython:{output_file}", str(header_file)],
+        )
+        from headerkit._cli import main
+
+        with patch("headerkit._cli.batch_generate") as mock_batch:
+            from headerkit._generate import BatchResult, GenerateResult
+
+            mock_batch.return_value = BatchResult(
+                results=[
+                    GenerateResult(
+                        writer_name="cython",
+                        output="mock-output",
+                        output_path=output_file,
+                        from_cache=False,
+                    )
+                ],
+                headers_processed=1,
+                headers_skipped=0,
+            )
+            result = main()
+        assert result == 0
+        mock_batch.assert_called_once()
+        call_kwargs = mock_batch.call_args
+        assert call_kwargs.kwargs["writers"] == ["cython"]
+        assert call_kwargs.kwargs["output_templates"] == {"cython": str(output_file)}
+
+    def test_main_bare_output_inferred_writer(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Bare -o path infers writer from extension (e.g. .pxd -> cython)."""
+        header_file = tmp_path / "test.h"
+        header_file.write_text("// test\n")
+        output_file = tmp_path / "librime.pxd"
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["headerkit", "--no-config", "-o", str(output_file), str(header_file)],
+        )
+        from headerkit._cli import main
+
+        with patch("headerkit._cli.batch_generate") as mock_batch:
+            from headerkit._generate import BatchResult, GenerateResult
+
+            mock_batch.return_value = BatchResult(
+                results=[
+                    GenerateResult(
+                        writer_name="cython",
+                        output="mock-output",
+                        output_path=output_file,
+                        from_cache=False,
+                    )
+                ],
+                headers_processed=1,
+                headers_skipped=0,
+            )
+            result = main()
+        assert result == 0
+        mock_batch.assert_called_once()
+        call_kwargs = mock_batch.call_args
+        assert call_kwargs.kwargs["writers"] == ["cython"]
+        assert call_kwargs.kwargs["output_templates"] == {"cython": str(output_file)}
+
+    def test_main_multiple_writers_bare_output_exits(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Multiple active writers with bare -o template exits with error."""
+        header_file = tmp_path / "test.h"
+        header_file.write_text("// test\n")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["headerkit", "--no-config", "-w", "cython", "-w", "cffi", "-o", "out.h", str(header_file)],
+        )
+        from headerkit._cli import main
+
+        result = main()
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "requires exactly one active writer" in captured.err
+
     def test_main_multiple_stdout_exits(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
