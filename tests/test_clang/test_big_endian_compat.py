@@ -32,44 +32,60 @@ class TestPatchBigEndianCallbacksDirect:
     @pytest.mark.parametrize("version", ["14", "18", "20", "23"])
     def test_patch_updates_callback_restype(self, version: str) -> None:
         cindex = importlib.import_module(f"headerkit._clang.v{version}.cindex")
-        _patch_big_endian_callbacks(cindex)
+        cursor_orig = getattr(cindex, "cursor_visit_callback", None)
+        fields_orig = getattr(cindex, "fields_visit_callback", None)
+        callbacks_dict = getattr(cindex, "callbacks", None)
+        callbacks_orig = dict(callbacks_dict) if isinstance(callbacks_dict, dict) else None
+        try:
+            _patch_big_endian_callbacks(cindex)
 
-        cursor_cb: Any = getattr(cindex, "cursor_visit_callback", None)
-        callbacks = getattr(cindex, "callbacks", None)
+            cursor_cb: Any = getattr(cindex, "cursor_visit_callback", None)
+            callbacks = getattr(cindex, "callbacks", None)
 
-        checked = False
-        if cursor_cb is not None:
-            assert cursor_cb._restype_ is ctypes.c_ssize_t
-            checked = True
+            checked = False
+            if cursor_cb is not None:
+                assert cursor_cb._restype_ is ctypes.c_ssize_t
+                checked = True
 
-        fields_cb: Any = getattr(cindex, "fields_visit_callback", None)
-        if fields_cb is not None:
-            assert fields_cb._restype_ is ctypes.c_ssize_t
-            checked = True
+            fields_cb: Any = getattr(cindex, "fields_visit_callback", None)
+            if fields_cb is not None:
+                assert fields_cb._restype_ is ctypes.c_ssize_t
+                checked = True
 
-        if isinstance(callbacks, dict) and "cursor_visit" in callbacks:
-            assert callbacks["cursor_visit"]._restype_ is ctypes.c_ssize_t
-            assert callbacks["fields_visit"]._restype_ is ctypes.c_ssize_t
-            checked = True
+            if isinstance(callbacks, dict) and "cursor_visit" in callbacks:
+                assert callbacks["cursor_visit"]._restype_ is ctypes.c_ssize_t
+                assert callbacks["fields_visit"]._restype_ is ctypes.c_ssize_t
+                checked = True
 
-        assert checked, f"No callback mechanisms found in LLVM {version}"
+            assert checked, f"No callback mechanisms found in LLVM {version}"
+        finally:
+            if cursor_orig is not None:
+                cindex.cursor_visit_callback = cursor_orig
+            if fields_orig is not None:
+                cindex.fields_visit_callback = fields_orig
+            if callbacks_orig is not None and callbacks_dict is not None:
+                callbacks_dict.clear()
+                callbacks_dict.update(callbacks_orig)
 
     @pytest.mark.parametrize("version", ["14", "18", "20", "23"])
     def test_patch_updates_function_list_argtypes(self, version: str) -> None:
         cindex = importlib.import_module(f"headerkit._clang.v{version}.cindex")
-        _patch_big_endian_callbacks(cindex)
-
         fn_list = getattr(cindex, "FUNCTION_LIST", getattr(cindex, "functionList", None))
         assert fn_list is not None
+        fn_list_orig = list(fn_list)
+        try:
+            _patch_big_endian_callbacks(cindex)
 
-        fn_map = {entry[0]: entry for entry in fn_list}
-        assert "clang_visitChildren" in fn_map
-        visit_children_args = fn_map["clang_visitChildren"][1]
-        assert visit_children_args[1]._restype_ is ctypes.c_ssize_t
+            fn_map = {entry[0]: entry for entry in fn_list}
+            assert "clang_visitChildren" in fn_map
+            visit_children_args = fn_map["clang_visitChildren"][1]
+            assert visit_children_args[1]._restype_ is ctypes.c_ssize_t
 
-        for name in ("clang_visitCXXBaseClasses", "clang_visitCXXMethods", "clang_Type_visitFields"):
-            if name in fn_map:
-                assert fn_map[name][1][1]._restype_ is ctypes.c_ssize_t
+            for name in ("clang_visitCXXBaseClasses", "clang_visitCXXMethods", "clang_Type_visitFields"):
+                if name in fn_map:
+                    assert fn_map[name][1][1]._restype_ is ctypes.c_ssize_t
+        finally:
+            fn_list[:] = fn_list_orig
 
 
 class TestMonkeyPatchIntegration:
