@@ -1792,6 +1792,8 @@ class PxdWriter:
 
     def _write_constant(self, const: Constant) -> list[str]:
         """Write a constant declaration."""
+        if const.value is None and const.type is None:
+            return []
         name = self._escape_name(const.name, include_c_name=True)
 
         if const.type:

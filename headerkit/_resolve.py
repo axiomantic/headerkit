@@ -84,8 +84,6 @@ def resolve_output_path(
         dir_part = "."
     stem = header_path.stem
     name = header_path.name
-    if dir_part == ".":
-        dir_part = "."
     # Use POSIX separators for cross-platform consistency
     dir_part = dir_part.replace("\\", "/")
 

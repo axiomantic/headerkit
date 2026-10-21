@@ -225,6 +225,15 @@ class TestConstant:
         result = write_pxd(header)
         assert result == 'cdef extern from "test.h":\n\n    const char* VERSION\n'
 
+    def test_constant_without_value_or_type_skipped(self) -> None:
+        """Constant without value and without type is skipped."""
+        header = Header(
+            "test.h",
+            [Constant("FLAG_UNKNOWN", None, type=None, is_macro=True)],
+        )
+        result = write_pxd(header)
+        assert "FLAG_UNKNOWN" not in result
+
 
 class TestCppClass:
     """C++ class -> cdef cppclass."""
