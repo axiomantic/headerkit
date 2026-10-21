@@ -440,7 +440,14 @@ def _parse_output_specs(
     """
     result: dict[str, str] = {}
     for item in raw_specs:
-        if ":" in item:
+        has_writer_prefix = ":" in item
+        if has_writer_prefix:
+            prefix, _, rest = item.partition(":")
+            # On Windows, drive letters like "C:\path" or "C:/path" are paths, not writer prefixes.
+            if len(prefix) == 1 and prefix.isalpha() and (rest.startswith("\\") or rest.startswith("/")):
+                has_writer_prefix = False
+
+        if has_writer_prefix:
             writer_name, sep, template = item.partition(":")
             if not template:
                 raise ValueError(f"headerkit: malformed --output: {item!r}; use WRITER:TEMPLATE format")

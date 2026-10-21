@@ -150,3 +150,12 @@ class TestParseOutputSpecs:
         """Bare -o template with multiple active writers raises ValueError."""
         with pytest.raises(ValueError, match="requires exactly one active writer"):
             _parse_output_specs(["librime.pxd"], active_writers=["cython", "cffi"])
+
+    def test_parse_output_specs_windows_drive_path(self) -> None:
+        """Windows drive paths are treated as bare paths, not WRITER:TEMPLATE."""
+        result = _parse_output_specs([r"C:\Users\runneradmin\librime.pxd"])
+        assert result == {"cython": r"C:\Users\runneradmin\librime.pxd"}
+
+        # Explicit writer prefix with Windows drive path
+        result_explicit = _parse_output_specs([r"cython:C:\Users\runneradmin\librime.pxd"])
+        assert result_explicit == {"cython": r"C:\Users\runneradmin\librime.pxd"}

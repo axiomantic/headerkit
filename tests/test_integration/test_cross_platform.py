@@ -194,7 +194,7 @@ app_shutdown(addr ctx)
                 timeout=5,
             )
         except (subprocess.TimeoutExpired, OSError):
-            pytest.skip("docker daemon is not responsive or not running")
+            pytest.skip("docker daemon is not running")
 
         if probe.returncode != 0:
             pytest.skip("docker daemon is not running")
