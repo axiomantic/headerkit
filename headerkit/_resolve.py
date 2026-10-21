@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from glob import glob
 from pathlib import Path
 
 
@@ -12,12 +13,8 @@ def resolve_headers(
 ) -> tuple[list[Path], dict[Path, list[str]]]:
     """Resolve header file patterns into concrete paths.
 
-    For each pattern: if it contains glob metacharacters (``*``, ``?``, ``[``),
-    use ``project_root.glob(pattern)``; otherwise treat as a literal path
-    relative to *project_root*.
-
-    :param patterns: Glob patterns or literal paths relative to project_root.
-    :param exclude_patterns: Glob patterns for paths to exclude.
+    :param patterns: Glob patterns or literal paths.
+    :param exclude_patterns: Glob patterns or literal paths to exclude.
     :param project_root: Project root directory.
     :returns: Tuple of (sorted paths, mapping of path -> list of matching patterns).
     :raises ValueError: If no paths remain after resolution and exclusion.
@@ -26,25 +23,24 @@ def resolve_headers(
     pattern_mapping: dict[Path, list[str]] = {}
 
     for pattern in patterns:
-        if any(ch in pattern for ch in ("*", "?", "[")):
-            hits = list(project_root.glob(pattern))
-        else:
-            literal = project_root / pattern
-            try:
-                literal.resolve().relative_to(project_root.resolve())
-            except ValueError:
-                raise ValueError(f"Header path {pattern} is outside project root {project_root}") from None
-            hits = [literal]
-
+        is_absolute = Path(pattern).is_absolute()
+        root_dir = None if is_absolute else project_root
+        hits = [
+            (project_root / h).resolve() for h in glob(pattern, root_dir=root_dir, recursive=True, include_hidden=True)
+        ]
         for path in hits:
             matched.add(path)
             pattern_mapping.setdefault(path, []).append(pattern)
 
     # Apply exclusions
-    for exclude in exclude_patterns:
-        excluded = set(project_root.glob(exclude))
-        matched -= excluded
-        for path in excluded:
+    for pattern in exclude_patterns:
+        is_absolute = Path(pattern).is_absolute()
+        root_dir = None if is_absolute else project_root
+        hits = [
+            (project_root / h).resolve() for h in glob(pattern, root_dir=root_dir, recursive=True, include_hidden=True)
+        ]
+        for path in hits:
+            matched.discard(path)
             pattern_mapping.pop(path, None)
 
     if not matched:
@@ -64,15 +60,16 @@ def resolve_output_path(
     :param template: Path template with {stem}, {name}, {dir} variables.
     :param header_path: Absolute path to the header file.
     :param project_root: Project root directory.
-    :returns: Resolved output path relative to project_root.
+    :returns: Resolved output path.
     :raises ValueError: If template contains unknown variables.
     """
-    rel = header_path.absolute().relative_to(project_root.absolute())
     stem = header_path.stem
     name = header_path.name
-    dir_part = str(rel.parent)
-    if dir_part == ".":
-        dir_part = "."
+    parent = header_path.absolute().parent
+    try:
+        dir_part = str(parent.relative_to(project_root.absolute()))
+    except ValueError:
+        dir_part = ""
     # Use POSIX separators for cross-platform consistency
     dir_part = dir_part.replace("\\", "/")
 
