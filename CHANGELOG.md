@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.2] - 2026-10-21
+
+### Fixed
+
+- Fixed AST traversal truncation on 64-bit big-endian architectures (`s390x`, `ppc64`, `sparc64`) in Python < 3.14. Due to CPython issue [gh-156933](https://github.com/python/cpython/issues/156933), `ctypes.CFUNCTYPE` callbacks returning 32-bit `c_int` wrote to the high-order 32 bits of the 64-bit return slot, leaving the low-order bits as 0. In the 64-bit big-endian ABI, native C callers (such as `clang_visitChildren` in `libclang`) evaluate 32-bit return values in the low 32 bits of register `r2`, reading `0` (`CXChildVisit_Break`) and prematurely terminating AST traversal on the first node. Widening the visitor callback return types (`cursor_visit_callback`, `fields_visit_callback`) to `ctypes.c_ssize_t` on 64-bit big-endian platforms ensures `ctypes` writes the full 64-bit integer, correctly returning `CXChildVisit_Continue` and allowing complete AST traversal.
+
 ## [0.47.1] - 2026-10-21
+
 
 ### Added
 
