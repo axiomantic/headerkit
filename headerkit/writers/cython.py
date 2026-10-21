@@ -1162,16 +1162,10 @@ class PxdWriter:
         return []
 
     def _write_macro_function(self, decl: MacroFunction) -> list[str]:
-        """Convert a MacroFunction to Cython cdef extern function or comment stub."""
-        if decl.has_token_pasting:
-            return [f"# Macro function '{decl.name}' with token pasting skipped"]
-        named_params = [
-            f"int {p.name}" for p in decl.parameters if not p.is_variadic and p.name not in ("...", "__VA_ARGS__")
-        ]
-        if decl.is_variadic or any(p.is_variadic or p.name in ("...", "__VA_ARGS__") for p in decl.parameters):
-            named_params.append("...")
-        params_str = ", ".join(named_params)
-        return [f"int {decl.name}({params_str})"]
+        """Convert a MacroFunction to Cython comment stub."""
+        param_strs = [p.name + ("..." if p.is_variadic else "") for p in decl.parameters]
+        params_str = ", ".join(param_strs)
+        return [f"# Macro function '{decl.name}({params_str})' skipped (preprocessor macro)"]
 
     # -----------------------------------------------------------------
     # Struct / union / cppclass

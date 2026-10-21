@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- CFFI writer no longer generates synthetic `int foo(int, ...)` function declarations for function-like preprocessor macros. C macros frequently reference variables from outer scope or take non-integer arguments, causing CFFI out-of-line compilation failures (such as `_cffi_d_NNG_PROTOCOL_NUMBER` in downstream `pynng`). Function-like macros are now skipped with a clear comment in the generated CFFI cdef (`/* Macro function 'NAME(params)' skipped (preprocessor macro) */`), aligning with the ctypes writer and the "writers do not guess" principle.
+- CFFI and Cython writers no longer generate synthetic `int foo(int, ...)` function declarations for function-like preprocessor macros. C macros frequently reference variables from outer scope, evaluate to non-integer types, or represent syntax snippets, causing out-of-line compilation failures (such as `_cffi_d_NNG_PROTOCOL_NUMBER` in downstream `pynng`). Function-like macros are now skipped with a clear comment in generated bindings, aligning with the ctypes writer and the "writers do not guess" principle. Only evaluated pure constant macros are emitted as declarations.
 
 ### Fixed
 
