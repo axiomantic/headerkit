@@ -1381,6 +1381,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2027,6 +2038,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2113,6 +2135,15 @@
 </div>
 </div>
 </div>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
+<p>Compared to the default <code>libclang</code> backend, the tree-sitter backend is syntactic and more limited:</p>
+<ul>
+<li><strong>No <code>#include</code> Expansion</strong>: Parses the given file or code string only. It does not resolve or follow <code>#include</code> directives; declarations from included headers do not appear in the resulting IR.</li>
+<li><strong>No Preprocessor Macro Extraction</strong>: Does not evaluate or extract <code>#define</code> macros into IR <code>Constant</code> or <code>MacroFunction</code> nodes.</li>
+<li><strong>No System Include Discovery</strong>: Does not query system compilers for include search paths.</li>
+<li><strong>Single Translation Unit Context</strong>: Operates without a compiler semantic engine or cross-file type resolution.</li>
+</ul>
+<p>Use <code>tree-sitter</code> for self-contained headers, minimal/headless build environments without system LLVM libraries, or fast syntax extraction. For umbrella headers, full macro extraction, or compiler-accurate type layouts, use <code>libclang</code>.</p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 
