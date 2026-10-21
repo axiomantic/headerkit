@@ -36,12 +36,7 @@ def resolve_headers(
         elif any(ch in pattern for ch in ("*", "?", "[")):
             hits = list(project_root.glob(pattern))
         else:
-            literal = project_root / pattern
-            try:
-                literal.resolve().relative_to(project_root.resolve())
-            except ValueError:
-                raise ValueError(f"Header path {pattern} is outside project root {project_root}") from None
-            hits = [literal]
+            hits = [project_root / pattern]
 
         for path in hits:
             matched.add(path)
@@ -78,7 +73,7 @@ def resolve_output_path(
     :raises ValueError: If template contains unknown variables.
     """
     try:
-        rel = header_path.absolute().relative_to(project_root.absolute())
+        rel = header_path.resolve().relative_to(project_root.resolve())
         dir_part = str(rel.parent)
     except ValueError:
         dir_part = "."
