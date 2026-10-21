@@ -186,7 +186,16 @@ app_shutdown(addr ctx)
             pytest.skip("docker CLI not found on PATH")
 
         # Verify docker daemon is alive and supports Linux containers
-        probe = subprocess.run(["docker", "info", "--format", "{{.OSType}}"], capture_output=True, text=True)
+        try:
+            probe = subprocess.run(
+                ["docker", "info", "--format", "{{.OSType}}"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            pytest.skip("docker daemon is not responsive or not running")
+
         if probe.returncode != 0:
             pytest.skip("docker daemon is not running")
         if probe.stdout.strip().lower() != "linux":
