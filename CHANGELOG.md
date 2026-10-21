@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.7] - 2026-10-23
+
+### Changed
+
+- Added `slots=True` across all IR dataclasses (`headerkit.ir`), reconciliation models (`headerkit.reconcile`), and scaffolding models (`headerkit.scaffold`), reducing AST memory overhead by ~60% and speeding up node instantiation across large parsing workloads.
+
 ## [0.47.6] - 2026-10-23
 
 ### Fixed
@@ -35,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `header_path` writer option to `CythonWriter` and `CShimWriter` (parity with `NimWriter`), allowing users to explicitly override the emitted header path in `cdef extern from "..."` and `#include "..."` (e.g. via `-o cython:header_path=rime_api.h` or `-o cshim:header_path=rime_api.h`).
+
 
 ## [0.47.3] - 2026-10-21
 

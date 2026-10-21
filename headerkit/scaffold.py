@@ -11,7 +11,7 @@ from headerkit.hooks import HookDispatcher, Priority, hook
 from headerkit.ir import Constant, Declaration, Function, Header, SourceUnit
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class OutputFile:
     """A single file to be written in a project layout."""
 
@@ -27,7 +27,7 @@ class OutputFile:
     merge_strategy: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ProjectLayout:
     """A collection of output files comprising a project or package layout."""
 
@@ -410,7 +410,7 @@ def merge_incremental_tests(
     return result.rstrip() + "\n"
 
 
-@dataclass
+@dataclass(slots=True)
 class ScaffoldOptions:
     """Configuration options for project scaffolding."""
 
