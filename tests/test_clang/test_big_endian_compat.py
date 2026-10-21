@@ -67,7 +67,7 @@ class TestPatchBigEndianCallbacksDirect:
         visit_children_args = fn_map["clang_visitChildren"][1]
         assert visit_children_args[1]._restype_ is ctypes.c_ssize_t
 
-        for name in ("clang_visitCXXBaseClasses", "clang_Type_visitFields"):
+        for name in ("clang_visitCXXBaseClasses", "clang_visitCXXMethods", "clang_Type_visitFields"):
             if name in fn_map:
                 assert fn_map[name][1][1]._restype_ is ctypes.c_ssize_t
 
@@ -82,7 +82,9 @@ class TestMonkeyPatchIntegration:
             headerkit._clang._cached_cindex = None
             headerkit._clang._NEEDS_BIG_ENDIAN_CALLBACK_PATCH = True
             cindex = get_cindex()
-            cursor_cb: Any = getattr(cindex, "cursor_visit_callback", None)
+            cursor_cb: Any = getattr(cindex, "cursor_visit_callback", None) or getattr(cindex, "callbacks", {}).get(
+                "cursor_visit"
+            )
             assert cursor_cb is not None
             assert cursor_cb._restype_ is ctypes.c_ssize_t
         finally:
@@ -104,7 +106,10 @@ class TestMonkeyPatchIntegration:
             headerkit._clang._cached_cindex = None
             headerkit._clang._NEEDS_BIG_ENDIAN_CALLBACK_PATCH = True
             cindex = get_cindex()
-            assert cindex.cursor_visit_callback._restype_ is ctypes.c_ssize_t
+            cursor_cb: Any = getattr(cindex, "cursor_visit_callback", None) or getattr(cindex, "callbacks", {}).get(
+                "cursor_visit"
+            )
+            assert cursor_cb is not None and cursor_cb._restype_ is ctypes.c_ssize_t
 
             backend = LibclangBackend()
             header = backend.parse(
