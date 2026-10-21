@@ -566,21 +566,23 @@ _system_include_cache_c: list[str] | None = None
 _system_include_cache_cxx: list[str] | None = None
 
 
-def _find_libclang_builtin_include_dirs() -> list[str]:
+def _find_libclang_builtin_include_dirs(candidate_paths: Sequence[str] | None = None) -> list[str]:
     """Find clang builtin include directories containing stddef.h, stdint.h, etc."""
     include_dirs: list[str] = []
-    candidates: list[str] = []
+    if candidate_paths is not None:
+        candidates = [os.fspath(c) for c in candidate_paths]
+    else:
+        candidates = []
+        # Check if a library file is already loaded by cindex
+        try:
+            cindex_mod = _cindex
+            lib_file = getattr(getattr(cindex_mod, "Config", None), "library_file", None)
+            if lib_file:
+                candidates.append(lib_file)
+        except Exception:  # noqa: BLE001
+            pass
 
-    # Check if a library file is already loaded by cindex
-    try:
-        cindex_mod = _cindex
-        lib_file = getattr(getattr(cindex_mod, "Config", None), "library_file", None)
-        if lib_file:
-            candidates.append(lib_file)
-    except Exception:  # noqa: BLE001
-        pass
-
-    candidates.extend(_get_libclang_search_paths())
+        candidates.extend(_get_libclang_search_paths())
 
     seen: set[str] = set()
     for candidate in candidates:

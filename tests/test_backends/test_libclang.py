@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import glob
 import os
 import shutil
@@ -2220,10 +2221,16 @@ class TestLibclangDiscoveryAndIncludes:
         resource_inc.mkdir(parents=True)
         (resource_inc / "stddef.h").write_text("/* stddef.h */\n")
 
+        # Explicit candidate paths parameter
+        dirs = mod._find_libclang_builtin_include_dirs([str(fake_lib)])
+        assert str(resource_inc) in dirs
+
+        # Fallback to _get_libclang_search_paths when Config.library_file is empty
+        with contextlib.suppress(AttributeError, TypeError):
+            monkeypatch.setattr(mod._cindex.Config, "library_file", None)
         monkeypatch.setattr(
             "headerkit.backends.libclang._get_libclang_search_paths",
             lambda: [str(fake_lib)],
         )
-
-        dirs = mod._find_libclang_builtin_include_dirs()
-        assert str(resource_inc) in dirs
+        dirs_fallback = mod._find_libclang_builtin_include_dirs()
+        assert str(resource_inc) in dirs_fallback
