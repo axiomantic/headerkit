@@ -67,16 +67,20 @@ def _patch_big_endian_callbacks(cindex: ModuleType) -> None:
             elif name in ("clang_visitCXXBaseClasses", "clang_visitCXXMethods", "clang_Type_visitFields"):
                 fn_list[idx] = (name, [cindex.Type, new_fields_cb, ctypes.py_object], entry[2])
 
-    if hasattr(cindex, "conf") and hasattr(cindex.conf, "lib"):
-        lib = cindex.conf.lib
-        for attr, cb, target_type in [
-            ("clang_visitChildren", new_cursor_cb, cindex.Cursor),
-            ("clang_visitCXXBaseClasses", new_fields_cb, cindex.Type),
-            ("clang_visitCXXMethods", new_fields_cb, cindex.Type),
-            ("clang_Type_visitFields", new_fields_cb, cindex.Type),
-        ]:
-            if hasattr(lib, attr):
-                getattr(lib, attr).argtypes = [target_type, cb, ctypes.py_object]
+    config_cls = getattr(cindex, "Config", None)
+    if config_cls is not None and getattr(config_cls, "loaded", False) and hasattr(cindex, "conf"):
+        try:
+            lib = cindex.conf.lib
+            for attr, cb, target_type in [
+                ("clang_visitChildren", new_cursor_cb, cindex.Cursor),
+                ("clang_visitCXXBaseClasses", new_fields_cb, cindex.Type),
+                ("clang_visitCXXMethods", new_fields_cb, cindex.Type),
+                ("clang_Type_visitFields", new_fields_cb, cindex.Type),
+            ]:
+                if hasattr(lib, attr):
+                    getattr(lib, attr).argtypes = [target_type, cb, ctypes.py_object]
+        except Exception:
+            pass
 
 
 VENDORED_VERSIONS = ("14", "15", "16", "17", "18", "19", "20", "21", "22", "23")
