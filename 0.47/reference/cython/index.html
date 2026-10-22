@@ -2224,7 +2224,7 @@ Cython keywords are automatically escaped with a <code>_</code> suffix and a C n
 
 
 <a href="#headerkit.writers.cython.CythonWriter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CythonWriter</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CythonWriter</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2339,7 +2339,7 @@ pxd_string = writer.write(header)
 
 
 <a href="#headerkit.writers.cython.write_pxd" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_pxd</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_pxd</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2397,6 +2397,22 @@ Defaults to "headerkit.stubs". Pass None to suppress stub cimports.</p>
                   <code>&#39;headerkit.stubs&#39;</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>header_path</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Override the header path used in generated cdef extern from block.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2441,7 +2457,7 @@ internally by <a class="autorefs autorefs-internal" title="            CythonWri
 
 
 <a href="#headerkit.writers.cython.PxdWriter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">PxdWriter</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">PxdWriter</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
