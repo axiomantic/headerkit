@@ -907,3 +907,11 @@ class TestLuaWriter:
         writer = get_writer("lua")
         assert isinstance(writer, LuaWriter)
         assert writer.name == "lua"
+
+    def test_lua_windows_path_normalized(self) -> None:
+        """Windows backslashes in header path must be normalized to forward slashes in source comment."""
+        h = Header(r"D:\_temp\msys64\mingw64\include\rime_api.h", [])
+        writer = LuaWriter()
+        out = writer.write(h)
+        assert "-- Source: D:/_temp/msys64/mingw64/include/rime_api.h" in out
+        assert "\\" not in out.split("-- Source: ")[1].splitlines()[0]

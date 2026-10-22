@@ -505,6 +505,10 @@ class TestUnifiedWriterScaffolding:
 
         cython_opts = {opt.name: opt for opt in list_writer_options("cython")}
         assert "stub_cimport_prefix" in cython_opts
+        assert "header_path" in cython_opts
+
+        cshim_opts = {opt.name: opt for opt in list_writer_options("cshim")}
+        assert "header_path" in cshim_opts
 
         nim_opts = {opt.name: opt for opt in list_writer_options("nim")}
         assert "header_path" in nim_opts

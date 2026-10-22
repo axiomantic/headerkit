@@ -30,6 +30,7 @@ import textwrap
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import replace
+from pathlib import PureWindowsPath
 from typing import Any, ClassVar
 
 from headerkit.ir import (
@@ -100,6 +101,23 @@ CONVENTIONAL_DEPENDENT_SPELLINGS: dict[str, str] = {
 # it integer semantics -- the correct lowering for C++ and, because a C header
 # spelling ``bool`` must have included ``<stdbool.h>``, for C too.
 _BOOL_CIMPORT_MODULE = "libcpp"
+
+
+def _cython_string_path(path: str | None) -> str:
+    """Render a header path safe for embedding in a Cython string literal.
+
+    Inside Cython's ``cdef extern from "..."`` block, the path is parsed as a
+    string literal. On Windows, backslashes start escape sequences: ``\\r`` becomes
+    a carriage return (splitting the generated C ``#include`` across two lines),
+    ``\\t`` becomes a tab, and ``\\U``/``\\x`` trigger escape errors.
+
+    All C/C++ compilers and Cython accept forward slashes on Windows.
+    Normalised with PureWindowsPath so the result depends on the path structure
+    rather than on the host OS running HeaderKit.
+    """
+    if not path:
+        return ""
+    return PureWindowsPath(path).as_posix()
 
 
 def _strip_namespace_qualifiers(name: str) -> str:
@@ -200,9 +218,16 @@ class PxdWriter:
     default_output_pattern: str = "{dir}/{stem}.pxd"
     INDENT: str = "    "
 
-    def __init__(self, header: Header, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:
+    def __init__(
+        self,
+        header: Header,
+        *,
+        stub_cimport_prefix: str | None = "headerkit.stubs",
+        header_path: str | None = None,
+    ) -> None:
         self.header: Header = header
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
+        self.header_path: str = header_path or _cython_string_path(header.path)
         # Track declared struct/union/enum names for type reference cleanup
         self.known_structs: set[str] = set()
         self.known_unions: set[str] = set()
@@ -582,9 +607,9 @@ class PxdWriter:
 
             # Extern block header
             if namespace:
-                lines.append(f'cdef extern from "{self.header.path}" namespace "{namespace}":')
+                lines.append(f'cdef extern from "{self.header_path}" namespace "{namespace}":')
             else:
-                lines.append(f'cdef extern from "{self.header.path}":')
+                lines.append(f'cdef extern from "{self.header_path}":')
 
             # Forward declarations for undeclared types (global namespace only)
             if namespace is None:
@@ -2240,16 +2265,22 @@ class PxdWriter:
 # =====================================================================
 
 
-def write_pxd(header: Header, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> str:
+def write_pxd(
+    header: Header,
+    *,
+    stub_cimport_prefix: str | None = "headerkit.stubs",
+    header_path: str | None = None,
+) -> str:
     """Convenience function to convert a Header IR to Cython .pxd format.
 
     :param header: The Header IR to convert
     :param stub_cimport_prefix: If set, emit cimport lines for stub types
         (e.g., "headerkit.stubs" -> "from headerkit.stubs.stdarg cimport va_list").
         Defaults to "headerkit.stubs". Pass None to suppress stub cimports.
+    :param header_path: Override the header path used in generated cdef extern from block.
     :return: The generated .pxd file contents as a string
     """
-    writer = PxdWriter(header, stub_cimport_prefix=stub_cimport_prefix)
+    writer = PxdWriter(header, stub_cimport_prefix=stub_cimport_prefix, header_path=header_path)
     return writer.write()
 
 
@@ -2342,14 +2373,40 @@ class CythonWriter(BaseWriter):
             default="public",
             choices=("public", "protected", "private", "all"),
         ),
+        WriterOption(
+            name="header_path",
+            description="Header path to reference in cdef extern from blocks",
+            default=None,
+            type=str,
+        ),
     )
 
-    def __init__(self, *, stub_cimport_prefix: str | None = "headerkit.stubs") -> None:
+    def __init__(
+        self,
+        *,
+        stub_cimport_prefix: str | None = "headerkit.stubs",
+        header_path: str | None = None,
+    ) -> None:
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
+        self.header_path: str | None = _cython_string_path(header_path) if header_path else None
+
+    def _prepare(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions | None = None,
+    ) -> SourceUnit | Header:
+        if options is not None:
+            if "header_path" in options.options and options.options["header_path"]:
+                self.header_path = _cython_string_path(str(options.options["header_path"]))
+        return super()._prepare(unit, options=options)
 
     def _render(self, unit: SourceUnit | Header) -> str:
         header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
-        writer = PxdWriter(header, stub_cimport_prefix=self.stub_cimport_prefix)
+        writer = PxdWriter(
+            header,
+            stub_cimport_prefix=self.stub_cimport_prefix,
+            header_path=self.header_path,
+        )
         return writer.write()
 
     def write(self, header: Any) -> str:
@@ -2363,14 +2420,18 @@ class CythonWriter(BaseWriter):
         unit: ReconciledUnit | MultiDimensionalReconciledUnit,
     ) -> str:
         """Render a ReconciledUnit containing common declarations and platform-guarded blocks."""
-        header_path = unit.path or "header.h"
+        header_path = self.header_path or _cython_string_path(unit.path or "header.h")
         all_cimports: set[str] = set()
 
         def _render_chunk(decls: list[Declaration]) -> list[str]:
             if not decls:
                 return []
             sub_header = Header(path=header_path, declarations=decls)
-            writer = PxdWriter(sub_header, stub_cimport_prefix=self.stub_cimport_prefix)
+            writer = PxdWriter(
+                sub_header,
+                stub_cimport_prefix=self.stub_cimport_prefix,
+                header_path=header_path,
+            )
             body = writer._write_body()
             all_cimports.update(writer._cimport_lines())
             return body
