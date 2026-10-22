@@ -428,7 +428,7 @@ class TestR7IncludeAllowlist:
     @staticmethod
     def _expected(main: Path) -> str:
         return textwrap.dedent(f"""\
-            cdef extern from "{main}":
+            cdef extern from "{main.as_posix()}":
 
                 cdef struct Widget:
                     int w
@@ -438,7 +438,7 @@ class TestR7IncludeAllowlist:
 
     @staticmethod
     def _empty(main: Path) -> str:
-        return f'cdef extern from "{main}":\n    pass\n'
+        return f'cdef extern from "{main.as_posix()}":\n    pass\n'
 
     def test_recursion_merges_includes_and_an_allowlist_narrows_that(self, tmp_path: Path) -> None:
         """An allowlist narrows the merged result even with traversal on.
@@ -578,7 +578,7 @@ class TestR7IncludeAllowlist:
 
         result = write_pxd(get_backend("libclang").parse(main.read_text(), str(main), denylist=[str(main), "other.h"]))
         assert result == textwrap.dedent(f"""\
-            cdef extern from "{main}":
+            cdef extern from "{main.as_posix()}":
 
                 int main_fn()
         """)
@@ -611,7 +611,7 @@ class TestR7IncludeAllowlist:
             get_backend("libclang").parse(main.read_text(), str(main), recursive_includes=False, allowlist=["other.h"])
         )
         assert result == textwrap.dedent(f"""\
-            cdef extern from "{main}":
+            cdef extern from "{main.as_posix()}":
 
                 cdef struct Widget
 

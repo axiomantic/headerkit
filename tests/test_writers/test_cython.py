@@ -1,6 +1,7 @@
 """Tests for the Cython .pxd writer."""
 
 import textwrap
+from pathlib import Path
 
 from headerkit.ir import (
     Array,
@@ -1415,3 +1416,78 @@ class TestCythonVariableAndOpaqueStructOrdering:
         out = PxdWriter(h).write()
 
         assert "ctypedef struct rAudioBuffer" in out
+
+
+class TestCythonWindowsPaths:
+    """Test Windows backslash normalization and header_path override."""
+
+    def test_windows_path_with_escape_chars_normalizes_to_forward_slashes(self) -> None:
+        """Windows backslashes (especially \\r, \\t, \\n) must normalize to forward slashes."""
+        h = Header(r"D:\_temp\msys64\mingw64\include\rime_api.h", [Function("rime_setup", CType("void"), [])])
+        out = write_pxd(h)
+        assert 'cdef extern from "D:/_temp/msys64/mingw64/include/rime_api.h":' in out
+        assert "\r" not in out.splitlines()[0]
+        extern_part = out.split('cdef extern from "')[1].split('"')[0]
+        assert "\\" not in extern_part
+
+    def test_cython_header_path_override(self) -> None:
+        """header_path parameter overrides header.path."""
+        h = Header(r"D:\_temp\msys64\mingw64\include\rime_api.h", [Function("rime_setup", CType("void"), [])])
+        out = write_pxd(h, header_path="rime_api.h")
+        assert 'cdef extern from "rime_api.h":' in out
+
+        writer = CythonWriter(header_path="custom/path.h")
+        out_writer = writer.write(h)
+        assert 'cdef extern from "custom/path.h":' in out_writer
+
+    def test_cython_scaffold_header_path_option(self) -> None:
+        """header_path option in ScaffoldOptions overrides header.path."""
+        from headerkit.scaffold import ScaffoldOptions
+
+        h = Header(r"C:\Users\admin\include\api.h", [Function("setup", CType("void"), [])])
+        writer = CythonWriter()
+        opts = ScaffoldOptions(
+            package_name="testpkg",
+            target_language="cython",
+            options={"header_path": "api.h"},
+        )
+        layout = writer.write_layout(h, opts)
+        pxd_file = next(f for f in layout.files if f.path.endswith(".pxd"))
+        assert 'cdef extern from "api.h":' in pxd_file.content
+
+    def test_cython_compiles_pxd_with_windows_path(self, tmp_path: Path) -> None:
+        """Verify Cython compiles a pxd generated with a Windows path without line splitting."""
+        import subprocess
+        import sys
+
+        h = Header(r"D:\_temp\msys64\mingw64\include\rime_api.h", [Function("rime_setup", CType("void"), [])])
+        pxd_content = write_pxd(h)
+
+        pxd_path = tmp_path / "use.pxd"
+        pxd_path.write_text(pxd_content)
+
+        pyx_path = tmp_path / "use.pyx"
+        pyx_path.write_text(
+            textwrap.dedent("""\
+                cimport use
+
+                def call_setup():
+                    use.rime_setup()
+            """)
+        )
+
+        res = subprocess.run(  # noqa: S603
+            [sys.executable, "-m", "cython", "-3", "use.pyx", "-o", "use.c"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 0, f"Cython compilation failed:\n{res.stderr}"
+
+        c_file = tmp_path / "use.c"
+        assert c_file.exists()
+        c_lines = c_file.read_text().splitlines()
+        include_lines = [line.strip() for line in c_lines if "rime_api.h" in line]
+        assert len(include_lines) >= 1
+        assert include_lines[0] == '#include "D:/_temp/msys64/mingw64/include/rime_api.h"'

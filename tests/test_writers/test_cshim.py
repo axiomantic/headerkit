@@ -887,3 +887,45 @@ def test_cshim_base_class_namespace_resolution_no_collision() -> None:
     assert "static_cast<gui_b::Widget*>" in out
     assert "void gui_b_Button_draw_b(gui_b_Button_t* self);" in out
     assert "void gui_b_Button_draw_a" not in out
+
+
+def test_cshim_windows_path_normalized_to_forward_slashes() -> None:
+    """Windows backslashes in header paths must normalize to forward slashes in #include."""
+    fn = Function(name="setup", return_type=CType("void"), parameters=[])
+    h = Header(path=r"D:\_temp\msys64\mingw64\include\rime_api.h", declarations=[fn])
+    writer = CShimWriter()
+    out = writer.write(h)
+    assert '#include "D:/_temp/msys64/mingw64/include/rime_api.h"' in out
+    assert "\\" not in out.split('#include "')[1].split('"')[0]
+
+
+def test_cshim_header_path_override() -> None:
+    """header_path parameter overrides header.path."""
+    from headerkit.writers.cshim import write_cshim
+
+    fn = Function(name="setup", return_type=CType("void"), parameters=[])
+    h = Header(path=r"D:\_temp\msys64\mingw64\include\rime_api.h", declarations=[fn])
+    out = write_cshim(h, header_path="rime_api.h")
+    assert '#include "rime_api.h"' in out
+
+    writer = CShimWriter(header_path="custom/api.h")
+    out_writer = writer.write(h)
+    assert '#include "custom/api.h"' in out_writer
+
+
+def test_cshim_scaffold_header_path_option() -> None:
+    """header_path option in ScaffoldOptions overrides header.path and normalizes."""
+    from headerkit.scaffold import ScaffoldOptions
+
+    fn = Function(name="setup", return_type=CType("void"), parameters=[])
+    h = Header(path=r"C:\Users\admin\include\api.h", declarations=[fn])
+    writer = CShimWriter()
+    opts = ScaffoldOptions(
+        package_name="testshim",
+        target_language="cshim",
+        layout="package",
+        options={"header_path": r"custom\api.h"},
+    )
+    layout = writer.write_layout(h, opts)
+    cpp_file = next(f for f in layout.files if f.path.endswith(".cpp"))
+    assert '#include "custom/api.h"' in cpp_file.content

@@ -10,6 +10,7 @@ from __future__ import annotations
 import collections
 import re
 import textwrap
+from pathlib import PureWindowsPath
 from typing import ClassVar
 
 from headerkit.ir import (
@@ -27,6 +28,20 @@ from headerkit.ir import (
 )
 from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
+
+
+def _cshim_string_path(path: str | None) -> str:
+    """Render a header path safe for embedding in a C/C++ #include directive.
+
+    In C/C++, backslashes in ``#include "..."`` can be parsed as escape sequences
+    by preprocessors or fail on Windows compilers. All standard C/C++ compilers
+    (MSVC, GCC, Clang) natively accept forward slashes on Windows.
+    Normalised with PureWindowsPath so the result depends on the path structure
+    rather than on the host OS running HeaderKit.
+    """
+    if not path:
+        return ""
+    return PureWindowsPath(path).as_posix()
 
 
 def _sanitize_name(name: str, num_params: int | None = None) -> str:
@@ -250,10 +265,32 @@ class CShimWriter(BaseWriter):
             default=False,
             type=bool,
         ),
+        WriterOption(
+            name="header_path",
+            description="Header path to reference in #include directives",
+            default=None,
+            type=str,
+        ),
     )
 
-    def __init__(self, *, catch_exceptions: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        catch_exceptions: bool = False,
+        header_path: str | None = None,
+    ) -> None:
         self.catch_exceptions = catch_exceptions
+        self.header_path: str | None = _cshim_string_path(header_path) if header_path else None
+
+    def _prepare(
+        self,
+        unit: SourceUnit | Header,
+        options: ScaffoldOptions | None = None,
+    ) -> SourceUnit | Header:
+        if options is not None:
+            if "header_path" in options.options and options.options["header_path"]:
+                self.header_path = _cshim_string_path(str(options.options["header_path"]))
+        return super()._prepare(unit, options=options)
 
     def _render_parts(self, unit: SourceUnit | Header) -> tuple[str, list[str], list[str]]:
         """Generate C-ABI header code, cpp implementations, and exported symbol names."""
@@ -587,8 +624,9 @@ class CShimWriter(BaseWriter):
             cpp_includes.append("#include <cstddef>")
         if self.catch_exceptions:
             cpp_includes.append("#include <exception>")
-        if header.path:
-            cpp_includes.append(f'#include "{header.path}"')
+        include_path = self.header_path or _cshim_string_path(header.path)
+        if include_path:
+            cpp_includes.append(f'#include "{include_path}"')
 
         lines: list[str] = [
             header_code,
@@ -625,8 +663,9 @@ class CShimWriter(BaseWriter):
             cpp_header_includes.append("#include <cstddef>")
         if self.catch_exceptions:
             cpp_header_includes.append("#include <exception>")
-        if header.path:
-            cpp_header_includes.append(f'#include "{header.path}"')
+        include_path = self.header_path or _cshim_string_path(header.path)
+        if include_path:
+            cpp_header_includes.append(f'#include "{include_path}"')
 
         cpp_code = "\n".join(
             [
@@ -727,9 +766,14 @@ class CShimWriter(BaseWriter):
         return ProjectLayout(files=files)
 
 
-def write_cshim(header: Header, *, catch_exceptions: bool = False) -> str:
+def write_cshim(
+    header: Header,
+    *,
+    catch_exceptions: bool = False,
+    header_path: str | None = None,
+) -> str:
     """Convenience function to generate C-ABI shims from a Header IR."""
-    return CShimWriter(catch_exceptions=catch_exceptions).write(header)
+    return CShimWriter(catch_exceptions=catch_exceptions, header_path=header_path).write(header)
 
 
 # Self-register

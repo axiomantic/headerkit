@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.4] - 2026-10-21
+
+### Fixed
+
+- Fixed Cython and C-ABI shim (`cshim`) compilation errors on Windows caused by backslashes in header paths being interpreted as escape sequences (`\r`, `\n`, `\t`, `\x`, `\U`) inside generated string literals (`cdef extern from "..."` in `.pxd` and `#include "..."` in `.cpp`). Specifically, paths like `D:\_temp\msys64\mingw64\include\rime_api.h` triggered `\r` (carriage return), causing Cython to split the generated C `#include` across two lines and breaking downstream compilation (Fixes #96).
+- Path backslashes are now deterministically normalized to forward slashes across all writers (`cython`, `cshim`, `lua`) via `PureWindowsPath.as_posix()`.
+
+### Added
+
+- Added `header_path` writer option to `CythonWriter` and `CShimWriter` (parity with `NimWriter`), allowing users to explicitly override the emitted header path in `cdef extern from "..."` and `#include "..."` (e.g. via `-o cython:header_path=rime_api.h` or `-o cshim:header_path=rime_api.h`).
+
 ## [0.47.3] - 2026-10-21
 
 ### Fixed
