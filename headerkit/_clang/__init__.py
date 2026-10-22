@@ -21,9 +21,7 @@ from types import ModuleType
 
 _NEEDS_INTEROP_STRING_PATCH = platform.python_implementation() != "CPython"
 
-_NEEDS_BIG_ENDIAN_CALLBACK_PATCH = (
-    sys.byteorder == "big" and ctypes.sizeof(ctypes.c_void_p) == 8 and sys.version_info < (3, 14)
-)
+_NEEDS_BIG_ENDIAN_CALLBACK_PATCH = sys.byteorder == "big" and ctypes.sizeof(ctypes.c_void_p) == 8
 
 _cached_cindex: ModuleType | None = None
 
@@ -31,10 +29,10 @@ _cached_cindex: ModuleType | None = None
 def _patch_big_endian_callbacks(cindex: ModuleType) -> None:
     """Work around CPython issue gh-156933 on 64-bit big-endian architectures (e.g. s390x).
 
-    In Python < 3.14 on 64-bit big-endian architectures, ctypes.CFUNCTYPE callbacks
-    returning 32-bit integers (such as c_int) fail to widen narrow return values per
-    the libffi contract. Writing 4 bytes to an 8-byte buffer writes into the high-order
-    bits on big-endian machines, leaving the low-order bits as 0 or stack garbage.
+    On 64-bit big-endian architectures, ctypes.CFUNCTYPE callbacks returning 32-bit
+    integers (such as c_int) fail to widen narrow return values per the libffi contract.
+    Writing 4 bytes to an 8-byte buffer writes into the high-order bits on big-endian
+    machines, leaving the low-order bits as 0 or stack garbage.
     In the s390x ELF ABI, 32-bit return values are evaluated in the low 32 bits of register
     r2. When clang_visitChildren evaluates CXChildVisitResult, it reads 0
     (CXChildVisit_Break), immediately aborting AST traversal on the very first node.

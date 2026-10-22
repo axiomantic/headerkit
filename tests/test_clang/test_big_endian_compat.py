@@ -22,7 +22,7 @@ class TestBigEndianCallbackPatchFlag:
 
     def test_flag_exists(self) -> None:
         assert hasattr(headerkit._clang, "_NEEDS_BIG_ENDIAN_CALLBACK_PATCH")
-        expected = sys.byteorder == "big" and ctypes.sizeof(ctypes.c_void_p) == 8 and sys.version_info < (3, 14)
+        expected = sys.byteorder == "big" and ctypes.sizeof(ctypes.c_void_p) == 8
         assert expected == _NEEDS_BIG_ENDIAN_CALLBACK_PATCH
 
 

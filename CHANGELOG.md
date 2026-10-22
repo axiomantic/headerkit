@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.5] - 2026-10-21
+
+### Fixed
+
+- Extended the 64-bit big-endian AST traversal callback patch in `headerkit._clang` to Python 3.14+. The previous workaround for CPython issue [gh-156933](https://github.com/python/cpython/issues/156933) was restricted to `sys.version_info < (3, 14)` under the expectation that Python 3.14 would address the libffi return-slot widening in core `ctypes`. On 64-bit big-endian architectures (`s390x`, `ppc64`, `sparc64`) under Python 3.14 (including Alpine `musllinux_s390x` and `manylinux_s390x`), `ctypes.CFUNCTYPE` callbacks returning `c_int` still leave high-order bits populated and low-order bits 0 in register `r2`, causing `clang_visitChildren` to read `0` (`CXChildVisit_Break`) and prematurely abort traversal on the root node. Removing the version cap ensures visitor callbacks are widened to `ctypes.c_ssize_t` across all Python versions on 64-bit big-endian platforms.
+
 ## [0.47.4] - 2026-10-21
 
 ### Fixed
