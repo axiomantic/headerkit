@@ -64,7 +64,7 @@ from typing import (
 # =============================================================================
 
 
-@dataclass
+@dataclass(slots=True)
 class SourceLocation:
     """Location in source file for error reporting and filtering.
 
@@ -96,7 +96,7 @@ class SourceLocation:
 # =============================================================================
 
 
-@dataclass
+@dataclass(slots=True)
 class CType:
     """A C type expression representing a base type with optional qualifiers.
 
@@ -152,7 +152,7 @@ class CType:
         return self.name
 
 
-@dataclass
+@dataclass(slots=True)
 class Pointer:
     """Pointer to another type.
 
@@ -192,7 +192,7 @@ class Pointer:
         return f"{self.pointee}*{quals}"
 
 
-@dataclass
+@dataclass(slots=True)
 class Reference:
     """C++ reference to another type.
 
@@ -213,7 +213,7 @@ class Reference:
         return f"{quals}{self.target}{ref}"
 
 
-@dataclass
+@dataclass(slots=True)
 class Array:
     """Fixed-size or flexible array type.
 
@@ -252,7 +252,7 @@ class Array:
         return f"{self.element_type}[{size_str}]"
 
 
-@dataclass
+@dataclass(slots=True)
 class Parameter:
     """Function parameter declaration.
 
@@ -293,7 +293,7 @@ class Parameter:
         return f"{self.type}{default_str}"
 
 
-@dataclass
+@dataclass(slots=True)
 class FunctionPointer:
     """Function pointer type.
 
@@ -352,7 +352,7 @@ TypeExpr = Union[CType, Pointer, Reference, Array, FunctionPointer]
 # =============================================================================
 
 
-@dataclass
+@dataclass(slots=True)
 class BaseSpecifier:
     """C++ base class specifier in class inheritance.
 
@@ -370,7 +370,7 @@ class BaseSpecifier:
         return f"{self.access} {virt}{self.name}"
 
 
-@dataclass
+@dataclass(slots=True)
 class Field:
     """Struct or union field declaration.
 
@@ -441,7 +441,7 @@ class Field:
         return base
 
 
-@dataclass
+@dataclass(slots=True)
 class EnumValue:
     """Single enumeration constant.
 
@@ -476,7 +476,7 @@ class EnumValue:
         return self.name
 
 
-@dataclass
+@dataclass(slots=True)
 class Enum:
     """Enumeration declaration.
 
@@ -571,7 +571,7 @@ class Enum:
         return f"enum {name_str}"
 
 
-@dataclass
+@dataclass(slots=True)
 class TemplateParameter:
     """A C++ template parameter.
 
@@ -595,7 +595,7 @@ class TemplateParameter:
         return f"{prefix}{self.name}{pack}{default}"
 
 
-@dataclass
+@dataclass(slots=True)
 class Struct:
     """Struct or union declaration.
 
@@ -692,7 +692,7 @@ class Struct:
         return f"{kind} {name_str}{packed_str}"
 
 
-@dataclass
+@dataclass(slots=True)
 class Function:
     """Function declaration.
 
@@ -771,7 +771,7 @@ class Function:
         return f"{self.return_type}{cc} {self.name}{t_params}({params})"
 
 
-@dataclass
+@dataclass(slots=True)
 class Typedef:
     """Type alias declaration.
 
@@ -812,7 +812,7 @@ class Typedef:
         return f"typedef {self.underlying_type} {self.name}"
 
 
-@dataclass
+@dataclass(slots=True)
 class Variable:
     """Global or extern variable declaration.
 
@@ -850,7 +850,7 @@ class Variable:
         return f"{self.type} {self.name}"
 
 
-@dataclass
+@dataclass(slots=True)
 class Constant:
     """Compile-time constant declaration.
 
@@ -904,7 +904,7 @@ class Constant:
         return f"const {self.name} = {self.value}"
 
 
-@dataclass
+@dataclass(slots=True)
 class MacroParameter:
     """Parameter of a function-like macro.
 
@@ -921,7 +921,7 @@ class MacroParameter:
         return self.name
 
 
-@dataclass
+@dataclass(slots=True)
 class MacroFunction:
     """Function-like macro declaration (#define FOO(a, b) ...).
 
@@ -962,7 +962,7 @@ Declaration = Union[Enum, Struct, Function, Typedef, Variable, Constant, MacroFu
 # =============================================================================
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class InputSpec:
     """Specification of an input source unit, its language, and classification.
 
@@ -1027,7 +1027,7 @@ class InputSpec:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class SourceUnit:
     """Container for a parsed source or interface unit.
 

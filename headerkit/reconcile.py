@@ -15,7 +15,7 @@ from headerkit.matrix.models import ConfigCondition
 TARGET_TO_PREDICATE: dict[str, PlatformCondition] = {}
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PlatformCondition:
     """Platform condition predicate for code generation."""
 
@@ -42,14 +42,14 @@ def get_platform_condition(target_or_os: str) -> PlatformCondition:
     return PlatformCondition(frozenset({lower}), f"defined({lower})")
 
 
-@dataclass
+@dataclass(slots=True)
 class PlatformGuardedBlock:
     """A collection of platform-guarded declaration branches."""
 
     branches: list[tuple[PlatformCondition, list[Declaration]]]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MatrixCondition:
     """General multi-dimensional boolean condition for guarded blocks."""
 
@@ -57,14 +57,14 @@ class MatrixCondition:
     raw_conditions: tuple[ConfigCondition, ...]
 
 
-@dataclass
+@dataclass(slots=True)
 class MatrixGuardedBlock:
     """A block of declaration branches guarded by multi-dimensional conditions."""
 
     branches: list[tuple[MatrixCondition, list[Declaration]]]
 
 
-@dataclass
+@dataclass(slots=True)
 class ReconciledUnit:
     """Topologically ordered and platform-reconciled unit."""
 
@@ -72,7 +72,7 @@ class ReconciledUnit:
     items: list[Declaration | PlatformGuardedBlock] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(slots=True)
 class MultiDimensionalReconciledUnit:
     """Topologically ordered unit containing common declarations and matrix-guarded blocks."""
 
