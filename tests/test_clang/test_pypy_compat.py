@@ -79,6 +79,23 @@ class TestCompatCInteropStringToPython:
         obj = _compat_c_interop_string()
         assert _compat_c_interop_string.to_python_string(obj) == ""
 
+    def test_to_python_string_errcheck_signature(self) -> None:
+        # ctypes errcheck functions are called with (result, func, arguments)
+        obj = _compat_c_interop_string("errcheck_result")
+        assert _compat_c_interop_string.to_python_string(obj, None, ()) == "errcheck_result"
+
+    def test_to_python_string_none(self) -> None:
+        assert _compat_c_interop_string.to_python_string(None) is None
+        assert _compat_c_interop_string.to_python_string(None, None, ()) is None
+
+    def test_to_python_string_raw_pointer_int(self) -> None:
+        import ctypes
+
+        buf = ctypes.create_string_buffer(b"from_pointer")
+        ptr = ctypes.cast(buf, ctypes.c_void_p).value
+        assert _compat_c_interop_string.to_python_string(ptr) == "from_pointer"
+        assert _compat_c_interop_string.to_python_string(0) is None
+
 
 class TestCompatCInteropStringUnicode:
     """Tests for UTF-8 roundtrip with non-ASCII characters."""
@@ -148,3 +165,49 @@ class TestMonkeyPatchMechanism:
         finally:
             headerkit._clang._NEEDS_INTEROP_STRING_PATCH = saved_flag
             headerkit._clang._cached_cindex = saved_cindex
+
+
+class TestPyPyPatches:
+    """Tests for PyPy struct-by-value and callback isolation patches."""
+
+    def test_patch_pypy_struct_pass_by_value(self) -> None:
+        from headerkit._clang import _patch_pypy_struct_pass_by_value, get_cindex
+
+        cindex = get_cindex()
+        _patch_pypy_struct_pass_by_value(cindex)
+
+        # Verify Cursor.from_param returns an independent copy
+        c = cindex.Cursor()
+        c._kind_id = 2
+        c.xdata = 0
+        c.data[0] = 100
+        c.data[1] = 1
+        c.data[2] = 300
+
+        c_param = cindex.Cursor.from_param(c)
+        assert c_param is not c
+        assert c_param._kind_id == c._kind_id
+        assert c_param.data[0] == c.data[0]
+        assert c_param.data[1] == c.data[1]
+        assert c_param.data[2] == c.data[2]
+
+        # Mutating c_param must not affect c
+        c_param.data[1] = 0
+        assert c.data[1] == 1
+
+    def test_patch_pypy_callbacks(self) -> None:
+        from headerkit._clang import _patch_pypy_callbacks, get_cindex
+
+        cindex = get_cindex()
+        _patch_pypy_callbacks(cindex)
+
+        received: list[object] = []
+
+        def visitor(fobj_copy: object, _lptr: object, _depth: object, _data: object) -> None:
+            received.append(fobj_copy)
+
+        cb_wrapper = cindex.translation_unit_includes_callback
+        # Invoking the callback wrapper with dummy args
+        cb_func = cb_wrapper(visitor)
+        # Verify it returns a callable CFunctionType
+        assert callable(cb_func)

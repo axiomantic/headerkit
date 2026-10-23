@@ -26,6 +26,162 @@ _NEEDS_BIG_ENDIAN_CALLBACK_PATCH = sys.byteorder == "big" and ctypes.sizeof(ctyp
 _cached_cindex: ModuleType | None = None
 
 
+def _patch_pypy_simpletype() -> None:
+    """Work around PyPy issue with subclassing primitive ctypes types.
+
+    In PyPy, _ctypes.primitive.SimpleType.__new__ attempts to create endian-swapped
+    variants (_be or _le) for any primitive subclass whose name does not end in '_p'.
+    When creating the swapped variant, it recursively invokes self.__new__ passing
+    the exact same class namespace dictionary `dct`. If the class definition used
+    `super()` or referred to its own name, `dct` contains `__classcell__`.
+    Calling `type.__new__` a second time with the already-bound `__classcell__`
+    raises `TypeError: __class__ set to ... defining ... as ...`.
+
+    Stripping `__classcell__` from `dct` when creating endian-swapped variants
+    allows PyPy to define the class cleanly.
+    """
+    try:
+        import _ctypes.primitive  # type: ignore[import-not-found]
+
+        orig_new = _ctypes.primitive.SimpleType.__new__
+
+        if getattr(orig_new, "_headerkit_patched", False):
+            return
+
+        def patched_new(
+            self: object,
+            name: str,
+            bases: tuple[object, ...],
+            dct: dict[str, object],
+        ) -> object:
+            if name.endswith(("_be", "_le")) and "__classcell__" in dct:
+                clean_dct = dict(dct)
+                del clean_dct["__classcell__"]
+                return orig_new(self, name, bases, clean_dct)
+            return orig_new(self, name, bases, dct)
+
+        patched_new._headerkit_patched = True  # type: ignore[attr-defined]
+        _ctypes.primitive.SimpleType.__new__ = patched_new
+    except (ImportError, AttributeError):
+        pass
+
+
+if _NEEDS_INTEROP_STRING_PATCH:
+    _patch_pypy_simpletype()
+
+
+def _patch_pypy_callbacks(cindex: ModuleType) -> None:
+    """Work around PyPy transient memory in ctypes Structure callback arguments.
+
+    In PyPy, Structure instances passed as arguments into CFUNCTYPE callbacks
+    point to transient stack-allocated memory that is reused across callback
+    invocations. Because cindex AST visitors collect cursors into Python lists
+    (e.g. `children.append(child)` in Cursor.get_children()), the collected
+    cursors would all point to the same corrupted memory once the callback
+    unwinds.
+
+    Wrapping cursor_visit_callback, fields_visit_callback, and
+    translation_unit_includes_callback to create independent copies of
+    incoming structs and pointer objects before passing them to the visitor
+    function ensures that AST traversal and inclusion gathering retain valid
+    data across iterations.
+    """
+    from typing import Any
+
+    if hasattr(cindex, "cursor_visit_callback"):
+        orig_cursor_cb = cindex.cursor_visit_callback
+
+        def cursor_cb_wrapper(visitor: Any) -> Any:
+            def copying_visitor(child: Any, parent: Any, data: Any) -> Any:
+                child_copy = cindex.Cursor()
+                ctypes.memmove(
+                    ctypes.byref(child_copy),
+                    ctypes.byref(child),
+                    ctypes.sizeof(child),
+                )
+                return visitor(child_copy, parent, data)
+
+            return orig_cursor_cb(copying_visitor)
+
+        cindex.cursor_visit_callback = cursor_cb_wrapper  # type: ignore[attr-defined]
+
+    if hasattr(cindex, "fields_visit_callback"):
+        orig_fields_cb = cindex.fields_visit_callback
+
+        def fields_cb_wrapper(visitor: Any) -> Any:
+            def copying_visitor(field: Any, data: Any) -> Any:
+                field_copy = cindex.Cursor()
+                ctypes.memmove(
+                    ctypes.byref(field_copy),
+                    ctypes.byref(field),
+                    ctypes.sizeof(field),
+                )
+                return visitor(field_copy, data)
+
+            return orig_fields_cb(copying_visitor)
+
+        cindex.fields_visit_callback = fields_cb_wrapper  # type: ignore[attr-defined]
+
+    if hasattr(cindex, "translation_unit_includes_callback"):
+        orig_includes_cb = cindex.translation_unit_includes_callback
+
+        def includes_cb_wrapper(visitor: Any) -> Any:
+            def copying_visitor(fobj: Any, lptr: Any, depth: Any, data: Any) -> Any:
+                raw_ptr = ctypes.cast(fobj, ctypes.c_void_p).value
+                fobj_copy = ctypes.cast(raw_ptr or 0, cindex.c_object_p)
+                return visitor(fobj_copy, lptr, depth, data)
+
+            return orig_includes_cb(copying_visitor)
+
+        cindex.translation_unit_includes_callback = includes_cb_wrapper  # type: ignore[attr-defined]
+
+
+def _patch_pypy_struct_pass_by_value(cindex: ModuleType) -> None:
+    """Ensure structs passed by value to libclang are copied on PyPy.
+
+    In the C ABI, struct arguments passed by value belong to the callee,
+    which is permitted to mutate its local parameters in place. For instance,
+    clang_equalCursors(CXCursor X, CXCursor Y) zeroes out the HadErrors flag
+    at offset 16 in X and Y during cursor comparison.
+
+    CPython's ctypes creates a temporary copy on the call frame when passing
+    structs by value. PyPy's _ctypes implementation, however, passes the object's
+    internal buffer directly (see PyPy structure.py: _to_ffi_param). As a result,
+    calling clang_equalCursors (invoked by cursor.is_null()) in-place mutates
+    cursor.data[1] from 1 to 0 on PyPy, causing subsequent calls to
+    cursor.is_definition() to return False.
+
+    Overriding from_param on cindex Structure types to return an independent copy
+    preserves the caller's struct state across native function calls.
+    """
+    from typing import Any
+
+    for name in ("Cursor", "Type", "SourceLocation", "SourceRange", "Token"):
+        cls = getattr(cindex, name, None)
+        if cls is None:
+            continue
+        orig_from_param = cls.from_param
+
+        def _make_copying_from_param(target_cls: Any, orig_fp: Any) -> Any:
+            def pypy_from_param(_cls: Any, val: Any) -> Any:
+                obj = orig_fp(val)
+                if isinstance(obj, target_cls):
+                    new_obj = target_cls()
+                    ctypes.memmove(
+                        ctypes.byref(new_obj),
+                        ctypes.byref(obj),
+                        ctypes.sizeof(obj),
+                    )
+                    if hasattr(obj, "_tu"):
+                        new_obj._tu = obj._tu
+                    return new_obj
+                return obj
+
+            return classmethod(pypy_from_param)
+
+        cls.from_param = _make_copying_from_param(cls, orig_from_param)
+
+
 def _patch_big_endian_callbacks(cindex: ModuleType) -> None:
     """Work around CPython issue gh-156933 on 64-bit big-endian architectures (e.g. s390x).
 
@@ -90,35 +246,54 @@ class _compat_c_interop_string(c_void_p):
     """PyPy-compatible replacement for c_interop_string.
 
     The vendored cindex.py defines c_interop_string as a subclass of
-    ctypes.c_char_p, but PyPy does not support subclassing c_char_p.
-    This replacement uses c_void_p as the base and manually manages
-    string buffer storage to provide an identical API.
+    ctypes.c_char_p, but PyPy does not support subclassing c_char_p
+    with methods calling super(), and PyPy's _SimpleCData metaclass
+    forbids closure variables (__class__) and custom property descriptors.
+    This replacement uses c_void_p as the base, manages string buffer
+    storage without conflicting with PyPy's internal _buffer attribute,
+    and implements __getattribute__ to provide string decoding across both
+    CPython and PyPy.
     """
 
-    _buffer: ctypes.Array[ctypes.c_char] | None = None
+    _str_buffer: ctypes.Array[ctypes.c_char] | None = None
 
     def __init__(self, p: str | bytes | None = None) -> None:
         if p is None:
             p = b""
-        if isinstance(p, str):
+        elif isinstance(p, str):
             p = p.encode("utf8")
         buf = ctypes.create_string_buffer(p)
-        super().__init__(ctypes.cast(buf, c_void_p).value)
-        self._buffer = buf  # prevent GC
+        c_void_p.__init__(self, ctypes.cast(buf, c_void_p).value)
+        self._str_buffer = buf  # prevent GC
+        if platform.python_implementation() == "CPython":
+            object.__setattr__(self, "_buffer", buf)
 
     def __str__(self) -> str:
         return self.value or ""
 
     def _get_raw_ptr(self) -> int | None:
         """Read the raw void pointer value from the c_void_p base."""
-        return super().value
+        val_attr = getattr(c_void_p, "value", None)
+        if val_attr is not None and hasattr(val_attr, "__get__"):
+            ptr: object = val_attr.__get__(self)
+        else:
+            ptr = getattr(self, "_as_parameter_", None)
+        return ptr if isinstance(ptr, int) else None
 
     @property
     def value(self) -> str | None:  # type: ignore[override]
         ptr = self._get_raw_ptr()
-        if ptr is None:
+        if ptr is None or ptr == 0:
             return None
         return ctypes.string_at(ptr).decode("utf8")
+
+    def __getattribute__(self, name: str) -> object:
+        if name == "value":
+            ptr = self._get_raw_ptr()
+            if ptr is None or ptr == 0:
+                return None
+            return ctypes.string_at(ptr).decode("utf8")
+        return object.__getattribute__(self, name)
 
     @classmethod
     def from_param(cls, param: str | bytes | None) -> "_compat_c_interop_string":
@@ -131,8 +306,28 @@ class _compat_c_interop_string(c_void_p):
         raise TypeError(f"Cannot convert '{type(param).__name__}' to '{cls.__name__}'")
 
     @staticmethod
-    def to_python_string(x: "_compat_c_interop_string") -> str | None:
-        return x.value
+    def to_python_string(x: object, *_args: object) -> str | None:
+        if x is None:
+            return None
+        if isinstance(x, str):
+            return x
+        if isinstance(x, bytes):
+            return x.decode("utf8")
+        if isinstance(x, int):
+            if x == 0:
+                return None
+            return ctypes.string_at(x).decode("utf8")
+        if hasattr(x, "value"):
+            v = x.value
+            if isinstance(v, bytes):
+                return v.decode("utf8")
+            if isinstance(v, str):
+                return v
+            if isinstance(v, int):
+                if v == 0:
+                    return None
+                return ctypes.string_at(v).decode("utf8")
+        return str(x)
 
 
 def get_cindex() -> ModuleType:
@@ -187,13 +382,18 @@ def get_cindex() -> ModuleType:
             )
             version = LATEST_VENDORED
 
-    cindex = importlib.import_module(f"headerkit._clang.v{version}.cindex")
-
     if _NEEDS_INTEROP_STRING_PATCH:
-        cindex.c_interop_string = _compat_c_interop_string  # type: ignore[attr-defined]
+        _patch_pypy_simpletype()
+
+    cindex = importlib.import_module(f"headerkit._clang.v{version}.cindex")
 
     if _NEEDS_BIG_ENDIAN_CALLBACK_PATCH:
         _patch_big_endian_callbacks(cindex)
+
+    if _NEEDS_INTEROP_STRING_PATCH:
+        cindex.c_interop_string = _compat_c_interop_string  # type: ignore[attr-defined]
+        _patch_pypy_callbacks(cindex)
+        _patch_pypy_struct_pass_by_value(cindex)
 
     _cached_cindex = cindex
     return cindex
