@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.6] - 2026-10-23
+
+### Fixed
+
+- Fixed PyPy compatibility issues across `headerkit._clang`:
+  - Fixed metaclass collision in PyPy's `_ctypes.primitive.SimpleType.__new__` when importing vendored `cindex.py` (LLVM 20-23) by stripping `__classcell__` from endian-swapped type definitions.
+  - Replaced `c_interop_string` on PyPy with `_compat_c_interop_string` supporting 1-arg direct string conversion and 3-arg ctypes `errcheck(result, func, args)` signatures, raw integer pointer addresses, and bytes decoding.
+  - Fixed AST cursor memory corruption in PyPy during AST traversal (`clang_visitChildren`, `clang_Type_visitFields`) by creating independent copies of callback struct arguments before visitor invocation, preventing transient stack memory reuse across callback iterations.
+  - Fixed in-place cursor corruption during native struct pass-by-value calls in PyPy: native functions such as `clang_equalCursors` mutate pass-by-value `CXCursor` structs in place (e.g. clearing the `HadErrors` flag at offset 16), which on PyPy's `_ctypes` clobbered the Python `Cursor` object directly because PyPy does not create caller frame copies. This in turn caused `cursor.is_definition()` to return `False` for defined structs. Overriding `from_param` on cindex `Structure` types (`Cursor`, `Type`, `SourceLocation`, `SourceRange`, `Token`) ensures independent copies are passed to native functions.
+  - Fixed inclusion resolution on PyPy in `translation_unit_includes_callback` where `fobj` passed to `File` pointed to transient callback stack memory, ensuring heap-persisted `c_object_p` copies across inclusion traversal.
+
+
 ## [0.47.5] - 2026-10-21
 
 ### Fixed
