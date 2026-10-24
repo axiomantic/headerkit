@@ -1,4 +1,4 @@
-"""headerkit - C/C++ header parsing toolkit."""
+"""headerkit - The universal C/C++ interop toolkit."""
 
 from headerkit._config import HeaderkitConfig, load_config
 from headerkit._generate import BatchResult, GenerateResult, batch_generate, generate, generate_all

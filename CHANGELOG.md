@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.8] - 2026-10-24
+
+### Changed
+
+- Updated project description and tagline across `pyproject.toml`, `README.md`, `mkdocs.yml`, `docs/index.md`, and module metadata to consistently reflect modern multi-language bindings and package scaffolding capabilities.
+
 ## [0.47.7] - 2026-10-23
 
 ### Changed
@@ -1281,7 +1287,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for ruff, mypy, and standard checks
 - LLVM license compliance for vendored bindings
 
-[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.47.3...HEAD
+[Unreleased]: https://github.com/axiomantic/headerkit/compare/v0.47.8...HEAD
+[0.47.8]: https://github.com/axiomantic/headerkit/compare/v0.47.7...v0.47.8
+[0.47.7]: https://github.com/axiomantic/headerkit/compare/v0.47.6...v0.47.7
+[0.47.6]: https://github.com/axiomantic/headerkit/compare/v0.47.5...v0.47.6
+[0.47.5]: https://github.com/axiomantic/headerkit/compare/v0.47.4...v0.47.5
+[0.47.4]: https://github.com/axiomantic/headerkit/compare/v0.47.3...v0.47.4
 [0.47.3]: https://github.com/axiomantic/headerkit/compare/v0.47.2...v0.47.3
 [0.47.2]: https://github.com/axiomantic/headerkit/compare/v0.47.1...v0.47.2
 [0.47.1]: https://github.com/axiomantic/headerkit/compare/v0.47.0...v0.47.1

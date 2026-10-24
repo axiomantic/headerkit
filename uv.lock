@@ -364,7 +364,7 @@ wheels = [
 
 [[package]]
 name = "headerkit"
-version = "0.47.7"
+version = "0.47.8"
 source = { editable = "." }
 
 [package.optional-dependencies]

@@ -1,6 +1,6 @@
 # headerkit
 
-**A C/C++ header parsing toolkit with pluggable backends and writers.**
+**The universal C/C++ interop toolkit.** Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.
 
 headerkit parses C and C++ header files into a language-agnostic Intermediate Representation (IR), then transforms that IR into various output formats. Use it to generate FFI bindings, serialize header metadata to JSON, or build your own custom code generators.
 
