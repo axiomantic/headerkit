@@ -1,5 +1,5 @@
 site_name: headerkit
-site_description: C/C++ header parsing toolkit with pluggable backends and writers for ctypes, Cython, CFFI, LuaJIT FFI, and more
+site_description: The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.
 site_url: https://axiomantic.github.io/headerkit/
 repo_url: https://github.com/axiomantic/headerkit
 repo_name: axiomantic/headerkit
