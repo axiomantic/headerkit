@@ -266,6 +266,7 @@ def _dict_to_variable(d: dict[str, Any]) -> Variable:
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 
@@ -278,6 +279,7 @@ def _dict_to_constant(d: dict[str, Any]) -> Constant:
         type=_dict_to_ctype(d["type"]) if "type" in d else None,
         is_macro=d.get("is_macro", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 

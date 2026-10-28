@@ -288,6 +288,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["alignment"] = decl.alignment
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
+        if decl.doc is not None:
+            d["doc"] = decl.doc
         return d
     elif isinstance(decl, Constant):
         d = {
@@ -306,6 +308,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["type"] = _type_to_dict(decl.type)
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
+        if decl.doc is not None:
+            d["doc"] = decl.doc
         return d
     elif isinstance(decl, MacroFunction):
         return _macro_function_to_dict(decl)

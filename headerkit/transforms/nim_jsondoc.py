@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -11,13 +13,17 @@ from typing import Any
 
 from headerkit.hooks import PipelineContext
 from headerkit.ir import (
+    Constant,
     Enum,
     Function,
     SourceUnit,
     Struct,
     Typedef,
+    Variable,
 )
 from headerkit.transforms.filter import PipelineFilter
+
+logger = logging.getLogger(__name__)
 
 
 class NimJsonDocEnricher(PipelineFilter):
@@ -44,26 +50,27 @@ class NimJsonDocEnricher(PipelineFilter):
             return
         self._loaded = True
         if self.jsondoc_path is not None and self.jsondoc_path.is_file():
-            raw = json.loads(self.jsondoc_path.read_text(encoding="utf-8"))
-            self._entries = self._extract_entries(raw)
-        elif self.nim_source_path is not None and self.nim_source_path.is_file():
-            out_json = self.nim_source_path.with_suffix(".jsondoc.json")
             try:
-                proc = subprocess.run(
-                    ["nim", "jsondoc", f"-o:{out_json}", str(self.nim_source_path)],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    check=False,
-                )
-                if proc.returncode == 0 and out_json.is_file():
-                    raw = json.loads(out_json.read_text(encoding="utf-8"))
-                    self._entries = self._extract_entries(raw)
-            except (OSError, subprocess.SubprocessError, ValueError):
-                pass
-            finally:
-                if out_json.is_file():
-                    out_json.unlink(missing_ok=True)
+                raw = json.loads(self.jsondoc_path.read_text(encoding="utf-8"))
+                self._entries = self._extract_entries(raw)
+            except (OSError, ValueError) as exc:
+                logger.warning("Failed to load jsondoc file %s: %s", self.jsondoc_path, exc)
+        elif self.nim_source_path is not None and self.nim_source_path.is_file():
+            with tempfile.TemporaryDirectory() as tmpdir:
+                out_json = Path(tmpdir) / f"{self.nim_source_path.stem}.jsondoc.json"
+                try:
+                    proc = subprocess.run(
+                        ["nim", "jsondoc", "--raw", f"-o:{out_json}", str(self.nim_source_path)],
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                        check=False,
+                    )
+                    if proc.returncode == 0 and out_json.is_file():
+                        raw = json.loads(out_json.read_text(encoding="utf-8"))
+                        self._entries = self._extract_entries(raw)
+                except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                    logger.warning("Failed to run nim jsondoc on %s: %s", self.nim_source_path, exc)
         self._index_entries(self._entries)
 
     @staticmethod
@@ -85,6 +92,10 @@ class NimJsonDocEnricher(PipelineFilter):
             if isinstance(desc, str) and desc.strip():
                 self._docs_by_name[name] = desc.strip()
             params = entry.get("parameters") or entry.get("params")
+            if params is None:
+                sig = entry.get("signature")
+                if isinstance(sig, Mapping):
+                    params = sig.get("arguments") or sig.get("parameters") or sig.get("params")
             if isinstance(params, list):
                 param_names: list[str] = []
                 for p in params:
@@ -135,3 +146,15 @@ class NimJsonDocEnricher(PipelineFilter):
         if td.name in self._docs_by_name:
             return replace(td, doc=self._docs_by_name[td.name])
         return td
+
+    def visit_Variable(self, node: Variable, context: PipelineContext | None = None) -> Variable:
+        var = self.generic_visit(node, context=context)
+        if var.name in self._docs_by_name:
+            return replace(var, doc=self._docs_by_name[var.name])
+        return var
+
+    def visit_Constant(self, node: Constant, context: PipelineContext | None = None) -> Constant:
+        const = self.generic_visit(node, context=context)
+        if const.name in self._docs_by_name:
+            return replace(const, doc=self._docs_by_name[const.name])
+        return const

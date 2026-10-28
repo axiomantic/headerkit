@@ -15,7 +15,10 @@ from headerkit.backends import is_backend_available
 from headerkit.backends.libclang import _find_nim_libpath, _has_nimbase_in_dirs
 from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.ir import (
+    Constant,
     CType,
+    Enum,
+    EnumValue,
     Field,
     Function,
     FunctionPointer,
@@ -176,8 +179,24 @@ class TestNimCleanupTransform:
                     name="Vector",
                     fields=[
                         Field(name="data`gensym0", type=CType("NCSTRING")),
-                        Field(name="length_p0", type=CType("NI")),
+                        Field(name="length_colon_len_0", type=CType("NI")),
+                        Field(name="elem_0", type=CType("_Bool")),
                     ],
+                ),
+                Enum(
+                    name="NimMode",
+                    values=[EnumValue("MODE_FAST", 0)],
+                    underlying_type="NI32",
+                ),
+                Function(
+                    name="nim_add",
+                    return_type=CType("NI"),
+                    parameters=[Parameter(name="x_p0", type=CType("NI"))],
+                ),
+                Function(
+                    name="nimGC_unref",
+                    return_type=CType("void"),
+                    parameters=[],
                 ),
                 Function(
                     name="compute",
@@ -220,9 +239,20 @@ class TestNimCleanupTransform:
                 Struct(
                     name="Vector",
                     fields=[
-                        Field(name="data", type=Pointer(CType("char"))),
+                        Field(name="data", type=Pointer(CType("char", is_elaborated=False))),
                         Field(name="length", type=CType("intptr_t")),
+                        Field(name="elem_0", type=CType("bool")),
                     ],
+                ),
+                Enum(
+                    name="NimMode",
+                    values=[EnumValue("MODE_FAST", 0)],
+                    underlying_type="int32_t",
+                ),
+                Function(
+                    name="nim_add",
+                    return_type=CType("intptr_t"),
+                    parameters=[Parameter(name="x", type=CType("intptr_t"))],
                 ),
                 Function(
                     name="compute",
@@ -230,7 +260,7 @@ class TestNimCleanupTransform:
                     parameters=[
                         Parameter(name="alpha", type=CType("int32_t")),
                         Parameter(name="beta", type=CType("float")),
-                        Parameter(name="tag", type=Pointer(CType("char"))),
+                        Parameter(name="tag", type=Pointer(CType("char", is_elaborated=False))),
                         Parameter(name="flag", type=CType("bool")),
                         Parameter(name="normal_param", type=CType("int")),
                         Parameter(name="p0", type=CType("int")),
@@ -246,11 +276,13 @@ class TestNimCleanupTransform:
 class TestNimJsonDocEnricher:
     """Verify NimJsonDocEnricher populates docstrings and restores parameter names."""
 
-    def test_jsondoc_enrichment_and_pyi_rendering(self) -> None:
-        """Verify NimJsonDocEnricher attaches docstrings to Function and Struct for PyiWriter."""
+    def test_jsondoc_enrichment_and_pyi_rendering(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        """Verify NimJsonDocEnricher attaches docstrings across all 6 IR declarations and handles signature.arguments."""
         unit = SourceUnit(
             path="mathlib.h",
             declarations=[
+                Constant(name="MAX_ITERS", value=100),
+                Enum(name="Mode", values=[EnumValue("FAST", 0)]),
                 Struct(
                     name="Point",
                     fields=[
@@ -258,6 +290,8 @@ class TestNimJsonDocEnricher:
                         Field("y", CType("double")),
                     ],
                 ),
+                Typedef(name="Coord", underlying_type=CType("double")),
+                Variable(name="g_tolerance", type=CType("double")),
                 Function(
                     name="add",
                     return_type=CType("int"),
@@ -270,16 +304,25 @@ class TestNimJsonDocEnricher:
         )
         enricher = NimJsonDocEnricher(
             entries=[
+                {"name": "MAX_ITERS", "description": "Maximum solver iterations."},
+                {"name": "Mode", "description": "Execution mode."},
                 {
                     "name": "Point",
                     "type": "skType",
                     "description": "2D Cartesian point.",
                 },
+                {"name": "Coord", "description": "Coordinate scalar alias."},
+                {"name": "g_tolerance", "description": "Global convergence tolerance."},
                 {
                     "name": "add",
                     "type": "skProc",
                     "description": "Add two integers together.",
-                    "parameters": ["lhs", "rhs"],
+                    "signature": {
+                        "arguments": [
+                            {"name": "lhs", "type": "cint"},
+                            {"name": "rhs", "type": "cint"},
+                        ]
+                    },
                 },
             ]
         )
@@ -288,16 +331,39 @@ class TestNimJsonDocEnricher:
         expected_stub = textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
 
+            import enum
+
+            MAX_ITERS: int = 100
+            \"\"\"Maximum solver iterations.\"\"\"
+
+            class Mode(enum.IntEnum):
+                \"\"\"Execution mode.\"\"\"
+                FAST: int = 0
+
             class Point:
                 \"\"\"2D Cartesian point.\"\"\"
                 x: float
                 y: float
+
+            Coord = float
+            \"\"\"Coordinate scalar alias.\"\"\"
+
+            g_tolerance: float
+            \"\"\"Global convergence tolerance.\"\"\"
 
             def add(lhs: int, rhs: int) -> int:
                 \"\"\"Add two integers together.\"\"\"
                 ...
         """)
         assert stub == expected_stub
+
+        # Negative control: invalid JSON file logs warning and leaves unit intact
+        bad_json = tmp_path / "broken.json"
+        bad_json.write_text("{not valid json", encoding="utf-8")
+        bad_enricher = NimJsonDocEnricher(jsondoc_path=bad_json)
+        unchanged = unit >> bad_enricher
+        assert unchanged == unit
+        assert any("Failed to load jsondoc file" in r.message for r in caplog.records)
 
 
 class TestRealNimHeaderBackends:
@@ -325,6 +391,8 @@ class TestRealNimHeaderBackends:
                 check=False,
             )
         assert _has_nimbase_in_dirs([str(fake_lib)], None, "foo.h") is True
+        assert _has_nimbase_in_dirs(None, ["-I", str(fake_lib)], "foo.h") is True
+        assert _has_nimbase_in_dirs(None, ["-isystem", str(fake_lib)], "foo.h") is True
         assert _has_nimbase_in_dirs([str(tmp_path)], None, "foo.h") is False
         _find_nim_libpath.cache_clear()
 
@@ -390,7 +458,6 @@ class TestRealNimHeaderBackends:
             lc_unit = lc_backend.parse(
                 code,
                 str(header_path),
-                project_prefixes=(str(nimcache),),
             )
             lc_cleaned = lc_unit >> NimCleanupTransform()
             lc_pyi = PyiWriter().write(lc_cleaned)

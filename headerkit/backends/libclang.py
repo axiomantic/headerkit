@@ -45,6 +45,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 from collections import deque
@@ -760,6 +761,9 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
     # Check project prefixes first - if path matches, it's NOT a system header
     if _matches_project_prefix(header_path, project_prefixes):
         return False
+
+    if os.path.basename(path_str) == "nimbase.h":
+        return True
 
     # System header locations that are absolute path prefixes
     system_path_prefixes = (
@@ -4297,8 +4301,12 @@ def _has_nimbase_in_dirs(
     if include_dirs:
         search.extend(include_dirs)
     if extra_args:
-        for arg in extra_args:
-            if arg.startswith("-I") and len(arg) > 2:
+        args_iter = iter(extra_args)
+        for arg in args_iter:
+            if arg in ("-I", "-isystem"):
+                with contextlib.suppress(StopIteration):
+                    search.append(next(args_iter))
+            elif arg.startswith("-I") and len(arg) > 2:
                 search.append(arg[2:])
             elif arg.startswith("-isystem") and len(arg) > 8:
                 search.append(arg[8:])
@@ -4737,11 +4745,14 @@ class LibclangBackend:
         # Auto-resolve Nim's standard library directory when parsing a header that includes "nimbase.h"
         uses_nimbase = "nimbase.h" in code
         nim_libpath_added = False
-        if uses_nimbase and not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
-            nim_libpath = _find_nim_libpath()
-            if nim_libpath is not None:
-                args.append(f"-I{nim_libpath}")
-                nim_libpath_added = True
+        if uses_nimbase:
+            if "NIM_INTBITS" not in code and not any("NIM_INTBITS" in a for a in args):
+                args.append(f"-DNIM_INTBITS={struct.calcsize('P') * 8}")
+            if not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
+                nim_libpath = _find_nim_libpath()
+                if nim_libpath is not None:
+                    args.append(f"-isystem{nim_libpath}")
+                    nim_libpath_added = True
 
         # Parse the code with detailed preprocessing record for macro extraction
         index = self._get_index()
@@ -4757,10 +4768,12 @@ class LibclangBackend:
             diag.severity >= _cindex.Diagnostic.Error and "nimbase.h" in str(diag.spelling) for diag in tu.diagnostics
         ):
             uses_nimbase = True
+            if "NIM_INTBITS" not in code and not any("NIM_INTBITS" in a for a in args):
+                args.append(f"-DNIM_INTBITS={struct.calcsize('P') * 8}")
             if not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
                 nim_libpath = _find_nim_libpath()
                 if nim_libpath is not None:
-                    args.append(f"-I{nim_libpath}")
+                    args.append(f"-isystem{nim_libpath}")
                     nim_libpath_added = True
                     tu = index.parse(
                         filename,

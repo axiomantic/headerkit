@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from collections.abc import Sequence
 from keyword import iskeyword
@@ -186,20 +187,32 @@ class PyiWriter(BaseWriter):
             return False
         return any(pat.search(name) for pat in self._compiled_excludes)
 
+    @staticmethod
+    def _is_valid_python_expr(expr: str) -> bool:
+        if not expr:
+            return False
+        try:
+            ast.parse(expr, mode="eval")
+            return True
+        except SyntaxError:
+            return False
+
     def _format_type(self, type_expr: TypeExpr, *, is_param: bool = False) -> str:
         if isinstance(type_expr, CType):
             key = _normalize_ctype_key(type_expr)
-            if key == "void":
-                return "None"
-            if key in _BOOL_TYPES:
-                return "bool"
-            if key in _INT_TYPES:
-                return "int"
-            if key in _FLOAT_TYPES:
-                return "float"
-            if key == "NCSTRING":
-                return "bytes | str" if is_param else "bytes"
-            return _sanitize_identifier(key, fallback="Any")
+            if not type_expr.is_elaborated:
+                if key == "void":
+                    return "None"
+                if key in _BOOL_TYPES:
+                    return "bool"
+                if key in _INT_TYPES:
+                    return "int"
+                if key in _FLOAT_TYPES:
+                    return "float"
+            res = _sanitize_identifier(key, fallback="Any")
+            if res == "Any":
+                self._needs_any = True
+            return res
 
         if isinstance(type_expr, Pointer):
             pointee = type_expr.pointee
@@ -207,13 +220,19 @@ class PyiWriter(BaseWriter):
                 return self._format_function_pointer(pointee)
             if isinstance(pointee, CType):
                 p_key = _normalize_ctype_key(pointee)
-                if p_key == "char":
-                    return "bytes | str" if is_param else "bytes"
-                if p_key == "void":
-                    self._needs_any = True
-                    return "Any"
-                if p_key not in _BOOL_TYPES and p_key not in _INT_TYPES and p_key not in _FLOAT_TYPES:
-                    return _sanitize_identifier(p_key, fallback="Any")
+                if not pointee.is_elaborated:
+                    if p_key == "char":
+                        return "bytes | str" if is_param else "bytes"
+                    if p_key == "void":
+                        self._needs_any = True
+                        return "Any"
+                if pointee.is_elaborated or (
+                    p_key not in _BOOL_TYPES and p_key not in _INT_TYPES and p_key not in _FLOAT_TYPES
+                ):
+                    res = _sanitize_identifier(p_key, fallback="Any")
+                    if res == "Any":
+                        self._needs_any = True
+                    return res
             self._needs_any = True
             return "Any"
 
@@ -221,7 +240,11 @@ class PyiWriter(BaseWriter):
             return self._format_type(type_expr.target, is_param=is_param)
 
         if isinstance(type_expr, Array):
-            if isinstance(type_expr.element_type, CType) and _normalize_ctype_key(type_expr.element_type) == "char":
+            if (
+                isinstance(type_expr.element_type, CType)
+                and not type_expr.element_type.is_elaborated
+                and _normalize_ctype_key(type_expr.element_type) == "char"
+            ):
                 return "bytes"
             elem = self._format_type(type_expr.element_type, is_param=False)
             return f"list[{elem}]"
@@ -237,27 +260,48 @@ class PyiWriter(BaseWriter):
         ret = self._format_type(fp.return_type, is_param=False)
         if fp.is_variadic:
             return f"Callable[..., {ret}]"
-        arg_types = [self._format_type(p.type, is_param=False) for p in fp.parameters]
+        arg_types = [
+            self._format_type(p.type, is_param=False)
+            for p in fp.parameters
+            if not (
+                isinstance(p.type, CType)
+                and not p.type.is_elaborated
+                and _normalize_ctype_key(p.type) == "void"
+                and not p.name
+            )
+        ]
         return f"Callable[[{', '.join(arg_types)}], {ret}]"
 
-    def _format_constant(self, const: Constant) -> str:
+    def _format_constant(self, const: Constant) -> list[str]:
         name = _sanitize_identifier(const.name)
         if const.value is not None:
-            if isinstance(const.value, int):
-                return f"{name}: int = {const.value}"
-            if isinstance(const.value, float):
-                return f"{name}: float = {const.value}"
-            val_str = str(const.value).strip()
-            if (val_str.startswith('"') and val_str.endswith('"')) or (
-                val_str.startswith("'") and val_str.endswith("'")
-            ):
-                return f"{name}: str = {val_str}"
-            return f"{name}: int = {val_str}"
-        if const.type is not None:
+            if isinstance(const.value, bool):
+                line = f"{name}: bool = {const.value}"
+            elif isinstance(const.value, int):
+                line = f"{name}: int = {const.value}"
+            elif isinstance(const.value, float):
+                line = f"{name}: float = {const.value}"
+            else:
+                val_str = str(const.value).strip()
+                if (val_str.startswith('"') and val_str.endswith('"')) or (
+                    val_str.startswith("'") and val_str.endswith("'")
+                ):
+                    val_out = val_str if self._is_valid_python_expr(val_str) else "..."
+                    line = f"{name}: str = {val_out}"
+                else:
+                    val_out = val_str if self._is_valid_python_expr(val_str) else "..."
+                    line = f"{name}: int = {val_out}"
+        elif const.type is not None:
             t_str = self._format_type(const.type, is_param=False)
-            return f"{name}: {t_str}"
-        self._needs_any = True
-        return f"{name}: Any"
+            line = f"{name}: {t_str}"
+        else:
+            self._needs_any = True
+            line = f"{name}: Any"
+        lines = [line]
+        doc = getattr(const, "doc", None)
+        if isinstance(doc, str) and doc.strip():
+            lines.extend(self._format_docstring(doc, indent=""))
+        return lines
 
     def _format_enum(self, enum: Enum) -> list[str]:
         lines: list[str] = []
@@ -275,11 +319,15 @@ class PyiWriter(BaseWriter):
                 next_val = 0
                 for ev in enum.values:
                     v_name = _sanitize_identifier(ev.name)
-                    if isinstance(ev.value, int):
+                    if isinstance(ev.value, bool):
+                        val_repr = str(int(ev.value))
+                        next_val = int(ev.value) + 1
+                    elif isinstance(ev.value, int):
                         val_repr = str(ev.value)
                         next_val = ev.value + 1
                     elif isinstance(ev.value, str) and ev.value.strip():
-                        val_repr = ev.value.strip()
+                        raw_ev = ev.value.strip()
+                        val_repr = raw_ev if self._is_valid_python_expr(raw_ev) else "..."
                     else:
                         val_repr = str(next_val)
                         next_val += 1
@@ -288,11 +336,15 @@ class PyiWriter(BaseWriter):
             next_val = 0
             for ev in enum.values:
                 v_name = _sanitize_identifier(ev.name)
-                if isinstance(ev.value, int):
+                if isinstance(ev.value, bool):
+                    val_repr = str(int(ev.value))
+                    next_val = int(ev.value) + 1
+                elif isinstance(ev.value, int):
                     val_repr = str(ev.value)
                     next_val = ev.value + 1
                 elif isinstance(ev.value, str) and ev.value.strip():
-                    val_repr = ev.value.strip()
+                    raw_ev = ev.value.strip()
+                    val_repr = raw_ev if self._is_valid_python_expr(raw_ev) else "..."
                 else:
                     val_repr = str(next_val)
                     next_val += 1
@@ -370,7 +422,9 @@ class PyiWriter(BaseWriter):
 
     @staticmethod
     def _format_docstring(doc: str, *, indent: str = "    ") -> list[str]:
-        cleaned = doc.strip().replace('"""', '\\"\\"\\"')
+        cleaned = doc.strip().replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
+        if cleaned.endswith('"'):
+            cleaned = cleaned[:-1] + '\\"'
         doc_lines = cleaned.splitlines()
         if len(doc_lines) == 1:
             return [f'{indent}"""{doc_lines[0]}"""']
@@ -409,7 +463,8 @@ class PyiWriter(BaseWriter):
                 continue
 
             if isinstance(decl, Constant):
-                body_blocks.append(self._format_constant(decl))
+                const_lines = self._format_constant(decl)
+                body_blocks.append("\n".join(const_lines))
             elif isinstance(decl, Enum):
                 enum_lines = self._format_enum(decl)
                 if enum_lines:
@@ -424,11 +479,19 @@ class PyiWriter(BaseWriter):
                 if alias_name == target_str and alias_name in defined_record_names:
                     continue
                 if alias_name != target_str:
-                    body_blocks.append(f"{alias_name} = {target_str}")
+                    td_lines = [f"{alias_name} = {target_str}"]
+                    doc = getattr(decl, "doc", None)
+                    if isinstance(doc, str) and doc.strip():
+                        td_lines.extend(self._format_docstring(doc, indent=""))
+                    body_blocks.append("\n".join(td_lines))
             elif isinstance(decl, Variable):
                 v_name = _sanitize_identifier(decl.name)
                 v_type = self._format_type(decl.type, is_param=False)
-                body_blocks.append(f"{v_name}: {v_type}")
+                var_lines = [f"{v_name}: {v_type}"]
+                doc = getattr(decl, "doc", None)
+                if isinstance(doc, str) and doc.strip():
+                    var_lines.extend(self._format_docstring(doc, indent=""))
+                body_blocks.append("\n".join(var_lines))
             elif isinstance(decl, Function):
                 fn_lines = self._format_function(decl)
                 body_blocks.append("\n".join(fn_lines))

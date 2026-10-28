@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import replace
 
@@ -10,6 +11,7 @@ from headerkit.ir import (
     Array,
     Constant,
     CType,
+    Enum,
     Field,
     Function,
     FunctionPointer,
@@ -49,8 +51,15 @@ _NIM_INTERNAL_EXACT_NAMES: frozenset[str] = frozenset(
 )
 
 _NIM_INTERNAL_PREFIXES: tuple[str, ...] = (
-    "nim_",
-    "Nim_",
+    "nimGC_",
+    "nimRegister",
+    "nimErrorFlag",
+    "nimZeroMem",
+    "nimCopyMem",
+    "nimSetMem",
+    "nimAdd",
+    "nimSub",
+    "nimMul",
     "eqdestroy_",
     "eqcopy_",
     "eqsink_",
@@ -76,17 +85,30 @@ _NIM_SCALAR_TYPE_MAP: dict[str, str] = {
     "NF64": "double",
     "NF32": "float",
     "NIM_BOOL": "bool",
+    "_Bool": "bool",
     "NIM_CHAR": "char",
 }
 
 _NIM_BUILTIN_TYPEDEFS: frozenset[str] = frozenset({"NCSTRING", *_NIM_SCALAR_TYPE_MAP})
+
+_NIM_COLON_MANGLE_RE = re.compile(r"_colon_([A-Za-z_][A-Za-z0-9_]*?)(?:_[0-9]+)?$")
+
+
+def _unmangle_nim_colon_name(name: str) -> str:
+    """Unmangle Nim compiler ``_colon_<name>`` C identifier suffixes."""
+    match = _NIM_COLON_MANGLE_RE.search(name)
+    if match:
+        prefix = name[: match.start()]
+        if prefix:
+            return prefix
+    return name
 
 
 def _clean_nim_identifier(name: str | None) -> str | None:
     """Strip Nim C parameter disambiguation suffixes (``_p0``, ``_p1``) and template gensyms (```gensym0``)."""
     if not name:
         return name
-    cleaned = name
+    cleaned = _unmangle_nim_colon_name(name)
     while True:
         prev = cleaned
         p_idx = cleaned.rfind("_p")
@@ -96,6 +118,22 @@ def _clean_nim_identifier(name: str | None) -> str | None:
             g_idx = cleaned.rfind(sep)
             if g_idx > 0 and cleaned[g_idx + len(sep) :].isdigit():
                 cleaned = cleaned[:g_idx]
+        cleaned = _unmangle_nim_colon_name(cleaned)
+        if cleaned == prev:
+            break
+    return cleaned
+
+
+def _clean_nim_field_name(name: str) -> str:
+    """Clean a Nim struct field name without stripping numeric suffixes like ``_0`` or ``_1``."""
+    cleaned = _unmangle_nim_colon_name(name)
+    while True:
+        prev = cleaned
+        for sep in ("`gensym", "_gensym"):
+            g_idx = cleaned.rfind(sep)
+            if g_idx > 0 and cleaned[g_idx + len(sep) :].isdigit():
+                cleaned = cleaned[:g_idx]
+        cleaned = _unmangle_nim_colon_name(cleaned)
         if cleaned == prev:
             break
     return cleaned
@@ -105,7 +143,9 @@ def _rewrite_nim_type(type_expr: TypeExpr) -> TypeExpr:
     """Recursively normalize Nim ``nimbase.h`` C types into standard C99 ``TypeExpr`` nodes."""
     if isinstance(type_expr, CType):
         if type_expr.name == "NCSTRING":
-            return Pointer(pointee=CType(name="char", qualifiers=list(type_expr.qualifiers)))
+            return Pointer(
+                pointee=CType(name="char", qualifiers=list(type_expr.qualifiers), is_elaborated=False)
+            )
         mapped = _NIM_SCALAR_TYPE_MAP.get(type_expr.name)
         if mapped is not None:
             return replace(type_expr, name=mapped)
@@ -186,7 +226,7 @@ class NimCleanupTransform(PipelineFilter):
 
     def visit_Field(self, node: Field, context: PipelineContext | None = None) -> Field:
         fld = self.generic_visit(node, context=context)
-        new_name = _clean_nim_identifier(fld.name) or fld.name
+        new_name = _clean_nim_field_name(fld.name) if fld.name else fld.name
         new_type = _rewrite_nim_type(fld.type)
         if new_name != fld.name or new_type != fld.type:
             return replace(fld, name=new_name, type=new_type)
@@ -196,6 +236,14 @@ class NimCleanupTransform(PipelineFilter):
         if self._is_internal_symbol(node.name):
             return None
         return self.generic_visit(node, context=context)
+
+    def visit_Enum(self, node: Enum, context: PipelineContext | None = None) -> Enum | None:
+        if self._is_internal_symbol(node.name):
+            return None
+        en = self.generic_visit(node, context=context)
+        if en.underlying_type and en.underlying_type in _NIM_SCALAR_TYPE_MAP:
+            return replace(en, underlying_type=_NIM_SCALAR_TYPE_MAP[en.underlying_type])
+        return en
 
     def visit_Typedef(self, node: Typedef, context: PipelineContext | None = None) -> Typedef | None:
         if self._is_internal_symbol(node.name) or node.name in _NIM_BUILTIN_TYPEDEFS:

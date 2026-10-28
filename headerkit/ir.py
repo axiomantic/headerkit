@@ -849,6 +849,7 @@ class Variable:
     is_deprecated: bool = False
     alignment: int | None = None
     location: SourceLocation | None = None
+    doc: str | None = None
 
     def __str__(self) -> str:
         return f"{self.type} {self.name}"
@@ -899,6 +900,7 @@ class Constant:
     type: CType | None = None
     is_macro: bool = False
     location: SourceLocation | None = None
+    doc: str | None = None
 
     def __str__(self) -> str:
         if self.is_macro:
