@@ -131,6 +131,7 @@ _WRITER_EXTENSIONS: dict[str, str] = {
     "json": ".json",
     "lua": ".lua",
     "prompt": ".txt",
+    "pyi": ".pyi",
     "diff": ".json",
 }
 

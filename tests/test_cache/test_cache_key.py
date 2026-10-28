@@ -259,7 +259,7 @@ class TestIrSchemaVersion:
     #: dataclass in ``headerkit.ir``. Recorded, not computed at import, so that
     #: a change to the IR has to be acknowledged here rather than silently
     #: absorbed.
-    IR_SHAPE_FINGERPRINT = "26f834093f3a540a"
+    IR_SHAPE_FINGERPRINT = "ccea33f729f8da17"
 
     @staticmethod
     def _ir_shape_fingerprint() -> str:
@@ -328,7 +328,7 @@ class TestIrSchemaVersion:
             "silently wrong value rather than a refusal whenever that default resolves to something. "
             "Bump _IR_SCHEMA_VERSION so warm caches miss, then update IR_SHAPE_FINGERPRINT here."
         )
-        assert _IR_SCHEMA_VERSION == "6"
+        assert _IR_SCHEMA_VERSION == "7"
 
     def test_old_schema_version_2_cache_miss(self, tmp_path: Path, caplog: logging.LogCaptureFixture) -> None:
         """A metadata.json with ir_schema_version '2' results in a cache miss and warning."""

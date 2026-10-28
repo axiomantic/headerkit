@@ -780,3 +780,21 @@ class TestBatchCLIIntegration:
         parser = _build_parser()
         args = parser.parse_args(["test.h", "-o", "cffi:{stem}_cffi.py"])
         assert args.output_specs == ["cffi:{stem}_cffi.py"]
+
+    def test_cli_backend_short_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Verify -b and --backend both set args.backend."""
+        monkeypatch.delenv("HEADERKIT_BACKEND", raising=False)
+        parser = _build_parser()
+        args_short = parser.parse_args(["test.h", "-b", "tree-sitter"])
+        assert args_short.backend == "tree-sitter"
+        args_long = parser.parse_args(["test.h", "--backend", "libclang"])
+        assert args_long.backend == "libclang"
+        args_default = parser.parse_args(["test.h"])
+        assert args_default.backend == "libclang"
+
+    def test_cli_pyi_output_spec_routing(self) -> None:
+        """Verify -o pyi:mylib.pyi and bare -o mylib.pyi route to pyi writer."""
+        explicit = _parse_output_specs(["pyi:mylib.pyi"])
+        assert explicit == {"pyi": "mylib.pyi"}
+        inferred = _parse_output_specs(["mylib.pyi"])
+        assert inferred == {"pyi": "mylib.pyi"}

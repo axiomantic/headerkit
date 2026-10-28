@@ -404,6 +404,7 @@ def _ensure_writers_loaded() -> None:
     import headerkit.writers.mojo  # noqa: F401
     import headerkit.writers.nim  # noqa: F401
     import headerkit.writers.prompt  # noqa: F401
+    import headerkit.writers.pyi  # noqa: F401
 
 
 def _load_writer_plugins() -> None:

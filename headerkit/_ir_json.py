@@ -199,6 +199,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 
@@ -213,6 +214,7 @@ def _dict_to_enum(d: dict[str, Any]) -> Enum:
         cpp_name=d.get("cpp_name"),
         underlying_type=d.get("underlying_type"),
         underlying_type_known=d.get("underlying_type_known", _default(Enum, "underlying_type_known")),
+        doc=d.get("doc"),
     )
 
 
@@ -239,6 +241,7 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 
@@ -250,6 +253,7 @@ def _dict_to_typedef(d: dict[str, Any]) -> Typedef:
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 
@@ -262,6 +266,7 @@ def _dict_to_variable(d: dict[str, Any]) -> Variable:
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 
@@ -274,6 +279,7 @@ def _dict_to_constant(d: dict[str, Any]) -> Constant:
         type=_dict_to_ctype(d["type"]) if "type" in d else None,
         is_macro=d.get("is_macro", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 

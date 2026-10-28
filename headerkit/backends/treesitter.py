@@ -344,6 +344,128 @@ def _recovered_bitfield_clause(field_decl: Node) -> Node | None:
     return None
 
 
+_NIM_STORAGE_MACROS: frozenset[bytes] = frozenset(
+    {
+        b"N_LIB_PRIVATE",
+        b"N_LIB_EXPORT",
+        b"N_LIB_IMPORT",
+        b"N_LIB_EXPORT_VAR",
+        b"NIM_EXTERNC",
+        b"N_NIM_DEPRECATED",
+    }
+)
+
+_NIM_CALLCONV_MACROS: frozenset[bytes] = frozenset(
+    {
+        b"N_CDECL",
+        b"N_NOCONV",
+        b"N_STDCALL",
+        b"N_FASTCALL",
+        b"N_INLINE",
+        b"N_NOINLINE",
+        b"N_NIMCALL",
+        b"N_SYSCALL",
+        b"N_THISCALL",
+        b"N_SAFECALL",
+        b"N_CLOSURE",
+    }
+)
+
+_NIM_CALLCONV_PTR_MACROS: frozenset[bytes] = frozenset(
+    {
+        b"N_CDECL_PTR",
+        b"N_NOCONV_PTR",
+        b"N_STDCALL_PTR",
+        b"N_FASTCALL_PTR",
+        b"N_INLINE_PTR",
+        b"N_NOINLINE_PTR",
+        b"N_NIMCALL_PTR",
+        b"N_SYSCALL_PTR",
+        b"N_THISCALL_PTR",
+        b"N_SAFECALL_PTR",
+        b"N_CLOSURE_PTR",
+    }
+)
+
+
+def _collect_cst_leaves(node: Node, out: list[Node]) -> None:
+    """Collect non-missing CST leaf tokens outside preprocessor definitions, strings, and comments."""
+    if node.type in ("preproc_def", "preproc_function_def", "comment", "string_literal", "char_literal"):
+        return
+    if not node.children:
+        if not node.is_missing:
+            out.append(node)
+        return
+    for child in node.children:
+        _collect_cst_leaves(child, out)
+
+
+def _expand_nim_macros_from_cst(raw: bytes, root: Node) -> bytes | None:
+    """Expand Nim ``nimbase.h`` calling-convention and linkage macros via CST leaf traversal."""
+    leaves: list[Node] = []
+    _collect_cst_leaves(root, leaves)
+    edits: list[tuple[int, int, bytes]] = []
+    i = 0
+    n = len(leaves)
+    while i < n:
+        leaf = leaves[i]
+        tok = leaf.text
+        if leaf.type in ("identifier", "type_identifier") and tok:
+            if tok in _NIM_STORAGE_MACROS:
+                edits.append((leaf.start_byte, leaf.end_byte, b" " * (leaf.end_byte - leaf.start_byte)))
+                i += 1
+                continue
+            if (
+                (tok in _NIM_CALLCONV_MACROS or tok in _NIM_CALLCONV_PTR_MACROS)
+                and i + 1 < n
+                and leaves[i + 1].type == "("
+            ):
+                open_leaf = leaves[i + 1]
+                depth = 1
+                j = i + 2
+                comma_leaf: Node | None = None
+                close_leaf: Node | None = None
+                while j < n and depth > 0:
+                    lj = leaves[j]
+                    if lj.type == "(":
+                        depth += 1
+                    elif lj.type == ")":
+                        depth -= 1
+                        if depth == 0:
+                            close_leaf = lj
+                            break
+                    elif lj.type == "," and depth == 1 and comma_leaf is None:
+                        comma_leaf = lj
+                    j += 1
+                if comma_leaf is not None and close_leaf is not None:
+                    ret_bytes = raw[open_leaf.end_byte : comma_leaf.start_byte].strip()
+                    name_bytes = raw[comma_leaf.end_byte : close_leaf.start_byte].strip()
+                    if tok in _NIM_CALLCONV_PTR_MACROS:
+                        repl = ret_bytes + b" (*" + name_bytes + b")"
+                    elif tok == b"N_INLINE":
+                        repl = b"inline " + ret_bytes + b" " + name_bytes
+                    else:
+                        repl = ret_bytes + b" " + name_bytes
+                    orig_newlines = raw[leaf.start_byte : close_leaf.end_byte].count(b"\n")
+                    repl_newlines = repl.count(b"\n")
+                    if orig_newlines > repl_newlines:
+                        repl = repl + (b"\n" * (orig_newlines - repl_newlines))
+                    edits.append((leaf.start_byte, close_leaf.end_byte, repl))
+                    i = j + 1
+                    continue
+        i += 1
+    if not edits:
+        return None
+    out = bytearray()
+    last = 0
+    for start, end, repl in edits:
+        out.extend(raw[last:start])
+        out.extend(repl)
+        last = end
+    out.extend(raw[last:])
+    return bytes(out)
+
+
 class TreeSitterBackend:
     """Parser backend using tree-sitter-c and tree-sitter-cpp."""
 
@@ -509,7 +631,12 @@ class TreeSitterBackend:
             raise RuntimeError(msg)
 
         parser = Parser(language)
-        tree = parser.parse(code.encode("utf-8"))
+        raw_bytes = code.encode("utf-8")
+        tree = parser.parse(raw_bytes)
+        if b"N_" in raw_bytes or b"NIM_EXTERNC" in raw_bytes:
+            expanded_bytes = _expand_nim_macros_from_cst(raw_bytes, tree.root_node)
+            if expanded_bytes is not None:
+                tree = parser.parse(expanded_bytes)
 
         self._defined_records = set()
         self._forward_records = {}
@@ -2108,6 +2235,8 @@ class TreeSitterBackend:
             type_name = "int"
         else:
             type_name = text
+        if type_name == "NCSTRING":
+            return Pointer(pointee=CType(name="char", qualifiers=quals, is_elaborated=is_elaborated))
         return CType(name=type_name, qualifiers=quals, is_elaborated=is_elaborated)
 
 
