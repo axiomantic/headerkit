@@ -1,10 +1,8 @@
 name: Momus
 
-# The automatic review on pull-request-open is gone: an LLM review of every
-# opened pull request is a per-push cost like any other. The two human-initiated
-# paths stay -- an /ai-review comment and a manual dispatch -- because both are
-# already someone deciding to spend it.
 on:
+  pull_request:
+    types: [opened]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -14,8 +12,27 @@ on:
         required: true
         type: string
 
+permissions: {}
+
+concurrency:
+  group: momus-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   call:
+    if: >-
+      github.event.sender.type != 'Bot' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && github.event.action == 'opened') ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request != null &&
+          (
+            startsWith(github.event.comment.body, '/ai-review') ||
+            contains(github.event.comment.body, '@axiomantic-momus[bot]')
+          )
+        )
+      )
     permissions:
       contents: read
       pull-requests: write
@@ -26,6 +43,10 @@ jobs:
       event_name: ${{ github.event_name }}
       trigger_command: /ai-review
       trigger_mention: "@axiomantic-momus[bot]"
+      model: ~anthropic/claude-sonnet-latest
+      base_url: https://openrouter.ai/api/v1
+      only_collaborators: true
+      environment: code-review
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       MOMUS_APP_ID: ${{ secrets.MOMUS_APP_ID }}

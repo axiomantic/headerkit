@@ -1,0 +1,18 @@
+_commit: v0.2.0
+_src_path: gh:axiomantic/polyform
+author_email: team@axiomantic.dev
+author_name: Axiomantic
+description: Fast C/C++ foreign header parser and binding generator
+docs_engine: none
+enable_momus_review: true
+github_owner: axiomantic
+has_c_cpp: false
+has_nim: false
+has_python: true
+has_typescript: false
+license: MIT
+momus_base_url: https://openrouter.ai/api/v1
+momus_model: ~anthropic/claude-sonnet-latest
+package_name: headerkit
+project_name: headerkit
+repo_name: headerkit
