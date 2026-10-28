@@ -221,7 +221,8 @@ class _CXString(Structure):
     _fields_ = [("spelling", c_char_p), ("free", c_int)]
 
     def __del__(self):
-        conf.lib.clang_disposeString(self)
+        if conf is not None:
+            conf.lib.clang_disposeString(self)
 
     @staticmethod
     def from_result(res, fn=None, args=None):
@@ -389,7 +390,8 @@ class Diagnostic(object):
         self.ptr = ptr
 
     def __del__(self):
-        conf.lib.clang_disposeDiagnostic(self)
+        if conf is not None:
+            conf.lib.clang_disposeDiagnostic(self)
 
     @property
     def severity(self):
@@ -535,7 +537,8 @@ class TokenGroup(object):
         self._count = count
 
     def __del__(self):
-        conf.lib.clang_disposeTokens(self._tu, self._memory, self._count)
+        if conf is not None:
+            conf.lib.clang_disposeTokens(self._tu, self._memory, self._count)
 
     @staticmethod
     def get_tokens(tu, extent):
@@ -2717,7 +2720,8 @@ class CodeCompletionResults(ClangObject):
         return self._as_parameter_
 
     def __del__(self):
-        conf.lib.clang_disposeCodeCompleteResults(self)
+        if conf is not None:
+            conf.lib.clang_disposeCodeCompleteResults(self)
 
     @property
     def results(self):
@@ -2756,7 +2760,8 @@ class Index(ClangObject):
         return Index(conf.lib.clang_createIndex(excludeDecls, 0))
 
     def __del__(self):
-        conf.lib.clang_disposeIndex(self)
+        if conf is not None:
+            conf.lib.clang_disposeIndex(self)
 
     def read(self, path):
         """Load a TranslationUnit from the given AST file."""
@@ -2929,7 +2934,8 @@ class TranslationUnit(ClangObject):
         ClangObject.__init__(self, ptr)
 
     def __del__(self):
-        conf.lib.clang_disposeTranslationUnit(self)
+        if conf is not None:
+            conf.lib.clang_disposeTranslationUnit(self)
 
     @property
     def cursor(self):
@@ -3263,7 +3269,8 @@ class CompileCommands(object):
         self.ccmds = ccmds
 
     def __del__(self):
-        conf.lib.clang_CompileCommands_dispose(self.ccmds)
+        if conf is not None:
+            conf.lib.clang_CompileCommands_dispose(self.ccmds)
 
     def __len__(self):
         return int(conf.lib.clang_CompileCommands_getSize(self.ccmds))
@@ -3289,7 +3296,8 @@ class CompilationDatabase(ClangObject):
     """
 
     def __del__(self):
-        conf.lib.clang_CompilationDatabase_dispose(self)
+        if conf is not None:
+            conf.lib.clang_CompilationDatabase_dispose(self)
 
     @staticmethod
     def from_result(res, fn, args):

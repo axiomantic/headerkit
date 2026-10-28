@@ -37,6 +37,7 @@ Example
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import fnmatch
 import functools
@@ -117,6 +118,16 @@ def _get_probe_index() -> Any:
     if _PROBE_INDEX is None:
         _PROBE_INDEX = _cindex.Index.create()
     return _PROBE_INDEX
+
+
+def _cleanup_probe_index() -> None:
+    """Dispose the shared ABI probe index at exit while cindex.conf is alive."""
+    global _PROBE_INDEX
+    _PROBE_INDEX = None
+    _unnamed_bitfields_impose_alignment.cache_clear()
+
+
+atexit.register(_cleanup_probe_index)
 
 
 @functools.lru_cache(maxsize=256)

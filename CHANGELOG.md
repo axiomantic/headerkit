@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add Nim --header support in tree-sitter and libclang backends, NimCleanupTransform, NimJsonDocEnricher, -b CLI short flag, and PEP 484 PyiWriter (-w pyi).
 
+### Fixed
+- Guard all `__del__` finalizers across vendored `headerkit._clang.v14`..`v23` `cindex.py` modules with `if conf is not None:` and register an `atexit` handler (`_cleanup_probe_index`) in `headerkit.backends.libclang` to dispose `_PROBE_INDEX` before module globals are cleared, preventing `AttributeError: 'NoneType' object has no attribute 'lib'` tracebacks during Python interpreter shutdown.
+
+## [0.48.0] - 2026-10-28
+
+### Added
+- Add Nim `--header` support in `tree-sitter` and `libclang` backends (`N_CDECL`, `N_NIMCALL`, `N_STDCALL`, `N_FASTCALL`, `N_NOCONV`, `N_INLINE`, `N_NOINLINE`, `N_*_PTR`, `NCSTRING`, and auto-discovered `nimbase.h` include paths), `NimCleanupTransform`, `NimJsonDocEnricher`, `-b` CLI short flag for `--backend`, and PEP 484 `PyiWriter` (`-w pyi`).
+
+### Fixed
+- Guard all `__del__` finalizers across vendored `headerkit._clang.v14`..`v23` `cindex.py` modules with `if conf is not None:` and register `_cleanup_probe_index` via `atexit` in `headerkit.backends.libclang` to prevent `AttributeError` during interpreter shutdown.
+
 ## [0.47.8] - 2026-10-24
 
 ### Changed

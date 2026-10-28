@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import shutil
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -537,3 +539,73 @@ class TestRealNimHeaderBackends:
             lc_cleaned = lc_unit >> NimCleanupTransform()
             lc_pyi = PyiWriter().write(lc_cleaned)
             assert lc_pyi == expected_pyi
+
+
+class TestCindexShutdownSafety:
+    """Verify vendored cindex.__del__ and libclang _PROBE_INDEX cleanup at interpreter shutdown."""
+
+    def test_cleanup_probe_index_resets_global_and_cache(self) -> None:
+        """_cleanup_probe_index() resets _PROBE_INDEX to None and clears probe cache."""
+        import headerkit.backends.libclang as lc_mod
+
+        sentinel = object()
+        orig_probe = lc_mod._PROBE_INDEX
+        try:
+            lc_mod._PROBE_INDEX = sentinel
+            lc_mod._cleanup_probe_index()
+            assert lc_mod._PROBE_INDEX is None
+            assert lc_mod._unnamed_bitfields_impose_alignment.cache_info().currsize == 0
+        finally:
+            lc_mod._PROBE_INDEX = orig_probe
+
+    @pytest.mark.parametrize("ver", [f"v{v}" for v in range(14, 24)])
+    def test_cindex_del_methods_safe_when_conf_is_none(self, ver: str) -> None:
+        """All vendored cindex.__del__ methods return cleanly when cindex.conf is None."""
+        mod = importlib.import_module(f"headerkit._clang.{ver}.cindex")
+        cls_names = [
+            "_CXString",
+            "Diagnostic",
+            "TokenGroup",
+            "CodeCompletionResults",
+            "Index",
+            "TranslationUnit",
+            "CompileCommands",
+            "CompilationDatabase",
+            "Rewriter",
+            "PrintingPolicy",
+        ]
+        found_names = [name for name in cls_names if hasattr(mod, name)]
+        ver_num = int(ver[1:])
+        expected_names = cls_names[:8] if ver_num <= 18 else (cls_names[:9] if ver_num == 19 else cls_names)
+        assert found_names == expected_names
+
+        with patch.object(mod, "conf", None):
+            for name in found_names:
+                cls = getattr(mod, name)
+                dummy = MagicMock()
+                assert cls.__del__(dummy) is None
+
+        # Negative control: when conf is present, Index.__del__ invokes conf.lib.clang_disposeIndex
+        mock_conf = MagicMock()
+        with patch.object(mod, "conf", mock_conf):
+            dummy_idx = MagicMock()
+            mod.Index.__del__(dummy_idx)
+            mock_conf.lib.clang_disposeIndex.assert_called_once_with(dummy_idx)
+
+    @pytest.mark.skipif(not is_backend_available("libclang"), reason="libclang not available")
+    def test_subprocess_parse_bitfield_probe_emits_no_shutdown_stderr(self) -> None:
+        """Subprocess parsing unnamed bitfield exits 0 with empty stderr at interpreter shutdown."""
+        code = (
+            "from headerkit.backends import get_backend; "
+            "b = get_backend('libclang'); "
+            "b.parse('struct S { char a; unsigned int : 8; char b; };', 'test.h')"
+        )
+        res = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert res.returncode == 0
+        assert res.stderr == ""
