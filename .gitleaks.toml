@@ -1,0 +1,6 @@
+[allowlist]
+description = "Ignore historical cache keys in .hkcache and test data"
+paths = [
+    '''^\.hkcache/''',
+    '''^\.headerkit/''',
+]

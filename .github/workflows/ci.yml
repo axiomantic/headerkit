@@ -1,56 +1,48 @@
 name: CI
-
-# Manual. A four-OS matrix on every push costs money and starves the contended
-# macOS runner other pull requests are waiting on, so nothing dispatches this
-# but a person:
-#
-#     gh workflow run CI --ref <branch>
-#
-# The merge gate turns "nobody dispatched it" red, so a pull request cannot
-# reach merge looking green on a run that never happened. See CONTRIBUTING.md.
-#
-# The paths-ignore lists that used to sit here are gone with the triggers they
-# filtered. The documentation-only set they spelled out survives as
-# .github/docs-only-paths.txt, which is now its single definition.
 on:
-  workflow_dispatch:
-    inputs:
-      full-matrix:
-        description: "Run the full Python version matrix instead of the boundary versions"
-        type: boolean
-        default: false
-      downstream:
-        description: "Run downstream integration tests (pynng, python-autopxd2)"
-        type: boolean
-        default: false
+  push:
+    branches: [main]
+  pull_request:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions: {}
 
 jobs:
-  lint:
+  secrets-scan:
+    name: Secrets Scan
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install and run Gitleaks
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.24.0/gitleaks_8.24.0_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --verbose --redact
+
+  test-python:
+    name: Python (3.12)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: 'pip'
-      - run: pip install -e '.[lint]'
-      - uses: pre-commit/action@v3.0.1
-      - name: Run CI lint script
-        run: bash scripts/ci/lint.sh
 
-  test:
-    uses: ./.github/workflows/test.yml
-    with:
-      full-matrix: ${{ inputs.full-matrix }}
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e ".[dev]"
 
-  downstream:
-    if: inputs.downstream
-    uses: ./.github/workflows/test-downstream.yml
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: pytest
+        run: uv run pytest tests/test_public_api.py

@@ -86,3 +86,4 @@ nimcache/
 *.exe
 examples/**/example
 examples/**/example_plugin
+justfile.local
