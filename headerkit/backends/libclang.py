@@ -4288,9 +4288,6 @@ def _find_nim_libpath() -> str | None:
     return None
 
 
-_get_nim_libpath = _find_nim_libpath
-
-
 def _has_nimbase_in_dirs(
     include_dirs: Sequence[str] | None,
     extra_args: Sequence[str] | None,

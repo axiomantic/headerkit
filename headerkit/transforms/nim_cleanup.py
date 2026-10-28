@@ -143,9 +143,7 @@ def _rewrite_nim_type(type_expr: TypeExpr) -> TypeExpr:
     """Recursively normalize Nim ``nimbase.h`` C types into standard C99 ``TypeExpr`` nodes."""
     if isinstance(type_expr, CType):
         if type_expr.name == "NCSTRING":
-            return Pointer(
-                pointee=CType(name="char", qualifiers=list(type_expr.qualifiers), is_elaborated=False)
-            )
+            return Pointer(pointee=CType(name="char", qualifiers=list(type_expr.qualifiers), is_elaborated=False))
         mapped = _NIM_SCALAR_TYPE_MAP.get(type_expr.name)
         if mapped is not None:
             return replace(type_expr, name=mapped)

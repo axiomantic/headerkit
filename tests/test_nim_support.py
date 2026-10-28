@@ -365,6 +365,81 @@ class TestNimJsonDocEnricher:
         assert unchanged == unit
         assert any("Failed to load jsondoc file" in r.message for r in caplog.records)
 
+    def test_jsondoc_kind_keyed_disambiguation_between_type_and_proc(self) -> None:
+        """Verify NimJsonDocEnricher keys docstrings by (category, name) so skProc and skType do not collide."""
+        unit = SourceUnit(
+            path="collision.h",
+            declarations=[
+                Struct(
+                    name="Widget",
+                    fields=[Field("id", CType("int"))],
+                ),
+                Function(
+                    name="Widget",
+                    return_type=CType("int"),
+                    parameters=[Parameter("w_p0", CType("int"))],
+                ),
+                Struct(
+                    name="OnlyProcDoc",
+                    fields=[Field("v", CType("int"))],
+                ),
+                Function(
+                    name="OnlyProcDoc",
+                    return_type=CType("void"),
+                    parameters=[],
+                ),
+            ],
+        )
+        enricher = NimJsonDocEnricher(
+            entries=[
+                {
+                    "name": "Widget",
+                    "type": "skType",
+                    "description": "Widget data structure.",
+                },
+                {
+                    "name": "Widget",
+                    "type": "skProc",
+                    "description": "Construct a Widget.",
+                    "parameters": ["widget_id"],
+                },
+                {
+                    "name": "OnlyProcDoc",
+                    "type": "skProc",
+                    "description": "Proc-only documentation must not leak onto struct.",
+                },
+            ]
+        )
+        enriched = unit >> enricher
+        expected = SourceUnit(
+            path="collision.h",
+            declarations=[
+                Struct(
+                    name="Widget",
+                    fields=[Field("id", CType("int"))],
+                    doc="Widget data structure.",
+                ),
+                Function(
+                    name="Widget",
+                    return_type=CType("int"),
+                    parameters=[Parameter("widget_id", CType("int"))],
+                    doc="Construct a Widget.",
+                ),
+                Struct(
+                    name="OnlyProcDoc",
+                    fields=[Field("v", CType("int"))],
+                    doc=None,
+                ),
+                Function(
+                    name="OnlyProcDoc",
+                    return_type=CType("void"),
+                    parameters=[],
+                    doc="Proc-only documentation must not leak onto struct.",
+                ),
+            ],
+        )
+        assert enriched == expected
+
 
 class TestRealNimHeaderBackends:
     """Verify both tree-sitter and libclang parse real Nim --header output."""

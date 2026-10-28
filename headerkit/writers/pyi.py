@@ -30,7 +30,7 @@ from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers import WriterBackend, register_writer
 from headerkit.writers.base import BaseWriter, WriterOption
 
-_BOOL_TYPES: frozenset[str] = frozenset({"bool", "_Bool", "NIM_BOOL"})
+_BOOL_TYPES: frozenset[str] = frozenset({"bool", "_Bool"})
 
 _INT_TYPES: frozenset[str] = frozenset(
     {
@@ -94,17 +94,6 @@ _INT_TYPES: frozenset[str] = frozenset(
         "wchar_t",
         "char16_t",
         "char32_t",
-        "NI",
-        "NU",
-        "NI8",
-        "NI16",
-        "NI32",
-        "NI64",
-        "NU8",
-        "NU16",
-        "NU32",
-        "NU64",
-        "NIM_CHAR",
     }
 )
 
@@ -113,9 +102,6 @@ _FLOAT_TYPES: frozenset[str] = frozenset(
         "float",
         "double",
         "long double",
-        "NF",
-        "NF32",
-        "NF64",
     }
 )
 
@@ -181,6 +167,12 @@ class PyiWriter(BaseWriter):
         self._needs_enum = False
         self._needs_callable = False
         self._needs_any = False
+        self._declared_structs: set[str] = set()
+        self._declared_enums: set[str] = set()
+        self._declared_typedefs: set[str] = set()
+
+    def _is_declared_user_type(self, key: str) -> bool:
+        return key in self._declared_typedefs or key in self._declared_structs or key in self._declared_enums
 
     def _is_excluded(self, name: str | None) -> bool:
         if not name or not self._compiled_excludes:
@@ -200,15 +192,24 @@ class PyiWriter(BaseWriter):
     def _format_type(self, type_expr: TypeExpr, *, is_param: bool = False) -> str:
         if isinstance(type_expr, CType):
             key = _normalize_ctype_key(type_expr)
-            if not type_expr.is_elaborated:
-                if key == "void":
-                    return "None"
-                if key in _BOOL_TYPES:
-                    return "bool"
-                if key in _INT_TYPES:
-                    return "int"
-                if key in _FLOAT_TYPES:
-                    return "float"
+            if type_expr.is_elaborated:
+                res = _sanitize_identifier(key, fallback="Any")
+                if res == "Any":
+                    self._needs_any = True
+                return res
+            if self._is_declared_user_type(key):
+                res = _sanitize_identifier(key, fallback="Any")
+                if res == "Any":
+                    self._needs_any = True
+                return res
+            if key == "void":
+                return "None"
+            if key in _BOOL_TYPES:
+                return "bool"
+            if key in _INT_TYPES:
+                return "int"
+            if key in _FLOAT_TYPES:
+                return "float"
             res = _sanitize_identifier(key, fallback="Any")
             if res == "Any":
                 self._needs_any = True
@@ -220,15 +221,17 @@ class PyiWriter(BaseWriter):
                 return self._format_function_pointer(pointee)
             if isinstance(pointee, CType):
                 p_key = _normalize_ctype_key(pointee)
-                if not pointee.is_elaborated:
-                    if p_key == "char":
-                        return "bytes | str" if is_param else "bytes"
-                    if p_key == "void":
+                if pointee.is_elaborated or self._is_declared_user_type(p_key):
+                    res = _sanitize_identifier(p_key, fallback="Any")
+                    if res == "Any":
                         self._needs_any = True
-                        return "Any"
-                if pointee.is_elaborated or (
-                    p_key not in _BOOL_TYPES and p_key not in _INT_TYPES and p_key not in _FLOAT_TYPES
-                ):
+                    return res
+                if p_key == "char":
+                    return "bytes | str" if is_param else "bytes"
+                if p_key == "void":
+                    self._needs_any = True
+                    return "Any"
+                if p_key not in _BOOL_TYPES and p_key not in _INT_TYPES and p_key not in _FLOAT_TYPES:
                     res = _sanitize_identifier(p_key, fallback="Any")
                     if res == "Any":
                         self._needs_any = True
@@ -243,6 +246,7 @@ class PyiWriter(BaseWriter):
             if (
                 isinstance(type_expr.element_type, CType)
                 and not type_expr.element_type.is_elaborated
+                and not self._is_declared_user_type(_normalize_ctype_key(type_expr.element_type))
                 and _normalize_ctype_key(type_expr.element_type) == "char"
             ):
                 return "bytes"
@@ -450,11 +454,20 @@ class PyiWriter(BaseWriter):
         self._needs_enum = False
         self._needs_callable = False
         self._needs_any = False
+        self._declared_structs = set()
+        self._declared_enums = set()
+        self._declared_typedefs = set()
 
         defined_record_names: set[str] = set()
         for decl in unit.declarations:
-            if isinstance(decl, (Struct, Enum)) and decl.name and not self._is_excluded(decl.name):
+            if isinstance(decl, Struct) and decl.name and not self._is_excluded(decl.name):
+                self._declared_structs.add(decl.name.strip())
                 defined_record_names.add(_sanitize_identifier(decl.name))
+            elif isinstance(decl, Enum) and decl.name and not self._is_excluded(decl.name):
+                self._declared_enums.add(decl.name.strip())
+                defined_record_names.add(_sanitize_identifier(decl.name))
+            elif isinstance(decl, Typedef) and decl.name and not self._is_excluded(decl.name):
+                self._declared_typedefs.add(decl.name.strip())
 
         body_blocks: list[str] = []
         for decl in unit.declarations:
