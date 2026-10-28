@@ -124,19 +124,10 @@ def _sanitize_identifier(name: str, fallback: str = "arg") -> str:
     return cleaned
 
 
-def _strip_elaborated_prefix(name: str) -> str:
-    """Strip leading C/C++ aggregate keywords from a type name."""
-    text = name.strip()
-    for prefix in ("struct ", "union ", "enum ", "class "):
-        if text.startswith(prefix):
-            return text[len(prefix) :].strip()
-    return text
-
-
 def _normalize_ctype_key(ctype: CType) -> str:
     """Build normalized C type lookup key combining signedness qualifiers and base name."""
     signed_quals = [q for q in ctype.qualifiers if q in ("signed", "unsigned")]
-    base = _strip_elaborated_prefix(ctype.name)
+    base = ctype.name.strip()
     if signed_quals:
         return f"{' '.join(signed_quals)} {base}".strip()
     return base
@@ -167,12 +158,10 @@ class PyiWriter(BaseWriter):
         self._needs_enum = False
         self._needs_callable = False
         self._needs_any = False
-        self._declared_structs: set[str] = set()
-        self._declared_enums: set[str] = set()
-        self._declared_typedefs: set[str] = set()
-
-    def _is_declared_user_type(self, key: str) -> bool:
-        return key in self._declared_typedefs or key in self._declared_structs or key in self._declared_enums
+        self._record_tags: dict[str, str] = {}
+        self._enum_tags: dict[str, str] = {}
+        self._typedef_map: dict[str, TypeExpr] = {}
+        self._contested_tags: set[str] = set()
 
     def _is_excluded(self, name: str | None) -> bool:
         if not name or not self._compiled_excludes:
@@ -192,12 +181,10 @@ class PyiWriter(BaseWriter):
     def _format_type(self, type_expr: TypeExpr, *, is_param: bool = False) -> str:
         if isinstance(type_expr, CType):
             key = _normalize_ctype_key(type_expr)
-            if type_expr.is_elaborated:
-                res = _sanitize_identifier(key, fallback="Any")
-                if res == "Any":
-                    self._needs_any = True
-                return res
-            if self._is_declared_user_type(key):
+            if type_expr.is_elaborated is True:
+                resolved = self._record_tags.get(key) or self._enum_tags.get(key)
+                if resolved is not None:
+                    return resolved
                 res = _sanitize_identifier(key, fallback="Any")
                 if res == "Any":
                     self._needs_any = True
@@ -210,6 +197,11 @@ class PyiWriter(BaseWriter):
                 return "int"
             if key in _FLOAT_TYPES:
                 return "float"
+            if key in self._contested_tags and type_expr.is_elaborated is False:
+                return self._format_type(self._typedef_map[key], is_param=is_param)
+            resolved = self._record_tags.get(key) or self._enum_tags.get(key)
+            if resolved is not None:
+                return resolved
             res = _sanitize_identifier(key, fallback="Any")
             if res == "Any":
                 self._needs_any = True
@@ -221,7 +213,10 @@ class PyiWriter(BaseWriter):
                 return self._format_function_pointer(pointee)
             if isinstance(pointee, CType):
                 p_key = _normalize_ctype_key(pointee)
-                if pointee.is_elaborated or self._is_declared_user_type(p_key):
+                if pointee.is_elaborated is True:
+                    resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
+                    if resolved is not None:
+                        return resolved
                     res = _sanitize_identifier(p_key, fallback="Any")
                     if res == "Any":
                         self._needs_any = True
@@ -231,11 +226,18 @@ class PyiWriter(BaseWriter):
                 if p_key == "void":
                     self._needs_any = True
                     return "Any"
-                if p_key not in _BOOL_TYPES and p_key not in _INT_TYPES and p_key not in _FLOAT_TYPES:
-                    res = _sanitize_identifier(p_key, fallback="Any")
-                    if res == "Any":
-                        self._needs_any = True
-                    return res
+                if p_key in _BOOL_TYPES or p_key in _INT_TYPES or p_key in _FLOAT_TYPES:
+                    self._needs_any = True
+                    return "Any"
+                if p_key in self._contested_tags and pointee.is_elaborated is False:
+                    return self._format_type(Pointer(self._typedef_map[p_key]), is_param=is_param)
+                resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
+                if resolved is not None:
+                    return resolved
+                res = _sanitize_identifier(p_key, fallback="Any")
+                if res == "Any":
+                    self._needs_any = True
+                return res
             self._needs_any = True
             return "Any"
 
@@ -245,8 +247,7 @@ class PyiWriter(BaseWriter):
         if isinstance(type_expr, Array):
             if (
                 isinstance(type_expr.element_type, CType)
-                and not type_expr.element_type.is_elaborated
-                and not self._is_declared_user_type(_normalize_ctype_key(type_expr.element_type))
+                and type_expr.element_type.is_elaborated is not True
                 and _normalize_ctype_key(type_expr.element_type) == "char"
             ):
                 return "bytes"
@@ -454,20 +455,40 @@ class PyiWriter(BaseWriter):
         self._needs_enum = False
         self._needs_callable = False
         self._needs_any = False
-        self._declared_structs = set()
-        self._declared_enums = set()
-        self._declared_typedefs = set()
+        self._record_tags = {}
+        self._enum_tags = {}
+        self._typedef_map = {}
+        self._contested_tags = set()
 
         defined_record_names: set[str] = set()
+        raw_record_tags: set[str] = set()
         for decl in unit.declarations:
             if isinstance(decl, Struct) and decl.name and not self._is_excluded(decl.name):
-                self._declared_structs.add(decl.name.strip())
-                defined_record_names.add(_sanitize_identifier(decl.name))
+                tag = decl.name.strip()
+                cls_name = _sanitize_identifier(tag)
+                raw_record_tags.add(tag)
+                defined_record_names.add(cls_name)
+                keyword = "union" if decl.is_union else "struct"
+                self._record_tags[tag] = cls_name
+                self._record_tags[f"{keyword} {tag}"] = cls_name
             elif isinstance(decl, Enum) and decl.name and not self._is_excluded(decl.name):
-                self._declared_enums.add(decl.name.strip())
-                defined_record_names.add(_sanitize_identifier(decl.name))
+                tag = decl.name.strip()
+                cls_name = _sanitize_identifier(tag)
+                raw_record_tags.add(tag)
+                defined_record_names.add(cls_name)
+                self._enum_tags[tag] = cls_name
+                self._enum_tags[f"enum {tag}"] = cls_name
             elif isinstance(decl, Typedef) and decl.name and not self._is_excluded(decl.name):
-                self._declared_typedefs.add(decl.name.strip())
+                td_name = decl.name.strip()
+                self._typedef_map[td_name] = decl.underlying_type
+
+        for td_name, underlying in self._typedef_map.items():
+            if td_name in raw_record_tags:
+                if not (
+                    isinstance(underlying, CType)
+                    and self._record_tags.get(underlying.name.strip()) == _sanitize_identifier(td_name)
+                ):
+                    self._contested_tags.add(td_name)
 
         body_blocks: list[str] = []
         for decl in unit.declarations:
@@ -489,7 +510,7 @@ class PyiWriter(BaseWriter):
             elif isinstance(decl, Typedef):
                 alias_name = _sanitize_identifier(decl.name)
                 target_str = self._format_type(decl.underlying_type, is_param=False)
-                if alias_name == target_str and alias_name in defined_record_names:
+                if alias_name in defined_record_names:
                     continue
                 if alias_name != target_str:
                     td_lines = [f"{alias_name} = {target_str}"]

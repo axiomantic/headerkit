@@ -49,6 +49,8 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
+import weakref
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import replace
@@ -110,6 +112,7 @@ _UNNAMED_BITFIELD_PROBE = "struct _hk_abi_probe { char a; unsigned int : 8; char
 #: Index owning every ABI probe translation unit. Held for the life of the
 #: process because clang frees a TU's memory with the index that made it.
 _PROBE_INDEX: Any = None
+_LIVE_BACKENDS: weakref.WeakSet[LibclangBackend] = weakref.WeakSet()
 
 
 def _get_probe_index() -> Any:
@@ -121,10 +124,12 @@ def _get_probe_index() -> Any:
 
 
 def _cleanup_probe_index() -> None:
-    """Dispose the shared ABI probe index at exit while cindex.conf is alive."""
+    """Dispose the shared ABI probe index and cached backend indices at exit while cindex.conf is alive."""
     global _PROBE_INDEX
     _PROBE_INDEX = None
     _unnamed_bitfields_impose_alignment.cache_clear()
+    for backend in list(_LIVE_BACKENDS):
+        backend._index = None
 
 
 atexit.register(_cleanup_probe_index)
@@ -4273,6 +4278,7 @@ def _find_nim_libpath() -> str | None:
     try:
         proc = subprocess.run(
             ["nim", "dump", "--dump.format:json", "."],
+            cwd=tempfile.gettempdir(),
             capture_output=True,
             text=True,
             timeout=10,
@@ -4367,6 +4373,7 @@ class LibclangBackend:
         # Normalized paths clang itself classified as system headers, accumulated
         # across every translation unit this backend has parsed.
         self._clang_system_headers: set[str] = set()
+        _LIVE_BACKENDS.add(self)
 
     def _is_system_include(self, header_path: str, project_prefixes: tuple[str, ...] | None) -> bool:
         """Decide whether an included header is a system header.

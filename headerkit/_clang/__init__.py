@@ -241,6 +241,56 @@ VENDORED_VERSIONS = ("14", "15", "16", "17", "18", "19", "20", "21", "22", "23")
 LATEST_VENDORED = "23"
 OLDEST_VENDORED = "14"
 
+_DESTRUCTOR_CLASS_NAMES = (
+    "_CXString",
+    "Diagnostic",
+    "TokenGroup",
+    "CodeCompletionResults",
+    "Index",
+    "TranslationUnit",
+    "CompileCommands",
+    "CompilationDatabase",
+    "Rewriter",
+    "PrintingPolicy",
+)
+
+
+def _patch_shutdown_safe_destructors(cindex: ModuleType) -> None:
+    """Guard vendored cindex.__del__ methods against interpreter-shutdown None globals.
+
+    During Python interpreter finalization, module-level globals on the vendored
+    ``cindex`` module (specifically ``cindex.conf``) may be set to ``None`` before
+    cached ``Index`` or ``TranslationUnit`` instances are garbage-collected.
+    Wrapping ``__del__`` on the vendored wrapper classes in-memory avoids mutating
+    the vendored upstream files while preventing shutdown ``AttributeError`` tracebacks.
+    """
+    from typing import Any
+
+    for cls_name in _DESTRUCTOR_CLASS_NAMES:
+        cls = getattr(cindex, cls_name, None)
+        if cls is None:
+            continue
+        orig_del = getattr(cls, "__del__", None)
+        if orig_del is None or getattr(orig_del, "_headerkit_shutdown_patched", False):
+            continue
+
+        def _make_safe_del(fn: Any) -> Any:
+            def _safe_del(self: Any) -> None:
+                conf = getattr(cindex, "conf", None)
+                if conf is None or getattr(conf, "_lib", True) is None:
+                    return
+                try:
+                    fn(self)
+                except AttributeError:
+                    if getattr(cindex, "conf", None) is None:
+                        return
+                    raise
+
+            _safe_del._headerkit_shutdown_patched = True  # type: ignore[attr-defined]
+            return _safe_del
+
+        cls.__del__ = _make_safe_del(orig_del)
+
 
 class _compat_c_interop_string(c_void_p):
     """PyPy-compatible replacement for c_interop_string.
@@ -386,6 +436,7 @@ def get_cindex() -> ModuleType:
         _patch_pypy_simpletype()
 
     cindex = importlib.import_module(f"headerkit._clang.v{version}.cindex")
+    _patch_shutdown_safe_destructors(cindex)
 
     if _NEEDS_BIG_ENDIAN_CALLBACK_PATCH:
         _patch_big_endian_callbacks(cindex)

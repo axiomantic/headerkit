@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add Nim --header support in tree-sitter and libclang backends, NimCleanupTransform, NimJsonDocEnricher, -b CLI short flag, and PEP 484 PyiWriter (-w pyi).
 
 ### Fixed
-- Guard all `__del__` finalizers across vendored `headerkit._clang.v14`..`v23` `cindex.py` modules with `if conf is not None:` and register an `atexit` handler (`_cleanup_probe_index`) in `headerkit.backends.libclang` to dispose `_PROBE_INDEX` before module globals are cleared, preventing `AttributeError: 'NoneType' object has no attribute 'lib'` tracebacks during Python interpreter shutdown.
+- Patch `__del__` finalizers at runtime in `headerkit._clang._patch_shutdown_safe_destructors` (preserving pristine vendored `v14`..`v23` `cindex.py` modules), register `_cleanup_probe_index` via `atexit` in `headerkit.backends.libclang` to clear `_PROBE_INDEX` and cached backend indices before module globals are cleared, run `nim dump` in `tempfile.gettempdir()`, and resolve elaborated record/enum tags in `PyiWriter` strictly from IR `is_elaborated` and declaration tables.
 
 ## [0.48.0] - 2026-10-28
 
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add Nim `--header` support in `tree-sitter` and `libclang` backends (`N_CDECL`, `N_NIMCALL`, `N_STDCALL`, `N_FASTCALL`, `N_NOCONV`, `N_INLINE`, `N_NOINLINE`, `N_*_PTR`, `NCSTRING`, and auto-discovered `nimbase.h` include paths), `NimCleanupTransform`, `NimJsonDocEnricher`, `-b` CLI short flag for `--backend`, and PEP 484 `PyiWriter` (`-w pyi`).
 
 ### Fixed
-- Guard all `__del__` finalizers across vendored `headerkit._clang.v14`..`v23` `cindex.py` modules with `if conf is not None:` and register `_cleanup_probe_index` via `atexit` in `headerkit.backends.libclang` to prevent `AttributeError` during interpreter shutdown.
+- Patch `__del__` finalizers at runtime in `headerkit._clang._patch_shutdown_safe_destructors` and register `_cleanup_probe_index` via `atexit` in `headerkit.backends.libclang` to prevent `AttributeError` during interpreter shutdown.
 
 ## [0.47.8] - 2026-10-24
 
