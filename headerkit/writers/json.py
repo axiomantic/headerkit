@@ -184,6 +184,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["alignment"] = decl.alignment
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
+        if decl.doc is not None:
+            d["doc"] = decl.doc
         return d
     elif isinstance(decl, Enum):
         d = {
@@ -205,6 +207,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["cpp_name"] = decl.cpp_name
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
+        if decl.doc is not None:
+            d["doc"] = decl.doc
         return d
     elif isinstance(decl, Function):
         d = {
@@ -248,6 +252,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["is_deprecated"] = True
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
+        if decl.doc is not None:
+            d["doc"] = decl.doc
         return d
     elif isinstance(decl, Typedef):
         d = {
@@ -263,6 +269,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["is_deprecated"] = True
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
+        if decl.doc is not None:
+            d["doc"] = decl.doc
         return d
     elif isinstance(decl, Variable):
         d = {

@@ -227,3 +227,6 @@ class StripPaddingFields(PipelineFilter):
         ]
         new_nested = [self.visit_Struct(n, context=context) for n in node.nested_records]
         return replace(node, fields=new_fields, nested_records=new_nested)
+
+
+from headerkit.transforms.nim_cleanup import NimCleanupTransform as NimCleanupTransform  # noqa: E402

@@ -41,8 +41,10 @@ import contextlib
 import fnmatch
 import functools
 import glob
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections import deque
@@ -4250,6 +4252,62 @@ class ClangASTConverter:
         return None
 
 
+@functools.lru_cache(maxsize=1)
+def _find_nim_libpath() -> str | None:
+    """Locate Nim's standard library directory containing ``nimbase.h`` via ``nim dump``."""
+    try:
+        proc = subprocess.run(
+            ["nim", "dump", "--dump.format:json", "."],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            start = proc.stdout.find("{")
+            end = proc.stdout.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                data = json.loads(proc.stdout[start : end + 1])
+                if isinstance(data, dict):
+                    libpath = data.get("libpath")
+                    if isinstance(libpath, str) and libpath:
+                        return libpath
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+
+    nim_bin = shutil.which("nim")
+    if nim_bin is not None:
+        real_nim = os.path.realpath(nim_bin)
+        candidate = os.path.normpath(os.path.join(os.path.dirname(real_nim), "..", "lib"))
+        if os.path.isfile(os.path.join(candidate, "nimbase.h")):
+            return candidate
+    return None
+
+
+_get_nim_libpath = _find_nim_libpath
+
+
+def _has_nimbase_in_dirs(
+    include_dirs: Sequence[str] | None,
+    extra_args: Sequence[str] | None,
+    filename: str,
+) -> bool:
+    """Check whether ``nimbase.h`` is already present in configured include directories."""
+    search: list[str] = []
+    if include_dirs:
+        search.extend(include_dirs)
+    if extra_args:
+        for arg in extra_args:
+            if arg.startswith("-I") and len(arg) > 2:
+                search.append(arg[2:])
+            elif arg.startswith("-isystem") and len(arg) > 8:
+                search.append(arg[8:])
+    file_dir = os.path.dirname(os.path.abspath(filename))
+    if file_dir:
+        search.append(file_dir)
+    return any(os.path.isfile(os.path.join(d, "nimbase.h")) for d in search)
+
+
 class LibclangBackend:
     """Parser backend using libclang.
 
@@ -4676,6 +4734,15 @@ class LibclangBackend:
         if extra_args:
             args.extend(extra_args)
 
+        # Auto-resolve Nim's standard library directory when parsing a header that includes "nimbase.h"
+        uses_nimbase = "nimbase.h" in code
+        nim_libpath_added = False
+        if uses_nimbase and not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
+            nim_libpath = _find_nim_libpath()
+            if nim_libpath is not None:
+                args.append(f"-I{nim_libpath}")
+                nim_libpath_added = True
+
         # Parse the code with detailed preprocessing record for macro extraction
         index = self._get_index()
         tu = index.parse(
@@ -4684,6 +4751,36 @@ class LibclangBackend:
             unsaved_files=[(filename, code)],
             options=_cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
         )
+
+        # If an included header (e.g. via umbrella #include) needed nimbase.h, retry with Nim libpath
+        if not nim_libpath_added and any(
+            diag.severity >= _cindex.Diagnostic.Error and "nimbase.h" in str(diag.spelling) for diag in tu.diagnostics
+        ):
+            uses_nimbase = True
+            if not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
+                nim_libpath = _find_nim_libpath()
+                if nim_libpath is not None:
+                    args.append(f"-I{nim_libpath}")
+                    nim_libpath_added = True
+                    tu = index.parse(
+                        filename,
+                        args=args,
+                        unsaved_files=[(filename, code)],
+                        options=_cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
+                    )
+
+        # Debug Nim --header output emits inline nimFrame() bodies referencing undeclared
+        # framePtr__system_u*; retry skipping function bodies if a Nim header fails body check
+        if uses_nimbase and any(diag.severity >= _cindex.Diagnostic.Error for diag in tu.diagnostics):
+            tu = index.parse(
+                filename,
+                args=args,
+                unsaved_files=[(filename, code)],
+                options=(
+                    _cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD
+                    | _cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES
+                ),
+            )
 
         # Check for fatal errors
         for diag in tu.diagnostics:

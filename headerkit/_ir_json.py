@@ -199,6 +199,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 
@@ -213,6 +214,7 @@ def _dict_to_enum(d: dict[str, Any]) -> Enum:
         cpp_name=d.get("cpp_name"),
         underlying_type=d.get("underlying_type"),
         underlying_type_known=d.get("underlying_type_known", _default(Enum, "underlying_type_known")),
+        doc=d.get("doc"),
     )
 
 
@@ -239,6 +241,7 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 
@@ -250,6 +253,7 @@ def _dict_to_typedef(d: dict[str, Any]) -> Typedef:
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         location=_dict_to_location(d["location"]) if "location" in d else None,
+        doc=d.get("doc"),
     )
 
 

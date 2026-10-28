@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add Nim --header support in tree-sitter and libclang backends, NimCleanupTransform, NimJsonDocEnricher, -b CLI short flag, and PEP 484 PyiWriter (-w pyi).
+
 ## [0.47.8] - 2026-10-24
 
 ### Changed

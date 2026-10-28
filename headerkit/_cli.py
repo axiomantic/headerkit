@@ -179,6 +179,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Header file paths or glob patterns (e.g., 'include/**/*.h')",
     )
     parser.add_argument(
+        "-b",
         "--backend",
         dest="backend",
         metavar="NAME",
@@ -413,7 +414,7 @@ _EXTENSION_TO_WRITER: dict[str, str] = {
     ".txt": "prompt",
     ".nim": "nim",
     ".py": "cffi",
-    ".pyi": "cffi",
+    ".pyi": "pyi",
 }
 
 

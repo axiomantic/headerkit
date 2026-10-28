@@ -556,6 +556,7 @@ class Enum:
     cpp_name: str | None = None
     underlying_type: str | None = None
     underlying_type_known: bool = True
+    doc: str | None = None
 
     @property
     def qualified_name(self) -> str | None:
@@ -673,6 +674,7 @@ class Struct:
     access: str | None = None
     alignment: int | None = None
     location: SourceLocation | None = None
+    doc: str | None = None
 
     def __post_init__(self) -> None:
         if self.template_parameters and not self.template_params:
@@ -755,6 +757,7 @@ class Function:
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     location: SourceLocation | None = None
+    doc: str | None = None
 
     def __post_init__(self) -> None:
         if self.template_parameters and not self.template_params:
@@ -807,6 +810,7 @@ class Typedef:
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     location: SourceLocation | None = None
+    doc: str | None = None
 
     def __str__(self) -> str:
         return f"typedef {self.underlying_type} {self.name}"
