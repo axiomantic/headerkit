@@ -1709,17 +1709,19 @@ class ClangASTConverter:
             "blkcnt_t",
         }
 
+        system_types_not_to_emit |= {k for k in typedef_map if k.startswith("__")}
+
         # Expand needed_types to include all transitive dependencies
         all_needed: set[str] = set()
         to_expand = list(needed_types)
         while to_expand:
             type_name = to_expand.pop()
-            if type_name in all_needed:
+            if type_name in all_needed or type_name in system_types_not_to_emit:
                 continue
             if type_name in typedef_map:
                 all_needed.add(type_name)
                 deps = get_dependencies(type_name, include_pointers=True)
-                to_expand.extend(deps - all_needed)
+                to_expand.extend(deps - all_needed - system_types_not_to_emit)
 
         # Filter out system types that shouldn't be emitted
         all_needed -= system_types_not_to_emit
@@ -3695,7 +3697,9 @@ class ClangASTConverter:
                                     break
                         # Don't create another struct, but might still need typedef
                     else:
-                        # First time seeing this struct - create it
+                        # First time seeing this struct - remove any prior forward declaration and create it
+                        if struct_key in self._seen:
+                            self._remove_forward_declaration(struct_name, key_prefix)
                         self._seen.add(struct_key)
                         self._seen.add(definition_key)  # Mark definition as seen
                         is_union = decl.kind == CursorKind.UNION_DECL
