@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Add Nim --header support in tree-sitter and libclang backends, NimCleanupTransform, NimJsonDocEnricher, -b CLI short flag, and PEP 484 PyiWriter (-w pyi).
+### Fixed
+- Remove prior forward-declared `Struct` entries in `ClangASTConverter._process_typedef` when a `typedef struct S S;` cursor resolves directly to a subsequent `struct S { ... };` definition on LLVM <= 21 (`libclang-21-dev` on Ubuntu and Windows LLVM), preventing duplicate empty `class S: pass` emissions in `PyiWriter`.
+- Exclude glibc/system `__*` internal typedefs (such as `__int64_t` underlying `int64_t`) from transitive dependency expansion in `ClangASTConverter._resolve_dependencies`.
+- Restore `headerkit.backends.libclang` package attribute alongside `sys.modules["headerkit.backends.libclang"]` in `tests/test_backends/test_registry.py` and serialize Windows paths via `json.dumps` in `tests/test_nim_support.py`.
+
+## [0.48.1] - 2026-10-28
 
 ### Fixed
-- Patch `__del__` finalizers at runtime in `headerkit._clang._patch_shutdown_safe_destructors` (preserving pristine vendored `v14`..`v23` `cindex.py` modules), register `_cleanup_probe_index` via `atexit` in `headerkit.backends.libclang` to clear `_PROBE_INDEX` and cached backend indices before module globals are cleared, run `nim dump` in `tempfile.gettempdir()`, and resolve elaborated record/enum tags in `PyiWriter` strictly from IR `is_elaborated` and declaration tables.
+- Remove prior forward-declared `Struct` entries in `ClangASTConverter._process_typedef` when a `typedef struct S S;` cursor resolves directly to a subsequent `struct S { ... };` definition on LLVM <= 21 (`libclang-21-dev` on Ubuntu and Windows LLVM), preventing duplicate empty `class S: pass` emissions in `PyiWriter`.
+- Exclude glibc/system `__*` internal typedefs (such as `__int64_t` underlying `int64_t`) from transitive dependency expansion in `ClangASTConverter._resolve_dependencies`.
+- Restore `headerkit.backends.libclang` package attribute alongside `sys.modules["headerkit.backends.libclang"]` in `tests/test_backends/test_registry.py` and serialize Windows paths via `json.dumps` in `tests/test_nim_support.py`.
 
 ## [0.48.0] - 2026-10-28
 

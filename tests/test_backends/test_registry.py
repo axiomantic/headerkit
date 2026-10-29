@@ -242,8 +242,10 @@ class TestBackendRegistry:
         finally:
             if saved_module is not None:
                 sys.modules["headerkit.backends.libclang"] = saved_module
+                b.libclang = saved_module  # type: ignore[attr-defined]
             else:
                 sys.modules.pop("headerkit.backends.libclang", None)
+                b.__dict__.pop("libclang", None)
 
         # Flag is set to prevent re-trying the failed import
         assert b._BACKENDS_LOADED is True
@@ -275,6 +277,10 @@ class TestBackendRegistry:
             # Restore the module to avoid polluting other tests.
             if saved_module is not None:
                 sys.modules["headerkit.backends.libclang"] = saved_module
+                b.libclang = saved_module  # type: ignore[attr-defined]
+            else:
+                sys.modules.pop("headerkit.backends.libclang", None)
+                b.__dict__.pop("libclang", None)
 
     def test_treesitter_alias_normalization(self):
         """Backend aliases 'treesitter' and 'tree_sitter' resolve to 'tree-sitter'."""
