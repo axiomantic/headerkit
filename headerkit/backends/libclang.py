@@ -839,10 +839,16 @@ def _deduplicate_declarations(declarations: list[Declaration]) -> list[Declarati
     - `typedef enum [Foo] {...} Foo;` creates both Enum and Typedef
     - We keep only the Enum and remove the redundant Typedef
 
+    Special handling for forward declarations:
+    - Included headers are parsed as separate translation units, so `struct Foo;`
+      from one and `struct Foo {...};` from another both reach this merge
+    - The definition replaces the forward declaration, in its position, whichever
+      of the two came first
+
     :param declarations: List of declarations to deduplicate
     :returns: List with duplicates removed, preserving order
     """
-    seen: set[tuple[type, str | None, str | None]] = set()
+    seen: dict[tuple[type, str | None, str | None], int] = {}
     unique: list[Declaration] = []
 
     enum_names: set[str | None] = {decl.name for decl in declarations if isinstance(decl, Enum)}
@@ -897,10 +903,26 @@ def _deduplicate_declarations(declarations: list[Declaration]) -> list[Declarati
             decl = replace(decl, is_typedef=True)
 
         if key not in seen:
-            seen.add(key)
+            seen[key] = len(unique)
             unique.append(decl)
+        elif _defines_forward_declaration(unique[seen[key]], decl):
+            unique[seen[key]] = decl
 
     return unique
+
+
+def _defines_forward_declaration(kept: Declaration, candidate: Declaration) -> bool:
+    """Report whether ``candidate`` is the definition of a type ``kept`` only forward-declares.
+
+    A body-less record or a value-less enum is what a forward declaration
+    produces; the same criterion drives the Cython writer's
+    ``_drop_redundant_record_forwards``.
+    """
+    if isinstance(kept, Struct) and isinstance(candidate, Struct):
+        return not (kept.fields or kept.methods) and bool(candidate.fields or candidate.methods)
+    if isinstance(kept, Enum) and isinstance(candidate, Enum):
+        return not kept.values and bool(candidate.values)
+    return False
 
 
 def _mangle_specialization_name(cpp_name: str) -> str:
@@ -4527,8 +4549,10 @@ class LibclangBackend:
         all_declarations: list[Declaration] = list(main_header.declarations)
         main_dir = os.path.dirname(os.path.abspath(main_path))
 
-        # Process each included header
-        for include_path in main_header.included_headers:
+        # Process each included header. ``included_headers`` is a set, so walking
+        # it directly merged the headers -- and ordered every writer's input -- by
+        # string hash, which changes with ``PYTHONHASHSEED`` from run to run.
+        for include_path in sorted(main_header.included_headers):
             # Skip system headers (unless allowlisted via project_prefixes)
             if self._is_system_include(include_path, project_prefixes):
                 continue
