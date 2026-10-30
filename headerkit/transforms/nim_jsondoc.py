@@ -66,7 +66,7 @@ def _categorize_entry_kind(raw_kind: Any) -> str | None:
 
 
 class NimJsonDocEnricher(PipelineFilter):
-    """Enrich a ``SourceUnit`` with docstrings and parameter names from ``nim jsondoc`` or ``.phyne.ir.json``."""
+    """Enrich a ``SourceUnit`` with docstrings and parameter names from ``nim jsondoc`` or ``.naganim.ir.json``."""
 
     def __init__(
         self,
