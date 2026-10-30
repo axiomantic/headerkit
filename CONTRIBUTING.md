@@ -32,77 +32,7 @@ Pre-commit hooks enforce lint and format checks automatically on each commit.
 3. Add or update tests as needed.
 4. Run all quality gates listed above.
 5. Update `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
-6. Open a pull request against `main`.
-7. Dispatch CI for the pull request's head commit, and wait for it to pass. Nothing does this for you -- see below.
-
-## Dual-CI Architecture and Shared Scripts
-
-HeaderKit employs a dual-CI architecture with shared script execution:
-
-- **Shared CI scripts (`scripts/ci/`)**: Build, lint, and test logic lives in standalone, parameterized shell scripts that can be invoked locally or by CI runners:
-  - `scripts/ci/lint.sh`: Runs `ruff check`, `ruff format --check`, `mypy --strict`, and Clang stubtest.
-  - `scripts/ci/test.sh`: Verifies required test toolchain prerequisites and invokes `pytest -rs`.
-  - `scripts/ci/install-deps-linux.sh`: Installs `libclang-dev` and modern C23-capable GCC on Debian/Ubuntu systems.
-- **Forgejo CI (`.forgejo/workflows/ci.yml`)**: Runs on self-hosted Forgejo (`https://git.axiomantic.dev`) using Podman-backed Linux runners (`runs-on: docker`) on push and pull requests for Linux/OS-agnostic legs.
-- **GitHub Actions (`.github/workflows/ci.yml`, `.github/workflows/test.yml`)**: Hosted on the manual GitHub mirror (`axiomantic`). Because the self-hosted private runner is Linux-only (no private macOS or Windows runner capacity), GitHub Actions handles the macOS and Windows matrix legs and manual cross-version matrix testing.
-
-## CI on GitHub is manual
-
-The GitHub test matrix spans four operating systems and four Python versions (3.11 to 3.14). Running it on
-every push costs real money and holds the macOS runner that every other pull request
-is queued behind, so **no workflow on GitHub runs automatically on `push` or
-`pull_request`.** You start GitHub CI manually:
-
-```bash
-# The boundary Python versions (3.11 and 3.14) on Linux, macOS and Windows.
-gh workflow run CI --ref <your-branch>
-
-# Every Python version. Dispatch this before a release, or when a change is
-# version-sensitive.
-gh workflow run CI --ref <your-branch> -f full-matrix=true
-
-# Watch it.
-gh run watch "$(gh run list --workflow=CI --branch <your-branch> --limit 1 \
-  --json databaseId --jq '.[0].databaseId')"
-```
-
-Two other workflows are dispatched by hand when a change calls for them. There is no
-longer a `paths` filter deciding for you:
-
-```bash
-# When you touch headerkit/install_libclang.py or tests/test_install_libclang.py.
-gh workflow run "Test install_libclang" --ref <your-branch>
-
-# When you touch docs/ or mkdocs.yml and want the dev site updated.
-gh workflow run Documentation --ref main
-```
-
-### The merge gate
-
-Manual CI has one hazard, and one workflow exists for it. If nothing ran, a pull
-request's checks list is *empty* -- and an empty checks list looks exactly like a
-clean one. Merging on that appearance would mean merging code no machine has
-compiled.
-
-So the `Merge gate` workflow is the single exception that triggers automatically. It
-runs in seconds, does no build work, and **starts red**:
-
-- No `CI` run for your head commit: **failure**, with the dispatch command in the log.
-- A `CI` run that failed, was cancelled, or is still going: **failure**.
-- A `CI` run that succeeded for that exact commit: **success**.
-
-It keys on the head SHA, never the branch. A green run on the commit before the one
-under review is evidence about code that no longer exists, so pushing a new commit
-turns the gate red again and you dispatch again. This is also why a green gate cannot
-be obtained without a real run: the gate's only input is GitHub's own record of runs
-against that SHA.
-
-Once a dispatched run finishes, the gate re-evaluates on its own. If it has not, press
-**Re-run** on the `Merge gate` check.
-
-Make `CI ran and passed for this commit` a required status check on `main` in the
-branch protection settings. With it required, merging without a dispatched, passing
-run is not possible.
+6. Open a pull request against `main` and ensure GitHub Actions CI passes.
 
 ## Important notes
 

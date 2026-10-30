@@ -605,8 +605,10 @@ def _render_agents_md(options: PluginScaffoldOptions) -> str:
         ## Quality Gates
 
         All code must pass:
-        - `bash scripts/ci/lint.sh` (`ruff check .`, `ruff format --check .`, `mypy --strict {options.package_name}`)
-        - `bash scripts/ci/test.sh` (`pytest -rs`)
+        - `ruff check .`
+        - `ruff format --check .`
+        - `mypy --strict {options.package_name}`
+        - `pytest -rs`
     """)
 
 
@@ -683,38 +685,16 @@ def _render_readme_md(options: PluginScaffoldOptions) -> str:
         ## Testing
 
         ```bash
-        bash scripts/ci/lint.sh
-        bash scripts/ci/test.sh
+        ruff check .
+        ruff format --check .
+        mypy --strict {options.package_name}
+        pytest -rs
         ```
     """)
 
 
-def _render_ci_lint(options: PluginScaffoldOptions) -> str:
+def _render_ci_workflow(options: PluginScaffoldOptions) -> str:
     return textwrap.dedent(f"""\
-        #!/usr/bin/env bash
-        set -euo pipefail
-
-        echo "=== Running Lint Checks ==="
-        ruff check .
-        ruff format --check .
-        mypy --strict {options.package_name}
-        echo "=== All Lint Checks Passed ==="
-    """)
-
-
-def _render_ci_test() -> str:
-    return textwrap.dedent("""\
-        #!/usr/bin/env bash
-        set -euo pipefail
-
-        echo "=== Running Test Suite ==="
-        pytest -rs "${@}"
-        echo "=== All Tests Passed ==="
-    """)
-
-
-def _render_ci_workflow(_options: PluginScaffoldOptions) -> str:
-    return textwrap.dedent("""\
         name: CI
 
         on:
@@ -731,24 +711,32 @@ def _render_ci_workflow(_options: PluginScaffoldOptions) -> str:
                 with:
                   python-version: "3.12"
                   cache: "pip"
-              - run: pip install -e '.[lint]'
-              - run: bash scripts/ci/lint.sh
+              - name: Install dependencies
+                run: pip install -e '.[lint]'
+              - name: Ruff check
+                run: ruff check .
+              - name: Ruff format check
+                run: ruff format --check .
+              - name: Mypy strict check
+                run: mypy --strict {options.package_name}
 
           test:
-            runs-on: ${{ matrix.os }}
+            runs-on: ${{{{ matrix.os }}}}
             strategy:
               fail-fast: false
               matrix:
                 os: [ubuntu-latest, macos-latest]
-                python-version: ["3.10", "3.12", "3.14"]
+                python-version: ["3.11", "3.12", "3.14"]
             steps:
               - uses: actions/checkout@v4
               - uses: actions/setup-python@v5
                 with:
-                  python-version: ${{ matrix.python-version }}
+                  python-version: ${{{{ matrix.python-version }}}}
                   cache: "pip"
-              - run: pip install -e '.[test]'
-              - run: bash scripts/ci/test.sh
+              - name: Install dependencies
+                run: pip install -e '.[test]'
+              - name: Run tests
+                run: pytest -rs
     """)
 
 
@@ -776,8 +764,6 @@ def scaffold_plugin(options: PluginScaffoldOptions) -> ProjectLayout:
         OutputFile(path=f"tests/test_{options.target}.py", content=_render_tests(options)),
         OutputFile(path="AGENTS.md", content=_render_agents_md(options)),
         OutputFile(path="README.md", content=_render_readme_md(options)),
-        OutputFile(path="scripts/ci/lint.sh", content=_render_ci_lint(options), is_executable=True),
-        OutputFile(path="scripts/ci/test.sh", content=_render_ci_test(), is_executable=True),
         OutputFile(path=".github/workflows/ci.yml", content=_render_ci_workflow(options)),
     ]
 

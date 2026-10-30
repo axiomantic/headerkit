@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "headerkit"
-version = "0.48.1"
+version = "0.48.2"
 description = "The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims."
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"

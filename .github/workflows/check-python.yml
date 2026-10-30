@@ -10,8 +10,9 @@
 
 name: Check Python Versions
 
-# Manual. The weekly cron is gone with the rest of the automatic triggers.
 on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays at 9 AM UTC
   workflow_dispatch:
 
 concurrency:

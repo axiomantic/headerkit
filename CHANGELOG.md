@@ -7,10 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- Remove prior forward-declared `Struct` entries in `ClangASTConverter._process_typedef` when a `typedef struct S S;` cursor resolves directly to a subsequent `struct S { ... };` definition on LLVM <= 21 (`libclang-21-dev` on Ubuntu and Windows LLVM), preventing duplicate empty `class S: pass` emissions in `PyiWriter`.
-- Exclude glibc/system `__*` internal typedefs (such as `__int64_t` underlying `int64_t`) from transitive dependency expansion in `ClangASTConverter._resolve_dependencies`.
-- Restore `headerkit.backends.libclang` package attribute alongside `sys.modules["headerkit.backends.libclang"]` in `tests/test_backends/test_registry.py` and serialize Windows paths via `json.dumps` in `tests/test_nim_support.py`.
+### Changed
+- Aligned CI workflows with standard GitHub Actions triggers (`push`, `pull_request`, `schedule`, `workflow_dispatch`), inlined job steps across workflows and `headerkit new` project scaffolding, and removed the Forgejo dual-CI scripts (`scripts/ci/`, `scripts/require_ci_run.sh`, `.forgejo/workflows/ci.yml`) and manual-dispatch merge gate in favor of `check-release-prep.yml`.
+- Bumped `ruff` to `0.17.2` and `astral-sh/setup-uv` to `v7`.
 
 ## [0.48.1] - 2026-10-28
 

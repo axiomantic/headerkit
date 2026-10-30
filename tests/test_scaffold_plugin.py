@@ -38,8 +38,6 @@ class TestPluginScaffolding:
             "tests/test_zig.py",
             "AGENTS.md",
             "README.md",
-            "scripts/ci/lint.sh",
-            "scripts/ci/test.sh",
             ".github/workflows/ci.yml",
         }
         actual_paths = {f.path for f in layout.files}

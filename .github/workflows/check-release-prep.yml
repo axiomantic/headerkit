@@ -1,58 +1,16 @@
-name: Merge gate
-
-# The only workflow in this repository that triggers by itself.
-#
-# Every other workflow is on `workflow_dispatch`, because a four-OS test matrix
-# on every push costs money and starves the contended macOS runner that other
-# pull requests are queued behind. Manual CI has one failure mode, and this
-# workflow exists for it: a pull request nobody dispatched shows an empty checks
-# list, and an empty checks list is the same colour as a clean one. This job
-# makes "nobody ran it" red, so it cannot be mistaken for "it passed".
-#
-# It does no real work -- one API query and a diff -- so it is affordable to run
-# on every pull request, which is exactly what the expensive workflows are not.
+name: Check release prep
 
 on:
   pull_request:
-  # Re-evaluate when a dispatched CI run finishes, so a pull request goes green
-  # on its own rather than waiting for someone to press "re-run" on this job.
-  # Takes effect once this file is on the default branch; until then, re-run
-  # this check by hand after CI finishes.
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
-  actions: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
-  cancel-in-progress: true
 
 jobs:
-  # Deliberately not run on pushes to main. No dispatch ever targets a merge
-  # commit, so this job would be permanently red there -- and a check that is
-  # always red trains people to ignore it on the pull requests where it is
-  # load-bearing, which is the argument this repository already made about
-  # check-release-prep's false warnings.
-  ci-status:
-    name: CI ran and passed for this commit
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      # The gate's own code comes from the commit under review, so a change to
-      # it is visible in the diff it is judging rather than hidden on main.
-      - uses: actions/checkout@v7
-      - name: Require a successful CI run for this exact commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/require_ci_run.sh \
-            "${{ github.repository }}" \
-            "${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}"
-
   release-prep:
     name: Release prep
     # A stack of pull requests is one release. The parent carries the version

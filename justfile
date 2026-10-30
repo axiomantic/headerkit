@@ -15,7 +15,7 @@ test-py:
     uv run --extra dev pytest tests/test_public_api.py
 
 test-all:
-    bash scripts/ci/test.sh
+    uv run --extra dev pytest -rs
 
 # 3. Linter Execution
 lint:
@@ -23,6 +23,8 @@ lint:
 
 lint-py:
     uv run --extra dev ruff check .
+    uv run --extra dev ruff format --check .
+    uv run --extra dev mypy --strict headerkit
 
 # 4. Formatter Execution
 fmt:

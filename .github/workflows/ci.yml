@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions: {}
 
@@ -44,6 +45,12 @@ jobs:
 
       - name: ruff check
         run: uv run ruff check .
+
+      - name: ruff format
+        run: uv run ruff format --check .
+
+      - name: mypy
+        run: uv run mypy --strict headerkit/
 
       - name: pytest
         run: uv run pytest tests/test_public_api.py
