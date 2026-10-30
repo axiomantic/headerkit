@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="C/C++ header parsing toolkit with pluggable backends and writers for ctypes, Cython, CFFI, LuaJIT FFI, and more">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
       
       
       
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -904,6 +904,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="2. Scaffolding a Full Package">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nim-build-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nim build configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-c-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The C++ backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-the-native-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming the native library
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-c-tripwire-establishes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the C++ tripwire establishes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -950,6 +1000,45 @@
     <span class="md-ellipsis">
       
         Tripwire Verification in Nim
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-version-bindings-downstream-library-consumption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Version Bindings &amp; Downstream Library Consumption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-Version Bindings &amp; Downstream Library Consumption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-downstream-consumption-compile-time-vs-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Downstream Consumption: Compile-Time vs. Runtime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-order-independent-multi-version-scaffolding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Order-Independent Multi-Version Scaffolding
       
     </span>
   </a>
@@ -1024,6 +1113,118 @@
     
   
     Test Work Orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../matrix_reconciliation_and_overrides/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Matrix Reconciliation & Overrides
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platform_guarded_store_merge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platform Guarded Store Merge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ir_transformations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IR Transformations
   
 
     
@@ -1831,6 +2032,90 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Matrix API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/reconcile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reconciliation API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/transforms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transforms API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1907,6 +2192,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="2. Scaffolding a Full Package">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nim-build-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nim build configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-c-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The C++ backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-the-native-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming the native library
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-c-tripwire-establishes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the C++ tripwire establishes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1953,6 +2288,45 @@
     <span class="md-ellipsis">
       
         Tripwire Verification in Nim
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-version-bindings-downstream-library-consumption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Version Bindings &amp; Downstream Library Consumption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-Version Bindings &amp; Downstream Library Consumption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-downstream-consumption-compile-time-vs-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Downstream Consumption: Compile-Time vs. Runtime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-order-independent-multi-version-scaffolding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Order-Independent Multi-Version Scaffolding
       
     </span>
   </a>
@@ -2056,22 +2430,110 @@
 <p>This generates the following structure:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nim_vector/
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├── nim_vector.nimble          # Nimble package spec with test tasks
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>├── nim.cfg                    # Compiler flags (--mm:orc, --threads:on)
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>├── nim.cfg                    # Compiler and link flags (see 'Nim build configuration')
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>├── src/
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>│   ├── nim_vector.nim         # Public API re-export
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>│   └── nim_vector/
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>│       └── bindings.nim       # Generated foreign function interface
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>└── tests/
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    ├── test_tripwire.nim      # Symbol and ABI linking verification tests
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    ├── test_tripwire.nim      # Symbol resolution (C) or compile-and-link (C++) verification
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    └── test_nim_vector.nim    # High-level unit test skeleton
 </code></pre></div>
+<h4 id="nim-build-configuration">Nim build configuration<a class="headerlink" href="#nim-build-configuration" title="Permanent link">&para;</a></h4>
+<p><code>nim.cfg</code> carries the flags the generated package needs in order to build. Every flag
+is invariant, derived from the parsed IR, or supplied by you. Nothing is guessed.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Where it comes from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--mm:orc</code>, <code>--threads:on</code>, <code>--styleCheck:hint</code></td>
+<td>Invariant.</td>
+</tr>
+<tr>
+<td><code>--path:"$config/src"</code></td>
+<td>Invariant. Lets the package build with a bare <code>nim c</code>, not only under <code>nimble</code>.</td>
+</tr>
+<tr>
+<td><code>--backend:cpp</code></td>
+<td>Emitted when the parsed unit needs the C++ backend.</td>
+</tr>
+<tr>
+<td><code>--passC:"-I\"...\""</code></td>
+<td>The header's own directory, plus every <code>-I</code> passed to the parse. The inner quotes survive Nim's word-splitting of config values, so a path containing a space reaches the compiler whole. They are <strong>double</strong> quotes, escaped: a config file is read by Nim's own lexer, where <code>'</code> opens a character literal and a single-quoted path is a syntax error rather than a flag. Paths are emitted with forward slashes, which every compiler in the matrix accepts on Windows and which keeps a <code>\U</code> out of a Nim string literal.</td>
+</tr>
+<tr>
+<td><code>--passC:"-D..."</code></td>
+<td>Every <code>-D</code> passed to the parse.</td>
+</tr>
+<tr>
+<td><code>--passL:"-l..."</code>, <code>--passL:"-L\"...\""</code></td>
+<td>The <code>library</code> and <code>library_dirs</code> writer options.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="the-c-backend">The C++ backend<a class="headerlink" href="#the-c-backend" title="Permanent link">&para;</a></h4>
+<p>Nim's default C backend cannot build <code>importcpp</code> bindings: it hands a C++ header to
+the C compiler, which rejects <code>class</code> outright. HeaderKit decides from the IR, not
+from the file extension -- a <code>.h</code> declaring a class is C++, and a <code>.hpp</code> declaring
+only C functions is not. The test is structural rather than a list of known shapes:
+any C++ reference, any template-id, any qualified name, any namespace, any scoped
+enumeration. It is deliberately broader than the <code>importc</code>/<code>importcpp</code> choice, since
+a record can keep an <code>importc</code> pragma while a field of it renders as <code>CppString</code>.</p>
+<p>One case cannot be decided from the IR's type names at all: libclang reports a
+<code>std::string</code> field and a C <code>typedef struct { ... } string;</code> as the identical
+<code>CType(name="string")</code>. HeaderKit settles it with the language the <em>parser</em> chose for
+the translation unit, which both backends record on the IR. A C header naming a record
+<code>vector</code> therefore stays on the C backend, where its functions link by their unmangled
+names.</p>
+<p>Not every C++ shape can be <em>compile-gated</em>. A shape earns a place in the compile gate
+only when the C backend genuinely rejects it; a scoped enumeration, for instance, needs
+the C++ backend the moment it is used but builds under either when only its size is
+taken, so gating it would be a check that cannot fail. The decision matrix therefore
+covers many more shapes than the compile gate does, and that is deliberate. The flag is set in <code>nim.cfg</code> rather than in the <code>.nimble</code>
+test task because a backend selected in the config also overrides a plain <code>nim c</code>.</p>
+<h4 id="naming-the-native-library">Naming the native library<a class="headerlink" href="#naming-the-native-library" title="Permanent link">&para;</a></h4>
+<p>HeaderKit cannot know which library your header's declarations live in, so it does
+not guess one. Name it, and the link flags appear:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>headerkit<span class="w"> </span>include/counter.hpp<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-w<span class="w"> </span>nim<span class="w"> </span>--layout<span class="w"> </span>package<span class="w"> </span>--package-name<span class="w"> </span>counter<span class="w"> </span>-o<span class="w"> </span>nim:./counter<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--writer-opt<span class="w"> </span>nim:library<span class="o">=</span>counter<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--writer-opt<span class="w"> </span>nim:library_dirs<span class="o">=</span>/opt/counter/lib
+</code></pre></div>
+<p>Both options are repeatable. Without them, <code>nim.cfg</code> says in a comment that no
+library is linked rather than carrying an <code>-l</code> that resolves to the wrong one.</p>
+<h4 id="what-the-c-tripwire-establishes">What the C++ tripwire establishes<a class="headerlink" href="#what-the-c-tripwire-establishes" title="Permanent link">&para;</a></h4>
+<p>For a C target, <code>tests/test_tripwire.nim</code> loads the shared library and resolves each
+exported symbol. That check cannot serve a C++ target: an <code>importcpp</code> binding has no
+unmangled name to look up, and a header-only or statically linked library has no
+shared object at all -- such a tripwire fails for a reason unrelated to the bindings.</p>
+<p>A unit that binds nothing linkable -- one declaring only templates, which emit no
+symbol until instantiated -- gets a tripwire that reports inconclusive and fails loudly
+via <code>fail()</code>. It cannot exit 0 or report skipped, because a tripwire that exits 0
+without establishing linkage is a green mirage: a CI step reading its exit status
+alone would mistake it for verification. To resolve it, instantiate the generics you
+use in a test of your own. A private or protected member is not probed either: the
+probe would fail to compile rather than fail to link, taking the whole package with
+it.</p>
+<p>For a C++ target the tripwire's assertion is its own build. It compiles, which proves
+the bindings are valid C++ against the real header; it links, which proves every
+non-generic entry point resolves against the real library; and it checks <code>sizeof</code> of
+each bound class, which the C++ compiler can only answer from a complete definition.
+The link probes it contains are never executed -- they exist so the compiler must
+emit a reference to each entry point. It does not establish that a shared library is
+findable at run time, because a statically linked package has none to find.</p>
+<hr />
 <h3 id="3-interactive-wizard">3. Interactive Wizard<a class="headerlink" href="#3-interactive-wizard" title="Permanent link">&para;</a></h3>
 <p>When executed in a terminal without explicit arguments, HeaderKit launches an interactive questionnaire:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$<span class="w"> </span>headerkit<span class="w"> </span>include/vector.h<span class="w"> </span>-w<span class="w"> </span>mojo<span class="w"> </span>-o<span class="w"> </span>./mojo_vector
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>Package<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>mojo_vector<span class="o">]</span>:
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>Target<span class="w"> </span>language<span class="w"> </span><span class="o">(</span>nim,<span class="w"> </span>mojo,<span class="w"> </span>ctypes,<span class="w"> </span>cffi<span class="o">)</span><span class="w"> </span><span class="o">[</span>mojo<span class="o">]</span>:
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Layout<span class="w"> </span><span class="o">(</span>file,<span class="w"> </span>package<span class="o">)</span><span class="w"> </span><span class="o">[</span>package<span class="o">]</span>:
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>Test<span class="w"> </span>generation<span class="w"> </span><span class="o">(</span>both,<span class="w"> </span>tripwire,<span class="w"> </span>unit,<span class="w"> </span>none<span class="o">)</span><span class="w"> </span><span class="o">[</span>both<span class="o">]</span>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>$<span class="w"> </span>headerkit<span class="w"> </span>include/vector.h<span class="w"> </span>-w<span class="w"> </span>mojo<span class="w"> </span>-o<span class="w"> </span>./mojo_vector
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Package<span class="w"> </span>name<span class="w"> </span><span class="o">[</span>mojo_vector<span class="o">]</span>:
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>Target<span class="w"> </span>language<span class="w"> </span><span class="o">(</span>nim,<span class="w"> </span>mojo,<span class="w"> </span>ctypes,<span class="w"> </span>cffi<span class="o">)</span><span class="w"> </span><span class="o">[</span>mojo<span class="o">]</span>:
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>Layout<span class="w"> </span><span class="o">(</span>file,<span class="w"> </span>package<span class="o">)</span><span class="w"> </span><span class="o">[</span>package<span class="o">]</span>:
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>Test<span class="w"> </span>generation<span class="w"> </span><span class="o">(</span>both,<span class="w"> </span>tripwire,<span class="w"> </span>unit,<span class="w"> </span>none<span class="o">)</span><span class="w"> </span><span class="o">[</span>both<span class="o">]</span>:
 </code></pre></div>
 <p>To bypass prompts in CI or automated scripts, pass <code>--no-input</code>.</p>
 <hr />
@@ -2104,69 +2566,115 @@
 </tbody>
 </table>
 <h3 id="tripwire-verification-in-python-pytest-tripwire">Tripwire Verification in Python (<code>pytest-tripwire</code>)<a class="headerlink" href="#tripwire-verification-in-python-pytest-tripwire" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">mypkg</span><span class="w"> </span><span class="kn">import</span> <span class="n">_bindings</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">tripwire</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_tripwire_exported_symbols</span><span class="p">():</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="sd">"""Tripwire verification: asserts foreign C symbols are present in runtime bindings."""</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_bindings</span><span class="p">,</span> <span class="s2">"vector_add"</span><span class="p">),</span> <span class="s2">"Missing export entrypoint vector_add"</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_bindings</span><span class="p">,</span> <span class="s2">"vector_norm"</span><span class="p">),</span> <span class="s2">"Missing export entrypoint vector_norm"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">mypkg</span><span class="w"> </span><span class="kn">import</span> <span class="n">_bindings</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">tripwire</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_tripwire_exported_symbols</span><span class="p">():</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="sd">"""Tripwire verification: asserts foreign C symbols are present in runtime bindings."""</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_bindings</span><span class="p">,</span> <span class="s2">"vector_add"</span><span class="p">),</span> <span class="s2">"Missing export entrypoint vector_add"</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_bindings</span><span class="p">,</span> <span class="s2">"vector_norm"</span><span class="p">),</span> <span class="s2">"Missing export entrypoint vector_norm"</span>
 </code></pre></div>
 <h3 id="tripwire-verification-in-nim">Tripwire Verification in Nim<a class="headerlink" href="#tripwire-verification-in-nim" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">std</span><span class="o">/</span><span class="n">unittest</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">mypkg</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">suite</span><span class="w"> </span><span class="s">"Tripwire Symbol &amp; ABI Verification"</span><span class="p">:</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="n">test</span><span class="w"> </span><span class="s">"verify foreign library entrypoints exist and link"</span><span class="p">:</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">"Verifying tripwire symbol: vector_add"</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">"Verifying tripwire symbol: vector_norm"</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="n">checkpoint</span><span class="w"> </span><span class="s">"Tripwire symbol link verification active"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">std</span><span class="o">/[</span><span class="n">unittest</span><span class="p">,</span><span class="w"> </span><span class="n">dynlib</span><span class="o">]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">mypkg</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">suite</span><span class="w"> </span><span class="s">"Tripwire Symbol &amp; ABI Verification"</span><span class="p">:</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="n">test</span><span class="w"> </span><span class="s">"verify foreign library entrypoints exist and link"</span><span class="p">:</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">loadLib</span><span class="p">(</span><span class="s">"mypkg"</span><span class="p">)</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">lib</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kp">nil</span><span class="p">:</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="n">checkpoint</span><span class="w"> </span><span class="s">"Native dynamic library 'mypkg' not found in system library path"</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">      </span><span class="n">fail</span><span class="p">()</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">lib</span><span class="p">.</span><span class="n">symAddr</span><span class="p">(</span><span class="s">"vector_add"</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kp">nil</span><span class="p">:</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">      </span><span class="n">checkpoint</span><span class="w"> </span><span class="s">"Entry point 'vector_add' missing from native library 'mypkg'"</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">      </span><span class="n">fail</span><span class="p">()</span>
 </code></pre></div>
 <hr />
+<h2 id="multi-version-bindings-downstream-library-consumption">Multi-Version Bindings &amp; Downstream Library Consumption<a class="headerlink" href="#multi-version-bindings-downstream-library-consumption" title="Permanent link">&para;</a></h2>
+<p>When generating bindings for libraries that span multiple releases (such as JUCE 8.0, 8.1, and 9.0), projects must consider both how the scaffolder produces bindings and how downstream application developers consume them.</p>
+<h3 id="1-downstream-consumption-compile-time-vs-runtime">1. Downstream Consumption: Compile-Time vs. Runtime<a class="headerlink" href="#1-downstream-consumption-compile-time-vs-runtime" title="Permanent link">&para;</a></h3>
+<p>Foreign C and C++ libraries compiled statically into Nim (e.g. via <code>--backend:cpp</code> and <code>importcpp</code>) resolve symbols and API differences at <strong>compile time</strong>. If an application attempts to call a C++ method that does not exist in the linked library version, the C++ compiler (<code>clang++</code>/<code>g++</code>) fails at compile time.</p>
+<p>HeaderKit emits header version macros as top-level Nim <code>const</code> values, enabling downstream application code to adapt across library versions seamlessly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">juce_core</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c"># Pattern 1: Compile-time version branching</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">when</span><span class="w"> </span><span class="n">JUCE_MAJOR_VERSION</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">9</span><span class="p">:</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="k">proc</span><span class="w"> </span><span class="nf">runModernAudio</span><span class="p">()</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="c"># JUCE 9 modern API</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="n">initDirect2DAudio</span><span class="p">()</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">elif</span><span class="w"> </span><span class="n">JUCE_MAJOR_VERSION</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">JUCE_MINOR_VERSION</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="k">proc</span><span class="w"> </span><span class="nf">runModernAudio</span><span class="p">()</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="c"># JUCE 8.1 fallback</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="n">initMetalAudio</span><span class="p">()</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="k">proc</span><span class="w"> </span><span class="nf">runModernAudio</span><span class="p">()</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span><span class="c"># Legacy JUCE 8.0 fallback</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span><span class="n">initSoftwareAudio</span><span class="p">()</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c"># Pattern 2: Compile-time symbol probing</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="k">when</span><span class="w"> </span><span class="n">declared</span><span class="p">(</span><span class="n">initDirect2DAudio</span><span class="p">):</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">  </span><span class="n">initDirect2DAudio</span><span class="p">()</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">  </span><span class="n">initSoftwareAudio</span><span class="p">()</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="c"># Pattern 3: Runtime version inspection</span>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="n">echo</span><span class="w"> </span><span class="s">"Running on JUCE runtime version: "</span><span class="p">,</span><span class="w"> </span><span class="n">SystemStats</span><span class="p">.</span><span class="n">getJUCEVersion</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="2-order-independent-multi-version-scaffolding">2. Order-Independent Multi-Version Scaffolding<a class="headerlink" href="#2-order-independent-multi-version-scaffolding" title="Permanent link">&para;</a></h3>
+<p>When regenerating test suites across multiple versions of a header, HeaderKit provides <code>OutputFile.merge_strategy = "canonical_merge"</code> and <code>merge_incremental_tests(..., canonicalize=True)</code>:</p>
+<ul>
+<li><strong>Human Assertion Preservation</strong>: Custom assertions added by engineers are never overwritten or clobbered.</li>
+<li><strong>Symbol Discovery</strong>: New symbols from incoming header versions have tests appended automatically.</li>
+<li><strong>Order Independence</strong>: Tests are canonically ordered by test title and suite, guaranteeing identical, byte-for-byte output regardless of whether Version 8 or Version 9 was processed first.</li>
+</ul>
 <h2 id="bring-your-own-scaffolder-byoscaffolder">Bring-Your-Own-Scaffolder (BYOScaffolder)<a class="headerlink" href="#bring-your-own-scaffolder-byoscaffolder" title="Permanent link">&para;</a></h2>
 <p>HeaderKit core is 100% zero-dependency, shipping with <code>StdlibScaffolder</code> built purely on Python's standard library (<code>string.Template</code> and <code>pathlib</code>).</p>
 <p>For corporate environments or advanced repositories needing external template engines (like <a href="https://copier.readthedocs.io/">Copier</a> or <a href="https://cookiecutter.readthedocs.io/">Cookiecutter</a>), HeaderKit provides the pluggable <code>BYOScaffolder</code> protocol integrated with the unified hook engine.</p>
 <h3 id="example-copier-byoscaffolder-plugin">Example: Copier BYOScaffolder Plugin<a class="headerlink" href="#example-copier-byoscaffolder-plugin" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">copier</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">Priority</span><span class="p">,</span> <span class="n">hook</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Header</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">BYOScaffolder</span><span class="p">,</span> <span class="n">OutputFile</span><span class="p">,</span> <span class="n">ProjectLayout</span><span class="p">,</span> <span class="n">ScaffoldOptions</span><span class="p">,</span> <span class="n">scaffold</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_writer</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">CopierScaffolder</span><span class="p">(</span><span class="n">BYOScaffolder</span><span class="p">):</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">template_dir</span> <span class="o">=</span> <span class="n">template_dir</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">scaffold</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="n">Header</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">ScaffoldOptions</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProjectLayout</span><span class="p">:</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>        <span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">target_language</span><span class="p">)</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>        <span class="n">bindings</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">tmp_dir</span><span class="p">:</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>            <span class="n">copier</span><span class="o">.</span><span class="n">run_copy</span><span class="p">(</span>
-<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>                <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">template_dir</span><span class="p">),</span>
-<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>                <span class="n">tmp_dir</span><span class="p">,</span>
-<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>                <span class="n">data</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>                    <span class="s2">"package_name"</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">package_name</span><span class="p">,</span>
-<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>                    <span class="s2">"target_language"</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">target_language</span><span class="p">,</span>
-<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>                    <span class="s2">"bindings_code"</span><span class="p">:</span> <span class="n">bindings</span><span class="p">,</span>
-<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>                <span class="p">},</span>
-<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>                <span class="n">defaults</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>            <span class="p">)</span>
-<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>            <span class="n">files</span> <span class="o">=</span> <span class="p">[</span>
-<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>                <span class="n">OutputFile</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)),</span> <span class="n">content</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">))</span>
-<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s2">"*"</span><span class="p">)</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
-<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>            <span class="p">]</span>
-<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>            <span class="k">return</span> <span class="n">ProjectLayout</span><span class="p">(</span><span class="n">files</span><span class="o">=</span><span class="n">files</span><span class="p">)</span>
-<a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>
-<a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="c1"># Register via HeaderKit hook engine</span>
-<a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="n">copier_plugin</span> <span class="o">=</span> <span class="n">CopierScaffolder</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">"./templates/custom_template"</span><span class="p">))</span>
-<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>
-<a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"scaffold_project"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">OVERRIDE</span><span class="p">)</span>
-<a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="k">def</span><span class="w"> </span><span class="nf">custom_scaffold_hook</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">Header</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">ScaffoldOptions</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProjectLayout</span><span class="p">:</span>
-<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>    <span class="k">return</span> <span class="n">copier_plugin</span><span class="o">.</span><span class="n">scaffold</span><span class="p">(</span><span class="n">unit</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">copier</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">Priority</span><span class="p">,</span> <span class="n">hook</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Header</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">BYOScaffolder</span><span class="p">,</span> <span class="n">OutputFile</span><span class="p">,</span> <span class="n">ProjectLayout</span><span class="p">,</span> <span class="n">ScaffoldOptions</span><span class="p">,</span> <span class="n">scaffold</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_writer</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">CopierScaffolder</span><span class="p">(</span><span class="n">BYOScaffolder</span><span class="p">):</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">template_dir</span> <span class="o">=</span> <span class="n">template_dir</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">scaffold</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">unit</span><span class="p">:</span> <span class="n">Header</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">ScaffoldOptions</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProjectLayout</span><span class="p">:</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>        <span class="n">writer</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">target_language</span><span class="p">)</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>        <span class="n">bindings</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">tmp_dir</span><span class="p">:</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>            <span class="n">copier</span><span class="o">.</span><span class="n">run_copy</span><span class="p">(</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>                <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">template_dir</span><span class="p">),</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>                <span class="n">tmp_dir</span><span class="p">,</span>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>                <span class="n">data</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>                    <span class="s2">"package_name"</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">package_name</span><span class="p">,</span>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>                    <span class="s2">"target_language"</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">target_language</span><span class="p">,</span>
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>                    <span class="s2">"bindings_code"</span><span class="p">:</span> <span class="n">bindings</span><span class="p">,</span>
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>                <span class="p">},</span>
+<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>                <span class="n">defaults</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>            <span class="p">)</span>
+<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>            <span class="n">files</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>                <span class="n">OutputFile</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)),</span> <span class="n">content</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">))</span>
+<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s2">"*"</span><span class="p">)</span>
+<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>                <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
+<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>            <span class="p">]</span>
+<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>            <span class="k">return</span> <span class="n">ProjectLayout</span><span class="p">(</span><span class="n">files</span><span class="o">=</span><span class="n">files</span><span class="p">)</span>
+<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>
+<a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>
+<a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a><span class="c1"># Register via HeaderKit hook engine</span>
+<a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a><span class="n">copier_plugin</span> <span class="o">=</span> <span class="n">CopierScaffolder</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">"./templates/custom_template"</span><span class="p">))</span>
+<a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>
+<a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>
+<a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"scaffold_project"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">OVERRIDE</span><span class="p">)</span>
+<a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a><span class="k">def</span><span class="w"> </span><span class="nf">custom_scaffold_hook</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">Header</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">ScaffoldOptions</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProjectLayout</span><span class="p">:</span>
+<a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a>    <span class="k">return</span> <span class="n">copier_plugin</span><span class="o">.</span><span class="n">scaffold</span><span class="p">(</span><span class="n">unit</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
 </code></pre></div>
 <p>See the executable example in <code>examples/scaffolding/copier_scaffolder.py</code>.</p>
 <h2 id="test-work-orders">Test work orders<a class="headerlink" href="#test-work-orders" title="Permanent link">&para;</a></h2>
@@ -2228,10 +2736,10 @@ human or LLM judgment. See <a href="../work-orders/">Test work orders</a>.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>

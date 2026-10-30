@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="C/C++ header parsing toolkit with pluggable backends and writers for ctypes, Cython, CFFI, LuaJIT FFI, and more">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
       
       
       
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -838,6 +838,118 @@
     
   
     Test Work Orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/configuration_matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/matrix_reconciliation_and_overrides/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Matrix Reconciliation & Overrides
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/platform_guarded_store_merge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platform Guarded Store Merge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/ir_transformations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IR Transformations
   
 
     
@@ -1814,6 +1926,90 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Matrix API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reconcile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reconciliation API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transforms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transforms API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2226,297 +2422,297 @@ the reader stops reading it carefully.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>headerkit/workorder.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-334">334</a></span>
-<span class="normal"><a href="#__codelineno-0-335">335</a></span>
-<span class="normal"><a href="#__codelineno-0-336">336</a></span>
-<span class="normal"><a href="#__codelineno-0-337">337</a></span>
-<span class="normal"><a href="#__codelineno-0-338">338</a></span>
-<span class="normal"><a href="#__codelineno-0-339">339</a></span>
-<span class="normal"><a href="#__codelineno-0-340">340</a></span>
-<span class="normal"><a href="#__codelineno-0-341">341</a></span>
-<span class="normal"><a href="#__codelineno-0-342">342</a></span>
-<span class="normal"><a href="#__codelineno-0-343">343</a></span>
-<span class="normal"><a href="#__codelineno-0-344">344</a></span>
-<span class="normal"><a href="#__codelineno-0-345">345</a></span>
-<span class="normal"><a href="#__codelineno-0-346">346</a></span>
-<span class="normal"><a href="#__codelineno-0-347">347</a></span>
-<span class="normal"><a href="#__codelineno-0-348">348</a></span>
-<span class="normal"><a href="#__codelineno-0-349">349</a></span>
-<span class="normal"><a href="#__codelineno-0-350">350</a></span>
-<span class="normal"><a href="#__codelineno-0-351">351</a></span>
-<span class="normal"><a href="#__codelineno-0-352">352</a></span>
-<span class="normal"><a href="#__codelineno-0-353">353</a></span>
-<span class="normal"><a href="#__codelineno-0-354">354</a></span>
-<span class="normal"><a href="#__codelineno-0-355">355</a></span>
-<span class="normal"><a href="#__codelineno-0-356">356</a></span>
-<span class="normal"><a href="#__codelineno-0-357">357</a></span>
-<span class="normal"><a href="#__codelineno-0-358">358</a></span>
-<span class="normal"><a href="#__codelineno-0-359">359</a></span>
-<span class="normal"><a href="#__codelineno-0-360">360</a></span>
-<span class="normal"><a href="#__codelineno-0-361">361</a></span>
-<span class="normal"><a href="#__codelineno-0-362">362</a></span>
-<span class="normal"><a href="#__codelineno-0-363">363</a></span>
-<span class="normal"><a href="#__codelineno-0-364">364</a></span>
-<span class="normal"><a href="#__codelineno-0-365">365</a></span>
-<span class="normal"><a href="#__codelineno-0-366">366</a></span>
-<span class="normal"><a href="#__codelineno-0-367">367</a></span>
-<span class="normal"><a href="#__codelineno-0-368">368</a></span>
-<span class="normal"><a href="#__codelineno-0-369">369</a></span>
-<span class="normal"><a href="#__codelineno-0-370">370</a></span>
-<span class="normal"><a href="#__codelineno-0-371">371</a></span>
-<span class="normal"><a href="#__codelineno-0-372">372</a></span>
-<span class="normal"><a href="#__codelineno-0-373">373</a></span>
-<span class="normal"><a href="#__codelineno-0-374">374</a></span>
-<span class="normal"><a href="#__codelineno-0-375">375</a></span>
-<span class="normal"><a href="#__codelineno-0-376">376</a></span>
-<span class="normal"><a href="#__codelineno-0-377">377</a></span>
-<span class="normal"><a href="#__codelineno-0-378">378</a></span>
-<span class="normal"><a href="#__codelineno-0-379">379</a></span>
-<span class="normal"><a href="#__codelineno-0-380">380</a></span>
-<span class="normal"><a href="#__codelineno-0-381">381</a></span>
-<span class="normal"><a href="#__codelineno-0-382">382</a></span>
-<span class="normal"><a href="#__codelineno-0-383">383</a></span>
-<span class="normal"><a href="#__codelineno-0-384">384</a></span>
-<span class="normal"><a href="#__codelineno-0-385">385</a></span>
-<span class="normal"><a href="#__codelineno-0-386">386</a></span>
-<span class="normal"><a href="#__codelineno-0-387">387</a></span>
-<span class="normal"><a href="#__codelineno-0-388">388</a></span>
-<span class="normal"><a href="#__codelineno-0-389">389</a></span>
-<span class="normal"><a href="#__codelineno-0-390">390</a></span>
-<span class="normal"><a href="#__codelineno-0-391">391</a></span>
-<span class="normal"><a href="#__codelineno-0-392">392</a></span>
-<span class="normal"><a href="#__codelineno-0-393">393</a></span>
-<span class="normal"><a href="#__codelineno-0-394">394</a></span>
-<span class="normal"><a href="#__codelineno-0-395">395</a></span>
-<span class="normal"><a href="#__codelineno-0-396">396</a></span>
-<span class="normal"><a href="#__codelineno-0-397">397</a></span>
-<span class="normal"><a href="#__codelineno-0-398">398</a></span>
-<span class="normal"><a href="#__codelineno-0-399">399</a></span>
-<span class="normal"><a href="#__codelineno-0-400">400</a></span>
-<span class="normal"><a href="#__codelineno-0-401">401</a></span>
-<span class="normal"><a href="#__codelineno-0-402">402</a></span>
-<span class="normal"><a href="#__codelineno-0-403">403</a></span>
-<span class="normal"><a href="#__codelineno-0-404">404</a></span>
-<span class="normal"><a href="#__codelineno-0-405">405</a></span>
-<span class="normal"><a href="#__codelineno-0-406">406</a></span>
-<span class="normal"><a href="#__codelineno-0-407">407</a></span>
-<span class="normal"><a href="#__codelineno-0-408">408</a></span>
-<span class="normal"><a href="#__codelineno-0-409">409</a></span>
-<span class="normal"><a href="#__codelineno-0-410">410</a></span>
-<span class="normal"><a href="#__codelineno-0-411">411</a></span>
-<span class="normal"><a href="#__codelineno-0-412">412</a></span>
-<span class="normal"><a href="#__codelineno-0-413">413</a></span>
-<span class="normal"><a href="#__codelineno-0-414">414</a></span>
-<span class="normal"><a href="#__codelineno-0-415">415</a></span>
-<span class="normal"><a href="#__codelineno-0-416">416</a></span>
-<span class="normal"><a href="#__codelineno-0-417">417</a></span>
-<span class="normal"><a href="#__codelineno-0-418">418</a></span>
-<span class="normal"><a href="#__codelineno-0-419">419</a></span>
-<span class="normal"><a href="#__codelineno-0-420">420</a></span>
-<span class="normal"><a href="#__codelineno-0-421">421</a></span>
-<span class="normal"><a href="#__codelineno-0-422">422</a></span>
-<span class="normal"><a href="#__codelineno-0-423">423</a></span>
-<span class="normal"><a href="#__codelineno-0-424">424</a></span>
-<span class="normal"><a href="#__codelineno-0-425">425</a></span>
-<span class="normal"><a href="#__codelineno-0-426">426</a></span>
-<span class="normal"><a href="#__codelineno-0-427">427</a></span>
-<span class="normal"><a href="#__codelineno-0-428">428</a></span>
-<span class="normal"><a href="#__codelineno-0-429">429</a></span>
-<span class="normal"><a href="#__codelineno-0-430">430</a></span>
-<span class="normal"><a href="#__codelineno-0-431">431</a></span>
-<span class="normal"><a href="#__codelineno-0-432">432</a></span>
-<span class="normal"><a href="#__codelineno-0-433">433</a></span>
-<span class="normal"><a href="#__codelineno-0-434">434</a></span>
-<span class="normal"><a href="#__codelineno-0-435">435</a></span>
-<span class="normal"><a href="#__codelineno-0-436">436</a></span>
-<span class="normal"><a href="#__codelineno-0-437">437</a></span>
-<span class="normal"><a href="#__codelineno-0-438">438</a></span>
-<span class="normal"><a href="#__codelineno-0-439">439</a></span>
-<span class="normal"><a href="#__codelineno-0-440">440</a></span>
-<span class="normal"><a href="#__codelineno-0-441">441</a></span>
-<span class="normal"><a href="#__codelineno-0-442">442</a></span>
-<span class="normal"><a href="#__codelineno-0-443">443</a></span>
-<span class="normal"><a href="#__codelineno-0-444">444</a></span>
-<span class="normal"><a href="#__codelineno-0-445">445</a></span>
-<span class="normal"><a href="#__codelineno-0-446">446</a></span>
-<span class="normal"><a href="#__codelineno-0-447">447</a></span>
-<span class="normal"><a href="#__codelineno-0-448">448</a></span>
-<span class="normal"><a href="#__codelineno-0-449">449</a></span>
-<span class="normal"><a href="#__codelineno-0-450">450</a></span>
-<span class="normal"><a href="#__codelineno-0-451">451</a></span>
-<span class="normal"><a href="#__codelineno-0-452">452</a></span>
-<span class="normal"><a href="#__codelineno-0-453">453</a></span>
-<span class="normal"><a href="#__codelineno-0-454">454</a></span>
-<span class="normal"><a href="#__codelineno-0-455">455</a></span>
-<span class="normal"><a href="#__codelineno-0-456">456</a></span>
-<span class="normal"><a href="#__codelineno-0-457">457</a></span>
-<span class="normal"><a href="#__codelineno-0-458">458</a></span>
-<span class="normal"><a href="#__codelineno-0-459">459</a></span>
-<span class="normal"><a href="#__codelineno-0-460">460</a></span>
-<span class="normal"><a href="#__codelineno-0-461">461</a></span>
-<span class="normal"><a href="#__codelineno-0-462">462</a></span>
-<span class="normal"><a href="#__codelineno-0-463">463</a></span>
-<span class="normal"><a href="#__codelineno-0-464">464</a></span>
-<span class="normal"><a href="#__codelineno-0-465">465</a></span>
-<span class="normal"><a href="#__codelineno-0-466">466</a></span>
-<span class="normal"><a href="#__codelineno-0-467">467</a></span>
-<span class="normal"><a href="#__codelineno-0-468">468</a></span>
-<span class="normal"><a href="#__codelineno-0-469">469</a></span>
-<span class="normal"><a href="#__codelineno-0-470">470</a></span>
-<span class="normal"><a href="#__codelineno-0-471">471</a></span>
-<span class="normal"><a href="#__codelineno-0-472">472</a></span>
-<span class="normal"><a href="#__codelineno-0-473">473</a></span>
-<span class="normal"><a href="#__codelineno-0-474">474</a></span>
-<span class="normal"><a href="#__codelineno-0-475">475</a></span>
-<span class="normal"><a href="#__codelineno-0-476">476</a></span>
-<span class="normal"><a href="#__codelineno-0-477">477</a></span>
-<span class="normal"><a href="#__codelineno-0-478">478</a></span>
-<span class="normal"><a href="#__codelineno-0-479">479</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="k">def</span><span class="w"> </span><span class="nf">analyze_work_order</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span> <span class="o">|</span> <span class="n">Header</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WorkOrder</span><span class="p">:</span>
-<a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="w">    </span><span class="sd">"""Assign every declaration in ``unit`` to a tier.</span>
-<a id="__codelineno-0-336" name="__codelineno-0-336"></a>
-<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">    A function reached by Tier 2 never also receives a Tier 3 stub, and records and</span>
-<a id="__codelineno-0-338" name="__codelineno-0-338"></a><span class="sd">    enums never receive stubs at all, because Tier 1 tests them completely. Diluting</span>
-<a id="__codelineno-0-339" name="__codelineno-0-339"></a><span class="sd">    the work order with items that are already covered is the way this feature fails:</span>
-<a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">    the reader stops reading it carefully.</span>
-<a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">    """</span>
-<a id="__codelineno-0-342" name="__codelineno-0-342"></a>    <span class="n">decls</span> <span class="o">=</span> <span class="n">_declarations</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
-<a id="__codelineno-0-343" name="__codelineno-0-343"></a>    <span class="n">order</span> <span class="o">=</span> <span class="n">WorkOrder</span><span class="p">()</span>
-<a id="__codelineno-0-344" name="__codelineno-0-344"></a>
-<a id="__codelineno-0-345" name="__codelineno-0-345"></a>    <span class="c1"># An enum whose name a target language cannot spell is excluded here as well as</span>
-<a id="__codelineno-0-346" name="__codelineno-0-346"></a>    <span class="c1"># from Tier 1: `_enum_param` hands this map's values to a Tier 2 stub, which emits</span>
-<a id="__codelineno-0-347" name="__codelineno-0-347"></a>    <span class="c1"># the type name verbatim as `parametrizedTest("use", ns::E)`. The Tier 1 guard</span>
-<a id="__codelineno-0-348" name="__codelineno-0-348"></a>    <span class="c1"># below does not reach that path.</span>
-<a id="__codelineno-0-349" name="__codelineno-0-349"></a>    <span class="n">enums</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-350" name="__codelineno-0-350"></a>    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">decls</span><span class="p">:</span>
-<a id="__codelineno-0-351" name="__codelineno-0-351"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Enum</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">isidentifier</span><span class="p">():</span>
-<a id="__codelineno-0-352" name="__codelineno-0-352"></a>            <span class="n">enums</span><span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">d</span>
-<a id="__codelineno-0-353" name="__codelineno-0-353"></a>
-<a id="__codelineno-0-354" name="__codelineno-0-354"></a>    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">decls</span><span class="p">:</span>
-<a id="__codelineno-0-355" name="__codelineno-0-355"></a>        <span class="c1"># A Tier 1 test names its subject directly (``_bindings.Rec``, ``var obj: Rec``),</span>
-<a id="__codelineno-0-356" name="__codelineno-0-356"></a>        <span class="c1"># so a subject a target language cannot spell -- a qualified or operator name --</span>
-<a id="__codelineno-0-357" name="__codelineno-0-357"></a>        <span class="c1"># has no reference to emit. Skipping is the honest response; pasting it in</span>
-<a id="__codelineno-0-358" name="__codelineno-0-358"></a>        <span class="c1"># produces a module that does not parse, which takes the valid tests with it.</span>
-<a id="__codelineno-0-359" name="__codelineno-0-359"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Enum</span> <span class="o">|</span> <span class="n">Struct</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">isidentifier</span><span class="p">():</span>
-<a id="__codelineno-0-360" name="__codelineno-0-360"></a>            <span class="k">continue</span>
-<a id="__codelineno-0-361" name="__codelineno-0-361"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Enum</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
-<a id="__codelineno-0-362" name="__codelineno-0-362"></a>            <span class="n">pairs</span> <span class="o">=</span> <span class="n">_enum_int_values</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
-<a id="__codelineno-0-363" name="__codelineno-0-363"></a>            <span class="c1"># `observed = {"E::A": _bindings.E::A}` is a SyntaxError. The test claims</span>
-<a id="__codelineno-0-364" name="__codelineno-0-364"></a>            <span class="c1"># *every* enumerator holds its declared value, so dropping the unspellable</span>
-<a id="__codelineno-0-365" name="__codelineno-0-365"></a>            <span class="c1"># ones would make its own description false: the whole test is skipped.</span>
-<a id="__codelineno-0-366" name="__codelineno-0-366"></a>            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="ow">not</span> <span class="n">name</span><span class="o">.</span><span class="n">isidentifier</span><span class="p">()</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">):</span>
-<a id="__codelineno-0-367" name="__codelineno-0-367"></a>                <span class="n">pairs</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-368" name="__codelineno-0-368"></a>            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
-<a id="__codelineno-0-369" name="__codelineno-0-369"></a>                <span class="n">order</span><span class="o">.</span><span class="n">tier1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-370" name="__codelineno-0-370"></a>                    <span class="n">Tier1Test</span><span class="p">(</span>
-<a id="__codelineno-0-371" name="__codelineno-0-371"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_enum_</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_values"</span><span class="p">,</span>
-<a id="__codelineno-0-372" name="__codelineno-0-372"></a>                        <span class="n">kind</span><span class="o">=</span><span class="s2">"enum_coverage"</span><span class="p">,</span>
-<a id="__codelineno-0-373" name="__codelineno-0-373"></a>                        <span class="n">subject</span><span class="o">=</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-374" name="__codelineno-0-374"></a>                        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">"every enumerator of `enum </span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">` is importable and holds its declared value"</span><span class="p">,</span>
-<a id="__codelineno-0-375" name="__codelineno-0-375"></a>                        <span class="n">values</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">pairs</span><span class="p">),</span>
-<a id="__codelineno-0-376" name="__codelineno-0-376"></a>                        <span class="n">all_distinct</span><span class="o">=</span><span class="nb">len</span><span class="p">({</span><span class="n">v</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">})</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">),</span>
-<a id="__codelineno-0-377" name="__codelineno-0-377"></a>                    <span class="p">)</span>
-<a id="__codelineno-0-378" name="__codelineno-0-378"></a>                <span class="p">)</span>
-<a id="__codelineno-0-379" name="__codelineno-0-379"></a>        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Struct</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
-<a id="__codelineno-0-380" name="__codelineno-0-380"></a>            <span class="k">if</span> <span class="n">_roundtrip_fields</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
-<a id="__codelineno-0-381" name="__codelineno-0-381"></a>                <span class="n">order</span><span class="o">.</span><span class="n">tier1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-382" name="__codelineno-0-382"></a>                    <span class="n">Tier1Test</span><span class="p">(</span>
-<a id="__codelineno-0-383" name="__codelineno-0-383"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_field_roundtrip"</span><span class="p">,</span>
-<a id="__codelineno-0-384" name="__codelineno-0-384"></a>                        <span class="n">kind</span><span class="o">=</span><span class="s2">"struct_roundtrip"</span><span class="p">,</span>
-<a id="__codelineno-0-385" name="__codelineno-0-385"></a>                        <span class="n">subject</span><span class="o">=</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-386" name="__codelineno-0-386"></a>                        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">"every scalar field of `</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">` round-trips through the generated wrapper"</span><span class="p">,</span>
-<a id="__codelineno-0-387" name="__codelineno-0-387"></a>                        <span class="n">values</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">_roundtrip_fields</span><span class="p">(</span><span class="n">d</span><span class="p">)),</span>
-<a id="__codelineno-0-388" name="__codelineno-0-388"></a>                    <span class="p">)</span>
-<a id="__codelineno-0-389" name="__codelineno-0-389"></a>                <span class="p">)</span>
-<a id="__codelineno-0-390" name="__codelineno-0-390"></a>            <span class="k">for</span> <span class="n">fname</span><span class="p">,</span> <span class="n">width</span> <span class="ow">in</span> <span class="n">_bitfield_bounds</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
-<a id="__codelineno-0-391" name="__codelineno-0-391"></a>                <span class="n">order</span><span class="o">.</span><span class="n">tier1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-392" name="__codelineno-0-392"></a>                    <span class="n">Tier1Test</span><span class="p">(</span>
-<a id="__codelineno-0-393" name="__codelineno-0-393"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">fname</span><span class="si">}</span><span class="s2">_bitfield_bounds"</span><span class="p">,</span>
-<a id="__codelineno-0-394" name="__codelineno-0-394"></a>                        <span class="n">kind</span><span class="o">=</span><span class="s2">"bitfield_bounds"</span><span class="p">,</span>
-<a id="__codelineno-0-395" name="__codelineno-0-395"></a>                        <span class="n">subject</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">fname</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-<a id="__codelineno-0-396" name="__codelineno-0-396"></a>                        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">"`</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">fname</span><span class="si">}</span><span class="s2">` is </span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2"> bits wide, so it holds </span><span class="si">{</span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">width</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2"> and truncates </span><span class="si">{</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">width</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-<a id="__codelineno-0-397" name="__codelineno-0-397"></a>                        <span class="n">values</span><span class="o">=</span><span class="p">((</span><span class="n">fname</span><span class="p">,</span> <span class="n">width</span><span class="p">),),</span>
-<a id="__codelineno-0-398" name="__codelineno-0-398"></a>                        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
-<a id="__codelineno-0-399" name="__codelineno-0-399"></a>                    <span class="p">)</span>
-<a id="__codelineno-0-400" name="__codelineno-0-400"></a>                <span class="p">)</span>
-<a id="__codelineno-0-401" name="__codelineno-0-401"></a>
-<a id="__codelineno-0-402" name="__codelineno-0-402"></a>    <span class="n">functions</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">decls</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Function</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
-<a id="__codelineno-0-403" name="__codelineno-0-403"></a>    <span class="n">by_name</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Function</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-404" name="__codelineno-0-404"></a>    <span class="k">for</span> <span class="n">fn</span> <span class="ow">in</span> <span class="n">functions</span><span class="p">:</span>
-<a id="__codelineno-0-405" name="__codelineno-0-405"></a>        <span class="n">by_name</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">fn</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
-<a id="__codelineno-0-406" name="__codelineno-0-406"></a>
-<a id="__codelineno-0-407" name="__codelineno-0-407"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">overloads</span> <span class="ow">in</span> <span class="n">by_name</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-<a id="__codelineno-0-408" name="__codelineno-0-408"></a>        <span class="n">primary</span> <span class="o">=</span> <span class="n">overloads</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-0-409" name="__codelineno-0-409"></a>        <span class="n">signature</span> <span class="o">=</span> <span class="n">render_signature</span><span class="p">(</span><span class="n">primary</span><span class="p">)</span>
-<a id="__codelineno-0-410" name="__codelineno-0-410"></a>
-<a id="__codelineno-0-411" name="__codelineno-0-411"></a>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">overloads</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
-<a id="__codelineno-0-412" name="__codelineno-0-412"></a>            <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-413" name="__codelineno-0-413"></a>                <span class="n">Stub</span><span class="p">(</span>
-<a id="__codelineno-0-414" name="__codelineno-0-414"></a>                    <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-<a id="__codelineno-0-415" name="__codelineno-0-415"></a>                    <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-416" name="__codelineno-0-416"></a>                    <span class="n">signature</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">render_signature</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">overloads</span><span class="p">),</span>
-<a id="__codelineno-0-417" name="__codelineno-0-417"></a>                    <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
-<a id="__codelineno-0-418" name="__codelineno-0-418"></a>                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` is an overload set with </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">overloads</span><span class="p">)</span><span class="si">}</span><span class="s2"> overloads. "</span>
-<a id="__codelineno-0-419" name="__codelineno-0-419"></a>                        <span class="sa">f</span><span class="s2">"Write one assertion per overload proving it resolves to the intended one. </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
-<a id="__codelineno-0-420" name="__codelineno-0-420"></a>                    <span class="p">),</span>
-<a id="__codelineno-0-421" name="__codelineno-0-421"></a>                    <span class="n">cases</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="sa">f</span><span class="s2">"overload_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">overloads</span><span class="p">))),</span>
-<a id="__codelineno-0-422" name="__codelineno-0-422"></a>                <span class="p">)</span>
-<a id="__codelineno-0-423" name="__codelineno-0-423"></a>            <span class="p">)</span>
-<a id="__codelineno-0-424" name="__codelineno-0-424"></a>            <span class="k">continue</span>
-<a id="__codelineno-0-425" name="__codelineno-0-425"></a>
-<a id="__codelineno-0-426" name="__codelineno-0-426"></a>        <span class="n">enum_case</span> <span class="o">=</span> <span class="n">_enum_param</span><span class="p">(</span><span class="n">primary</span><span class="p">,</span> <span class="n">enums</span><span class="p">)</span>
-<a id="__codelineno-0-427" name="__codelineno-0-427"></a>        <span class="k">if</span> <span class="n">enum_case</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-428" name="__codelineno-0-428"></a>            <span class="n">pname</span><span class="p">,</span> <span class="n">enum</span> <span class="o">=</span> <span class="n">enum_case</span>
-<a id="__codelineno-0-429" name="__codelineno-0-429"></a>            <span class="n">labels</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">enum</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
-<a id="__codelineno-0-430" name="__codelineno-0-430"></a>            <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
-<a id="__codelineno-0-431" name="__codelineno-0-431"></a>                <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-432" name="__codelineno-0-432"></a>                    <span class="n">Stub</span><span class="p">(</span>
-<a id="__codelineno-0-433" name="__codelineno-0-433"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-<a id="__codelineno-0-434" name="__codelineno-0-434"></a>                        <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-435" name="__codelineno-0-435"></a>                        <span class="n">signature</span><span class="o">=</span><span class="n">signature</span><span class="p">,</span>
-<a id="__codelineno-0-436" name="__codelineno-0-436"></a>                        <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
-<a id="__codelineno-0-437" name="__codelineno-0-437"></a>                            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: call `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` with `</span><span class="si">{</span><span class="n">pname</span><span class="si">}</span><span class="s2">` set to this enumerator and assert "</span>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a>                            <span class="sa">f</span><span class="s2">"what it should do for that value. </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
-<a id="__codelineno-0-439" name="__codelineno-0-439"></a>                        <span class="p">),</span>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a>                        <span class="n">cases</span><span class="o">=</span><span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-0-441" name="__codelineno-0-441"></a>                        <span class="n">enum_type</span><span class="o">=</span><span class="n">enum</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-442" name="__codelineno-0-442"></a>                    <span class="p">)</span>
-<a id="__codelineno-0-443" name="__codelineno-0-443"></a>                <span class="p">)</span>
-<a id="__codelineno-0-444" name="__codelineno-0-444"></a>                <span class="k">continue</span>
-<a id="__codelineno-0-445" name="__codelineno-0-445"></a>
-<a id="__codelineno-0-446" name="__codelineno-0-446"></a>        <span class="c1"># A pointer parameter adds a NULL case; it does not replace the question of what</span>
-<a id="__codelineno-0-447" name="__codelineno-0-447"></a>        <span class="c1"># the function is FOR, which is the more valuable of the two. Emitting only the</span>
-<a id="__codelineno-0-448" name="__codelineno-0-448"></a>        <span class="c1"># NULL question would bury the real one under boilerplate, since nearly every C</span>
-<a id="__codelineno-0-449" name="__codelineno-0-449"></a>        <span class="c1"># function in a typical header takes a pointer.</span>
-<a id="__codelineno-0-450" name="__codelineno-0-450"></a>        <span class="n">ptr</span> <span class="o">=</span> <span class="n">_pointer_param</span><span class="p">(</span><span class="n">primary</span><span class="p">)</span>
-<a id="__codelineno-0-451" name="__codelineno-0-451"></a>        <span class="k">if</span> <span class="n">ptr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-452" name="__codelineno-0-452"></a>            <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-453" name="__codelineno-0-453"></a>                <span class="n">Stub</span><span class="p">(</span>
-<a id="__codelineno-0-454" name="__codelineno-0-454"></a>                    <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-<a id="__codelineno-0-455" name="__codelineno-0-455"></a>                    <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-456" name="__codelineno-0-456"></a>                    <span class="n">signature</span><span class="o">=</span><span class="n">signature</span><span class="p">,</span>
-<a id="__codelineno-0-457" name="__codelineno-0-457"></a>                    <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
-<a id="__codelineno-0-458" name="__codelineno-0-458"></a>                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: for the `behaviour` case, describe what `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` is for and "</span>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a>                        <span class="sa">f</span><span class="s2">"assert it. For the `null_</span><span class="si">{</span><span class="n">ptr</span><span class="si">}</span><span class="s2">` case, decide what it does when `</span><span class="si">{</span><span class="n">ptr</span><span class="si">}</span><span class="s2">` is NULL -- "</span>
-<a id="__codelineno-0-460" name="__codelineno-0-460"></a>                        <span class="sa">f</span><span class="s2">"an error, or undefined and therefore untestable? </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
-<a id="__codelineno-0-461" name="__codelineno-0-461"></a>                    <span class="p">),</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a>                    <span class="n">cases</span><span class="o">=</span><span class="p">(</span><span class="s2">"behaviour"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"null_</span><span class="si">{</span><span class="n">ptr</span><span class="si">}</span><span class="s2">"</span><span class="p">),</span>
-<a id="__codelineno-0-463" name="__codelineno-0-463"></a>                <span class="p">)</span>
-<a id="__codelineno-0-464" name="__codelineno-0-464"></a>            <span class="p">)</span>
-<a id="__codelineno-0-465" name="__codelineno-0-465"></a>            <span class="k">continue</span>
-<a id="__codelineno-0-466" name="__codelineno-0-466"></a>
-<a id="__codelineno-0-467" name="__codelineno-0-467"></a>        <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-468" name="__codelineno-0-468"></a>            <span class="n">Stub</span><span class="p">(</span>
-<a id="__codelineno-0-469" name="__codelineno-0-469"></a>                <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-<a id="__codelineno-0-470" name="__codelineno-0-470"></a>                <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-471" name="__codelineno-0-471"></a>                <span class="n">signature</span><span class="o">=</span><span class="n">signature</span><span class="p">,</span>
-<a id="__codelineno-0-472" name="__codelineno-0-472"></a>                <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
-<a id="__codelineno-0-473" name="__codelineno-0-473"></a>                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: describe what `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` is for, then assert it. "</span>
-<a id="__codelineno-0-474" name="__codelineno-0-474"></a>                    <span class="sa">f</span><span class="s2">"No IR can tell you this; read the header docs or the library source. </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
-<a id="__codelineno-0-475" name="__codelineno-0-475"></a>                <span class="p">),</span>
-<a id="__codelineno-0-476" name="__codelineno-0-476"></a>            <span class="p">)</span>
-<a id="__codelineno-0-477" name="__codelineno-0-477"></a>        <span class="p">)</span>
-<a id="__codelineno-0-478" name="__codelineno-0-478"></a>
-<a id="__codelineno-0-479" name="__codelineno-0-479"></a>    <span class="k">return</span> <span class="n">_disambiguated</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-347">347</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-348">348</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-349">349</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-350">350</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-351">351</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-352">352</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-353">353</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-354">354</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-355">355</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-356">356</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-357">357</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-358">358</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-359">359</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-360">360</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-361">361</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-362">362</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-363">363</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-364">364</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-365">365</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-366">366</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-367">367</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-371">371</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-372">372</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-373">373</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-374">374</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-375">375</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-376">376</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-377">377</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-378">378</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-379">379</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-380">380</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-381">381</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-382">382</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-383">383</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-384">384</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-385">385</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-386">386</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-387">387</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-388">388</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-389">389</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-390">390</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-391">391</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-392">392</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-393">393</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-394">394</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-395">395</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-396">396</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-397">397</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-398">398</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-399">399</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-400">400</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-401">401</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-402">402</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-403">403</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-404">404</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-405">405</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-406">406</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-407">407</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-408">408</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-409">409</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-410">410</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-411">411</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-412">412</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-413">413</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-414">414</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-415">415</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-416">416</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-417">417</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-418">418</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-419">419</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-420">420</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-421">421</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-422">422</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-423">423</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-424">424</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-425">425</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-426">426</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-427">427</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-428">428</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-429">429</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-430">430</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-431">431</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-432">432</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-433">433</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-434">434</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-435">435</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-436">436</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-437">437</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-438">438</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-439">439</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-440">440</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-441">441</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-442">442</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-443">443</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-444">444</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-445">445</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-446">446</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-447">447</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-448">448</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-449">449</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-450">450</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-451">451</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-454">454</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-455">455</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-456">456</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-457">457</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-458">458</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-459">459</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-460">460</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-461">461</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-462">462</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-465">465</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-466">466</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-467">467</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-468">468</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-469">469</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-470">470</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-471">471</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-472">472</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-473">473</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-474">474</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-475">475</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-476">476</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-477">477</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-478">478</a></span>
+<span class="normal"><a href="#headerkit.workorder.analyze_work_order--source--__codelineno-0-479">479</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-334" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-334"></a><span class="k">def</span><span class="w"> </span><span class="nf">analyze_work_order</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span> <span class="o">|</span> <span class="n">Header</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WorkOrder</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-335" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-335"></a><span class="w">    </span><span class="sd">"""Assign every declaration in ``unit`` to a tier.</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-336" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-336"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-337" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-337"></a><span class="sd">    A function reached by Tier 2 never also receives a Tier 3 stub, and records and</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-338" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-338"></a><span class="sd">    enums never receive stubs at all, because Tier 1 tests them completely. Diluting</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-339" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-339"></a><span class="sd">    the work order with items that are already covered is the way this feature fails:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-340" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-340"></a><span class="sd">    the reader stops reading it carefully.</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-341" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-341"></a><span class="sd">    """</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-342" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-342"></a>    <span class="n">decls</span> <span class="o">=</span> <span class="n">_declarations</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-343" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-343"></a>    <span class="n">order</span> <span class="o">=</span> <span class="n">WorkOrder</span><span class="p">()</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-344" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-344"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-345" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-345"></a>    <span class="c1"># An enum whose name a target language cannot spell is excluded here as well as</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-346" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-346"></a>    <span class="c1"># from Tier 1: `_enum_param` hands this map's values to a Tier 2 stub, which emits</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-347" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-347"></a>    <span class="c1"># the type name verbatim as `parametrizedTest("use", ns::E)`. The Tier 1 guard</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-348" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-348"></a>    <span class="c1"># below does not reach that path.</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-349" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-349"></a>    <span class="n">enums</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-350" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-350"></a>    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">decls</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-351" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-351"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Enum</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">isidentifier</span><span class="p">():</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-352" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-352"></a>            <span class="n">enums</span><span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">d</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-353" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-353"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-354" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-354"></a>    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">decls</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-355" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-355"></a>        <span class="c1"># A Tier 1 test names its subject directly (``_bindings.Rec``, ``var obj: Rec``),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-356" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-356"></a>        <span class="c1"># so a subject a target language cannot spell -- a qualified or operator name --</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-357" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-357"></a>        <span class="c1"># has no reference to emit. Skipping is the honest response; pasting it in</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-358" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-358"></a>        <span class="c1"># produces a module that does not parse, which takes the valid tests with it.</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-359" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-359"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Enum</span> <span class="o">|</span> <span class="n">Struct</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">isidentifier</span><span class="p">():</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-360" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-360"></a>            <span class="k">continue</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-361" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-361"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Enum</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-362" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-362"></a>            <span class="n">pairs</span> <span class="o">=</span> <span class="n">_enum_int_values</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-363" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-363"></a>            <span class="c1"># `observed = {"E::A": _bindings.E::A}` is a SyntaxError. The test claims</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-364" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-364"></a>            <span class="c1"># *every* enumerator holds its declared value, so dropping the unspellable</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-365" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-365"></a>            <span class="c1"># ones would make its own description false: the whole test is skipped.</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-366" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-366"></a>            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="ow">not</span> <span class="n">name</span><span class="o">.</span><span class="n">isidentifier</span><span class="p">()</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">):</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-367" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-367"></a>                <span class="n">pairs</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-368" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-368"></a>            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-369" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-369"></a>                <span class="n">order</span><span class="o">.</span><span class="n">tier1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-370" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-370"></a>                    <span class="n">Tier1Test</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-371" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-371"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_enum_</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_values"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-372" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-372"></a>                        <span class="n">kind</span><span class="o">=</span><span class="s2">"enum_coverage"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-373" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-373"></a>                        <span class="n">subject</span><span class="o">=</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-374" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-374"></a>                        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">"every enumerator of `enum </span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">` is importable and holds its declared value"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-375" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-375"></a>                        <span class="n">values</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">pairs</span><span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-376" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-376"></a>                        <span class="n">all_distinct</span><span class="o">=</span><span class="nb">len</span><span class="p">({</span><span class="n">v</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">})</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-377" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-377"></a>                    <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-378" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-378"></a>                <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-379" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-379"></a>        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Struct</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-380" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-380"></a>            <span class="k">if</span> <span class="n">_roundtrip_fields</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-381" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-381"></a>                <span class="n">order</span><span class="o">.</span><span class="n">tier1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-382" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-382"></a>                    <span class="n">Tier1Test</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-383" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-383"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_field_roundtrip"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-384" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-384"></a>                        <span class="n">kind</span><span class="o">=</span><span class="s2">"struct_roundtrip"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-385" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-385"></a>                        <span class="n">subject</span><span class="o">=</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-386" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-386"></a>                        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">"every scalar field of `</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">` round-trips through the generated wrapper"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-387" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-387"></a>                        <span class="n">values</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">_roundtrip_fields</span><span class="p">(</span><span class="n">d</span><span class="p">)),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-388" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-388"></a>                    <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-389" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-389"></a>                <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-390" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-390"></a>            <span class="k">for</span> <span class="n">fname</span><span class="p">,</span> <span class="n">width</span> <span class="ow">in</span> <span class="n">_bitfield_bounds</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-391" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-391"></a>                <span class="n">order</span><span class="o">.</span><span class="n">tier1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-392" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-392"></a>                    <span class="n">Tier1Test</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-393" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-393"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">fname</span><span class="si">}</span><span class="s2">_bitfield_bounds"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-394" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-394"></a>                        <span class="n">kind</span><span class="o">=</span><span class="s2">"bitfield_bounds"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-395" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-395"></a>                        <span class="n">subject</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">fname</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-396" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-396"></a>                        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">"`</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">fname</span><span class="si">}</span><span class="s2">` is </span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2"> bits wide, so it holds </span><span class="si">{</span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">width</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2"> and truncates </span><span class="si">{</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">width</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-397" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-397"></a>                        <span class="n">values</span><span class="o">=</span><span class="p">((</span><span class="n">fname</span><span class="p">,</span> <span class="n">width</span><span class="p">),),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-398" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-398"></a>                        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-399" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-399"></a>                    <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-400" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-400"></a>                <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-401" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-401"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-402" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-402"></a>    <span class="n">functions</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">decls</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Function</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-403" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-403"></a>    <span class="n">by_name</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Function</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-404" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-404"></a>    <span class="k">for</span> <span class="n">fn</span> <span class="ow">in</span> <span class="n">functions</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-405" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-405"></a>        <span class="n">by_name</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">fn</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-406" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-406"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-407" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-407"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">overloads</span> <span class="ow">in</span> <span class="n">by_name</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-408" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-408"></a>        <span class="n">primary</span> <span class="o">=</span> <span class="n">overloads</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-409" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-409"></a>        <span class="n">signature</span> <span class="o">=</span> <span class="n">render_signature</span><span class="p">(</span><span class="n">primary</span><span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-410" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-410"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-411" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-411"></a>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">overloads</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-412" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-412"></a>            <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-413" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-413"></a>                <span class="n">Stub</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-414" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-414"></a>                    <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-415" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-415"></a>                    <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-416" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-416"></a>                    <span class="n">signature</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">render_signature</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">overloads</span><span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-417" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-417"></a>                    <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-418" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-418"></a>                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` is an overload set with </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">overloads</span><span class="p">)</span><span class="si">}</span><span class="s2"> overloads. "</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-419" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-419"></a>                        <span class="sa">f</span><span class="s2">"Write one assertion per overload proving it resolves to the intended one. </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-420" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-420"></a>                    <span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-421" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-421"></a>                    <span class="n">cases</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="sa">f</span><span class="s2">"overload_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">overloads</span><span class="p">))),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-422" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-422"></a>                <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-423" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-423"></a>            <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-424" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-424"></a>            <span class="k">continue</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-425" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-425"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-426" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-426"></a>        <span class="n">enum_case</span> <span class="o">=</span> <span class="n">_enum_param</span><span class="p">(</span><span class="n">primary</span><span class="p">,</span> <span class="n">enums</span><span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-427" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-427"></a>        <span class="k">if</span> <span class="n">enum_case</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-428" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-428"></a>            <span class="n">pname</span><span class="p">,</span> <span class="n">enum</span> <span class="o">=</span> <span class="n">enum_case</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-429" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-429"></a>            <span class="n">labels</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">enum</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-430" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-430"></a>            <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-431" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-431"></a>                <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-432" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-432"></a>                    <span class="n">Stub</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-433" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-433"></a>                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-434" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-434"></a>                        <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-435" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-435"></a>                        <span class="n">signature</span><span class="o">=</span><span class="n">signature</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-436" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-436"></a>                        <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-437" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-437"></a>                            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: call `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` with `</span><span class="si">{</span><span class="n">pname</span><span class="si">}</span><span class="s2">` set to this enumerator and assert "</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-438" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-438"></a>                            <span class="sa">f</span><span class="s2">"what it should do for that value. </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-439" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-439"></a>                        <span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-440" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-440"></a>                        <span class="n">cases</span><span class="o">=</span><span class="n">labels</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-441" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-441"></a>                        <span class="n">enum_type</span><span class="o">=</span><span class="n">enum</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-442" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-442"></a>                    <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-443" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-443"></a>                <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-444" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-444"></a>                <span class="k">continue</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-445" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-445"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-446" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-446"></a>        <span class="c1"># A pointer parameter adds a NULL case; it does not replace the question of what</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-447" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-447"></a>        <span class="c1"># the function is FOR, which is the more valuable of the two. Emitting only the</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-448" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-448"></a>        <span class="c1"># NULL question would bury the real one under boilerplate, since nearly every C</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-449" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-449"></a>        <span class="c1"># function in a typical header takes a pointer.</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-450" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-450"></a>        <span class="n">ptr</span> <span class="o">=</span> <span class="n">_pointer_param</span><span class="p">(</span><span class="n">primary</span><span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-451" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-451"></a>        <span class="k">if</span> <span class="n">ptr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-452" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-452"></a>            <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-453" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-453"></a>                <span class="n">Stub</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-454" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-454"></a>                    <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-455" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-455"></a>                    <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-456" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-456"></a>                    <span class="n">signature</span><span class="o">=</span><span class="n">signature</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-457" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-457"></a>                    <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-458" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-458"></a>                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: for the `behaviour` case, describe what `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` is for and "</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-459" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-459"></a>                        <span class="sa">f</span><span class="s2">"assert it. For the `null_</span><span class="si">{</span><span class="n">ptr</span><span class="si">}</span><span class="s2">` case, decide what it does when `</span><span class="si">{</span><span class="n">ptr</span><span class="si">}</span><span class="s2">` is NULL -- "</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-460" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-460"></a>                        <span class="sa">f</span><span class="s2">"an error, or undefined and therefore untestable? </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-461" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-461"></a>                    <span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-462" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-462"></a>                    <span class="n">cases</span><span class="o">=</span><span class="p">(</span><span class="s2">"behaviour"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"null_</span><span class="si">{</span><span class="n">ptr</span><span class="si">}</span><span class="s2">"</span><span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-463" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-463"></a>                <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-464" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-464"></a>            <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-465" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-465"></a>            <span class="k">continue</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-466" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-466"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-467" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-467"></a>        <span class="n">order</span><span class="o">.</span><span class="n">stubs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-468" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-468"></a>            <span class="n">Stub</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-469" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-469"></a>                <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"test_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-470" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-470"></a>                <span class="n">symbol</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-471" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-471"></a>                <span class="n">signature</span><span class="o">=</span><span class="n">signature</span><span class="p">,</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-472" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-472"></a>                <span class="n">instruction</span><span class="o">=</span><span class="p">(</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-473" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-473"></a>                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">WORK_ORDER_MARKER</span><span class="si">}</span><span class="s2">: describe what `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` is for, then assert it. "</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-474" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-474"></a>                    <span class="sa">f</span><span class="s2">"No IR can tell you this; read the header docs or the library source. </span><span class="si">{</span><span class="n">DEFINITION_OF_DONE</span><span class="si">}</span><span class="s2">"</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-475" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-475"></a>                <span class="p">),</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-476" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-476"></a>            <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-477" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-477"></a>        <span class="p">)</span>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-478" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-478"></a>
+<a id="headerkit.workorder.analyze_work_order--source--__codelineno-0-479" name="headerkit.workorder.analyze_work_order--source--__codelineno-0-479"></a>    <span class="k">return</span> <span class="n">_disambiguated</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2543,139 +2739,139 @@ human edits, and regeneration must not eat the work it asked for.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>headerkit/workorder.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-882">882</a></span>
-<span class="normal"><a href="#__codelineno-0-883">883</a></span>
-<span class="normal"><a href="#__codelineno-0-884">884</a></span>
-<span class="normal"><a href="#__codelineno-0-885">885</a></span>
-<span class="normal"><a href="#__codelineno-0-886">886</a></span>
-<span class="normal"><a href="#__codelineno-0-887">887</a></span>
-<span class="normal"><a href="#__codelineno-0-888">888</a></span>
-<span class="normal"><a href="#__codelineno-0-889">889</a></span>
-<span class="normal"><a href="#__codelineno-0-890">890</a></span>
-<span class="normal"><a href="#__codelineno-0-891">891</a></span>
-<span class="normal"><a href="#__codelineno-0-892">892</a></span>
-<span class="normal"><a href="#__codelineno-0-893">893</a></span>
-<span class="normal"><a href="#__codelineno-0-894">894</a></span>
-<span class="normal"><a href="#__codelineno-0-895">895</a></span>
-<span class="normal"><a href="#__codelineno-0-896">896</a></span>
-<span class="normal"><a href="#__codelineno-0-897">897</a></span>
-<span class="normal"><a href="#__codelineno-0-898">898</a></span>
-<span class="normal"><a href="#__codelineno-0-899">899</a></span>
-<span class="normal"><a href="#__codelineno-0-900">900</a></span>
-<span class="normal"><a href="#__codelineno-0-901">901</a></span>
-<span class="normal"><a href="#__codelineno-0-902">902</a></span>
-<span class="normal"><a href="#__codelineno-0-903">903</a></span>
-<span class="normal"><a href="#__codelineno-0-904">904</a></span>
-<span class="normal"><a href="#__codelineno-0-905">905</a></span>
-<span class="normal"><a href="#__codelineno-0-906">906</a></span>
-<span class="normal"><a href="#__codelineno-0-907">907</a></span>
-<span class="normal"><a href="#__codelineno-0-908">908</a></span>
-<span class="normal"><a href="#__codelineno-0-909">909</a></span>
-<span class="normal"><a href="#__codelineno-0-910">910</a></span>
-<span class="normal"><a href="#__codelineno-0-911">911</a></span>
-<span class="normal"><a href="#__codelineno-0-912">912</a></span>
-<span class="normal"><a href="#__codelineno-0-913">913</a></span>
-<span class="normal"><a href="#__codelineno-0-914">914</a></span>
-<span class="normal"><a href="#__codelineno-0-915">915</a></span>
-<span class="normal"><a href="#__codelineno-0-916">916</a></span>
-<span class="normal"><a href="#__codelineno-0-917">917</a></span>
-<span class="normal"><a href="#__codelineno-0-918">918</a></span>
-<span class="normal"><a href="#__codelineno-0-919">919</a></span>
-<span class="normal"><a href="#__codelineno-0-920">920</a></span>
-<span class="normal"><a href="#__codelineno-0-921">921</a></span>
-<span class="normal"><a href="#__codelineno-0-922">922</a></span>
-<span class="normal"><a href="#__codelineno-0-923">923</a></span>
-<span class="normal"><a href="#__codelineno-0-924">924</a></span>
-<span class="normal"><a href="#__codelineno-0-925">925</a></span>
-<span class="normal"><a href="#__codelineno-0-926">926</a></span>
-<span class="normal"><a href="#__codelineno-0-927">927</a></span>
-<span class="normal"><a href="#__codelineno-0-928">928</a></span>
-<span class="normal"><a href="#__codelineno-0-929">929</a></span>
-<span class="normal"><a href="#__codelineno-0-930">930</a></span>
-<span class="normal"><a href="#__codelineno-0-931">931</a></span>
-<span class="normal"><a href="#__codelineno-0-932">932</a></span>
-<span class="normal"><a href="#__codelineno-0-933">933</a></span>
-<span class="normal"><a href="#__codelineno-0-934">934</a></span>
-<span class="normal"><a href="#__codelineno-0-935">935</a></span>
-<span class="normal"><a href="#__codelineno-0-936">936</a></span>
-<span class="normal"><a href="#__codelineno-0-937">937</a></span>
-<span class="normal"><a href="#__codelineno-0-938">938</a></span>
-<span class="normal"><a href="#__codelineno-0-939">939</a></span>
-<span class="normal"><a href="#__codelineno-0-940">940</a></span>
-<span class="normal"><a href="#__codelineno-0-941">941</a></span>
-<span class="normal"><a href="#__codelineno-0-942">942</a></span>
-<span class="normal"><a href="#__codelineno-0-943">943</a></span>
-<span class="normal"><a href="#__codelineno-0-944">944</a></span>
-<span class="normal"><a href="#__codelineno-0-945">945</a></span>
-<span class="normal"><a href="#__codelineno-0-946">946</a></span>
-<span class="normal"><a href="#__codelineno-0-947">947</a></span>
-<span class="normal"><a href="#__codelineno-0-948">948</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-882" name="__codelineno-0-882"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_work_order_files</span><span class="p">(</span>
-<a id="__codelineno-0-883" name="__codelineno-0-883"></a>    <span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span> <span class="o">|</span> <span class="n">Header</span><span class="p">,</span>
-<a id="__codelineno-0-884" name="__codelineno-0-884"></a>    <span class="n">package_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-885" name="__codelineno-0-885"></a>    <span class="n">language</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"python"</span><span class="p">,</span>
-<a id="__codelineno-0-886" name="__codelineno-0-886"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">OutputFile</span><span class="p">]:</span>
-<a id="__codelineno-0-887" name="__codelineno-0-887"></a><span class="w">    </span><span class="sd">"""Build the tiered test file and its two markdown companions for a scaffolded project.</span>
-<a id="__codelineno-0-888" name="__codelineno-0-888"></a>
-<a id="__codelineno-0-889" name="__codelineno-0-889"></a><span class="sd">    Every file returned is marked ``preserve_existing``: these are the artifacts a</span>
-<a id="__codelineno-0-890" name="__codelineno-0-890"></a><span class="sd">    human edits, and regeneration must not eat the work it asked for.</span>
-<a id="__codelineno-0-891" name="__codelineno-0-891"></a><span class="sd">    """</span>
-<a id="__codelineno-0-892" name="__codelineno-0-892"></a>    <span class="n">order</span> <span class="o">=</span> <span class="n">analyze_work_order</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
-<a id="__codelineno-0-893" name="__codelineno-0-893"></a>    <span class="k">if</span> <span class="n">order</span><span class="o">.</span><span class="n">is_empty</span><span class="p">:</span>
-<a id="__codelineno-0-894" name="__codelineno-0-894"></a>        <span class="k">return</span> <span class="p">[]</span>
-<a id="__codelineno-0-895" name="__codelineno-0-895"></a>
-<a id="__codelineno-0-896" name="__codelineno-0-896"></a>    <span class="n">files</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">OutputFile</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-897" name="__codelineno-0-897"></a>    <span class="k">if</span> <span class="n">language</span> <span class="o">==</span> <span class="s2">"nim"</span><span class="p">:</span>
-<a id="__codelineno-0-898" name="__codelineno-0-898"></a>        <span class="n">nim_suite</span> <span class="o">=</span> <span class="n">render_nim_tests</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">package_name</span><span class="p">)</span>
-<a id="__codelineno-0-899" name="__codelineno-0-899"></a>        <span class="k">if</span> <span class="n">nim_suite</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-900" name="__codelineno-0-900"></a>            <span class="c1"># Nothing survives the Nim filter, so there is no suite to run and nothing</span>
-<a id="__codelineno-0-901" name="__codelineno-0-901"></a>            <span class="c1"># for the markdown to point at. An AGENTS.md telling the next session to</span>
-<a id="__codelineno-0-902" name="__codelineno-0-902"></a>            <span class="c1"># run a file that was never written is worse than no file at all.</span>
-<a id="__codelineno-0-903" name="__codelineno-0-903"></a>            <span class="k">return</span> <span class="p">[]</span>
-<a id="__codelineno-0-904" name="__codelineno-0-904"></a>        <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-905" name="__codelineno-0-905"></a>            <span class="n">OutputFile</span><span class="p">(</span>
-<a id="__codelineno-0-906" name="__codelineno-0-906"></a>                <span class="n">path</span><span class="o">=</span><span class="s2">"tests/workorder_dsl.nim"</span><span class="p">,</span>
-<a id="__codelineno-0-907" name="__codelineno-0-907"></a>                <span class="n">content</span><span class="o">=</span><span class="n">render_nim_dsl</span><span class="p">(),</span>
-<a id="__codelineno-0-908" name="__codelineno-0-908"></a>                <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-909" name="__codelineno-0-909"></a>            <span class="p">)</span>
-<a id="__codelineno-0-910" name="__codelineno-0-910"></a>        <span class="p">)</span>
-<a id="__codelineno-0-911" name="__codelineno-0-911"></a>        <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-912" name="__codelineno-0-912"></a>            <span class="n">OutputFile</span><span class="p">(</span>
-<a id="__codelineno-0-913" name="__codelineno-0-913"></a>                <span class="n">path</span><span class="o">=</span><span class="s2">"tests/test_workorder.nim"</span><span class="p">,</span>
-<a id="__codelineno-0-914" name="__codelineno-0-914"></a>                <span class="n">content</span><span class="o">=</span><span class="n">nim_suite</span><span class="p">,</span>
-<a id="__codelineno-0-915" name="__codelineno-0-915"></a>                <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-916" name="__codelineno-0-916"></a>            <span class="p">)</span>
-<a id="__codelineno-0-917" name="__codelineno-0-917"></a>        <span class="p">)</span>
-<a id="__codelineno-0-918" name="__codelineno-0-918"></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-919" name="__codelineno-0-919"></a>        <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-920" name="__codelineno-0-920"></a>            <span class="n">OutputFile</span><span class="p">(</span>
-<a id="__codelineno-0-921" name="__codelineno-0-921"></a>                <span class="n">path</span><span class="o">=</span><span class="s2">"tests/test_workorder.py"</span><span class="p">,</span>
-<a id="__codelineno-0-922" name="__codelineno-0-922"></a>                <span class="n">content</span><span class="o">=</span><span class="n">render_python_tests</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">package_name</span><span class="p">),</span>
-<a id="__codelineno-0-923" name="__codelineno-0-923"></a>                <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-924" name="__codelineno-0-924"></a>            <span class="p">)</span>
-<a id="__codelineno-0-925" name="__codelineno-0-925"></a>        <span class="p">)</span>
-<a id="__codelineno-0-926" name="__codelineno-0-926"></a>
-<a id="__codelineno-0-927" name="__codelineno-0-927"></a>    <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-928" name="__codelineno-0-928"></a>        <span class="n">OutputFile</span><span class="p">(</span>
-<a id="__codelineno-0-929" name="__codelineno-0-929"></a>            <span class="n">path</span><span class="o">=</span><span class="s2">"WORK_ORDER.md"</span><span class="p">,</span>
-<a id="__codelineno-0-930" name="__codelineno-0-930"></a>            <span class="n">content</span><span class="o">=</span><span class="n">render_work_order_md</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">package_name</span><span class="p">,</span> <span class="n">language</span><span class="p">),</span>
-<a id="__codelineno-0-931" name="__codelineno-0-931"></a>            <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-932" name="__codelineno-0-932"></a>        <span class="p">)</span>
-<a id="__codelineno-0-933" name="__codelineno-0-933"></a>    <span class="p">)</span>
-<a id="__codelineno-0-934" name="__codelineno-0-934"></a>    <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-935" name="__codelineno-0-935"></a>        <span class="n">OutputFile</span><span class="p">(</span>
-<a id="__codelineno-0-936" name="__codelineno-0-936"></a>            <span class="n">path</span><span class="o">=</span><span class="s2">"SUGGESTIONS.md"</span><span class="p">,</span>
-<a id="__codelineno-0-937" name="__codelineno-0-937"></a>            <span class="n">content</span><span class="o">=</span><span class="n">render_suggestions_md</span><span class="p">(</span><span class="n">language</span><span class="p">),</span>
-<a id="__codelineno-0-938" name="__codelineno-0-938"></a>            <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-939" name="__codelineno-0-939"></a>        <span class="p">)</span>
-<a id="__codelineno-0-940" name="__codelineno-0-940"></a>    <span class="p">)</span>
-<a id="__codelineno-0-941" name="__codelineno-0-941"></a>    <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-0-942" name="__codelineno-0-942"></a>        <span class="n">OutputFile</span><span class="p">(</span>
-<a id="__codelineno-0-943" name="__codelineno-0-943"></a>            <span class="n">path</span><span class="o">=</span><span class="s2">"AGENTS.md"</span><span class="p">,</span>
-<a id="__codelineno-0-944" name="__codelineno-0-944"></a>            <span class="n">content</span><span class="o">=</span><span class="n">render_agents_md</span><span class="p">(</span><span class="n">package_name</span><span class="p">,</span> <span class="n">language</span><span class="p">),</span>
-<a id="__codelineno-0-945" name="__codelineno-0-945"></a>            <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-946" name="__codelineno-0-946"></a>        <span class="p">)</span>
-<a id="__codelineno-0-947" name="__codelineno-0-947"></a>    <span class="p">)</span>
-<a id="__codelineno-0-948" name="__codelineno-0-948"></a>    <span class="k">return</span> <span class="n">files</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-878">878</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-879">879</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-880">880</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-881">881</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-882">882</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-883">883</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-884">884</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-885">885</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-886">886</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-887">887</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-888">888</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-889">889</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-890">890</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-891">891</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-892">892</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-893">893</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-894">894</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-895">895</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-896">896</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-897">897</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-898">898</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-899">899</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-900">900</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-901">901</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-902">902</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-903">903</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-904">904</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-905">905</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-906">906</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-907">907</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-908">908</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-909">909</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-910">910</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-911">911</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-912">912</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-913">913</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-914">914</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-915">915</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-916">916</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-917">917</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-918">918</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-919">919</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-920">920</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-921">921</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-922">922</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-923">923</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-924">924</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-925">925</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-926">926</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-927">927</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-928">928</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-929">929</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-930">930</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-931">931</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-932">932</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-933">933</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-934">934</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-935">935</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-936">936</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-937">937</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-938">938</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-939">939</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-940">940</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-941">941</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-942">942</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-943">943</a></span>
+<span class="normal"><a href="#headerkit.workorder.build_work_order_files--source--__codelineno-0-944">944</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-878" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-878"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_work_order_files</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-879" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-879"></a>    <span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span> <span class="o">|</span> <span class="n">Header</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-880" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-880"></a>    <span class="n">package_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-881" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-881"></a>    <span class="n">language</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"python"</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-882" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-882"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">OutputFile</span><span class="p">]:</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-883" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-883"></a><span class="w">    </span><span class="sd">"""Build the tiered test file and its two markdown companions for a scaffolded project.</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-884" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-884"></a>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-885" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-885"></a><span class="sd">    Every file returned is marked ``preserve_existing``: these are the artifacts a</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-886" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-886"></a><span class="sd">    human edits, and regeneration must not eat the work it asked for.</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-887" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-887"></a><span class="sd">    """</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-888" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-888"></a>    <span class="n">order</span> <span class="o">=</span> <span class="n">analyze_work_order</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-889" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-889"></a>    <span class="k">if</span> <span class="n">order</span><span class="o">.</span><span class="n">is_empty</span><span class="p">:</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-890" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-890"></a>        <span class="k">return</span> <span class="p">[]</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-891" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-891"></a>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-892" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-892"></a>    <span class="n">files</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">OutputFile</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-893" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-893"></a>    <span class="k">if</span> <span class="n">language</span> <span class="o">==</span> <span class="s2">"nim"</span><span class="p">:</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-894" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-894"></a>        <span class="n">nim_suite</span> <span class="o">=</span> <span class="n">render_nim_tests</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">package_name</span><span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-895" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-895"></a>        <span class="k">if</span> <span class="n">nim_suite</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-896" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-896"></a>            <span class="c1"># Nothing survives the Nim filter, so there is no suite to run and nothing</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-897" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-897"></a>            <span class="c1"># for the markdown to point at. An AGENTS.md telling the next session to</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-898" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-898"></a>            <span class="c1"># run a file that was never written is worse than no file at all.</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-899" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-899"></a>            <span class="k">return</span> <span class="p">[]</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-900" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-900"></a>        <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-901" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-901"></a>            <span class="n">OutputFile</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-902" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-902"></a>                <span class="n">path</span><span class="o">=</span><span class="s2">"tests/workorder_dsl.nim"</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-903" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-903"></a>                <span class="n">content</span><span class="o">=</span><span class="n">render_nim_dsl</span><span class="p">(),</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-904" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-904"></a>                <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-905" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-905"></a>            <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-906" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-906"></a>        <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-907" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-907"></a>        <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-908" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-908"></a>            <span class="n">OutputFile</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-909" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-909"></a>                <span class="n">path</span><span class="o">=</span><span class="s2">"tests/test_workorder.nim"</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-910" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-910"></a>                <span class="n">content</span><span class="o">=</span><span class="n">nim_suite</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-911" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-911"></a>                <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-912" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-912"></a>            <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-913" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-913"></a>        <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-914" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-914"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-915" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-915"></a>        <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-916" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-916"></a>            <span class="n">OutputFile</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-917" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-917"></a>                <span class="n">path</span><span class="o">=</span><span class="s2">"tests/test_workorder.py"</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-918" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-918"></a>                <span class="n">content</span><span class="o">=</span><span class="n">render_python_tests</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">package_name</span><span class="p">),</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-919" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-919"></a>                <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-920" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-920"></a>            <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-921" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-921"></a>        <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-922" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-922"></a>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-923" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-923"></a>    <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-924" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-924"></a>        <span class="n">OutputFile</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-925" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-925"></a>            <span class="n">path</span><span class="o">=</span><span class="s2">"WORK_ORDER.md"</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-926" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-926"></a>            <span class="n">content</span><span class="o">=</span><span class="n">render_work_order_md</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">package_name</span><span class="p">,</span> <span class="n">language</span><span class="p">),</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-927" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-927"></a>            <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-928" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-928"></a>        <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-929" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-929"></a>    <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-930" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-930"></a>    <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-931" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-931"></a>        <span class="n">OutputFile</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-932" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-932"></a>            <span class="n">path</span><span class="o">=</span><span class="s2">"SUGGESTIONS.md"</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-933" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-933"></a>            <span class="n">content</span><span class="o">=</span><span class="n">render_suggestions_md</span><span class="p">(</span><span class="n">language</span><span class="p">),</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-934" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-934"></a>            <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-935" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-935"></a>        <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-936" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-936"></a>    <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-937" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-937"></a>    <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-938" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-938"></a>        <span class="n">OutputFile</span><span class="p">(</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-939" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-939"></a>            <span class="n">path</span><span class="o">=</span><span class="s2">"AGENTS.md"</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-940" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-940"></a>            <span class="n">content</span><span class="o">=</span><span class="n">render_agents_md</span><span class="p">(</span><span class="n">package_name</span><span class="p">,</span> <span class="n">language</span><span class="p">),</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-941" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-941"></a>            <span class="n">preserve_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-942" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-942"></a>        <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-943" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-943"></a>    <span class="p">)</span>
+<a id="headerkit.workorder.build_work_order_files--source--__codelineno-0-944" name="headerkit.workorder.build_work_order_files--source--__codelineno-0-944"></a>    <span class="k">return</span> <span class="n">files</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2743,10 +2939,10 @@ described in the <a href="../../guides/work-orders/">Test work orders guide</a>.
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>
