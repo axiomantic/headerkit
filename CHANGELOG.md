@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Updated `NimJsonDocEnricher` docstring in `headerkit/transforms/nim_jsondoc.py` to reference `.naganim.ir.json` metadata sidecars (`elijahr/naganim`).
 - Aligned CI workflows with standard GitHub Actions triggers (`push`, `pull_request`, `schedule`, `workflow_dispatch`), inlined job steps across workflows and `headerkit new` project scaffolding, and removed the Forgejo dual-CI scripts (`scripts/ci/`, `scripts/require_ci_run.sh`, `.forgejo/workflows/ci.yml`) and manual-dispatch merge gate in favor of `check-release-prep.yml`.
 - Bumped `ruff` to `0.17.2` and `astral-sh/setup-uv` to `v7`.
 
