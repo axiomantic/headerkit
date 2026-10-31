@@ -1,0 +1,4005 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+      
+      
+      
+        <link rel="canonical" href="https://axiomantic.github.io/headerkit/0.49/reference/hooks/">
+      
+      
+        <link rel="prev" href="../treesitter/">
+      
+      
+        <link rel="next" href="../writers/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Hooks Pipeline - headerkit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#hooks-pipeline" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="headerkit" class="md-header__button md-logo" aria-label="headerkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            headerkit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Hooks Pipeline
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/axiomantic/headerkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    axiomantic/headerkit
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="headerkit" class="md-nav__button md-logo" aria-label="headerkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    headerkit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/axiomantic/headerkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    axiomantic/headerkit
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/install-libclang/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installing libclang
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/target-triples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target Triples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cache System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/build-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/github-action/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Store Population
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cibuildwheel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cibuildwheel Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cffi-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CFFI Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cffi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using CFFI Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/custom-backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing Custom Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/custom-writers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing Custom Writers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/nim-python-packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nim to Python Packaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/scaffolding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Scaffolding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/work-orders/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Work Orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/configuration_matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/matrix_reconciliation_and_overrides/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Matrix Reconciliation & Overrides
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/platform_guarded_store_merge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platform Guarded Store Merge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/ir_transformations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IR Transformations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/pxd-writer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PXD Writer (Cython)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/ctypes-writer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ctypes Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/json-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/header-cleanup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C Header Cleanup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ir/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IR Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../treesitter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tree-sitter Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks Pipeline
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#priority-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-matching-with-globs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Matching with Globs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backend-and-writer-unification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend and Writer Unification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-stage-pipeline-ingestion-to-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3-Stage Pipeline: Ingestion to Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#symbol-renaming-rename_symbol-and-resolve_collision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symbol Renaming: rename_symbol and resolve_collision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Symbol Renaming: rename_symbol and resolve_collision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-limitation-collision-checking-is-module-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitation: collision checking is module-scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#declarative-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declarative configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#who-applies-a-rename-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who applies a [rename] section
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#renaming-and-the-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Renaming and the cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaffolding-lifecycle-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaffolding Lifecycle Hooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.Priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Priority
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.PipelineContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;PipelineContext
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookRegistry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookRegistry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.register_global" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register_global
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.has_point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;has_point
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.get_matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.get_global_matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_global_matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;snapshot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;hook
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookDispatcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookDispatcher">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher.first_result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher.waterfall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;waterfall
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookCaller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookCaller
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.execute_pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;execute_pipeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.Symbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Symbol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Symbol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.Symbol.header_stem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;header_stem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.Symbol.qualified_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;qualified_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.RenameConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RenameConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" RenameConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.RenameConfig.is_default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;is_default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.RenameConfig.fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.RenameRule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RenameRule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.enforce_injectivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;enforce_injectivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.rename_cache_fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;rename_cache_fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.register_config_hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;register_config_hooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../writers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cffi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CFFI Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cshim/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CShim Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ctypes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ctypes Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cython/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cython Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../diff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diff Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../json/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lua/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mojo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mojo Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nim/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nim Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prompt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Writer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scaffold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaffolding API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workorder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Work Order API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generate Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install-libclang/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install Libclang CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Matrix API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reconcile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reconciliation API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transforms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transforms API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#priority-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-matching-with-globs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Matching with Globs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backend-and-writer-unification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend and Writer Unification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-stage-pipeline-ingestion-to-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3-Stage Pipeline: Ingestion to Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#symbol-renaming-rename_symbol-and-resolve_collision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symbol Renaming: rename_symbol and resolve_collision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Symbol Renaming: rename_symbol and resolve_collision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-limitation-collision-checking-is-module-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitation: collision checking is module-scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#declarative-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declarative configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#who-applies-a-rename-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who applies a [rename] section
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#renaming-and-the-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Renaming and the cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaffolding-lifecycle-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaffolding Lifecycle Hooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.Priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Priority
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.PipelineContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;PipelineContext
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookRegistry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookRegistry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.register_global" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register_global
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.has_point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;has_point
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.get_matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.get_global_matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_global_matching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;snapshot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookRegistry.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;hook
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookDispatcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" HookDispatcher">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher.first_result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_result
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookDispatcher.waterfall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;waterfall
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.HookCaller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;HookCaller
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.hooks.execute_pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;execute_pipeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.Symbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Symbol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Symbol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.Symbol.header_stem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;header_stem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.Symbol.qualified_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;qualified_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.RenameConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RenameConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" RenameConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.RenameConfig.is_default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;is_default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.RenameConfig.fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.RenameRule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RenameRule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.enforce_injectivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;enforce_injectivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.rename_cache_fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;rename_cache_fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.register_config_hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;register_config_hooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="hooks-pipeline">Hooks Pipeline<a class="headerlink" href="#hooks-pipeline" title="Permanent link">&para;</a></h1>
+<p>Headerkit provides a unified, priority-ordered hook pipeline (<code>headerkit.hooks</code>) for intercepting and customizing parsing, IR transformation, and output generation.</p>
+<h2 id="priority-tiers">Priority Tiers<a class="headerlink" href="#priority-tiers" title="Permanent link">&para;</a></h2>
+<p>Hooks execute according to integer priority tiers defined in <a class="autorefs autorefs-internal" title="            Priority" href="#headerkit.hooks.Priority"><code>Priority</code></a>. Higher numeric values execute first:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Value</th>
+<th>Intended Usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Priority.FALLBACK</code></td>
+<td><code>10</code></td>
+<td>Default fallback handlers (e.g. Tree-sitter fallback when system libclang is unavailable)</td>
+</tr>
+<tr>
+<td><code>Priority.STANDARD</code></td>
+<td><code>50</code></td>
+<td>Built-in backends and writers</td>
+</tr>
+<tr>
+<td><code>Priority.PROJECT</code></td>
+<td><code>100</code></td>
+<td>Local repository customizations and <code>pyproject.toml</code> extensions</td>
+</tr>
+<tr>
+<td><code>Priority.OVERRIDE</code></td>
+<td><code>1000</code></td>
+<td>Explicit hard overrides that take absolute precedence</td>
+</tr>
+</tbody>
+</table>
+<h2 id="execution-modes">Execution Modes<a class="headerlink" href="#execution-modes" title="Permanent link">&para;</a></h2>
+<p>The <a class="autorefs autorefs-internal" title="            HookDispatcher" href="#headerkit.hooks.HookDispatcher"><code>HookDispatcher</code></a> supports two execution modes:</p>
+<ul>
+<li><strong>First-Result Dispatch</strong> (<code>first_result</code>): Queries matching candidate hooks sorted from highest priority to lowest. The first hook to return a non-<code>None</code> value wins. If a hook returns <code>None</code>, the dispatcher cascades to the next candidate.</li>
+<li><strong>Waterfall Pipeline</strong> (<code>waterfall</code>): Passes an initial value sequentially through all matching hooks in priority order, threading the transformed output through each stage.</li>
+</ul>
+<h2 id="pattern-matching-with-globs">Pattern Matching with Globs<a class="headerlink" href="#pattern-matching-with-globs" title="Permanent link">&para;</a></h2>
+<p>Hooks can filter invocation contexts by specifying attribute matchers:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">hook</span><span class="p">,</span> <span class="n">Priority</span><span class="p">,</span> <span class="n">PipelineContext</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">SourceUnit</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"parse_unit"</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">"tree-sitter"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">STANDARD</span><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">custom_parser</span><span class="p">(</span><span class="n">code</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SourceUnit</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"write_output"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"ctypes"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">STANDARD</span><span class="p">)</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">write_ctypes</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"write_output"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"*"</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s2">"*windows*"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">PROJECT</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">windows_override</span><span class="p">(</span><span class="n">unit</span><span class="p">:</span> <span class="n">SourceUnit</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+</code></pre></div>
+<h2 id="backend-and-writer-unification">Backend and Writer Unification<a class="headerlink" href="#backend-and-writer-unification" title="Permanent link">&para;</a></h2>
+<p>All parser backends and output writers register into the unified hook pipeline:
+- Backends register at <code>parse_unit</code> and <code>get_backend</code>.
+- Writers register at <code>write_output</code> and <code>get_writer</code>.
+- Calling <code>get_backend()</code> and <code>get_writer()</code> queries the highest-priority matching hook.
+- Custom plugins can override built-in backends or writers by registering hooks at <code>Priority.PROJECT</code> (100) or <code>Priority.OVERRIDE</code> (1000).</p>
+<h2 id="3-stage-pipeline-ingestion-to-output">3-Stage Pipeline: Ingestion to Output<a class="headerlink" href="#3-stage-pipeline-ingestion-to-output" title="Permanent link">&para;</a></h2>
+<p>The pipeline executes in three stages:
+1. <strong><code>parse_unit</code></strong> (<code>first_result</code>): Parses raw source into a <a class="autorefs autorefs-internal" title="            SourceUnit
+
+
+  
+      dataclass
+  " href="../ir/#headerkit.ir.SourceUnit"><code>SourceUnit</code></a> Intermediate Representation.
+2. <strong><code>transform_unit</code></strong> (<code>waterfall</code>): Passes the <code>SourceUnit</code> through sequential AST transformations (such as runtime lifecycle injections, macro expansion, or dialect conversions).
+3. <strong><code>write_output</code></strong> (<code>first_result</code>): Generates code for the requested writer target.</p>
+<p><a class="autorefs autorefs-internal" title="            execute_pipeline" href="#headerkit.hooks.execute_pipeline"><code>execute_pipeline</code></a> automates this three-stage flow:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_pipeline</span><span class="p">,</span> <span class="n">PipelineContext</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputSpec</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">InputSpec</span><span class="o">.</span><span class="n">from_path</span><span class="p">(</span><span class="s2">"api.h"</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="s2">"int compute(int x);"</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">ctx</span> <span class="o">=</span> <span class="n">PipelineContext</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"tree-sitter"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"json"</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="s2">"nim"</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">unit</span><span class="p">,</span> <span class="n">output</span> <span class="o">=</span> <span class="n">execute_pipeline</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="symbol-renaming-rename_symbol-and-resolve_collision">Symbol Renaming: <code>rename_symbol</code> and <code>resolve_collision</code><a class="headerlink" href="#symbol-renaming-rename_symbol-and-resolve_collision" title="Permanent link">&para;</a></h2>
+<p>Two hook points govern the identifiers a writer emits.</p>
+<p><strong><code>rename_symbol</code></strong> (<code>waterfall</code>) transforms one symbol's name:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">renamer</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">,</span> <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+</code></pre></div>
+<p><code>kind</code> is one of <code>function</code>, <code>struct</code>, <code>union</code>, <code>enum</code>, <code>enumerator</code>, <code>field</code>,
+<code>typedef</code>, <code>param</code>, <code>macro</code>. It is what makes a case rule expressible at all:
+Nim spells types in PascalCase and procs in camelCase, which is one rule per
+kind and not one rule for the module.</p>
+<p>A waterfall runs <strong>highest priority first</strong>, and that ordering is the design.
+A project renamer registers at <code>Priority.PROJECT</code>; a writer registers its
+language's grammar rules at <code>Priority.FALLBACK</code> and therefore runs <strong>last</strong>.
+Whatever a project renames a symbol to must still survive the target language's
+lexer, and no configuration can bypass that floor. The Nim writer registers
+[<code>nim_legality_renamer</code>][headerkit.writers.nim.nim_legality_renamer] exactly the
+way it registers <code>write_output</code>.</p>
+<p><strong><code>resolve_collision</code></strong> (<code>first_result</code>) decides what to do when two source
+symbols collapse onto one identifier:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">resolver</span><span class="p">(</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">collided</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Symbol</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Symbol</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</code></pre></div>
+<p>Return an identifier for <strong>every</strong> member of <code>collided</code>, or <code>None</code> to decline.
+The default is to <strong>raise</strong>, naming both source symbols. An automatic
+disambiguator -- a counter suffix, first-wins, longest-wins -- is the writer
+deciding which symbol the caller meant, and it fails silently: the caller gets
+bindings that compile and call the wrong function.</p>
+<p>The returned mapping is re-checked rather than trusted. A partial mapping is an
+error, every returned identifier is re-validated against the language grammar,
+and the results are re-tested for collisions under the target language's own
+identity function. A resolver that answers a collision with another collision
+fails loudly.</p>
+<p>Renaming is not injective, and neither is the C-to-Nim spelling: <code>__sig</code> and
+<code>_sig</code> collapse under underscore repair, and to Nim <code>fooBar</code> and <code>foo_bar</code> are
+one identifier whatever the header called them
+([<code>nim_ident_identity</code>][headerkit.writers.nim.nim_ident_identity] is the
+function that says so). Equality on the emitted string is the wrong test.</p>
+<h3 id="known-limitation-collision-checking-is-module-scope">Known limitation: collision checking is module-scope<a class="headerlink" href="#known-limitation-collision-checking-is-module-scope" title="Permanent link">&para;</a></h3>
+<p>Collision checking covers the flat module-level namespace -- functions,
+structs, unions, enums, enumerators, typedefs and macros. It does <strong>not</strong> yet
+cover two fields of one record, or two parameters of one proc.</p>
+<p>That is a gap, not a safe exclusion. Nim rejects a colliding field or parameter
+exactly as it rejects a colliding module-level symbol: an object declaring both
+<code>fooBar</code> and <code>foo_bar</code> is <code>attempt to redefine: 'foo_bar'</code>, and so is a proc
+taking both as parameters. So a header whose collision sits at field or
+parameter level still produces a module its compiler refuses -- you get the
+error from Nim rather than from headerkit, without the source symbol names.</p>
+<p>Do not read a module-level refusal as evidence that the writer checks
+collisions generally. Detecting field- and parameter-level collisions needs the
+per-record and per-proc symbol identity that the IR contract work introduces.
+Both cases are pinned in <code>tests/test_rename.py</code> as strict xfails, so they turn
+red on the day that lands.</p>
+<h3 id="declarative-configuration">Declarative configuration<a class="headerlink" href="#declarative-configuration" title="Permanent link">&para;</a></h3>
+<p><code>[rename]</code> in <code>.headerkit.toml</code> covers the common cases without code:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[rename]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">collision_policy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"error"</span><span class="w">          </span><span class="c1"># the default; see below for the others</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">[[rename.rules]]</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">kinds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"function"</span><span class="p">]</span><span class="w">                </span><span class="c1"># omit to apply to every kind</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">strip_prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"juce_"</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">case</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"camel"</span><span class="w">                      </span><span class="c1"># snake | camel | pascal | preserve</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">collapse_underscores</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">add_prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">""</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">add_suffix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">""</span>
+</code></pre></div>
+<p>Steps within one rule apply in a fixed order: <code>strip_prefix</code>, <code>case</code>,
+<code>collapse_underscores</code>, <code>add_prefix</code>, <code>add_suffix</code>. Rules apply in declared
+order. A rename that needs the symbol's type, its header, or a lookup table is
+not expressible here -- that is what the Python hook is for.</p>
+<p><code>collision_policy</code> is one of <code>error</code> (default), <code>suffix_header_stem</code>,
+<code>prefer_shortest</code>, <code>prefer_longest</code>, <code>prefer_first_declared</code>. Every one but
+<code>error</code> is opt-in, each is deterministic given the same input set, and each is
+re-checked like any other resolver. <code>suffix_header_stem</code> separates symbols that
+came from different headers and cannot separate two declarations in one header:
+appending the same stem twice resolves nothing, and the re-check says so rather
+than emitting a module the compiler rejects.</p>
+<h3 id="who-applies-a-rename-section">Who applies a <code>[rename]</code> section<a class="headerlink" href="#who-applies-a-rename-section" title="Permanent link">&para;</a></h3>
+<p>The <strong>CLI</strong> reads <code>.headerkit.toml</code> and registers the section's hooks; nothing
+else does. <code>generate()</code>, <code>generate_all()</code> and <code>batch_generate()</code> take their
+inputs as arguments and read no config file at all -- store directory, plugins
+and writer options work the same way -- so a library consumer relying on a
+<code>[rename]</code> section on disk gets the default naming and no diagnostic.</p>
+<p>A library consumer applies it explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">generate</span><span class="p">,</span> <span class="n">load_config</span><span class="p">,</span> <span class="n">register_config_hooks</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">register_config_hooks</span><span class="p">(</span><span class="n">load_config</span><span class="p">(</span><span class="s2">".headerkit.toml"</span><span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"nim"</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">generate</span><span class="p">(</span><span class="s2">"api.h"</span><span class="p">,</span> <span class="s2">"nim"</span><span class="p">)</span>
+</code></pre></div>
+<p>Registration is global and idempotent: registering the same config twice is a
+no-op, and registering a different one adds to the waterfall rather than
+replacing what is there.</p>
+<h3 id="renaming-and-the-cache">Renaming and the cache<a class="headerlink" href="#renaming-and-the-cache" title="Permanent link">&para;</a></h3>
+<p>Renaming changes generated output, so the registered hooks enter the <strong>output
+cache key</strong> via <a class="autorefs autorefs-internal" title="            rename_cache_fingerprint" href="#headerkit.rename_cache_fingerprint"><code>rename_cache_fingerprint</code></a>.
+A hook built from declarative config carries its config's digest, so two
+different rename configs cannot share a key. A hook written in Python is
+identified by module and qualified name: editing that function's body does not
+move the key, the same limitation writer plugins have with <code>cache_version</code>.</p>
+<h2 id="scaffolding-lifecycle-hooks">Scaffolding Lifecycle Hooks<a class="headerlink" href="#scaffolding-lifecycle-hooks" title="Permanent link">&para;</a></h2>
+<p>When project scaffolding is invoked (<code>--layout package</code>), HeaderKit executes specialized lifecycle hook points:</p>
+<ol>
+<li><strong><code>resolve_version</code></strong> (<code>first_result</code>): Queries plugins to extract library version from custom metadata or AST declarations.</li>
+<li><strong><code>scaffold_project</code></strong> (<code>first_result</code>): Allows Bring-Your-Own-Scaffolder plugins to replace the default <code>StdlibScaffolder</code> layout engine.</li>
+<li><strong><code>scaffold_tests</code></strong> (<code>waterfall</code>): Post-processes and enriches test suites (e.g. generating 1:1 unit tests, tripwires, or test work orders).</li>
+<li><strong><code>transform_layout</code></strong> (<code>waterfall</code>): Passes the complete <code>ProjectLayout</code> through sequential transformations (e.g. injecting platform frameworks, precompiled objects, or custom compiler flags into <code>nim.cfg</code> or <code>CMakeLists.txt</code>).</li>
+<li><strong><code>merge_file</code></strong> (<code>first_result</code>): Allows plugins to handle custom file merging (e.g. AST-aware merge engines). Falls back to <code>merge_incremental_tests</code> when <code>OutputFile.merge_strategy</code> is set.</li>
+</ol>
+<h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.Priority" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Priority</span>
+
+
+<a href="#headerkit.hooks.Priority" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="enum.IntEnum">IntEnum</span></code></p>
+
+
+
+        <p>Execution priority tiers for registered hooks.</p>
+<p>Higher numeric values execute first.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.PipelineContext" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">PipelineContext</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit.hooks.PipelineContext" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">PipelineContext</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Contextual metadata passed to hooks during dispatch.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.HookRegistry" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">HookRegistry</span>
+
+
+<a href="#headerkit.hooks.HookRegistry" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">HookRegistry</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Registry maintaining registered hooks organized by hook point with O(1) indexing.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.register" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">register</span>
+
+
+<a href="#headerkit.hooks.HookRegistry.register" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n"><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></span><span class="p">,</span> <span class="o">**</span><span class="n">matchers</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register a hook implementation.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.register_global" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">register_global</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.register_global" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_global</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n"><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></span><span class="p">,</span> <span class="o">**</span><span class="n">matchers</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register a hook implementation globally.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.has_point" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">has_point</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.has_point" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">has_point</span><span class="p">(</span><span class="n">point</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Fast O(1) check if any hook is registered globally for the given point.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.get_matching" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_matching</span>
+
+
+<a href="#headerkit.hooks.HookRegistry.get_matching" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_matching</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return matching hooks sorted by priority descending and specificity descending.</p>
+<p>For ties in priority and specificity, later registered hooks take precedence.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.get_global_matching" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">get_global_matching</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.get_global_matching" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_global_matching</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return matching global hooks sorted by priority descending and specificity descending.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.snapshot" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">snapshot</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.snapshot" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">snapshot</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return a copy of all globally registered hooks.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.restore" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">restore</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.restore" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">restore</span><span class="p">(</span><span class="n">snapshot</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Restore global hooks from a snapshot, synchronizing fast-path lookup indices.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookRegistry.clear" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">clear</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#headerkit.hooks.HookRegistry.clear" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">clear</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Clear all globally registered hooks and fast-path lookup indices.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.hooks.hook" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">hook</span>
+
+
+<a href="#headerkit.hooks.hook" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">hook</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n"><span title="headerkit.hooks.Priority.STANDARD">STANDARD</span></span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">matchers</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Decorator to register a hook implementation.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.HookDispatcher" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">HookDispatcher</span>
+
+
+<a href="#headerkit.hooks.HookDispatcher" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">HookDispatcher</span><span class="p">(</span><span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Dispatches calls across registered hooks according to execution mode.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookDispatcher.first_result" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">first_result</span>
+
+
+<a href="#headerkit.hooks.HookDispatcher.first_result" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">first_result</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Execute matching hooks in priority order until one returns a non-None value.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.hooks.HookDispatcher.waterfall" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">waterfall</span>
+
+
+<a href="#headerkit.hooks.HookDispatcher.waterfall" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">waterfall</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">initial_value</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Pass a value sequentially through matching hooks in priority order.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.hooks.HookCaller" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">HookCaller</span>
+
+
+<a href="#headerkit.hooks.HookCaller" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">HookCaller</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Convenience caller bound to a specific hook point.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.hooks.execute_pipeline" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">execute_pipeline</span>
+
+
+<a href="#headerkit.hooks.execute_pipeline" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">execute_pipeline</span><span class="p">(</span><span class="n">input_item</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dispatcher</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Execute the 3-stage hook pipeline: parse_unit -&gt; transform_unit -&gt; write_output.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.Symbol" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Symbol</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit.Symbol" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Symbol</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>One source symbol being renamed.</p>
+<p><code>index</code> is declaration order within the unit and <code>header</code> is the file the
+declaration came from; both exist so a collision policy can be deterministic
+without reading the IR.</p>
+<p><code>namespace</code> is the enclosing C++ namespace, or <code>None</code> at global scope. It
+belongs to the symbol's identity rather than being decoration on it: every
+<code>name</code> in the IR is <em>unqualified</em>, so two declarations in two namespaces
+reach a writer as one <code>(name, kind)</code> pair while being two symbols competing
+for a single target identifier.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="headerkit.Symbol.header_stem" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">header_stem</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#headerkit.Symbol.header_stem" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">header_stem</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The originating header's filename without directories or extension.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="headerkit.Symbol.qualified_name" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">qualified_name</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#headerkit.Symbol.qualified_name" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">qualified_name</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The source spelling including any enclosing namespace.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.RenameConfig" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">RenameConfig</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit.RenameConfig" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">RenameConfig</span><span class="p">(</span><span class="n">rules</span><span class="o">=</span><span class="p">(),</span> <span class="n">collision_policy</span><span class="o">=</span><span class="s1">'error'</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The declarative half of symbol renaming, as loaded from config.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="headerkit.RenameConfig.is_default" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">is_default</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#headerkit.RenameConfig.is_default" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">is_default</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>True when this config asks for nothing beyond headerkit's defaults.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.RenameConfig.fingerprint" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">fingerprint</span>
+
+
+<a href="#headerkit.RenameConfig.fingerprint" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">fingerprint</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A stable digest of this config, for the output cache key.</p>
+<p>Rename configuration changes generated output, so it has to be part of
+the key. Without it, editing a rename rule serves the previously cached
+output under the old names and reports a hit.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.RenameRule" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">RenameRule</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit.RenameRule" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">RenameRule</span><span class="p">(</span><span class="n">kinds</span><span class="o">=</span><span class="p">(),</span> <span class="n">strip_prefix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">add_prefix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">add_suffix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">case</span><span class="o">=</span><span class="s1">'preserve'</span><span class="p">,</span> <span class="n">collapse_underscores</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>One declarative rename step, optionally restricted to certain kinds.</p>
+<p>Steps are applied in the order written: <code>strip_prefix</code>, <code>case</code>,
+<code>collapse_underscores</code>, <code>add_prefix</code>, <code>add_suffix</code>. The order is fixed
+rather than configurable so that two configs that list the same fields mean
+the same thing.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.enforce_injectivity" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">enforce_injectivity</span>
+
+
+<a href="#headerkit.enforce_injectivity" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">enforce_injectivity</span><span class="p">(</span><span class="n">assigned</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dispatcher</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Check that no two symbols share an identifier under <em>identity</em>.</p>
+<p>On a collision the <code>resolve_collision</code> hook is offered the group. The hook
+must return an identifier for <strong>every</strong> member -- a partial mapping is a
+refusal to decide about the rest, and keeping the original name for an
+uncovered symbol is the exact defect this exists to prevent. The returned
+identifiers are then re-validated and re-checked for collisions against the
+whole assignment; a resolver that answers a collision with another collision
+raises rather than being trusted.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code>SymbolCollisionError</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>when a collision is left unresolved.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code>RenameError</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>when a resolver returns an unusable mapping.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.rename_cache_fingerprint" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">rename_cache_fingerprint</span>
+
+
+<a href="#headerkit.rename_cache_fingerprint" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">rename_cache_fingerprint</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Digest the registered renaming hooks, for the output cache key.</p>
+<p>Renaming changes generated output, so a cache key that ignores it serves the
+previous output under the previous names and reports a hit -- silently, with
+no diagnostic anywhere. The digest therefore covers every registered
+<code>rename_symbol</code> and <code>resolve_collision</code> implementation.</p>
+<p>A hook built from declarative config carries its config's own digest on
+<code>headerkit_rename_fingerprint</code>, so two different rename configs cannot
+share a key. A hook written in Python is identified by module and qualified
+name: editing that function's body does not move the key, which is the same
+limitation writer plugins already have with <code>cache_version</code>.</p>
+<p>The parts are sorted so that the digest does not depend on the order writer
+modules happened to be imported in.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="headerkit.register_config_hooks" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">register_config_hooks</span>
+
+
+<a href="#headerkit.register_config_hooks" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_config_hooks</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">matchers</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Register the declarative rename config as hook implementations.</p>
+<p>Registered at :attr:<code>~headerkit.hooks.Priority.PROJECT</code>, above every writer's
+legality renamer at <code>FALLBACK</code>. The waterfall runs highest priority first,
+so a project rule is applied and then made legal, never the reverse.</p>
+<p>Registering the same config twice is a no-op. It was not, and the second
+registration was not merely redundant: <code>rename_symbol</code> is a waterfall, so
+two copies of a prefix rule ran in series and <code>foo</code> came out <code>hkhkfoo</code>.
+The output cache key digests the registered hooks, so the duplicate also
+moved the fingerprint and turned every subsequent lookup into a miss. Neither
+reported anything. Two <code>main()</code> calls in one process is enough to reach it,
+which is what a library consumer and the test suite both do.</p>
+
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
