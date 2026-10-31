@@ -840,10 +840,7 @@ def _deduplicate_declarations(declarations: list[Declaration]) -> list[Declarati
     - We keep only the Enum and remove the redundant Typedef
 
     Special handling for forward declarations:
-    - Included headers are parsed as separate translation units, so `struct Foo;`
-      from one and `struct Foo {...};` from another both reach this merge
-    - The definition replaces the forward declaration, in its position, whichever
-      of the two came first
+    - A definition replaces an earlier forward declaration in place
 
     :param declarations: List of declarations to deduplicate
     :returns: List with duplicates removed, preserving order
@@ -911,29 +908,10 @@ def _deduplicate_declarations(declarations: list[Declaration]) -> list[Declarati
     return unique
 
 
-def _struct_has_body(s: Struct) -> bool:
-    """Return whether ``s`` carries any record body members beyond a bare forward declaration."""
-    return bool(
-        s.fields
-        or s.methods
-        or s.constructors
-        or s.destructor is not None
-        or s.bases
-        or s.conversions
-        or s.inner_typedefs
-        or s.nested_records
-    )
-
-
 def _defines_forward_declaration(kept: Declaration, candidate: Declaration) -> bool:
-    """Report whether ``candidate`` is the definition of a type ``kept`` only forward-declares.
-
-    A body-less record or a value-less enum is what a forward declaration
-    produces; the same criterion drives the Cython writer's
-    ``_drop_redundant_record_forwards``.
-    """
+    """Return True if ``candidate`` defines a type that ``kept`` only forward-declares."""
     if isinstance(kept, Struct) and isinstance(candidate, Struct):
-        return not _struct_has_body(kept) and _struct_has_body(candidate)
+        return not kept.has_body and candidate.has_body
     if isinstance(kept, Enum) and isinstance(candidate, Enum):
         return not kept.values and bool(candidate.values)
     return False
@@ -1454,8 +1432,8 @@ class ClangASTConverter:
         for i, decl in enumerate(self.declarations):
             if isinstance(decl, Struct):
                 if decl.name == name and decl.namespace == self._current_namespace:
-                    # Check if it's a forward declaration (no fields, no methods)
-                    if not decl.fields and not decl.methods:
+                    # Check if it's a forward declaration
+                    if not decl.has_body:
                         # Verify the kind matches
                         is_match = (
                             (kind == "struct" and not decl.is_union and not decl.is_cppclass)
@@ -4563,9 +4541,6 @@ class LibclangBackend:
         all_declarations: list[Declaration] = list(main_header.declarations)
         main_dir = os.path.dirname(os.path.abspath(main_path))
 
-        # Process each included header. ``included_headers`` is a set, so walking
-        # it directly merged the headers -- and ordered every writer's input -- by
-        # string hash, which changes with ``PYTHONHASHSEED`` from run to run.
         for include_path in sorted(main_header.included_headers):
             # Skip system headers (unless allowlisted via project_prefixes)
             if self._is_system_include(include_path, project_prefixes):

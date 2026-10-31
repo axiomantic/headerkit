@@ -682,6 +682,20 @@ class Struct:
         elif self.template_params and not self.template_parameters:
             self.template_parameters = [TemplateParameter(name=p) for p in self.template_params]
 
+    @property
+    def has_body(self) -> bool:
+        """Return True if this record carries any body members beyond a bare forward declaration."""
+        return bool(
+            self.fields
+            or self.methods
+            or self.constructors
+            or self.destructor is not None
+            or self.bases
+            or self.conversions
+            or self.inner_typedefs
+            or self.nested_records
+        )
+
     def __str__(self) -> str:
         if self.is_cppclass:
             kind = "cppclass"

@@ -44,7 +44,18 @@ from pathlib import Path
 import pytest
 
 from headerkit.backends import get_backend, is_backend_available
-from headerkit.ir import Enum, Struct
+from headerkit.ir import (
+    BaseSpecifier,
+    CType,
+    Declaration,
+    Enum,
+    EnumValue,
+    Field,
+    Function,
+    Parameter,
+    SourceLocation,
+    Struct,
+)
 from headerkit.writers import get_writer
 from headerkit.writers.cffi import header_to_cffi
 from headerkit.writers.cython import write_pxd
@@ -91,25 +102,31 @@ def _require_c_toolchain() -> str:
     return require_program("cc", "gcc", "clang", install=CC_INSTALL)
 
 
-def _cythonize(workdir: Path, header: str, pxd: str, pyx: str, stem: str = "mod") -> str:
-    """Write a header/.pxd/.pyx triple, run Cython, and return the generated C source.
+def _cythonize(workdir: Path, header: str, pxd: str, pyx: str, stem: str = "mod", *, cplus: bool = False) -> str:
+    """Write a header/.pxd/.pyx triple, run Cython, and return the generated C/C++ source.
 
     :raises AssertionError: if Cython itself rejects the ``.pxd``/``.pyx`` pair.
     """
-    (workdir / "test.h").write_text(header)
+    header_ext = "hpp" if cplus else "h"
+    out_ext = "cpp" if cplus else "c"
+    (workdir / f"test.{header_ext}").write_text(header)
     (workdir / "defs.pxd").write_text(pxd)
     (workdir / f"{stem}.pyx").write_text(pyx)
 
-    c_path = workdir / f"{stem}.c"
+    out_path = workdir / f"{stem}.{out_ext}"
+    cmd = [sys.executable, "-m", "cython", "-3"]
+    if cplus:
+        cmd.append("--cplus")
+    cmd.extend([f"{stem}.pyx", "-o", str(out_path)])
     result = subprocess.run(
-        [sys.executable, "-m", "cython", "-3", f"{stem}.pyx", "-o", str(c_path)],
+        cmd,
         cwd=workdir,
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 0, f"cython failed:\n{result.stdout}\n{result.stderr}"
-    return c_path.read_text()
+    return out_path.read_text()
 
 
 def _compile_c(workdir: Path, compiler: str, stem: str = "mod") -> subprocess.CompletedProcess[str]:
@@ -1552,16 +1569,7 @@ class TestR14AllPaddingLayoutIsResolvedOnImport:
 
 @libclang
 class TestR15IncludeMergeOrderIsDeterministic:
-    """Recursive include processing must not depend on ``PYTHONHASHSEED``.
-
-    ``_parse_recursively`` walked ``SourceUnit.included_headers``, which is a
-    ``set``, so the order in which included headers were parsed and merged --
-    and therefore the declaration order handed to every writer -- changed from
-    one interpreter run to the next. Two runs over the same header produced two
-    different ``.pxd`` files, and since the Cython writer's cycle path is
-    sensitive to that order, some runs produced a ``.pxd`` that Cython rejected
-    and others one that it accepted.
-    """
+    """Recursive include merging produces deterministic declaration order across PYTHONHASHSEED values."""
 
     NAMES = ("alpha", "beta", "gamma", "delta", "epsilon", "zeta")
     SEEDS = ("0", "1", "2", "3", "4", "5")
@@ -1605,16 +1613,20 @@ class TestR15IncludeMergeOrderIsDeterministic:
         return run.stdout.strip()
 
     def test_the_seeds_really_reorder_a_set(self) -> None:
-        """Negative control: without it, an ignored ``PYTHONHASHSEED`` would make the next test vacuous."""
         code = "import sys; print(' '.join(set(sys.argv[1:])))"
-        headers = [f"{name}.h" for name in self.NAMES]
 
         with tempfile.TemporaryDirectory() as tmp:
-            orders = {self._run(Path(tmp), code, headers, seed) for seed in self.SEEDS}
+            inc = self._layout(Path(tmp))
+            headers = [str(inc / f"{name}.h") for name in self.NAMES]
+            orders = {seed: self._run(Path(tmp), code, headers, seed) for seed in self.SEEDS}
 
-        assert len(orders) > 1
-        for order in orders:
-            assert sorted(order.split()) == sorted(headers)
+        assert {seed: sorted(order.split()) for seed, order in orders.items()} == dict.fromkeys(
+            self.SEEDS, sorted(headers)
+        )
+        # SipHash set iteration order is architecture- and CPython-build-dependent,
+        # so exact per-seed strings are not portable; >1 distinct order proves
+        # PYTHONHASHSEED reorders the exact include-path strings used below.
+        assert len(set(orders.values())) > 1
 
     def test_declaration_order_is_identical_under_every_hash_seed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1635,21 +1647,7 @@ class TestR15IncludeMergeOrderIsDeterministic:
 
 @libclang
 class TestR16CyclicTypedefsAreOrdered:
-    """A typedef emitted on the cycle path must follow the typedefs it names.
-
-    ``struct value`` holds a ``value_destructor_cb_t``, whose parameter is a
-    ``value_t``, which is a typedef of ``struct value``: a cycle, so the writer
-    takes its phased path. That path forwards every record first and then emits
-    *all* typedefs in the order the IR delivered them. Records are forwarded,
-    so a typedef naming a record is always fine there -- but a typedef naming
-    another *typedef* was not ordered at all, and when the IR listed the
-    callback first Cython stopped at ``'value_t' is not a type identifier``.
-
-    The headers below are the shape that delivers that order: the callback and
-    the record live in one header, the typedef they share in another that both
-    the root and a sibling header include, and the root names the callback, so
-    the root unit pulls the callback in ahead of the typedef it uses.
-    """
+    """Typedefs emitted on the Cython cycle path are topologically ordered among themselves."""
 
     TYPES_H = textwrap.dedent("""\
         #ifndef TYPES_H
@@ -1714,13 +1712,6 @@ class TestR16CyclicTypedefsAreOrdered:
             """)
 
     def test_cyclic_typedefs_compile_link_and_execute(self) -> None:
-        """The end-to-end proof: the callback typedef must resolve to the C type.
-
-        ``root_use`` stores the callback in the record, and ``list_release``
-        invokes it and returns the field it left behind. The callback adds 1 to ``x``, so a
-        binding whose callback or record type were mis-declared yields something
-        other than 42 rather than merely failing to build.
-        """
         compiler = _require_c_toolchain()
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -1784,17 +1775,7 @@ class TestR16CyclicTypedefsAreOrdered:
 
 @libclang
 class TestR17DefinitionSurvivesIncludeMerge:
-    """Merging included headers must keep a type's definition over its forward declaration.
-
-    Every included header is parsed as its own translation unit and the results
-    are merged by ``_deduplicate_declarations``, which kept the *first*
-    declaration of each name. When the header that only forward-declares
-    ``struct rec`` was merged before the header that defines it, the definition
-    was discarded: the ``.pxd`` declared ``rec`` opaque, and any Cython code
-    touching a field or declaring a ``rec`` value failed. Within one translation
-    unit the converter already replaced a forward declaration with its
-    definition; the merge across units did not.
-    """
+    """Definitions from included headers replace earlier forward declarations during merge."""
 
     FORWARD_H = textwrap.dedent("""\
         #ifndef FORWARD_H
@@ -1812,45 +1793,54 @@ class TestR17DefinitionSurvivesIncludeMerge:
         """)
 
     @staticmethod
-    def _unit(workdir: Path, forward_name: str, definition_name: str) -> list[object]:
+    def _declarations(workdir: Path, forward_name: str, definition_name: str) -> list[Declaration]:
         (workdir / forward_name).write_text(TestR17DefinitionSurvivesIncludeMerge.FORWARD_H)
         (workdir / definition_name).write_text(TestR17DefinitionSurvivesIncludeMerge.DEFINITION_H)
         root = f"#include <{forward_name}>\n#include <{definition_name}>\n"
         unit = get_backend("libclang").parse(root, "test.h", include_dirs=[str(workdir)])
-        return [d for d in unit.declarations if isinstance(d, Struct | Enum)]
-
-    @staticmethod
-    def _shape(decls: list[object]) -> list[tuple[str, str, list[tuple[str, object]]]]:
-        shape: list[tuple[str, str, list[tuple[str, object]]]] = []
-        for decl in decls:
-            if isinstance(decl, Struct):
-                shape.append(("struct", str(decl.name), [(f.name, str(f.type)) for f in decl.fields]))
-            elif isinstance(decl, Enum):
-                shape.append(("enum", str(decl.name), [(v.name, v.value) for v in decl.values]))
-        return shape
+        return unit.declarations
 
     def test_definition_merged_after_forward_declaration_is_kept(self) -> None:
-        """``a_forward.h`` is merged first: the definition replaces the forward in place."""
         with tempfile.TemporaryDirectory() as tmp:
-            decls = self._unit(Path(tmp), "a_forward.h", "b_definition.h")
+            decls = self._declarations(Path(tmp), "a_forward.h", "b_definition.h")
 
-        assert self._shape(decls) == [
-            ("struct", "rec", [("x", "int"), ("k", "enum kind")]),
-            ("enum", "kind", [("KIND_A", 3), ("KIND_B", 5)]),
+        assert decls == [
+            Struct(
+                name="rec",
+                fields=[
+                    Field(name="x", type=CType(name="int"), access="public"),
+                    Field(name="k", type=CType(name="enum kind", is_elaborated=True), access="public"),
+                ],
+                location=SourceLocation(file="b_definition.h", line=4, column=8),
+            ),
+            Enum(
+                name="kind",
+                values=[EnumValue(name="KIND_A", value=3), EnumValue(name="KIND_B", value=5)],
+                location=SourceLocation(file="b_definition.h", line=3, column=6),
+            ),
         ]
 
     def test_definition_merged_before_forward_declaration_is_kept(self) -> None:
-        """Negative control: the order that always worked must keep working."""
         with tempfile.TemporaryDirectory() as tmp:
-            decls = self._unit(Path(tmp), "b_forward.h", "a_definition.h")
+            decls = self._declarations(Path(tmp), "b_forward.h", "a_definition.h")
 
-        assert self._shape(decls) == [
-            ("enum", "kind", [("KIND_A", 3), ("KIND_B", 5)]),
-            ("struct", "rec", [("x", "int"), ("k", "enum kind")]),
+        assert decls == [
+            Enum(
+                name="kind",
+                values=[EnumValue(name="KIND_A", value=3), EnumValue(name="KIND_B", value=5)],
+                location=SourceLocation(file="a_definition.h", line=3, column=6),
+            ),
+            Struct(
+                name="rec",
+                fields=[
+                    Field(name="x", type=CType(name="int"), access="public"),
+                    Field(name="k", type=CType(name="enum kind", is_elaborated=True), access="public"),
+                ],
+                location=SourceLocation(file="a_definition.h", line=4, column=8),
+            ),
         ]
 
     def test_merged_definition_reaches_the_pxd_and_cython_accepts_it(self) -> None:
-        """A field access only compiles against the definition, not an opaque forward."""
         _require_cython()
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -1881,14 +1871,13 @@ class TestR17DefinitionSurvivesIncludeMerge:
             """)
 
     def test_cpp_class_with_constructors_and_bases_merged_after_forward_is_kept(self) -> None:
-        """C++ records whose members are constructors/destructors/bases must replace forwards too."""
+        _require_cython()
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
             (workdir / "a_forward.hpp").write_text(
                 textwrap.dedent("""\
                     #ifndef A_FORWARD_HPP
                     #define A_FORWARD_HPP
-                    class Base { public: int b; };
                     class Box;
                     #endif
                     """)
@@ -1898,10 +1887,15 @@ class TestR17DefinitionSurvivesIncludeMerge:
                     #ifndef B_DEFINITION_HPP
                     #define B_DEFINITION_HPP
                     #include <a_forward.hpp>
+                    class Base { public: int b; };
                     class Box : public Base {
                     public:
                         Box(int x);
                         ~Box();
+                    };
+                    struct Holder {
+                        Box box;
+                        int y;
                     };
                     #endif
                     """)
@@ -1909,11 +1903,55 @@ class TestR17DefinitionSurvivesIncludeMerge:
             root = "#include <a_forward.hpp>\n#include <b_definition.hpp>\n"
             unit = get_backend("libclang").parse(root, "test.hpp", include_dirs=[str(workdir)])
             pxd = write_pxd(unit)
+            pyx = textwrap.dedent("""\
+                # distutils: language = c++
+                cimport defs
+                def make():
+                    cdef defs.Box* p = new defs.Box(7)
+                    cdef int v = p.b
+                    del p
+                    return v
+                """)
+            _cythonize(workdir, root, pxd, pyx, cplus=True)
 
-        box = next(d for d in unit.declarations if isinstance(d, Struct) and d.name == "Box")
-        assert [b.name for b in box.bases] == ["Base"]
-        assert len(box.constructors) == 1
-        assert box.destructor is not None
+        assert unit.declarations == [
+            Struct(
+                name="Box",
+                is_cppclass=True,
+                bases=[BaseSpecifier(name="Base", access="public", is_virtual=False)],
+                constructors=[
+                    Function(
+                        name="Box",
+                        return_type=CType(name="void"),
+                        parameters=[Parameter(name="x", type=CType(name="int"))],
+                        access="public",
+                        location=SourceLocation(file="b_definition.hpp", line=7, column=5),
+                    )
+                ],
+                destructor=Function(
+                    name="~Box",
+                    return_type=CType(name="void"),
+                    parameters=[],
+                    access="public",
+                    location=SourceLocation(file="b_definition.hpp", line=8, column=5),
+                ),
+                location=SourceLocation(file="b_definition.hpp", line=5, column=7),
+            ),
+            Struct(
+                name="Base",
+                fields=[Field(name="b", type=CType(name="int"), access="public")],
+                is_cppclass=True,
+                location=SourceLocation(file="b_definition.hpp", line=4, column=7),
+            ),
+            Struct(
+                name="Holder",
+                fields=[
+                    Field(name="box", type=CType(name="struct Box", is_elaborated=True), access="public"),
+                    Field(name="y", type=CType(name="int"), access="public"),
+                ],
+                location=SourceLocation(file="b_definition.hpp", line=10, column=8),
+            ),
+        ]
         assert pxd == textwrap.dedent("""\
             cdef extern from "test.hpp":
 
@@ -1922,4 +1960,129 @@ class TestR17DefinitionSurvivesIncludeMerge:
 
                 cdef cppclass Box(Base):
                     Box(int x)
+
+                cdef struct Holder:
+                    Box box
+                    int y
             """)
+
+    def test_cyclic_cpp_class_with_base_and_callback_typedef_cythonizes(self) -> None:
+        _require_cython()
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "a_forward.hpp").write_text(
+                textwrap.dedent("""\
+                    #ifndef A_FORWARD_HPP
+                    #define A_FORWARD_HPP
+                    class Box;
+                    typedef void (*box_cb_t)(Box*);
+                    #endif
+                    """)
+            )
+            (workdir / "b_definition.hpp").write_text(
+                textwrap.dedent("""\
+                    #ifndef B_DEFINITION_HPP
+                    #define B_DEFINITION_HPP
+                    #include <a_forward.hpp>
+                    class Base { public: int b; };
+                    class Box : public Base {
+                    public:
+                        Box(int x, box_cb_t cb);
+                        ~Box();
+                    };
+                    #endif
+                    """)
+            )
+            root = "#include <a_forward.hpp>\n#include <b_definition.hpp>\n"
+            unit = get_backend("libclang").parse(root, "test.hpp", include_dirs=[str(workdir)])
+            pxd = write_pxd(unit)
+            pyx = textwrap.dedent("""\
+                # distutils: language = c++
+                cimport defs
+                cdef void on_box(defs.Box* b) noexcept:
+                    b.b = 11
+                def make():
+                    cdef defs.Box* p = new defs.Box(7, on_box)
+                    cdef int v = p.b
+                    del p
+                    return v
+                """)
+            _cythonize(workdir, root, pxd, pyx, cplus=True)
+
+        assert pxd == textwrap.dedent("""\
+            cdef extern from "test.hpp":
+
+                cdef cppclass Base
+                cdef cppclass Box
+
+                ctypedef void (*box_cb_t)(Box*)
+
+
+                cdef cppclass Base:
+                    int b
+
+                cdef cppclass Box(Base):
+                    Box(int x, box_cb_t cb)
+            """)
+
+    @pytest.mark.parametrize(
+        ("member_kind", "prelude", "body", "expected_pxd_body"),
+        [
+            ("fields", "", "int x;", "    cdef cppclass Box:\n        int x"),
+            ("methods", "", "int get() const;", "    cdef cppclass Box:\n        int get() const"),
+            ("constructors", "", "Box(int x);", "    cdef cppclass Box:\n        Box(int x)"),
+            ("destructor", "", "~Box();", "    cdef cppclass Box:\n        pass"),
+            (
+                "bases",
+                "class Base { public: int b; };\n",
+                "",
+                "    cdef cppclass Base:\n        int b\n\n    cdef cppclass Box(Base):\n        pass",
+            ),
+            ("conversions", "", "operator bool() const;", "    cdef cppclass Box:\n        bool operator bool() const"),
+            (
+                "inner_typedefs",
+                "",
+                "typedef T value_type;",
+                "    cdef cppclass Box[T]:\n        ctypedef T value_type",
+            ),
+            (
+                "nested_records",
+                "",
+                "struct Inner { int z; };",
+                "    cdef cppclass Box:\n        struct Inner:\n            int z",
+            ),
+        ],
+    )
+    def test_each_record_body_member_kind_replaces_forward_declaration(
+        self,
+        member_kind: str,
+        prelude: str,
+        body: str,
+        expected_pxd_body: str,
+    ) -> None:
+        _require_cython()
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            tmpl = "template <typename T> " if member_kind == "inner_typedefs" else ""
+            (workdir / "a_forward.hpp").write_text(f"{tmpl}class Box;\n")
+            base_spec = " : public Base" if member_kind == "bases" else ""
+            (workdir / "b_definition.hpp").write_text(f"{prelude}{tmpl}class Box{base_spec} {{ public: {body} }};\n")
+            root = "#include <a_forward.hpp>\n#include <b_definition.hpp>\n"
+            unit = get_backend("libclang").parse(root, "test.hpp", include_dirs=[str(workdir)])
+            pxd = write_pxd(unit)
+            box_type = "defs.Box[int]*" if member_kind == "inner_typedefs" else "defs.Box*"
+            pyx = textwrap.dedent(f"""\
+                # distutils: language = c++
+                cimport defs
+                def touch():
+                    cdef {box_type} p = NULL
+                    return p == NULL
+                """)
+            _cythonize(workdir, root, pxd, pyx, cplus=True)
+
+        expected_names = ["Box", "Base"] if member_kind == "bases" else ["Box"]
+        assert [(d.name, isinstance(d, Struct) and d.has_body) for d in unit.declarations] == [
+            (name, True) for name in expected_names
+        ]
+        cimport = "from libcpp cimport bool\n\n" if member_kind == "conversions" else ""
+        assert pxd == f'{cimport}cdef extern from "test.hpp":\n\n{expected_pxd_body}\n'

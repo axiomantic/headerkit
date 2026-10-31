@@ -302,19 +302,23 @@ class PxdWriter:
     # Topological sorting
     # -----------------------------------------------------------------
 
-    @staticmethod
-    def _struct_has_body(decl: Struct) -> bool:
-        """Return whether ``decl`` carries any record body members beyond a forward declaration."""
-        return bool(
-            decl.fields
-            or decl.methods
-            or decl.constructors
-            or decl.destructor is not None
-            or decl.bases
-            or decl.conversions
-            or decl.inner_typedefs
-            or decl.nested_records
-        )
+    def _record_kind(self, struct: Struct) -> str:
+        """Return the Cython record keyword (``struct``, ``union``, or ``cppclass``) for *struct*."""
+        is_base = struct.name is not None and struct.name in self._base_class_names
+        if struct.is_cppclass or struct.bases or ((is_base or _has_callable_member(struct)) and not struct.is_union):
+            return "cppclass"
+        if struct.is_union:
+            return "union"
+        return "struct"
+
+    def _format_record_forward(self, struct: Struct) -> str:
+        """Render a bare ``cdef struct/union/cppclass`` forward declaration line (unindented)."""
+        kind = self._record_kind(struct)
+        name = self._escape_name(struct.name, include_c_name=True)
+        if kind == "cppclass" and struct.template_params:
+            params = ", ".join(struct.template_params)
+            name = f"{name}[{params}]"
+        return f"cdef {kind} {name}"
 
     def _drop_redundant_record_forwards(self, decls: list[Declaration]) -> list[Declaration]:
         """Drop a body-less record that the same block also defines with a body.
@@ -327,18 +331,13 @@ class PxdWriter:
         across the versions instead of leaking the parser's choice into the file.
         """
         defined: set[tuple[str, bool]] = {
-            (decl.name, decl.is_union)
-            for decl in decls
-            if isinstance(decl, Struct) and decl.name and self._struct_has_body(decl)
+            (decl.name, decl.is_union) for decl in decls if isinstance(decl, Struct) and decl.name and decl.has_body
         }
         return [
             decl
             for decl in decls
             if not (
-                isinstance(decl, Struct)
-                and decl.name
-                and not self._struct_has_body(decl)
-                and (decl.name, decl.is_union) in defined
+                isinstance(decl, Struct) and decl.name and not decl.has_body and (decl.name, decl.is_union) in defined
             )
         ]
 
@@ -380,6 +379,29 @@ class PxdWriter:
                                 dependencies[i].add(dep_idx)
 
             elif isinstance(decl, Struct):
+                for base in decl.bases:
+                    if not base.name:
+                        continue
+                    base_name = _strip_namespace_qualifiers(base.name).split("<")[0].strip()
+                    for dep_idx in decl_names.get(base_name, []):
+                        if dep_idx != i and isinstance(decls[dep_idx], Struct | Typedef):
+                            dependencies[i].add(dep_idx)
+                    if base_name in typedef_to_struct:
+                        struct_name = typedef_to_struct[base_name]
+                        for struct_idx in decl_names.get(struct_name, []):
+                            if struct_idx != i and isinstance(decls[struct_idx], Struct):
+                                dependencies[i].add(struct_idx)
+
+                callable_types: set[str] = set()
+                for callable_member in [*decl.methods, *decl.constructors, *decl.conversions]:
+                    callable_types.update(self._extract_type_names(callable_member.return_type))
+                    for param in callable_member.parameters:
+                        callable_types.update(self._extract_type_names(param.type))
+                for dep_name in callable_types:
+                    for dep_idx in decl_names.get(dep_name, []):
+                        if dep_idx != i and isinstance(decls[dep_idx], Typedef):
+                            dependencies[i].add(dep_idx)
+
                 for fld in decl.fields:
                     is_pointer = isinstance(fld.type, Pointer)
                     deps = self._extract_type_names(fld.type)
@@ -486,7 +508,7 @@ class PxdWriter:
         elif isinstance(decl, Struct):
             for fld in decl.fields:
                 names.update(self._extract_type_names(fld.type))
-            for method in decl.methods:
+            for method in [*decl.methods, *decl.constructors, *decl.conversions]:
                 names.update(self._extract_type_names(method.return_type))
                 for param in method.parameters:
                     names.update(self._extract_type_names(param.type))
@@ -502,17 +524,17 @@ class PxdWriter:
         The topological sort deliberately creates no edge from a function to a
         record it only names through a pointer, so a definition can land after
         its first use. Cython accepts that, but the reference output declares
-        the tag up front; these are the ``(kind, name)`` pairs to forward.
+        the tag up front; these are the ``(type_name, forward_decl)`` pairs to forward.
         """
         definitions: dict[str, tuple[int, str]] = {}
         for i, decl in enumerate(decls):
             if not isinstance(decl, Struct) or not decl.name or decl.is_typedef:
                 continue
-            if not decl.fields and not decl.methods:
+            if not decl.has_body:
                 continue
             if get_stub_module_for_type(decl.name):
                 continue
-            definitions.setdefault(decl.name, (i, "union" if decl.is_union else "struct"))
+            definitions.setdefault(decl.name, (i, self._format_record_forward(decl)))
 
         needed: dict[str, str] = {}
         for i, decl in enumerate(decls):
@@ -638,11 +660,10 @@ class PxdWriter:
                     # acyclic path needs these, and never for a name already
                     # forwarded above.
                     already = self.undeclared_structs | self.undeclared_unions
-                    for type_name, kind in self._early_reference_forwards(decls):
+                    for type_name, forward_decl in self._early_reference_forwards(decls):
                         if type_name in already:
                             continue
-                        escaped = self._escape_name(type_name, include_c_name=True)
-                        forward_decls.append(f"{self.INDENT}cdef {kind} {escaped}")
+                        forward_decls.append(f"{self.INDENT}{forward_decl}")
                 if forward_decls:
                     lines.append("")
                     lines.extend(forward_decls)
@@ -676,27 +697,23 @@ class PxdWriter:
     ) -> None:
         """Emit declarations in phases to break circular dependencies."""
         struct_bodies_names: set[str] = {
-            decl.name for decl in decls if isinstance(decl, Struct) and self._struct_has_body(decl) and decl.name
+            decl.name for decl in decls if isinstance(decl, Struct) and decl.has_body and decl.name
         }
 
         # Phase 1: Forward declarations for ALL structs with bodies
         forward_struct_decls: list[str] = []
         for decl in decls:
-            if isinstance(decl, Struct) and self._struct_has_body(decl):
+            if isinstance(decl, Struct) and decl.has_body:
                 if decl.name and get_stub_module_for_type(decl.name):
                     continue
                 if decl.is_typedef:
                     continue
-                kind = "union" if decl.is_union else "struct"
-                name = self._escape_name(decl.name, include_c_name=True)
-                forward_struct_decls.append(f"{self.INDENT}cdef {kind} {name}")
+                forward_struct_decls.append(f"{self.INDENT}{self._format_record_forward(decl)}")
         if forward_struct_decls:
             lines.append("")
             lines.extend(forward_struct_decls)
 
-        # Phase 2: ALL typedefs, sorted among themselves. Phase 1 forwarded every
-        # record they can name, but a typedef naming another typedef -- a callback
-        # taking a ``value_t*`` -- is only valid after it.
+        # Phase 2: ALL typedefs
         typedef_decls: list[str] = []
         sorted_typedefs, _ = self._sort_declarations([decl for decl in decls if isinstance(decl, Typedef)])
         for decl in sorted_typedefs:
@@ -713,7 +730,7 @@ class PxdWriter:
         for decl in decls:
             if isinstance(decl, Typedef):
                 continue
-            if isinstance(decl, Struct) and self._struct_has_body(decl):
+            if isinstance(decl, Struct) and decl.has_body:
                 continue
             if isinstance(decl, Struct) and decl.name in struct_bodies_names:
                 continue
@@ -731,7 +748,7 @@ class PxdWriter:
         struct_decls_list = [
             d
             for d in decls
-            if isinstance(d, Struct) and self._struct_has_body(d) and not (d.name and get_stub_module_for_type(d.name))
+            if isinstance(d, Struct) and d.has_body and not (d.name and get_stub_module_for_type(d.name))
         ]
 
         struct_name_to_idx: dict[str, int] = {}
@@ -750,6 +767,16 @@ class PxdWriter:
 
         struct_deps: dict[int, set[int]] = {i: set() for i in range(len(struct_decls_list))}
         for idx, sd in enumerate(struct_decls_list):
+            for base in sd.bases:
+                if not base.name:
+                    continue
+                base_name = _strip_namespace_qualifiers(base.name).split("<")[0].strip()
+                if base_name in struct_name_to_idx and base_name != sd.name:
+                    struct_deps[idx].add(struct_name_to_idx[base_name])
+                if base_name in typedef_to_struct_name:
+                    target = typedef_to_struct_name[base_name]
+                    if target in struct_name_to_idx and target != sd.name:
+                        struct_deps[idx].add(struct_name_to_idx[target])
             for fld in sd.fields:
                 if isinstance(fld.type, Pointer):
                     continue
@@ -1016,10 +1043,13 @@ class PxdWriter:
                 self._template_members.setdefault(decl.name, set()).update(decl.inner_typedefs)
 
     def _collect_incomplete_types(self) -> None:
-        """Collect structs that are forward declarations (no fields)."""
+        """Collect structs that are forward declarations with no definition in this unit."""
+        defined_structs: set[str] = {
+            decl.name for decl in self.header.declarations if isinstance(decl, Struct) and decl.name and decl.has_body
+        }
         for decl in self.header.declarations:
             if isinstance(decl, Struct):
-                if decl.name and not decl.fields and not decl.methods:
+                if decl.name and not decl.has_body and decl.name not in defined_structs:
                     self.incomplete_structs.add(decl.name)
 
     # -----------------------------------------------------------------
@@ -1213,9 +1243,7 @@ class PxdWriter:
 
     def _write_struct(self, struct: Struct) -> list[str]:
         """Convert a Struct to Cython struct/union/cppclass definition."""
-        if not struct.name or (
-            not struct.fields and not struct.methods and ("(anonymous" in struct.name or "(unnamed" in struct.name)
-        ):
+        if not struct.name or (not struct.has_body and ("(anonymous" in struct.name or "(unnamed" in struct.name)):
             return []
 
         lines: list[str] = []
@@ -1257,13 +1285,7 @@ class PxdWriter:
         # record C++ in the first place -- a C struct cannot have one -- so the
         # predicate never promotes a plain C struct, which must stay a
         # ``cdef struct`` because ``cppclass`` is meaningless in a C context.
-        is_base = struct.name is not None and struct.name in self._base_class_names
-        if struct.is_cppclass or struct.bases or ((is_base or _has_callable_member(struct)) and not struct.is_union):
-            kind = "cppclass"
-        elif struct.is_union:
-            kind = "union"
-        else:
-            kind = "struct"
+        kind = self._record_kind(struct)
         renamed = self._is_renamed_collision(struct)
         if renamed and struct.name is not None:
             name = self._collision_names[(struct.namespace, struct.name)]
@@ -1307,14 +1329,7 @@ class PxdWriter:
         nested_record_lines = self._write_nested_records(struct)
 
         # Forward declaration (nothing at all to put in a body)
-        if (
-            not struct.fields
-            and not struct.methods
-            and not struct.constructors
-            and not struct.conversions
-            and not inner_typedef_lines
-            and not nested_record_lines
-        ):
+        if not struct.has_body:
             lines.append(f"{keyword} {kind} {name}")
             self._clear_struct_context()
             return lines
