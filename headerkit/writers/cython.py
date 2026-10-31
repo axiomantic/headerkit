@@ -302,6 +302,20 @@ class PxdWriter:
     # Topological sorting
     # -----------------------------------------------------------------
 
+    @staticmethod
+    def _struct_has_body(decl: Struct) -> bool:
+        """Return whether ``decl`` carries any record body members beyond a forward declaration."""
+        return bool(
+            decl.fields
+            or decl.methods
+            or decl.constructors
+            or decl.destructor is not None
+            or decl.bases
+            or decl.conversions
+            or decl.inner_typedefs
+            or decl.nested_records
+        )
+
     def _drop_redundant_record_forwards(self, decls: list[Declaration]) -> list[Declaration]:
         """Drop a body-less record that the same block also defines with a body.
 
@@ -315,7 +329,7 @@ class PxdWriter:
         defined: set[tuple[str, bool]] = {
             (decl.name, decl.is_union)
             for decl in decls
-            if isinstance(decl, Struct) and decl.name and (decl.fields or decl.methods)
+            if isinstance(decl, Struct) and decl.name and self._struct_has_body(decl)
         }
         return [
             decl
@@ -323,8 +337,7 @@ class PxdWriter:
             if not (
                 isinstance(decl, Struct)
                 and decl.name
-                and not decl.fields
-                and not decl.methods
+                and not self._struct_has_body(decl)
                 and (decl.name, decl.is_union) in defined
             )
         ]
