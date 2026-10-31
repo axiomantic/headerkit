@@ -1820,30 +1820,34 @@ class TestR17DefinitionSurvivesIncludeMerge:
         return [d for d in unit.declarations if isinstance(d, Struct | Enum)]
 
     @staticmethod
-    def _shape(decls: list[object]) -> list[tuple[str, str, list[str]]]:
-        shape: list[tuple[str, str, list[str]]] = []
+    def _shape(decls: list[object]) -> list[tuple[str, str, list[tuple[str, object]]]]:
+        shape: list[tuple[str, str, list[tuple[str, object]]]] = []
         for decl in decls:
             if isinstance(decl, Struct):
-                shape.append(("struct", str(decl.name), [f.name for f in decl.fields]))
+                shape.append(("struct", str(decl.name), [(f.name, str(f.type)) for f in decl.fields]))
             elif isinstance(decl, Enum):
-                shape.append(("enum", str(decl.name), [v.name for v in decl.values]))
-        return sorted(shape)
-
-    EXPECTED = [("enum", "kind", ["KIND_A", "KIND_B"]), ("struct", "rec", ["x", "k"])]
+                shape.append(("enum", str(decl.name), [(v.name, v.value) for v in decl.values]))
+        return shape
 
     def test_definition_merged_after_forward_declaration_is_kept(self) -> None:
-        """``a_forward.h`` is merged first: the definition must still win."""
+        """``a_forward.h`` is merged first: the definition replaces the forward in place."""
         with tempfile.TemporaryDirectory() as tmp:
             decls = self._unit(Path(tmp), "a_forward.h", "b_definition.h")
 
-        assert self._shape(decls) == self.EXPECTED
+        assert self._shape(decls) == [
+            ("struct", "rec", [("x", "int"), ("k", "enum kind")]),
+            ("enum", "kind", [("KIND_A", 3), ("KIND_B", 5)]),
+        ]
 
     def test_definition_merged_before_forward_declaration_is_kept(self) -> None:
         """Negative control: the order that always worked must keep working."""
         with tempfile.TemporaryDirectory() as tmp:
             decls = self._unit(Path(tmp), "b_forward.h", "a_definition.h")
 
-        assert self._shape(decls) == self.EXPECTED
+        assert self._shape(decls) == [
+            ("enum", "kind", [("KIND_A", 3), ("KIND_B", 5)]),
+            ("struct", "rec", [("x", "int"), ("k", "enum kind")]),
+        ]
 
     def test_merged_definition_reaches_the_pxd_and_cython_accepts_it(self) -> None:
         """A field access only compiles against the definition, not an opaque forward."""

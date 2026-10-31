@@ -676,13 +676,13 @@ class PxdWriter:
     ) -> None:
         """Emit declarations in phases to break circular dependencies."""
         struct_bodies_names: set[str] = {
-            decl.name for decl in decls if isinstance(decl, Struct) and (decl.fields or decl.methods) and decl.name
+            decl.name for decl in decls if isinstance(decl, Struct) and self._struct_has_body(decl) and decl.name
         }
 
         # Phase 1: Forward declarations for ALL structs with bodies
         forward_struct_decls: list[str] = []
         for decl in decls:
-            if isinstance(decl, Struct) and (decl.fields or decl.methods):
+            if isinstance(decl, Struct) and self._struct_has_body(decl):
                 if decl.name and get_stub_module_for_type(decl.name):
                     continue
                 if decl.is_typedef:
@@ -700,11 +700,10 @@ class PxdWriter:
         typedef_decls: list[str] = []
         sorted_typedefs, _ = self._sort_declarations([decl for decl in decls if isinstance(decl, Typedef)])
         for decl in sorted_typedefs:
-            if isinstance(decl, Typedef):
-                decl_lines = self._write_declaration(decl)
-                for line in decl_lines:
-                    typedef_decls.append(f"{self.INDENT}{line}" if line else "")
-                typedef_decls.append("")
+            decl_lines = self._write_declaration(decl)
+            for line in decl_lines:
+                typedef_decls.append(f"{self.INDENT}{line}" if line else "")
+            typedef_decls.append("")
         if typedef_decls:
             lines.append("")
             lines.extend(typedef_decls)
@@ -714,7 +713,7 @@ class PxdWriter:
         for decl in decls:
             if isinstance(decl, Typedef):
                 continue
-            if isinstance(decl, Struct) and (decl.fields or decl.methods):
+            if isinstance(decl, Struct) and self._struct_has_body(decl):
                 continue
             if isinstance(decl, Struct) and decl.name in struct_bodies_names:
                 continue
@@ -732,7 +731,7 @@ class PxdWriter:
         struct_decls_list = [
             d
             for d in decls
-            if isinstance(d, Struct) and (d.fields or d.methods) and not (d.name and get_stub_module_for_type(d.name))
+            if isinstance(d, Struct) and self._struct_has_body(d) and not (d.name and get_stub_module_for_type(d.name))
         ]
 
         struct_name_to_idx: dict[str, int] = {}

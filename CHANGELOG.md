@@ -14,14 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NimWriter`: add `emit_macro_shims` writer option (`-o emit_macro_shims=true`) to generate `static inline` C shim functions (`hk_shim_<NAME>`) and companion `src/{pkg}/_shims.h` / `src/{pkg}/_shims.c` files for function-like macros containing the `##` token-pasting operator (`MacroFunction.has_token_pasting`).
 - `NimWriter`: add `embedded` writer option (`-o embedded=true` or `--target embedded`) emitting standalone RTOS flags (`--os:standalone`, `--mm:arc`, `--exceptions:goto`, `--threads:off`) in `nim.cfg` and a static-link tripwire (`_build_embedded_tripwire`) free of `std/dynlib` / `loadLib`.
 
-### Fixed
-- `LibclangBackend`: sort `included_headers` deterministically during recursive include merging, replace forward-declared records and enums with their full definitions (including C++ records whose members are constructors, destructors, base classes, conversion operators, inner typedefs, or nested records), and drop redundant forward declarations in `PxdWriter._drop_redundant_record_forwards` using the full record-body predicate.
-- `PxdWriter`: topologically sort `Typedef` declarations among themselves in `_write_cycle_phases` Phase 2 so function-pointer typedefs follow the typedefs they reference.
-
 ### Changed
 - Updated `NimJsonDocEnricher` docstring in `headerkit/transforms/nim_jsondoc.py` to reference `.naganim.ir.json` metadata sidecars (`elijahr/naganim`).
 - Aligned CI workflows with standard GitHub Actions triggers (`push`, `pull_request`, `schedule`, `workflow_dispatch`), inlined job steps across workflows and `headerkit new` project scaffolding, and removed the Forgejo dual-CI scripts (`scripts/ci/`, `scripts/require_ci_run.sh`, `.forgejo/workflows/ci.yml`) and manual-dispatch merge gate in favor of `check-release-prep.yml`.
-- Bumped `ruff` to `0.17.2` and `astral-sh/setup-uv` to `v7`.
+- Bumped `ruff` to `0.17.3` and `astral-sh/setup-uv` to `v7`.
+
+### Fixed
+- `LibclangBackend`: sort `included_headers` deterministically during recursive include merging, replace forward-declared records and enums with their full definitions (including C++ records whose members are constructors, destructors, base classes, conversion operators, inner typedefs, or nested records), and apply the full `_struct_has_body` record-body predicate across `PxdWriter._drop_redundant_record_forwards` and `PxdWriter._write_cycle_phases`.
+- `PxdWriter`: topologically sort `Typedef` declarations among themselves in `_write_cycle_phases` Phase 2 so function-pointer typedefs follow the typedefs they reference.
 
 ## [0.48.1] - 2026-10-28
 
