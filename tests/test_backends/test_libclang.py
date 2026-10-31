@@ -1802,6 +1802,28 @@ class TestRecursiveIncludeExpansion:
 
 
 @libclang
+class TestClassTemplateForwardDeclaration:
+    """A class template declared before it is defined keeps its definition."""
+
+    def test_class_template_definition_replaces_its_forward_declaration(self) -> None:
+        """A template's definition must not be dropped by an earlier forward declaration of it.
+
+        ``_process_class_template`` keyed its dedup on the name alone, so the
+        forward declaration claimed the key and the definition after it was
+        discarded, leaving an empty ``cppclass``.
+        """
+        header = LibclangBackend().parse(
+            "template <typename T> class Box;\ntemplate <typename T> class Box { public: typedef T value_type; };\n",
+            "test.hpp",
+        )
+
+        boxes = [d for d in header.declarations if isinstance(d, Struct) and d.name == "Box"]
+        assert [(b.template_params, b.inner_typedefs, b.has_body) for b in boxes] == [
+            (["T"], {"value_type": "T"}, True)
+        ]
+
+
+@libclang
 class TestBitfieldWidths:
     """``Field.bit_width`` must carry a bitfield's declared width.
 
