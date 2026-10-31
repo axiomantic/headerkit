@@ -4164,7 +4164,7 @@ class ClangASTConverter:
             # between an eight-byte record and a one-byte integer.
             if isinstance(result, CType):
                 result.is_elaborated = any(
-                    token in ("struct", "union", "enum") for token in clang_type.spelling.split()
+                    token in ("struct", "union", "enum", "class") for token in clang_type.spelling.split()
                 )
             return result
 

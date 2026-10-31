@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.4] - 2026-10-30
+
 ### Added
 - `Struct.has_body` property on `headerkit.ir.Struct` reporting whether a record carries any body members (`fields`, `methods`, `constructors`, `destructor`, `bases`, `conversions`, `inner_typedefs`, or `nested_records`) beyond a bare forward declaration.
 - `NimWriter`: set `preserve_existing=True` on `{pkg}.nimble`, `src/{pkg}.nim`, and `nim.cfg` while keeping `preserve_existing=False` on `src/{pkg}/bindings.nim` so package re-scaffolding preserves human-authored DSL wrappers and project configuration.
@@ -21,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped `ruff` to `0.17.3` and `astral-sh/setup-uv` to `v7`.
 
 ### Fixed
-- `LibclangBackend`: sort `included_headers` deterministically during recursive include merging, and use `Struct.has_body` in `_defines_forward_declaration` and `ClangASTConverter._remove_forward_declaration` so definitions with constructors, destructors, base classes, conversions, inner typedefs, or nested records replace earlier forward declarations.
+- `LibclangBackend`: recognize `"class"` in `TypeKind.ELABORATED` spelling check (`is_elaborated`), sort `included_headers` deterministically during recursive include merging, and use `Struct.has_body` in `_defines_forward_declaration` and `ClangASTConverter._remove_forward_declaration` so definitions with constructors, destructors, base classes, conversions, inner typedefs, or nested records replace earlier forward declarations.
 - `PxdWriter`: use `Struct.has_body` across `_drop_redundant_record_forwards`, `_early_reference_forwards`, `_write_cycle_phases`, `_collect_incomplete_types` (two-pass check so defined C++ classes are never marked incomplete), and `_write_struct`; emit `cdef cppclass` (including template parameters) in Phase 1 and early reference forwards via `_record_kind`; and add `decl.bases` and callable-member `Typedef` dependency edges in `_sort_declarations` and `_write_cycle_phases` Phase 4 so base classes precede derived classes and cyclic C++ typedefs are ordered.
 - `PxdWriter`: topologically sort `Typedef` declarations among themselves in `_write_cycle_phases` Phase 2 so function-pointer typedefs follow the typedefs they reference.
 

@@ -1894,7 +1894,7 @@ class TestR17DefinitionSurvivesIncludeMerge:
                         ~Box();
                     };
                     struct Holder {
-                        Box box;
+                        struct Box box;
                         int y;
                     };
                     #endif
