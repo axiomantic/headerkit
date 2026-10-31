@@ -791,13 +791,19 @@ def main(argv: list[str] | None = None) -> int:
             # header was actually parsed with. Without this the fields existed and
             # the writer read them, but nothing outside the tests ever filled them:
             # a package scaffolded with `-I`/`-D` was generated with neither.
+            extra_ctx: dict[str, object] = {
+                "include_dirs": list(include_dirs),
+                "defines": list(defines),
+            }
+            if getattr(args, "target", None):
+                extra_ctx["target"] = getattr(args, "target", None)
             defaults = ScaffoldOptions(
                 package_name=pkg_name,
                 target_language=spec.name,
                 layout=layout_mode or "package",
                 test_type=test_type,
                 options=scaffold_wopts,
-                extra_context={"include_dirs": list(include_dirs), "defines": list(defines)},
+                extra_context=extra_ctx,
             )
             scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
             try:

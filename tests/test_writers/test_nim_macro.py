@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -167,4 +168,133 @@ class TestNimMacroCodeGeneration:
 
             cmd = ["nim", "c", "-r", "--hints:off", str(nim_file)]
             res = subprocess.run(cmd, capture_output=True, text=True)
+            assert res.returncode == 0, f"Nim compile/run failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+
+    def test_token_pasting_macro_c_shim_generation(self) -> None:
+        macro_zero = MacroFunction(
+            name="REG_BASE",
+            parameters=[],
+            body="(PERIPH_ ## 0)",
+            has_token_pasting=True,
+        )
+        macro_expr = MacroFunction(
+            name="ADD_REG_OFFSET",
+            parameters=[MacroParameter("offset")],
+            body="(PERIPH_ ## 0 + (offset))",
+            has_token_pasting=True,
+        )
+        macro_stmt = MacroFunction(
+            name="CLEAR_REG",
+            parameters=[MacroParameter("ptr_val")],
+            body="do { *(ptr_val) = PERIPH_ ## 0; } while (0)",
+            is_statement=True,
+            has_token_pasting=True,
+        )
+        header = Header(path="periph.h", declarations=[macro_zero, macro_expr, macro_stmt])
+        macro_types = {
+            "ADD_REG_OFFSET": {
+                "return_type": "cint",
+                "parameters": [{"name": "offset", "type": "cint"}],
+            }
+        }
+        output = write_nim(header, header_path="periph.h", macro_types=macro_types, emit_macro_shims=True)
+
+        assert "skipped" not in output
+        assert "static inline int hk_shim_REG_BASE(void)" in output
+        assert "return REG_BASE();" in output
+        assert "static inline int hk_shim_ADD_REG_OFFSET(int offset)" in output
+        assert "return ADD_REG_OFFSET(offset);" in output
+        assert "static inline void hk_shim_CLEAR_REG(int ptr_val)" in output
+        assert "CLEAR_REG(ptr_val);" in output
+        assert 'proc c_REG_BASE*(): cint {.importc: "hk_shim_REG_BASE", header: "periph.h", nodecl.}' in output
+        assert (
+            'proc add_reg_offset*(offset: cint): cint {.importc: "hk_shim_ADD_REG_OFFSET", header: "periph.h", nodecl.}'
+            in output
+        )
+        assert (
+            'proc c_CLEAR_REG*[T](ptr_val: T): void {.importc: "hk_shim_CLEAR_REG", header: "periph.h", nodecl.}'
+            in output
+        )
+
+    def test_package_layout_emits_companion_macro_shim_files(self) -> None:
+        macro = MacroFunction(
+            name="READ_CH",
+            parameters=[MacroParameter("delta")],
+            body="(CH_BASE_ ## 0 + (delta))",
+            has_token_pasting=True,
+        )
+        header = Header(path="channel.h", declarations=[macro])
+        options = ScaffoldOptions(
+            package_name="chpkg",
+            target_language="nim",
+            layout="package",
+            options={"header_path": "channel.h", "emit_macro_shims": True},
+        )
+        layout = NimWriter().write_layout(header, options)
+        shims_h = layout.get_file("src/chpkg/_shims.h")
+        shims_c = layout.get_file("src/chpkg/_shims.c")
+        assert shims_h is not None
+        assert shims_c is not None
+        assert '#include "channel.h"' in shims_h.content
+        assert "static inline int hk_shim_READ_CH(int delta)" in shims_h.content
+        assert "return READ_CH(delta);" in shims_h.content
+        assert '#include "_shims.h"' in shims_c.content
+        assert "typedef int hk_macro_shims_tu_anchor;" in shims_c.content
+
+    @pytest.mark.allow("subprocess")
+    def test_nim_compiler_executes_token_pasting_macro_shims(self) -> None:
+        if not shutil.which("nim"):
+            pytest.skip("nim compiler is not installed on PATH")
+
+        with tempfile.TemporaryDirectory() as td:
+            h_path = Path(td) / "hw_regs.h"
+            h_path.write_text(
+                textwrap.dedent("""\
+                    #pragma once
+                    #define HW_BANK_0 100
+                    #define GET_BANK0() (HW_BANK_ ## 0)
+                    #define BANK0_PLUS(x) (HW_BANK_ ## 0 + (x))
+                """)
+            )
+            macros = [
+                MacroFunction(
+                    name="GET_BANK0",
+                    parameters=[],
+                    body="(HW_BANK_ ## 0)",
+                    has_token_pasting=True,
+                ),
+                MacroFunction(
+                    name="BANK0_PLUS",
+                    parameters=[MacroParameter("x")],
+                    body="(HW_BANK_ ## 0 + (x))",
+                    has_token_pasting=True,
+                ),
+            ]
+            header = Header(path=str(h_path), declarations=macros)
+            nim_code = write_nim(
+                header,
+                header_path=str(h_path),
+                macro_types={
+                    "BANK0_PLUS": {
+                        "return_type": "cint",
+                        "parameters": [{"name": "x", "type": "cint"}],
+                    }
+                },
+                emit_macro_shims=True,
+            )
+            test_script = (
+                nim_code
+                + "\n"
+                + textwrap.dedent("""\
+                    assert get_bank0() == 100
+                    assert bank0_plus(23) == 123
+                """)
+            )
+            nim_file = Path(td) / "test_token_paste.nim"
+            nim_file.write_text(test_script)
+            res = subprocess.run(
+                ["nim", "c", "-r", "--hints:off", f"--nimcache:{Path(td) / 'nc'}", str(nim_file)],
+                capture_output=True,
+                text=True,
+            )
             assert res.returncode == 0, f"Nim compile/run failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"

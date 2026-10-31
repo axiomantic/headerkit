@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -1627,3 +1628,323 @@ class TestSetOrderingIsStableAcrossProcesses:
         defines = [line for line in first.splitlines() if line.startswith('--passC:"-D')]
         assert libs == ['--passL:"-laaa"', '--passL:"-lpng"', '--passL:"-lzlib"'], libs
         assert defines == ['--passC:"-DALPHA=1"', '--passC:"-DMID=1"', '--passC:"-DZED=1"'], defines
+
+
+class TestNephyrNimEnhancements:
+    """Tests for safe package regeneration, incremental test merging, bitfields, and embedded profile."""
+
+    def test_package_layout_preserve_existing_and_incremental_merge(self, tmp_path: Path) -> None:
+        unit_v1 = Header(
+            path="zephyr_gpio.h",
+            declarations=[
+                Function(
+                    name="gpio_pin_configure",
+                    return_type=CType("int"),
+                    parameters=[Parameter("pin", CType("int")), Parameter("flags", CType("uint32_t"))],
+                )
+            ],
+        )
+        opts = ScaffoldOptions(package_name="nephyr_gpio", target_language="nim", layout="package", test_type="both")
+        layout_v1 = get_writer("nim").write_layout(unit_v1, opts)
+
+        nimble_file = layout_v1.get_file("nephyr_gpio.nimble")
+        main_file = layout_v1.get_file("src/nephyr_gpio.nim")
+        bindings_file = layout_v1.get_file("src/nephyr_gpio/bindings.nim")
+        cfg_file = layout_v1.get_file("nim.cfg")
+        unit_test_file = layout_v1.get_file("tests/test_nephyr_gpio.nim")
+
+        assert nimble_file is not None and nimble_file.preserve_existing is True
+        assert main_file is not None and main_file.preserve_existing is True
+        assert bindings_file is not None and bindings_file.preserve_existing is False
+        assert cfg_file is not None and cfg_file.preserve_existing is True
+        assert unit_test_file is not None and unit_test_file.merge_strategy == "append_new_tests"
+
+        # Write initial package to disk
+        layout_v1.write_to_disk(tmp_path)
+
+        # Simulate user adding high-level DSL code in src/nephyr_gpio.nim, custom nimble & cfg, and custom unit test
+        custom_dsl = textwrap.dedent("""\
+            import nephyr_gpio/bindings
+            export bindings
+
+            template withPin*(pin: cint, body: untyped) =
+              discard gpio_pin_configure(pin, 0'u32)
+              body
+        """)
+        (tmp_path / "src" / "nephyr_gpio.nim").write_text(custom_dsl, encoding="utf-8")
+        (tmp_path / "nephyr_gpio.nimble").write_text(
+            nimble_file.content + '\nrequires "stew >= 0.1.0"\n',
+            encoding="utf-8",
+        )
+        (tmp_path / "nim.cfg").write_text(
+            cfg_file.content + "--define:customEmbeddedFlag\n",
+            encoding="utf-8",
+        )
+        existing_test = (tmp_path / "tests" / "test_nephyr_gpio.nim").read_text(encoding="utf-8")
+        custom_test = existing_test + textwrap.dedent("""\
+
+              test "custom DSL withPin template":
+                check declared(withPin)
+        """)
+        (tmp_path / "tests" / "test_nephyr_gpio.nim").write_text(custom_test, encoding="utf-8")
+
+        # Regenerate with a v2 header that adds gpio_pin_set
+        unit_v2 = Header(
+            path="zephyr_gpio.h",
+            declarations=[
+                Function(
+                    name="gpio_pin_configure",
+                    return_type=CType("int"),
+                    parameters=[Parameter("pin", CType("int")), Parameter("flags", CType("uint32_t"))],
+                ),
+                Function(
+                    name="gpio_pin_set",
+                    return_type=CType("int"),
+                    parameters=[Parameter("pin", CType("int")), Parameter("value", CType("int"))],
+                ),
+            ],
+        )
+        layout_v2 = get_writer("nim").write_layout(unit_v2, opts)
+        layout_v2.write_to_disk(tmp_path)
+
+        # Verify human-authored files were preserved while bindings.nim updated
+        assert "template withPin*" in (tmp_path / "src" / "nephyr_gpio.nim").read_text(encoding="utf-8")
+        assert 'requires "stew >= 0.1.0"' in (tmp_path / "nephyr_gpio.nimble").read_text(encoding="utf-8")
+        assert "--define:customEmbeddedFlag" in (tmp_path / "nim.cfg").read_text(encoding="utf-8")
+        updated_bindings = (tmp_path / "src" / "nephyr_gpio" / "bindings.nim").read_text(encoding="utf-8")
+        assert "proc gpio_pin_configure*" in updated_bindings
+        assert "proc gpio_pin_set*" in updated_bindings
+        merged_test = (tmp_path / "tests" / "test_nephyr_gpio.nim").read_text(encoding="utf-8")
+        assert 'test "custom DSL withPin template":' in merged_test
+        assert "check declared(withPin)" in merged_test
+
+    def test_struct_bitfield_bitsize_pragma(self) -> None:
+        reg_struct = Struct(
+            name="lv_obj_flags_t",
+            fields=[
+                Field("hidden", CType("uint32_t"), bit_width=1),
+                Field("clickable", CType("uint32_t"), bit_width=1),
+                Field("layout_mode", CType("uint32_t"), bit_width=4),
+                Field("user_data", CType("uint32_t"), bit_width=None),
+            ],
+            is_typedef=True,
+        )
+        out = write_nim(Header(path="lv_obj.h", declarations=[reg_struct]), header_path="lv_obj.h")
+        assert "hidden* {.bitsize: 1.}: uint32" in out, out
+        assert "clickable* {.bitsize: 1.}: uint32" in out, out
+        assert "layout_mode* {.bitsize: 4.}: uint32" in out, out
+        assert "user_data*: uint32" in out, out
+        assert "user_data* {.bitsize:" not in out, out
+
+    @pytest.mark.allow("subprocess")
+    def test_struct_bitfield_abi_layout_matches_c_compiler(self, tmp_path: Path) -> None:
+        import shutil
+        import subprocess
+
+        if not shutil.which("nim"):
+            pytest.skip("nim compiler is not installed on PATH")
+
+        h_path = tmp_path / "bitfields.h"
+        h_path.write_text(
+            textwrap.dedent("""\
+                #pragma once
+                #include <stdint.h>
+
+                typedef struct {
+                    uint8_t enabled : 1;
+                    uint8_t mode : 3;
+                    uint8_t channel : 4;
+                    uint8_t raw_status;
+                } periph_ctrl_t;
+
+                static inline periph_ctrl_t make_ctrl(void) {
+                    periph_ctrl_t c;
+                    c.enabled = 1;
+                    c.mode = 5;
+                    c.channel = 9;
+                    c.raw_status = 0xAB;
+                    return c;
+                }
+            """),
+            encoding="utf-8",
+        )
+        unit = Header(
+            path=str(h_path),
+            declarations=[
+                Struct(
+                    name="periph_ctrl_t",
+                    fields=[
+                        Field("enabled", CType("uint8_t"), bit_width=1),
+                        Field("mode", CType("uint8_t"), bit_width=3),
+                        Field("channel", CType("uint8_t"), bit_width=4),
+                        Field("raw_status", CType("uint8_t")),
+                    ],
+                    is_typedef=True,
+                ),
+                Function(name="make_ctrl", return_type=CType("periph_ctrl_t"), parameters=[]),
+            ],
+        )
+        nim_code = write_nim(unit, header_path=str(h_path))
+        probe_nim = tmp_path / "probe_bitfield.nim"
+        probe_nim.write_text(
+            nim_code
+            + "\n"
+            + textwrap.dedent("""\
+                doAssert sizeof(periph_ctrl_t) == 2
+                let c = make_ctrl()
+                doAssert c.enabled == 1'u8
+                doAssert c.mode == 5'u8
+                doAssert c.channel == 9'u8
+                doAssert c.raw_status == 0xAB'u8
+            """),
+            encoding="utf-8",
+        )
+        res = subprocess.run(
+            ["nim", "c", "-r", "--hints:off", f"--nimcache:{tmp_path / 'nc'}", str(probe_nim)],
+            capture_output=True,
+            text=True,
+        )
+        assert res.returncode == 0, f"Nim bitfield ABI test failed:\n{res.stdout}\n{res.stderr}"
+
+    def test_embedded_profile_scaffolding_avoids_dynlib(self) -> None:
+        unit = Header(
+            path="zephyr_kernel.h",
+            declarations=[
+                Struct(name="k_timer", fields=[Field("status", CType("uint32_t"))]),
+                Function(
+                    name="k_msleep",
+                    return_type=CType("int32_t"),
+                    parameters=[Parameter("ms", CType("int32_t"))],
+                ),
+            ],
+        )
+        opts = ScaffoldOptions(
+            package_name="zephyr_kern",
+            target_language="nim",
+            layout="package",
+            options={"embedded": True},
+        )
+        layout = get_writer("nim").write_layout(unit, opts)
+        cfg = layout.get_file("nim.cfg")
+        tw = layout.get_file("tests/test_tripwire.nim")
+
+        assert cfg is not None
+        assert "--os:standalone" in cfg.content
+        assert "--mm:arc" in cfg.content
+        assert "--exceptions:goto" in cfg.content
+        assert "--threads:off" in cfg.content
+        assert "--mm:orc" not in cfg.content
+
+        assert tw is not None
+        assert "dynlib" not in tw.content
+        assert "loadLib" not in tw.content
+        assert "hkLinkProbe0" in tw.content
+        assert "hkForceLinkage()" in tw.content
+        assert "check declared(k_msleep)" in tw.content
+        assert "check sizeof(k_timer) > 0" in tw.content
+
+    def test_embedded_profile_via_target_extra_context(self) -> None:
+        unit = Header(
+            path="zephyr_kernel.h",
+            declarations=[Function(name="k_yield", return_type=CType("void"), parameters=[])],
+        )
+        opts = ScaffoldOptions(
+            package_name="zephyr_kern",
+            target_language="nim",
+            layout="package",
+            extra_context={"target": "embedded"},
+        )
+        layout = get_writer("nim").write_layout(unit, opts)
+        cfg = layout.get_file("nim.cfg")
+        tw = layout.get_file("tests/test_tripwire.nim")
+        assert cfg is not None and "--os:standalone" in cfg.content
+        assert tw is not None and "dynlib" not in tw.content
+        assert "check declared(k_yield)" in tw.content
+
+    def test_embedded_profile_inconclusive_tripwire_on_empty_unit(self) -> None:
+        unit = Header(path="empty.h", declarations=[])
+        opts = ScaffoldOptions(
+            package_name="empty_pkg",
+            target_language="nim",
+            layout="package",
+            options={"embedded": True},
+        )
+        layout = get_writer("nim").write_layout(unit, opts)
+        tw = layout.get_file("tests/test_tripwire.nim")
+        assert tw is not None
+        assert "TRIPWIRE INCONCLUSIVE" in tw.content
+        assert "fail()" in tw.content
+
+    @pytest.mark.allow("subprocess")
+    def test_embedded_tripwire_compiles_and_links_static_c_object(self, tmp_path: Path) -> None:
+        import shutil
+        import subprocess
+
+        if not shutil.which("nim") or not shutil.which("cc"):
+            pytest.skip("nim or C compiler is not installed on PATH")
+
+        c_hdr = tmp_path / "rtos_timer.h"
+        c_src = tmp_path / "rtos_timer.c"
+        c_hdr.write_text(
+            textwrap.dedent("""\
+                #pragma once
+                #include <stdint.h>
+
+                typedef struct {
+                    uint32_t period_ms;
+                } rtos_timer_t;
+
+                int32_t rtos_timer_start(int32_t ticks);
+            """),
+            encoding="utf-8",
+        )
+        c_src.write_text(
+            textwrap.dedent("""\
+                #include "rtos_timer.h"
+
+                int32_t rtos_timer_start(int32_t ticks) {
+                    return ticks * 2;
+                }
+            """),
+            encoding="utf-8",
+        )
+        unit = Header(
+            path=str(c_hdr),
+            declarations=[
+                Struct(name="rtos_timer_t", fields=[Field("period_ms", CType("uint32_t"))], is_typedef=True),
+                Function(
+                    name="rtos_timer_start",
+                    return_type=CType("int32_t"),
+                    parameters=[Parameter("ticks", CType("int32_t"))],
+                ),
+            ],
+        )
+        opts = ScaffoldOptions(
+            package_name="rtos_timer",
+            target_language="nim",
+            layout="package",
+            options={"header_path": str(c_hdr), "embedded": True},
+        )
+        layout = get_writer("nim").write_layout(unit, opts)
+        pkg_dir = tmp_path / "pkg"
+        layout.write_to_disk(pkg_dir)
+
+        tw_path = pkg_dir / "tests" / "test_tripwire.nim"
+        res = subprocess.run(
+            [
+                "nim",
+                "c",
+                "-r",
+                "--hints:off",
+                "--skipParentCfg:on",
+                "--skipProjCfg:on",
+                f"--path:{pkg_dir / 'src'}",
+                f"--compile:{c_src}",
+                f"--passC:-I{tmp_path}",
+                f"--nimcache:{tmp_path / 'nc'}",
+                str(tw_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert res.returncode == 0, f"Embedded tripwire compile/run failed:\n{res.stdout}\n{res.stderr}"

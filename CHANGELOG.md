@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `NimWriter`: set `preserve_existing=True` on `{pkg}.nimble`, `src/{pkg}.nim`, and `nim.cfg` while keeping `preserve_existing=False` on `src/{pkg}/bindings.nim` so package re-scaffolding preserves human-authored DSL wrappers and project configuration.
+- `NimWriter`: set `merge_strategy="append_new_tests"` on `tests/test_{pkg}.nim` in package layout so custom unit test blocks are retained across regenerations.
+- `NimWriter`: emit `{.bitsize: N.}` field pragmas in `_write_struct` when `Field.bit_width` is populated on C/C++ struct and union fields.
+- `NimWriter`: add `emit_macro_shims` writer option (`-o emit_macro_shims=true`) to generate `static inline` C shim functions (`hk_shim_<NAME>`) and companion `src/{pkg}/_shims.h` / `src/{pkg}/_shims.c` files for function-like macros containing the `##` token-pasting operator (`MacroFunction.has_token_pasting`).
+- `NimWriter`: add `embedded` writer option (`-o embedded=true` or `--target embedded`) emitting standalone RTOS flags (`--os:standalone`, `--mm:arc`, `--exceptions:goto`, `--threads:off`) in `nim.cfg` and a static-link tripwire (`_build_embedded_tripwire`) free of `std/dynlib` / `loadLib`.
+
 ### Changed
 - Updated `NimJsonDocEnricher` docstring in `headerkit/transforms/nim_jsondoc.py` to reference `.naganim.ir.json` metadata sidecars (`elijahr/naganim`).
 - Aligned CI workflows with standard GitHub Actions triggers (`push`, `pull_request`, `schedule`, `workflow_dispatch`), inlined job steps across workflows and `headerkit new` project scaffolding, and removed the Forgejo dual-CI scripts (`scripts/ci/`, `scripts/require_ci_run.sh`, `.forgejo/workflows/ci.yml`) and manual-dispatch merge gate in favor of `check-release-prep.yml`.

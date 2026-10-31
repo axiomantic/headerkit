@@ -186,6 +186,54 @@ C_TO_NIM_PRIMITIVES: dict[str, str] = {
     "void*": "pointer",
 }
 
+NIM_TO_C_SHIM_PRIMITIVES: dict[str, str] = {
+    "void": "void",
+    "cchar": "char",
+    "char": "char",
+    "cschar": "signed char",
+    "int8": "int8_t",
+    "cuchar": "unsigned char",
+    "uint8": "uint8_t",
+    "byte": "uint8_t",
+    "cshort": "short",
+    "int16": "int16_t",
+    "cushort": "unsigned short",
+    "uint16": "uint16_t",
+    "cint": "int",
+    "int32": "int32_t",
+    "cuint": "unsigned int",
+    "uint32": "uint32_t",
+    "clong": "long",
+    "culong": "unsigned long",
+    "clonglong": "long long",
+    "int64": "int64_t",
+    "culonglong": "unsigned long long",
+    "uint64": "uint64_t",
+    "int": "intptr_t",
+    "uint": "uintptr_t",
+    "csize_t": "size_t",
+    "cfloat": "float",
+    "float32": "float",
+    "cdouble": "double",
+    "float64": "double",
+    "clongdouble": "long double",
+    "bool": "bool",
+    "cstring": "const char*",
+    "pointer": "void*",
+}
+
+
+def _nim_type_to_c_shim_type(nim_type: str) -> str:
+    """Map a Nim primitive or pointer type string to a C type for static inline macro shims."""
+    clean = nim_type.strip().strip("`")
+    if clean.startswith("ptr "):
+        pointee = clean[4:].strip()
+        return f"{_nim_type_to_c_shim_type(pointee)}*"
+    if clean.startswith("var "):
+        target = clean[4:].strip()
+        return f"{_nim_type_to_c_shim_type(target)}*"
+    return NIM_TO_C_SHIM_PRIMITIVES.get(clean, clean)
+
 
 CPP_OPERATOR_MAP: dict[str, str] = {
     "operator[]": "`[]`",
@@ -1021,6 +1069,18 @@ class NimWriter(BaseWriter):
             default=None,
             type=dict,
         ),
+        WriterOption(
+            name="emit_macro_shims",
+            description="Emit companion C shim wrappers for function-like macros containing token-pasting (##)",
+            default=False,
+            type=bool,
+        ),
+        WriterOption(
+            name="embedded",
+            description="Target embedded / standalone bare-metal profile without dynamic library loading",
+            default=False,
+            type=bool,
+        ),
     )
 
     _known_types: set[str]
@@ -1035,6 +1095,8 @@ class NimWriter(BaseWriter):
         header_path: str | None = None,
         context: PipelineContext | None = None,
         macro_types: dict[str, dict[str, Any]] | None = None,
+        emit_macro_shims: bool = False,
+        embedded: bool = False,
     ) -> None:
         self.header_path = header_path.replace("\\", "/") if header_path else None
         self._used_helpers: set[str] = set()
@@ -1049,6 +1111,20 @@ class NimWriter(BaseWriter):
         self._type_refs: dict[str, dict[str, str]] = {}
         self._identity_owners: dict[str, Symbol] = {}
         self.macro_types: dict[str, dict[str, Any]] = dict(macro_types) if macro_types else {}
+        self.emit_macro_shims = emit_macro_shims
+        self.embedded = embedded
+
+    def _is_embedded(self, options: ScaffoldOptions | None = None) -> bool:
+        """Return whether the target profile is bare-metal / standalone embedded."""
+        if self.embedded:
+            return True
+        if options is not None:
+            if options.get_option("embedded", False):
+                return True
+            target = options.get_option("target") or options.extra_context.get("target")
+            if isinstance(target, str) and target.strip().lower() == "embedded":
+                return True
+        return False
 
     def _prepare(
         self,
@@ -1062,6 +1138,10 @@ class NimWriter(BaseWriter):
                 self.macro_types.update(options.macro_types)
             if "header_path" in options.options and options.options["header_path"]:
                 self.header_path = str(options.options["header_path"]).replace("\\", "/")
+            if "emit_macro_shims" in options.options and options.options["emit_macro_shims"] is not None:
+                self.emit_macro_shims = bool(options.options["emit_macro_shims"])
+            if self._is_embedded(options):
+                self.embedded = True
         return super()._prepare(unit, options=options)
 
     def _ident(self, name: str, *, kind: str, namespace: str | None = None) -> str:
@@ -1663,6 +1743,22 @@ class NimWriter(BaseWriter):
                 "  p = cast[ptr T](cast[uint](p) + sizeof(T).uint)",
             ]
             procs_section = inc_helper + procs_section
+
+        if self.emit_macro_shims:
+            shimmed_macros = [d for d in header.declarations if isinstance(d, MacroFunction) and d.has_token_pasting]
+            if shimmed_macros:
+                shim_funcs = "\n\n".join(self._build_macro_c_shim_func(m) for m in shimmed_macros)
+                emit_block = [
+                    '{.emit: """/*TYPESECTION*/',
+                    "#include <stdbool.h>",
+                    "#include <stddef.h>",
+                    "#include <stdint.h>",
+                    f'#include "{header_file}"',
+                    shim_funcs,
+                    '""".}',
+                    "",
+                ]
+                procs_section = emit_block + procs_section
 
         if procs_section:
             lines.extend(procs_section)
@@ -2337,7 +2433,8 @@ class NimWriter(BaseWriter):
                 all_known = getattr(self, "_known_types", set()) | set(tps)
                 if any(tok not in all_known for tok in tokens):
                     f_type = "pointer"
-                lines.append(f"  {f_name}*: {f_type}")
+                bitsize_pragma = f" {{.bitsize: {f.bit_width}.}}" if f.bit_width is not None else ""
+                lines.append(f"  {f_name}*{bitsize_pragma}: {f_type}")
 
         # Static member variables
         static_fields = [f for f in s.fields if f.is_static and f.access not in ("private", "protected")]
@@ -2870,10 +2967,73 @@ class NimWriter(BaseWriter):
         c_name = self._ident(c.name, kind="macro")
         return [f"{c_name}* = {c.value}"]
 
+    def _build_macro_c_shim_func(self, m: MacroFunction) -> str:
+        """Render a guarded ``static inline`` C shim function wrapping ``m``."""
+        shim_name = f"hk_shim_{m.name}"
+        guard_name = f"HK_SHIM_{m.name}_DEFINED"
+        if m.name in self.macro_types:
+            hint = self.macro_types[m.name]
+            nim_ret = str(hint.get("return_type", "void"))
+            c_ret = _nim_type_to_c_shim_type(nim_ret)
+            params_hint = hint.get("parameters", [])
+            c_params_list = [f"{_nim_type_to_c_shim_type(str(p['type']))} {p['name']}" for p in params_hint]
+            c_params = ", ".join(c_params_list) if c_params_list else "void"
+            call_args = ", ".join(str(p["name"]) for p in params_hint)
+            is_void = c_ret == "void" or m.is_statement
+        elif not m.parameters:
+            is_void = m.is_statement or not m.body.strip()
+            c_ret = "void" if is_void else "int"
+            c_params = "void"
+            call_args = ""
+        else:
+            is_void = m.is_statement
+            c_ret = "void" if is_void else "int"
+            p_names = [
+                (p.name if p.name not in ("...", "__VA_ARGS__") else f"arg{i}") for i, p in enumerate(m.parameters)
+            ]
+            c_params = ", ".join(f"int {name}" for name in p_names)
+            call_args = ", ".join(p_names)
+
+        call_expr = f"{m.name}({call_args})"
+        stmt = f"{call_expr};" if is_void else f"return {call_expr};"
+        return textwrap.dedent(f"""\
+            #ifndef {guard_name}
+            #define {guard_name}
+            static inline {c_ret} {shim_name}({c_params}) {{
+                {stmt}
+            }}
+            #endif""")
+
+    def _build_macro_shims_files(self, unit: SourceUnit | Header) -> tuple[str, str]:
+        """Render companion ``_shims.h`` and ``_shims.c`` files for macro shims."""
+        header_file = _nim_string_path(self.header_path or getattr(unit, "path", None) or "header.h")
+        shimmed_macros = [d for d in unit.declarations if isinstance(d, MacroFunction) and d.has_token_pasting]
+        h_lines = [
+            "/* Auto-generated C macro shims by HeaderKit */",
+            "#pragma once",
+            "#include <stdbool.h>",
+            "#include <stddef.h>",
+            "#include <stdint.h>",
+            f'#include "{header_file}"',
+        ]
+        for m in shimmed_macros:
+            h_lines.append("")
+            h_lines.append(self._build_macro_c_shim_func(m))
+        shims_h = "\n".join(h_lines) + "\n"
+        shims_c = textwrap.dedent("""\
+            /* Auto-generated C macro shim translation unit by HeaderKit */
+            #include "_shims.h"
+
+            typedef int hk_macro_shims_tu_anchor;
+        """)
+        return shims_h, shims_c
+
     def _write_macro_function(self, m: MacroFunction, header_file: str) -> list[str]:
         """Render a C function-like macro in Nim."""
-        if m.has_token_pasting:
+        if m.has_token_pasting and not self.emit_macro_shims:
             return [f"# Macro {m.name} skipped: contains preprocessor token-pasting (##) operator"]
+
+        importc_target = f"hk_shim_{m.name}" if m.has_token_pasting else m.name
 
         if m.name in self.macro_types:
             hint = self.macro_types[m.name]
@@ -2883,7 +3043,7 @@ class NimWriter(BaseWriter):
             proc_name = _escape_ident(m.name.lower())
             params_joined = ", ".join(param_strs)
             return [
-                f'proc {proc_name}*({params_joined}): {ret_type} {{.importc: "{m.name}", header: "{header_file}", nodecl.}}'
+                f'proc {proc_name}*({params_joined}): {ret_type} {{.importc: "{importc_target}", header: "{header_file}", nodecl.}}'
             ]
 
         c_bridge_name = f"c_{m.name}"
@@ -2894,7 +3054,7 @@ class NimWriter(BaseWriter):
         if not m.parameters:
             ret_val = "void" if (m.is_statement or not m.body.strip()) else "cint"
             return [
-                f'proc {c_bridge_name}*(): {ret_val} {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+                f'proc {c_bridge_name}*(): {ret_val} {{.importc: "{importc_target}", header: "{header_file}", nodecl.}}',
                 f"template {template_name}*(): untyped =",
                 f"  {c_bridge_name}()",
             ]
@@ -2911,7 +3071,7 @@ class NimWriter(BaseWriter):
                 c_params = ", ".join(f"{name}: T{i + 1}" for i, name in enumerate(param_names))
             t_params = ", ".join(f"{p}: untyped" for p in param_names)
             return [
-                f'proc {c_bridge_name}*{type_params}({c_params}): void {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+                f'proc {c_bridge_name}*{type_params}({c_params}): void {{.importc: "{importc_target}", header: "{header_file}", nodecl.}}',
                 f"template {template_name}*({t_params}): untyped =",
                 f"  {c_bridge_name}({call_params})",
             ]
@@ -2927,7 +3087,7 @@ class NimWriter(BaseWriter):
             ret_type = "T1"
         t_params = ", ".join(f"{p}: untyped" for p in param_names)
         return [
-            f'proc {c_bridge_name}*{type_params}({c_params}): {ret_type} {{.importc: "{m.name}", header: "{header_file}", nodecl.}}',
+            f'proc {c_bridge_name}*{type_params}({c_params}): {ret_type} {{.importc: "{importc_target}", header: "{header_file}", nodecl.}}',
             f"template {template_name}*({t_params}): untyped =",
             f"  {c_bridge_name}({call_params})",
         ]
@@ -2955,7 +3115,10 @@ class NimWriter(BaseWriter):
         name links against nothing and says so, rather than carrying a plausible
         ``-l`` that resolves to the wrong library or to none.
         """
-        lines = ["--mm:orc", "--threads:on", "--styleCheck:hint"]
+        if self._is_embedded(options):
+            lines = ["--os:standalone", "--mm:arc", "--exceptions:goto", "--threads:off", "--styleCheck:hint"]
+        else:
+            lines = ["--mm:orc", "--threads:on", "--styleCheck:hint"]
 
         # `$config` is the directory holding this file, so the package builds with a
         # bare `nim c tests/...` and not only under `nimble`, which supplies srcDir.
@@ -3201,6 +3364,68 @@ class NimWriter(BaseWriter):
                 fail()
             """)
 
+    def _build_embedded_tripwire(self, pkg: str, unit: SourceUnit | Header) -> str:
+        """Render the tripwire for an embedded / standalone static-link target.
+
+        Bare-metal RTOS targets (such as Zephyr) have no dynamic loader and cannot
+        import ``std/dynlib`` or call ``loadLib``. Symbols are statically linked into
+        the target ELF image. This tripwire verifies at compile and link time that
+        bound entry points are declared and resolve against the static library, and
+        that bound record types have complete C ABI layouts.
+        """
+        probes, calls, complete_types = self._collect_link_probes(unit)
+        fn_names = extract_function_names(unit)
+        for decl in unit.declarations:
+            if isinstance(decl, Struct) and decl.name and decl.fields and not decl.template_params:
+                st_ident = self._ident(
+                    decl.name,
+                    kind="union" if decl.is_union else "struct",
+                    namespace=decl.namespace,
+                )
+                if st_ident not in complete_types:
+                    complete_types.append(st_ident)
+
+        if not probes and not complete_types and not fn_names:
+            return self._build_inconclusive_tripwire(pkg)
+
+        probe_block = "\n\n".join(probes) if probes else ""
+        call_block = "\n".join(f"    {call}" for call in calls) if calls else "    discard"
+        check_lines: list[str] = []
+        for fn in fn_names:
+            fn_ident = self._ident(fn, kind="function")
+            check_lines.append(f"    check declared({fn_ident})")
+        for t in complete_types:
+            check_lines.append(f"    check sizeof({t}) > 0")
+        checks_block = "\n".join(check_lines)
+
+        template = textwrap.dedent("""\
+            # Tripwire for an embedded / standalone static-link target.
+            #
+            # Bare-metal RTOS targets link foreign C symbols statically into the firmware
+            # image rather than loading shared libraries at runtime.
+            import std/unittest
+            import {pkg}
+
+            var hkRunLinkProbes = false
+
+            {probe_block}
+
+            proc hkForceLinkage() =
+              if hkRunLinkProbes:
+            {call_block}
+
+            suite "Tripwire Static Symbol & ABI Verification":
+              test "verify static foreign library symbols declare and link in '{pkg}'":
+                hkForceLinkage()
+            {checks_block}
+            """)
+        return template.format(
+            pkg=pkg,
+            probe_block=probe_block,
+            call_block=call_block,
+            checks_block=checks_block,
+        )
+
     def _write_package_layout(
         self,
         unit: SourceUnit | Header,
@@ -3229,7 +3454,7 @@ class NimWriter(BaseWriter):
             task test, "Run tests":
               exec "nim c -r tests/test_tripwire.nim"
         """)
-        files.append(OutputFile(path=f"{pkg}.nimble", content=nimble))
+        files.append(OutputFile(path=f"{pkg}.nimble", content=nimble, preserve_existing=True))
 
         # 2. Main package re-export
         main_src = textwrap.dedent(f"""\
@@ -3237,16 +3462,22 @@ class NimWriter(BaseWriter):
             import {pkg}/bindings
             export bindings
         """)
-        files.append(OutputFile(path=f"src/{pkg}.nim", content=main_src))
+        files.append(OutputFile(path=f"src/{pkg}.nim", content=main_src, preserve_existing=True))
 
-        # 3. Generated bindings module
-        files.append(OutputFile(path=f"src/{pkg}/bindings.nim", content=bindings_code))
+        # 3. Generated bindings module (and optional companion C macro shims)
+        files.append(OutputFile(path=f"src/{pkg}/bindings.nim", content=bindings_code, preserve_existing=False))
+        if self.emit_macro_shims or options.get_option("emit_macro_shims", False):
+            shims_h, shims_c = self._build_macro_shims_files(unit)
+            files.append(OutputFile(path=f"src/{pkg}/_shims.h", content=shims_h, preserve_existing=False))
+            files.append(OutputFile(path=f"src/{pkg}/_shims.c", content=shims_c, preserve_existing=False))
 
         # 4. nim.cfg compiler flags
-        files.append(OutputFile(path="nim.cfg", content=self._build_nim_cfg(unit, options)))
+        files.append(OutputFile(path="nim.cfg", content=self._build_nim_cfg(unit, options), preserve_existing=True))
 
         # 5. Tests
-        if test_type in ("tripwire", "both") and unit_requires_cpp(unit):
+        if test_type in ("tripwire", "both") and self._is_embedded(options):
+            files.append(OutputFile(path="tests/test_tripwire.nim", content=self._build_embedded_tripwire(pkg, unit)))
+        elif test_type in ("tripwire", "both") and unit_requires_cpp(unit):
             files.append(OutputFile(path="tests/test_tripwire.nim", content=self._build_cpp_tripwire(pkg, unit)))
         elif test_type in ("tripwire", "both"):
             stub_lines = []
@@ -3290,7 +3521,13 @@ class NimWriter(BaseWriter):
             """,
                 decl_checks,
             )
-            files.append(OutputFile(path=f"tests/test_{pkg}.nim", content=unit_test))
+            files.append(
+                OutputFile(
+                    path=f"tests/test_{pkg}.nim",
+                    content=unit_test,
+                    merge_strategy="append_new_tests",
+                )
+            )
 
         if test_type in ("unit", "both"):
             files.extend(build_work_order_files(unit, pkg, "nim"))
@@ -3488,9 +3725,16 @@ def write_nim(
     *,
     header_path: str | None = None,
     macro_types: dict[str, dict[str, Any]] | None = None,
+    emit_macro_shims: bool = False,
+    embedded: bool = False,
 ) -> str:
     """Convenience function to generate Nim bindings from a Header IR or ReconciledUnit."""
-    writer = NimWriter(header_path=header_path, macro_types=macro_types)
+    writer = NimWriter(
+        header_path=header_path,
+        macro_types=macro_types,
+        emit_macro_shims=emit_macro_shims,
+        embedded=embedded,
+    )
     if isinstance(header, (ReconciledUnit, MultiDimensionalReconciledUnit)):
         return writer.write_reconciled(header)
     return writer.write(header)
