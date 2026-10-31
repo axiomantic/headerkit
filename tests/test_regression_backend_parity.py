@@ -1613,6 +1613,8 @@ class TestR15IncludeMergeOrderIsDeterministic:
             orders = {self._run(Path(tmp), code, headers, seed) for seed in self.SEEDS}
 
         assert len(orders) > 1
+        for order in orders:
+            assert sorted(order.split()) == sorted(headers)
 
     def test_declaration_order_is_identical_under_every_hash_seed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1620,9 +1622,10 @@ class TestR15IncludeMergeOrderIsDeterministic:
             inc = self._layout(workdir)
             orders = {seed: self._run(workdir, self.PROBE, [str(inc)], seed) for seed in self.SEEDS}
 
-        assert len(set(orders.values())) == 1, f"declaration order depends on the hash seed: {orders}"
-        expected = {"root_fn"} | {f"{name}_t" for name in self.NAMES} | {f"{name}_fn" for name in self.NAMES}
-        assert set(orders["0"].split()) == expected
+        expected_order = " ".join(
+            ["root_fn", *(item for name in sorted(self.NAMES) for item in (f"{name}_t", f"{name}_fn"))]
+        )
+        assert orders == dict.fromkeys(self.SEEDS, expected_order)
 
 
 # ---------------------------------------------------------------------------
@@ -1690,9 +1693,25 @@ class TestR16CyclicTypedefsAreOrdered:
         with tempfile.TemporaryDirectory() as tmp:
             pxd = self._pxd(Path(tmp))
 
-        alias = pxd.index("ctypedef value value_t")
-        callback = pxd.index("ctypedef void (*value_destructor_cb_t)(value_t*)")
-        assert alias < callback, pxd
+        assert pxd == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                cdef struct value
+
+                ctypedef value value_t
+
+                ctypedef void (*value_destructor_cb_t)(value_t*)
+
+
+                cdef struct value:
+                    int x
+                    value_destructor_cb_t destructor
+
+
+                void root_use(value_t* v, value_destructor_cb_t cb)
+
+                int list_release(value_t* v)
+            """)
 
     def test_cyclic_typedefs_compile_link_and_execute(self) -> None:
         """The end-to-end proof: the callback typedef must resolve to the C type.
@@ -1845,4 +1864,58 @@ class TestR17DefinitionSurvivesIncludeMerge:
                 """)
             _cythonize(workdir, root, pxd, pyx)
 
-        assert "cdef struct rec:" in pxd, pxd
+        assert pxd == textwrap.dedent("""\
+            cdef extern from "test.h":
+
+                cdef enum kind:
+                    KIND_A
+                    KIND_B
+
+                cdef struct rec:
+                    int x
+                    kind k
+            """)
+
+    def test_cpp_class_with_constructors_and_bases_merged_after_forward_is_kept(self) -> None:
+        """C++ records whose members are constructors/destructors/bases must replace forwards too."""
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "a_forward.hpp").write_text(
+                textwrap.dedent("""\
+                    #ifndef A_FORWARD_HPP
+                    #define A_FORWARD_HPP
+                    class Base { public: int b; };
+                    class Box;
+                    #endif
+                    """)
+            )
+            (workdir / "b_definition.hpp").write_text(
+                textwrap.dedent("""\
+                    #ifndef B_DEFINITION_HPP
+                    #define B_DEFINITION_HPP
+                    #include <a_forward.hpp>
+                    class Box : public Base {
+                    public:
+                        Box(int x);
+                        ~Box();
+                    };
+                    #endif
+                    """)
+            )
+            root = "#include <a_forward.hpp>\n#include <b_definition.hpp>\n"
+            unit = get_backend("libclang").parse(root, "test.hpp", include_dirs=[str(workdir)])
+            pxd = write_pxd(unit)
+
+        box = next(d for d in unit.declarations if isinstance(d, Struct) and d.name == "Box")
+        assert [b.name for b in box.bases] == ["Base"]
+        assert len(box.constructors) == 1
+        assert box.destructor is not None
+        assert pxd == textwrap.dedent("""\
+            cdef extern from "test.hpp":
+
+                cdef cppclass Base:
+                    int b
+
+                cdef cppclass Box(Base):
+                    Box(int x)
+            """)

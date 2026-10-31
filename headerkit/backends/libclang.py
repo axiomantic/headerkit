@@ -911,6 +911,20 @@ def _deduplicate_declarations(declarations: list[Declaration]) -> list[Declarati
     return unique
 
 
+def _struct_has_body(s: Struct) -> bool:
+    """Return whether ``s`` carries any record body members beyond a bare forward declaration."""
+    return bool(
+        s.fields
+        or s.methods
+        or s.constructors
+        or s.destructor is not None
+        or s.bases
+        or s.conversions
+        or s.inner_typedefs
+        or s.nested_records
+    )
+
+
 def _defines_forward_declaration(kept: Declaration, candidate: Declaration) -> bool:
     """Report whether ``candidate`` is the definition of a type ``kept`` only forward-declares.
 
@@ -919,7 +933,7 @@ def _defines_forward_declaration(kept: Declaration, candidate: Declaration) -> b
     ``_drop_redundant_record_forwards``.
     """
     if isinstance(kept, Struct) and isinstance(candidate, Struct):
-        return not (kept.fields or kept.methods) and bool(candidate.fields or candidate.methods)
+        return not _struct_has_body(kept) and _struct_has_body(candidate)
     if isinstance(kept, Enum) and isinstance(candidate, Enum):
         return not kept.values and bool(candidate.values)
     return False
