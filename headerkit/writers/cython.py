@@ -681,9 +681,12 @@ class PxdWriter:
             lines.append("")
             lines.extend(forward_struct_decls)
 
-        # Phase 2: ALL typedefs
+        # Phase 2: ALL typedefs, sorted among themselves. Phase 1 forwarded every
+        # record they can name, but a typedef naming another typedef -- a callback
+        # taking a ``value_t*`` -- is only valid after it.
         typedef_decls: list[str] = []
-        for decl in decls:
+        sorted_typedefs, _ = self._sort_declarations([decl for decl in decls if isinstance(decl, Typedef)])
+        for decl in sorted_typedefs:
             if isinstance(decl, Typedef):
                 decl_lines = self._write_declaration(decl)
                 for line in decl_lines:

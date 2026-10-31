@@ -44,7 +44,7 @@ from pathlib import Path
 import pytest
 
 from headerkit.backends import get_backend, is_backend_available
-from headerkit.ir import Enum
+from headerkit.ir import Enum, Struct
 from headerkit.writers import get_writer
 from headerkit.writers.cffi import header_to_cffi
 from headerkit.writers.cython import write_pxd
@@ -1543,3 +1543,306 @@ class TestR14AllPaddingLayoutIsResolvedOnImport:
 
         assert "_HK_UNNAMED_BITFIELD_ALIGNS" not in code
         assert "import platform" not in code
+
+
+# ---------------------------------------------------------------------------
+# R15 -- libclang must merge included headers in an order independent of hashing
+# ---------------------------------------------------------------------------
+
+
+@libclang
+class TestR15IncludeMergeOrderIsDeterministic:
+    """Recursive include processing must not depend on ``PYTHONHASHSEED``.
+
+    ``_parse_recursively`` walked ``SourceUnit.included_headers``, which is a
+    ``set``, so the order in which included headers were parsed and merged --
+    and therefore the declaration order handed to every writer -- changed from
+    one interpreter run to the next. Two runs over the same header produced two
+    different ``.pxd`` files, and since the Cython writer's cycle path is
+    sensitive to that order, some runs produced a ``.pxd`` that Cython rejected
+    and others one that it accepted.
+    """
+
+    NAMES = ("alpha", "beta", "gamma", "delta", "epsilon", "zeta")
+    SEEDS = ("0", "1", "2", "3", "4", "5")
+
+    PROBE = textwrap.dedent("""\
+        import sys
+        from headerkit.backends import get_backend
+        unit = get_backend("libclang").parse(open("root.h").read(), "root.h", include_dirs=[sys.argv[1]])
+        print(" ".join(d.name for d in unit.declarations))
+        """)
+
+    def _layout(self, workdir: Path) -> Path:
+        inc = workdir / "inc"
+        inc.mkdir()
+        for name in self.NAMES:
+            guard = f"{name.upper()}_H"
+            (inc / f"{name}.h").write_text(
+                textwrap.dedent(f"""\
+                    #ifndef {guard}
+                    #define {guard}
+                    typedef int {name}_t;
+                    void {name}_fn({name}_t x);
+                    #endif
+                    """)
+            )
+        includes = "".join(f"#include <{name}.h>\n" for name in self.NAMES)
+        (workdir / "root.h").write_text(f"{includes}void root_fn(void);\n")
+        return inc
+
+    @staticmethod
+    def _run(workdir: Path, code: str, argv: list[str], seed: str) -> str:
+        run = subprocess.run(
+            [sys.executable, "-c", code, *argv],
+            cwd=workdir,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert run.returncode == 0, f"probe failed under PYTHONHASHSEED={seed}:\n{run.stdout}\n{run.stderr}"
+        return run.stdout.strip()
+
+    def test_the_seeds_really_reorder_a_set(self) -> None:
+        """Negative control: without it, an ignored ``PYTHONHASHSEED`` would make the next test vacuous."""
+        code = "import sys; print(' '.join(set(sys.argv[1:])))"
+        headers = [f"{name}.h" for name in self.NAMES]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            orders = {self._run(Path(tmp), code, headers, seed) for seed in self.SEEDS}
+
+        assert len(orders) > 1
+
+    def test_declaration_order_is_identical_under_every_hash_seed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            inc = self._layout(workdir)
+            orders = {seed: self._run(workdir, self.PROBE, [str(inc)], seed) for seed in self.SEEDS}
+
+        assert len(set(orders.values())) == 1, f"declaration order depends on the hash seed: {orders}"
+        expected = {"root_fn"} | {f"{name}_t" for name in self.NAMES} | {f"{name}_fn" for name in self.NAMES}
+        assert set(orders["0"].split()) == expected
+
+
+# ---------------------------------------------------------------------------
+# R16 -- typedefs on the Cython cycle path are ordered among themselves
+# ---------------------------------------------------------------------------
+
+
+@libclang
+class TestR16CyclicTypedefsAreOrdered:
+    """A typedef emitted on the cycle path must follow the typedefs it names.
+
+    ``struct value`` holds a ``value_destructor_cb_t``, whose parameter is a
+    ``value_t``, which is a typedef of ``struct value``: a cycle, so the writer
+    takes its phased path. That path forwards every record first and then emits
+    *all* typedefs in the order the IR delivered them. Records are forwarded,
+    so a typedef naming a record is always fine there -- but a typedef naming
+    another *typedef* was not ordered at all, and when the IR listed the
+    callback first Cython stopped at ``'value_t' is not a type identifier``.
+
+    The headers below are the shape that delivers that order: the callback and
+    the record live in one header, the typedef they share in another that both
+    the root and a sibling header include, and the root names the callback, so
+    the root unit pulls the callback in ahead of the typedef it uses.
+    """
+
+    TYPES_H = textwrap.dedent("""\
+        #ifndef TYPES_H
+        #define TYPES_H
+        struct value;
+        typedef struct value value_t;
+        #endif
+        """)
+    VALUE_H = textwrap.dedent("""\
+        #ifndef VALUE_H
+        #define VALUE_H
+        #include <types.h>
+        typedef void (*value_destructor_cb_t)(value_t *);
+        struct value {
+            int x;
+            value_destructor_cb_t destructor;
+        };
+        #endif
+        """)
+    LIST_H = textwrap.dedent("""\
+        #ifndef LIST_H
+        #define LIST_H
+        #include <types.h>
+        #include <value.h>
+        int list_release(value_t *v);
+        #endif
+        """)
+    ROOT_H = textwrap.dedent("""\
+        #include <types.h>
+        #include <list.h>
+        void root_use(value_t *v, value_destructor_cb_t cb);
+        """)
+
+    def _pxd(self, workdir: Path) -> str:
+        for name, text in (("types.h", self.TYPES_H), ("value.h", self.VALUE_H), ("list.h", self.LIST_H)):
+            (workdir / name).write_text(text)
+        unit = get_backend("libclang").parse(self.ROOT_H, "test.h", include_dirs=[str(workdir)])
+        return write_pxd(unit)
+
+    def test_function_pointer_typedef_follows_the_typedef_it_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pxd = self._pxd(Path(tmp))
+
+        alias = pxd.index("ctypedef value value_t")
+        callback = pxd.index("ctypedef void (*value_destructor_cb_t)(value_t*)")
+        assert alias < callback, pxd
+
+    def test_cyclic_typedefs_compile_link_and_execute(self) -> None:
+        """The end-to-end proof: the callback typedef must resolve to the C type.
+
+        ``root_use`` stores the callback in the record, and ``list_release``
+        invokes it and returns the field it left behind. The callback adds 1 to ``x``, so a
+        binding whose callback or record type were mis-declared yields something
+        other than 42 rather than merely failing to build.
+        """
+        compiler = _require_c_toolchain()
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            pxd = self._pxd(workdir)
+            (workdir / "impl.c").write_text(
+                textwrap.dedent("""\
+                #include "test.h"
+                void root_use(value_t *v, value_destructor_cb_t cb) { v->destructor = cb; }
+                int list_release(value_t *v) { v->destructor(v); return v->x; }
+                """)
+            )
+            pyx = textwrap.dedent("""\
+                cimport defs
+                cdef void bump(defs.value_t* v) noexcept:
+                    v.x += 1
+                def call_it():
+                    cdef defs.value_t v
+                    v.x = 41
+                    defs.root_use(&v, bump)
+                    return defs.list_release(&v)
+                """)
+            _cythonize(workdir, self.ROOT_H, pxd, pyx)
+
+            built = _compile_c(workdir, compiler)
+            assert built.returncode == 0, f"mod.c failed to build:\n{built.stderr}"
+            impl = subprocess.run(
+                compile_object_command(compiler, "impl.c", "impl.o", includes=[workdir]),
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert impl.returncode == 0, f"impl.c failed to build:\n{impl.stderr}"
+
+            link = subprocess.run(
+                link_extension_command(compiler, ["mod.o", "impl.o"], "mod"),
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert link.returncode == 0, f"link failed:\n{link.stderr}"
+
+            run = subprocess.run(
+                [sys.executable, "-c", "import mod; print(mod.call_it())"],
+                cwd=workdir,
+                env={**os.environ, "PYTHONPATH": str(workdir)},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert run.returncode == 0, f"import/call failed:\n{run.stdout}\n{run.stderr}"
+
+        assert run.stdout.strip() == "42"
+
+
+# ---------------------------------------------------------------------------
+# R17 -- a definition from a later included header replaces a merged forward
+# ---------------------------------------------------------------------------
+
+
+@libclang
+class TestR17DefinitionSurvivesIncludeMerge:
+    """Merging included headers must keep a type's definition over its forward declaration.
+
+    Every included header is parsed as its own translation unit and the results
+    are merged by ``_deduplicate_declarations``, which kept the *first*
+    declaration of each name. When the header that only forward-declares
+    ``struct rec`` was merged before the header that defines it, the definition
+    was discarded: the ``.pxd`` declared ``rec`` opaque, and any Cython code
+    touching a field or declaring a ``rec`` value failed. Within one translation
+    unit the converter already replaced a forward declaration with its
+    definition; the merge across units did not.
+    """
+
+    FORWARD_H = textwrap.dedent("""\
+        #ifndef FORWARD_H
+        #define FORWARD_H
+        struct rec;
+        enum kind;
+        #endif
+        """)
+    DEFINITION_H = textwrap.dedent("""\
+        #ifndef DEFINITION_H
+        #define DEFINITION_H
+        enum kind { KIND_A = 3, KIND_B = 5 };
+        struct rec { int x; enum kind k; };
+        #endif
+        """)
+
+    @staticmethod
+    def _unit(workdir: Path, forward_name: str, definition_name: str) -> list[object]:
+        (workdir / forward_name).write_text(TestR17DefinitionSurvivesIncludeMerge.FORWARD_H)
+        (workdir / definition_name).write_text(TestR17DefinitionSurvivesIncludeMerge.DEFINITION_H)
+        root = f"#include <{forward_name}>\n#include <{definition_name}>\n"
+        unit = get_backend("libclang").parse(root, "test.h", include_dirs=[str(workdir)])
+        return [d for d in unit.declarations if isinstance(d, Struct | Enum)]
+
+    @staticmethod
+    def _shape(decls: list[object]) -> list[tuple[str, str, list[str]]]:
+        shape: list[tuple[str, str, list[str]]] = []
+        for decl in decls:
+            if isinstance(decl, Struct):
+                shape.append(("struct", str(decl.name), [f.name for f in decl.fields]))
+            elif isinstance(decl, Enum):
+                shape.append(("enum", str(decl.name), [v.name for v in decl.values]))
+        return sorted(shape)
+
+    EXPECTED = [("enum", "kind", ["KIND_A", "KIND_B"]), ("struct", "rec", ["x", "k"])]
+
+    def test_definition_merged_after_forward_declaration_is_kept(self) -> None:
+        """``a_forward.h`` is merged first: the definition must still win."""
+        with tempfile.TemporaryDirectory() as tmp:
+            decls = self._unit(Path(tmp), "a_forward.h", "b_definition.h")
+
+        assert self._shape(decls) == self.EXPECTED
+
+    def test_definition_merged_before_forward_declaration_is_kept(self) -> None:
+        """Negative control: the order that always worked must keep working."""
+        with tempfile.TemporaryDirectory() as tmp:
+            decls = self._unit(Path(tmp), "b_forward.h", "a_definition.h")
+
+        assert self._shape(decls) == self.EXPECTED
+
+    def test_merged_definition_reaches_the_pxd_and_cython_accepts_it(self) -> None:
+        """A field access only compiles against the definition, not an opaque forward."""
+        _require_cython()
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "a_forward.h").write_text(self.FORWARD_H)
+            (workdir / "b_definition.h").write_text(self.DEFINITION_H)
+            root = "#include <a_forward.h>\n#include <b_definition.h>\n"
+            pxd = write_pxd(get_backend("libclang").parse(root, "test.h", include_dirs=[str(workdir)]))
+            pyx = textwrap.dedent("""\
+                cimport defs
+                def make():
+                    cdef defs.rec r
+                    r.x = 1
+                    r.k = defs.KIND_B
+                    return r.x + <int>r.k
+                """)
+            _cythonize(workdir, root, pxd, pyx)
+
+        assert "cdef struct rec:" in pxd, pxd
