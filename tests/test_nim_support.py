@@ -273,6 +273,7 @@ class TestNimCleanupTransform:
                     ],
                 ),
             ],
+            source_origin="nim_c_header",
         )
         assert cleaned == expected
 
@@ -339,6 +340,7 @@ class TestNimCleanupTransform:
                     type_overrides={"pyi": "bool"},
                 ),
             ],
+            source_origin="nim_c_header",
         )
 
 
@@ -624,6 +626,7 @@ class TestNimJsonDocEnricher:
                     is_deprecated=True,
                 ),
             ],
+            source_origin="nim_c_header",
         )
 
         # Negative control: passing the fragment file directly detects it is an included fragment and NEVER runs nim jsondoc on it
