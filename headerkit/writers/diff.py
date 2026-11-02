@@ -227,13 +227,53 @@ def _is_nim_c_header(unit: Header) -> bool:
     return False
 
 
+def _is_cleaned_nim_comparison(baseline: Header, target: Header) -> bool:
+    """Detect whether baseline vs target is a C header vs Nim ``--header`` (raw or after NimCleanupTransform)."""
+    if _is_nim_c_header(baseline) or _is_nim_c_header(target):
+        return True
+    for a, b in ((baseline, target), (target, baseline)):
+        a_enums: set[str] = set()
+        a_struct_typedefs: set[str] = set()
+        for d in a.declarations:
+            if isinstance(d, Enum) and d.name:
+                a_enums.add(_strip_tag_prefix(d.name))
+                a_enums.add(f"{_strip_tag_prefix(d.name)}_t")
+            elif isinstance(d, Typedef) and d.name and isinstance(d.underlying_type, CType):
+                u_raw = d.underlying_type.name.strip()
+                if u_raw.startswith("enum "):
+                    a_enums.add(d.name)
+                elif u_raw.startswith("struct ") and _strip_tag_prefix(u_raw) != d.name:
+                    a_struct_typedefs.add(d.name)
+        for d in b.declarations:
+            if (
+                isinstance(d, Typedef)
+                and d.name in a_enums
+                and isinstance(d.underlying_type, CType)
+                and d.underlying_type.name in ("int32_t", "int", "NI32")
+            ):
+                return True
+            if isinstance(d, Struct) and d.name in a_struct_typedefs:
+                return True
+    return False
+
+
 def _build_typedef_map(unit: Header) -> dict[str, TypeExpr]:
-    """Build a mapping from typedef name to underlying TypeExpr for a header."""
+    """Build a mapping from typedef name (and enum names) to underlying TypeExpr for a header."""
     td_map: dict[str, TypeExpr] = {}
     for decl in unit.declarations:
-        if isinstance(decl, Typedef) and decl.name:
-            if isinstance(decl.underlying_type, CType) and _strip_tag_prefix(decl.underlying_type.name) == decl.name:
-                continue
+        if isinstance(decl, Enum) and decl.name:
+            norm_enum = _unmangle_nim_type_name(_strip_tag_prefix(decl.name))
+            td_map[norm_enum] = CType("int32_t")
+        elif isinstance(decl, Typedef) and decl.name:
+            if isinstance(decl.underlying_type, CType):
+                raw_under = decl.underlying_type.name.strip()
+                stripped_under = _strip_tag_prefix(raw_under)
+                if raw_under.startswith("enum "):
+                    td_map[_unmangle_nim_type_name(stripped_under)] = CType("int32_t")
+                    td_map[_unmangle_nim_type_name(decl.name)] = CType("int32_t")
+                    continue
+                if stripped_under == decl.name:
+                    continue
             td_map[decl.name] = decl.underlying_type
     return td_map
 
@@ -369,6 +409,50 @@ def _canonicalize_type(
     return type_expr
 
 
+_CANONICAL_SCALAR_VALUES: frozenset[str] = frozenset(_CANONICAL_SCALAR_MAP.values()) | {
+    "void",
+    "char",
+    "float",
+    "double",
+}
+
+
+def _abi_types_equivalent(b_expr: TypeExpr, t_expr: TypeExpr) -> bool:
+    """Compare two canonicalized TypeExpr trees, matching opaque struct tag ``<stem>`` vs ``<stem>_t``."""
+    if b_expr == t_expr:
+        return True
+    if isinstance(b_expr, CType) and isinstance(t_expr, CType):
+        if b_expr.qualifiers != t_expr.qualifiers:
+            return False
+        if b_expr.name == t_expr.name:
+            return True
+        if b_expr.name not in _CANONICAL_SCALAR_VALUES and t_expr.name not in _CANONICAL_SCALAR_VALUES:
+            return b_expr.name.removesuffix("_t") == t_expr.name.removesuffix("_t")
+        return False
+    if isinstance(b_expr, Pointer) and isinstance(t_expr, Pointer):
+        return b_expr.qualifiers == t_expr.qualifiers and _abi_types_equivalent(b_expr.pointee, t_expr.pointee)
+    if isinstance(b_expr, Array) and isinstance(t_expr, Array):
+        return b_expr.size == t_expr.size and _abi_types_equivalent(b_expr.element_type, t_expr.element_type)
+    if isinstance(b_expr, Reference) and isinstance(t_expr, Reference):
+        return (
+            b_expr.qualifiers == t_expr.qualifiers
+            and b_expr.is_rvalue == t_expr.is_rvalue
+            and _abi_types_equivalent(b_expr.target, t_expr.target)
+        )
+    if isinstance(b_expr, FunctionPointer) and isinstance(t_expr, FunctionPointer):
+        return (
+            b_expr.is_variadic == t_expr.is_variadic
+            and b_expr.calling_convention == t_expr.calling_convention
+            and len(b_expr.parameters) == len(t_expr.parameters)
+            and _abi_types_equivalent(b_expr.return_type, t_expr.return_type)
+            and all(
+                _abi_types_equivalent(bp.type, tp.type)
+                for bp, tp in zip(b_expr.parameters, t_expr.parameters, strict=True)
+            )
+        )
+    return False
+
+
 def _types_equal(
     b_type: TypeExpr,
     t_type: TypeExpr,
@@ -393,7 +477,7 @@ def _types_equal(
         abi_mode=True,
         ignore_pointer_const=ignore_pointer_const,
     )
-    return b_canon == t_canon
+    return _abi_types_equivalent(b_canon, t_canon)
 
 
 def _normalize_calling_convention(cc: str | None, *, abi_mode: bool = True) -> str | None:
@@ -863,14 +947,19 @@ def diff_headers(
     :returns: A DiffReport with all detected changes.
     """
     entries: list[DiffEntry] = []
-    is_nim_comparison = _is_nim_c_header(baseline) or _is_nim_c_header(target)
+    is_nim_comparison = _is_cleaned_nim_comparison(baseline, target)
     if ignore_pointer_const is not None:
         effective_ignore_const = bool(ignore_pointer_const or relax_nim_pointer_const)
     else:
-        effective_ignore_const = bool(relax_nim_pointer_const or (abi_mode and is_nim_comparison))
+        effective_ignore_const = bool(relax_nim_pointer_const or abi_mode)
 
     baseline_typedefs = _build_typedef_map(baseline) if abi_mode else {}
     target_typedefs = _build_typedef_map(target) if abi_mode else {}
+    if abi_mode:
+        for td_name, td_val in list(baseline_typedefs.items()):
+            target_typedefs.setdefault(td_name, td_val)
+        for td_name, td_val in list(target_typedefs.items()):
+            baseline_typedefs.setdefault(td_name, td_val)
 
     def _should_skip_decl(decl: Declaration) -> bool:
         if isinstance(decl, MacroFunction):
@@ -916,13 +1005,32 @@ def diff_headers(
                 if kind_label == "typedef" and is_nim_comparison:
                     continue
                 if (
+                    kind_label == "enum"
+                    and is_nim_comparison
+                    and (
+                        ("typedef", decl_name_str) in target_map
+                        or ("typedef", f"{decl_name_str}_t") in target_map
+                    )
+                ):
+                    continue
+                if (
                     kind_label == "struct"
                     and isinstance(decl, Struct)
                     and not decl.fields
-                    and ("typedef", decl_name_str) in target_map
+                    and (
+                        ("typedef", decl_name_str) in target_map
+                        or ("typedef", f"{decl_name_str}_t") in target_map
+                        or ("struct", f"{decl_name_str}_t") in target_map
+                        or ("struct", decl_name_str.removesuffix("_t")) in target_map
+                    )
                 ):
                     continue
-                if kind_label == "typedef" and ("struct", decl_name_str) in target_map:
+                if kind_label == "typedef" and (
+                    ("struct", decl_name_str) in target_map
+                    or ("struct", decl_name_str.removesuffix("_t")) in target_map
+                    or ("enum", decl_name_str) in target_map
+                    or ("enum", decl_name_str.removesuffix("_t")) in target_map
+                ):
                     continue
             severity = _REMOVED_SEVERITY.get(kind_label, "breaking")
             entries.append(
@@ -943,13 +1051,32 @@ def diff_headers(
                 if kind_label == "typedef" and is_nim_comparison:
                     continue
                 if (
+                    kind_label == "enum"
+                    and is_nim_comparison
+                    and (
+                        ("typedef", decl_name_str) in baseline_map
+                        or ("typedef", f"{decl_name_str}_t") in baseline_map
+                    )
+                ):
+                    continue
+                if (
                     kind_label == "struct"
                     and isinstance(decl, Struct)
                     and not decl.fields
-                    and ("typedef", decl_name_str) in baseline_map
+                    and (
+                        ("typedef", decl_name_str) in baseline_map
+                        or ("typedef", f"{decl_name_str}_t") in baseline_map
+                        or ("struct", f"{decl_name_str}_t") in baseline_map
+                        or ("struct", decl_name_str.removesuffix("_t")) in baseline_map
+                    )
                 ):
                     continue
-                if kind_label == "typedef" and ("struct", decl_name_str) in baseline_map:
+                if kind_label == "typedef" and (
+                    ("struct", decl_name_str) in baseline_map
+                    or ("struct", decl_name_str.removesuffix("_t")) in baseline_map
+                    or ("enum", decl_name_str) in baseline_map
+                    or ("enum", decl_name_str.removesuffix("_t")) in baseline_map
+                ):
                     continue
             severity = _ADDED_SEVERITY.get(kind_label, "non_breaking")
             entries.append(
