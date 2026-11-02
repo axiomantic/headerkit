@@ -3,6 +3,10 @@
 from headerkit.transforms.base import IRTransformer
 from headerkit.transforms.builtin import (
     FilterByHeader,
+    FilterBySymbol,
+    FilterDeprecated,
+    FilterUnexportedSymbols,
+    FilterUnexportedSymbolsTransform,
     MakeOpaque,
     RenameTypes,
     StripPaddingFields,
@@ -16,6 +20,10 @@ from headerkit.transforms.nim_jsondoc import NimJsonDocEnricher
 __all__ = [
     "ChainedFilter",
     "FilterByHeader",
+    "FilterBySymbol",
+    "FilterDeprecated",
+    "FilterUnexportedSymbols",
+    "FilterUnexportedSymbolsTransform",
     "IRTransformer",
     "MakeOpaque",
     "NimCleanupTransform",
@@ -26,3 +34,4 @@ __all__ = [
     "StripPrefix",
     "rewrite_type_references",
 ]
+

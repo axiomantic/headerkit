@@ -215,6 +215,7 @@ class TestNimCleanupTransform:
                         Parameter(name="p0", type=CType("int")),
                         Parameter(name="_p0", type=CType("int")),
                         Parameter(name="step_p", type=CType("int")),
+                        Parameter(name="step_p0_p0", type=CType("int")),
                     ],
                 ),
                 Function(
@@ -270,11 +271,77 @@ class TestNimCleanupTransform:
                         Parameter(name="p0", type=CType("int")),
                         Parameter(name="_p0", type=CType("int")),
                         Parameter(name="step_p", type=CType("int")),
+                        Parameter(name="step_p0", type=CType("int")),
                     ],
                 ),
             ],
         )
         assert cleaned == expected
+
+    def test_unmangles_tyobject_tyenum_and_inlines_typroc(self) -> None:
+        """Verify NimCleanupTransform unmangles tyObject_<Name>__<hash>, tyEnum_<Name>__<hash>, and inlines tyProc__<hash>."""
+        fp_sig = FunctionPointer(
+            return_type=CType("NI"),
+            parameters=[Parameter(name="code_p0", type=CType("NI32"))],
+        )
+        unit = SourceUnit(
+            path="nim_mangled.h",
+            declarations=[
+                Typedef(name="tyProc__a1b2c3d4", underlying_type=fp_sig),
+                Struct(
+                    name="tyObject_Packet__9f8e7d",
+                    fields=[
+                        Field(name="kind", type=CType("tyEnum_PacketKind__112233")),
+                        Field(name="on_done", type=CType("tyProc__a1b2c3d4")),
+                    ],
+                ),
+                Enum(
+                    name="tyEnum_PacketKind__112233",
+                    values=[EnumValue("PK_DATA", 0), EnumValue("PK_ACK", 1)],
+                    underlying_type="NI32",
+                ),
+                Function(
+                    name="sendPacket",
+                    return_type=CType("NIM_BOOL"),
+                    parameters=[
+                        Parameter(name="pkt_p0", type=Pointer(CType("tyObject_Packet__9f8e7d"))),
+                        Parameter(name="cb_p1", type=CType("tyProc__a1b2c3d4")),
+                    ],
+                ),
+            ],
+        )
+
+        cleaned = unit >> NimCleanupTransform()
+        expected_fp = FunctionPointer(
+            return_type=CType("intptr_t"),
+            parameters=[Parameter(name="code", type=CType("int32_t"))],
+        )
+        assert cleaned == SourceUnit(
+            path="nim_mangled.h",
+            declarations=[
+                Struct(
+                    name="Packet",
+                    fields=[
+                        Field(name="kind", type=CType("PacketKind")),
+                        Field(name="on_done", type=expected_fp),
+                    ],
+                ),
+                Enum(
+                    name="PacketKind",
+                    values=[EnumValue("PK_DATA", 0), EnumValue("PK_ACK", 1)],
+                    underlying_type="int32_t",
+                ),
+                Function(
+                    name="sendPacket",
+                    return_type=CType("bool"),
+                    parameters=[
+                        Parameter(name="pkt", type=Pointer(CType("Packet"))),
+                        Parameter(name="cb", type=expected_fp),
+                    ],
+                ),
+            ],
+        )
+
 
 
 class TestNimJsonDocEnricher:
@@ -443,6 +510,129 @@ class TestNimJsonDocEnricher:
             ],
         )
         assert enriched == expected
+
+    def test_follows_include_fragments_exportc_arity_and_cache_fingerprint(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Verify NimJsonDocEnricher follows include directives, handles exportc+arity, and skips nim jsondoc on fragments."""
+        proj = tmp_path / "mylib"
+        src_dir = proj / "src"
+        frag_dir = src_dir / "fragments"
+        frag_dir.mkdir(parents=True)
+        (proj / "mylib.nimble").write_text('version = "0.1.0"\nsrcDir = "src"\n', encoding="utf-8")
+
+        root_nim = src_dir / "mylib.nim"
+        frag_nim = frag_dir / "ops.nim"
+
+        root_nim.write_text(
+            textwrap.dedent("""\
+                ## Root library module.
+                include fragments/ops
+
+                proc initEngine*(threads: cint): bool {.exportc: "mylib_init_engine", cdecl, dynlib.} =
+                  ## Initialize the engine with a thread count.
+                  true
+            """),
+            encoding="utf-8",
+        )
+        frag_nim.write_text(
+            textwrap.dedent("""\
+                proc computeFast*(lhs: cint, rhs: cint): cint {.exportc: "mylib_compute", cdecl, dynlib.} =
+                  ## Fast two-operand computation from fragment.
+                  lhs + rhs
+
+                proc computeFast*(lhs: cint, rhs: cint, scale: cint): cint {.exportc: "mylib_compute_scaled", deprecated: "Use mylib_compute instead", cdecl, dynlib.} =
+                  ## Scaled three-operand computation from fragment.
+                  (lhs + rhs) * scale
+            """),
+            encoding="utf-8",
+        )
+
+        # Even if subprocess.run fails or is never invoked on fragment files, source-level parsing enriches everything
+        import headerkit.transforms.nim_jsondoc as nj_mod
+
+        called_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            called_cmds.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(nj_mod.subprocess, "run", fake_run)
+
+        enricher_root = NimJsonDocEnricher(nim_source_path=root_nim)
+        # Verify cache_fingerprint hashes both root_nim and included frag_nim
+        fp1 = enricher_root.cache_fingerprint()
+        assert len(fp1["config"]["nim_file_sha256s"]) == 2
+
+        unit = SourceUnit(
+            path="mylib.h",
+            declarations=[
+                Function(
+                    name="mylib_init_engine",
+                    return_type=CType("bool"),
+                    parameters=[Parameter("threads_p0", CType("int"))],
+                ),
+                Function(
+                    name="mylib_compute",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("a_p0", CType("int")),
+                        Parameter("b_p1", CType("int")),
+                    ],
+                ),
+                Function(
+                    name="mylib_compute_scaled",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("a_p0", CType("int")),
+                        Parameter("b_p1", CType("int")),
+                        Parameter("c_p2", CType("int")),
+                    ],
+                ),
+            ],
+        )
+
+        enriched = unit >> NimCleanupTransform() >> enricher_root
+        assert enriched == SourceUnit(
+            path="mylib.h",
+            declarations=[
+                Function(
+                    name="mylib_init_engine",
+                    return_type=CType("bool"),
+                    parameters=[Parameter("threads", CType("int"))],
+                    doc="Initialize the engine with a thread count.",
+                ),
+                Function(
+                    name="mylib_compute",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("lhs", CType("int")),
+                        Parameter("rhs", CType("int")),
+                    ],
+                    doc="Fast two-operand computation from fragment.",
+                ),
+                Function(
+                    name="mylib_compute_scaled",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("lhs", CType("int")),
+                        Parameter("rhs", CType("int")),
+                        Parameter("scale", CType("int")),
+                    ],
+                    doc="Scaled three-operand computation from fragment.",
+                    is_deprecated=True,
+                ),
+            ],
+        )
+
+        # Negative control: passing the fragment file directly detects it is an included fragment and NEVER runs nim jsondoc on it
+        called_cmds.clear()
+        enricher_frag = NimJsonDocEnricher(nim_source_path=frag_nim)
+        _ = unit >> enricher_frag
+        assert called_cmds == []
+
 
 
 class TestRealNimHeaderBackends:

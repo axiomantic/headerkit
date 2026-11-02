@@ -52,3 +52,24 @@ def test_pipeline_filter_unit_rrshift() -> None:
 
     assert isinstance(res, SourceUnit)
     assert res.declarations[0].name == "compute_a_b"
+
+
+def test_pipeline_filter_and_chained_filter_cache_fingerprint() -> None:
+    filt1 = AppendSuffixFilter("_v1")
+    filt2 = AppendSuffixFilter("_v2")
+    chained = filt1 >> filt2
+
+    assert filt1.cache_fingerprint() == {
+        "filter": "AppendSuffixFilter",
+        "config": {"suffix": "_v1"},
+    }
+    assert chained.cache_fingerprint() == {
+        "filter": "ChainedFilter",
+        "filters": [
+            filt1.cache_fingerprint(),
+            filt2.cache_fingerprint(),
+        ],
+    }
+    # Negative control: different parameter value changes cache_fingerprint()
+    assert filt1.cache_fingerprint() != filt2.cache_fingerprint()
+
