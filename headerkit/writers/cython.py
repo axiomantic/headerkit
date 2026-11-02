@@ -25,13 +25,13 @@ Example
 
 from __future__ import annotations
 
+import os
 import re
-import textwrap
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import PureWindowsPath
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 from headerkit.ir import (
     Array,
@@ -61,15 +61,15 @@ from headerkit.reconcile import (
     PlatformGuardedBlock,
     ReconciledUnit,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers._cython_keywords import keywords
 from headerkit.writers._cython_types import (
     LIBCPP_TYPES,
     get_cython_module_for_type,
     get_libcpp_module_for_type,
+    get_standalone_stub_declaration,
     get_stub_module_for_type,
 )
-from headerkit.writers.base import BaseWriter, WriterOption
+from headerkit.writers.base import BaseWriter, ScaffoldOptions, WriterOption
 
 # Type qualifiers that Cython doesn't support -- strip from output
 UNSUPPORTED_TYPE_QUALIFIERS: set[str] = {
@@ -107,17 +107,16 @@ def _cython_string_path(path: str | None) -> str:
     """Render a header path safe for embedding in a Cython string literal.
 
     Inside Cython's ``cdef extern from "..."`` block, the path is parsed as a
-    string literal. On Windows, backslashes start escape sequences: ``\\r`` becomes
-    a carriage return (splitting the generated C ``#include`` across two lines),
-    ``\\t`` becomes a tab, and ``\\U``/``\\x`` trigger escape errors.
-
-    All C/C++ compilers and Cython accept forward slashes on Windows.
-    Normalised with PureWindowsPath so the result depends on the path structure
-    rather than on the host OS running HeaderKit.
+    string literal. On Windows (or for Windows drive-letter paths), backslashes
+    are path separators and normalize to forward slashes; on POSIX, literal
+    backslashes and double quotes are escaped so Cython string literals remain
+    valid.
     """
     if not path:
         return ""
-    return PureWindowsPath(path).as_posix()
+    if os.sep == "\\" or (len(path) >= 3 and path[0].isalpha() and path[1:3] == ":\\"):
+        return PureWindowsPath(path).as_posix().replace('"', '\\"')
+    return path.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _strip_namespace_qualifiers(name: str) -> str:
@@ -223,11 +222,19 @@ class PxdWriter:
         header: Header,
         *,
         stub_cimport_prefix: str | None = "headerkit.stubs",
+        stub_mode: Literal["cimport", "standalone"] = "cimport",
         header_path: str | None = None,
+        nogil: bool | str = False,
+        exception_spec: str | None = None,
     ) -> None:
         self.header: Header = header
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
-        self.header_path: str = header_path or _cython_string_path(header.path)
+        self.stub_mode: Literal["cimport", "standalone"] = stub_mode
+        self.header_path: str = (
+            _cython_string_path(header_path) if header_path is not None else _cython_string_path(header.path)
+        )
+        self.nogil: bool | str = nogil
+        self.exception_spec: str | None = exception_spec
         # Track declared struct/union/enum names for type reference cleanup
         self.known_structs: set[str] = set()
         self.known_unions: set[str] = set()
@@ -265,6 +272,7 @@ class PxdWriter:
         self.cython_cimports: dict[str, set[str]] = {}  # module -> types
         self.libcpp_cimports: dict[str, set[str]] = {}  # module -> types
         self.stub_cimports: dict[str, set[str]] = {}  # stub_module -> types
+        self.standalone_stub_types: dict[str, set[str]] = {}  # stub_module -> types
 
         # Current struct's inner typedefs for method return type resolution
         self._current_inner_typedefs: dict[str, str] = {}
@@ -577,6 +585,9 @@ class PxdWriter:
         if lines:
             # Blank line between the cimport header and the extern blocks.
             lines.append("")
+        stub_lines = self._standalone_stub_lines()
+        if stub_lines:
+            lines.extend(stub_lines)
         lines.extend(body)
         return "\n".join(lines)
 
@@ -594,12 +605,32 @@ class PxdWriter:
             types = sorted(self.libcpp_cimports[module])
             lines.append(f"from {module} cimport {', '.join(types)}")
 
-        # 3. Stub cimports (only when stub_cimport_prefix is configured)
-        if self.stub_cimport_prefix is not None:
+        # 3. Stub cimports (only when stub_mode=="cimport" and stub_cimport_prefix is configured)
+        if self.stub_mode == "cimport" and self.stub_cimport_prefix is not None:
             for stub_module in sorted(self.stub_cimports.keys()):
                 types = sorted(self.stub_cimports[stub_module])
                 lines.append(f"from {self.stub_cimport_prefix}.{stub_module} cimport {', '.join(types)}")
 
+        return lines
+
+    def _standalone_stub_lines(self) -> list[str]:
+        """Render minimal scoped ``cdef extern from "<header.h>":`` blocks when ``stub_mode == 'standalone'``."""
+        if self.stub_mode != "standalone" or not self.standalone_stub_types:
+            return []
+        lines: list[str] = []
+        for stub_module in sorted(self.standalone_stub_types.keys()):
+            type_names = sorted(self.standalone_stub_types[stub_module])
+            if not type_names:
+                continue
+            header_spec, _ = get_standalone_stub_declaration(stub_module, type_names[0])
+            lines.append(f'cdef extern from "{header_spec}":')
+            for idx, tname in enumerate(type_names):
+                _, decl_lines = get_standalone_stub_declaration(stub_module, tname)
+                for dl in decl_lines:
+                    lines.append(f"{self.INDENT}{dl}")
+                if idx < len(type_names) - 1 and len(decl_lines) > 1:
+                    lines.append("")
+            lines.append("")
         return lines
 
     def _write_body(self) -> list[str]:
@@ -1108,10 +1139,18 @@ class PxdWriter:
         ):
             return
 
+        # Check Cython stdlib
+        module = get_cython_module_for_type(name) or (
+            get_cython_module_for_type(clean_name) if self.stub_mode == "standalone" else None
+        )
+        if module:
+            self.cython_cimports.setdefault(module, set()).add(clean_name if name.startswith("struct ") else name)
+            return
+
         # Check stubs BEFORE deciding to forward-declare
         stub_module = get_stub_module_for_type(name) or get_stub_module_for_type(clean_name)
 
-        if not stub_module:
+        if not stub_module or (self.stub_mode == "cimport" and self.stub_cimport_prefix is None):
             if name.startswith("struct "):
                 struct_name = name[7:].removeprefix("struct ")
                 if (
@@ -1137,20 +1176,17 @@ class PxdWriter:
         # For template types, extract the base name
         base_name = cpp_name.split("<")[0] if "<" in cpp_name else cpp_name
 
-        # Check Cython stdlib
-        module = get_cython_module_for_type(name)
-        if module:
-            self.cython_cimports.setdefault(module, set()).add(name)
-            return
-
         # Check C++ STL
         module = get_libcpp_module_for_type(base_name)
         if module:
             self.libcpp_cimports.setdefault(module, set()).add(base_name)
 
-        # Collect stub cimports if a prefix is configured
-        if self.stub_cimport_prefix is not None and stub_module:
-            self.stub_cimports.setdefault(stub_module, set()).add(clean_name)
+        # Collect stub cimports or standalone stub declarations
+        if stub_module:
+            if self.stub_mode == "standalone":
+                self.standalone_stub_types.setdefault(stub_module, set()).add(clean_name)
+            elif self.stub_cimport_prefix is not None:
+                self.stub_cimports.setdefault(stub_module, set()).add(clean_name)
 
         # Also check template arguments recursively
         if "<" in cpp_name:
@@ -1723,7 +1759,21 @@ class PxdWriter:
         if func.calling_convention:
             cc_comment = f"  # calling convention: __{func.calling_convention}__"
 
-        lines.append(f"{return_type} {name}({params}){const_suffix}{cc_comment}")
+        exc_suffix = ""
+        if self.exception_spec:
+            spec = self.exception_spec.strip()
+            if spec.startswith("except") or spec == "noexcept":
+                exc_suffix = f" {spec}"
+            else:
+                exc_suffix = f" except {spec}"
+        elif getattr(func, "is_noexcept", False):
+            exc_suffix = " noexcept"
+
+        nogil_suffix = ""
+        if self.nogil:
+            nogil_suffix = " nogil" if self.nogil is True else f" {self.nogil}"
+
+        lines.append(f"{return_type} {name}({params}){const_suffix}{exc_suffix}{nogil_suffix}{cc_comment}")
         return lines
 
     # -----------------------------------------------------------------
@@ -2302,7 +2352,10 @@ def write_pxd(
     header: Header,
     *,
     stub_cimport_prefix: str | None = "headerkit.stubs",
+    stub_mode: Literal["cimport", "standalone"] = "cimport",
     header_path: str | None = None,
+    nogil: bool | str = False,
+    exception_spec: str | None = None,
 ) -> str:
     """Convenience function to convert a Header IR to Cython .pxd format.
 
@@ -2310,10 +2363,21 @@ def write_pxd(
     :param stub_cimport_prefix: If set, emit cimport lines for stub types
         (e.g., "headerkit.stubs" -> "from headerkit.stubs.stdarg cimport va_list").
         Defaults to "headerkit.stubs". Pass None to suppress stub cimports.
+    :param stub_mode: Either ``"cimport"`` (default) or ``"standalone"`` (emits
+        scoped ``cdef extern from "<header.h>":`` declarations for referenced stub types).
     :param header_path: Override the header path used in generated cdef extern from block.
+    :param nogil: If True (or a custom modifier string), append ``nogil`` to function declarations.
+    :param exception_spec: Optional Cython exception specification (e.g., ``"+"`` -> ``except +``).
     :return: The generated .pxd file contents as a string
     """
-    writer = PxdWriter(header, stub_cimport_prefix=stub_cimport_prefix, header_path=header_path)
+    writer = PxdWriter(
+        header,
+        stub_cimport_prefix=stub_cimport_prefix,
+        stub_mode=stub_mode,
+        header_path=header_path,
+        nogil=nogil,
+        exception_spec=exception_spec,
+    )
     return writer.write()
 
 
@@ -2386,7 +2450,7 @@ class CythonWriter(BaseWriter):
     default_output_pattern: str = "{dir}/{stem}.pxd"
     default_extension: str = ".pxd"
     min_access_floor: ClassVar[str | None] = "public"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="test_type",
@@ -2401,6 +2465,12 @@ class CythonWriter(BaseWriter):
             type=str,
         ),
         WriterOption(
+            name="stub_mode",
+            description="Stub type resolution mode: cimport or standalone",
+            default="cimport",
+            choices=("cimport", "standalone"),
+        ),
+        WriterOption(
             name="access_floor",
             description="Minimum member access level to include (public, protected, private, or all)",
             default="public",
@@ -2412,16 +2482,34 @@ class CythonWriter(BaseWriter):
             default=None,
             type=str,
         ),
+        WriterOption(
+            name="nogil",
+            description="Append nogil to emitted function declarations",
+            default=False,
+            type=bool,
+        ),
+        WriterOption(
+            name="exception_spec",
+            description="Cython exception specification for functions (e.g. '+' for except +)",
+            default=None,
+            type=str,
+        ),
     )
 
     def __init__(
         self,
         *,
         stub_cimport_prefix: str | None = "headerkit.stubs",
+        stub_mode: Literal["cimport", "standalone"] = "cimport",
         header_path: str | None = None,
+        nogil: bool | str = False,
+        exception_spec: str | None = None,
     ) -> None:
         self.stub_cimport_prefix: str | None = stub_cimport_prefix
-        self.header_path: str | None = _cython_string_path(header_path) if header_path else None
+        self.stub_mode: Literal["cimport", "standalone"] = stub_mode
+        self.header_path: str | None = header_path
+        self.nogil: bool | str = nogil
+        self.exception_spec: str | None = exception_spec
 
     def _prepare(
         self,
@@ -2430,7 +2518,15 @@ class CythonWriter(BaseWriter):
     ) -> SourceUnit | Header:
         if options is not None:
             if "header_path" in options.options and options.options["header_path"]:
-                self.header_path = _cython_string_path(str(options.options["header_path"]))
+                self.header_path = str(options.options["header_path"])
+            if "stub_mode" in options.options and options.options["stub_mode"]:
+                mode = str(options.options["stub_mode"])
+                if mode in ("cimport", "standalone"):
+                    self.stub_mode = mode  # type: ignore[assignment]
+            if "nogil" in options.options:
+                self.nogil = options.options["nogil"]
+            if "exception_spec" in options.options and options.options["exception_spec"]:
+                self.exception_spec = str(options.options["exception_spec"])
         return super()._prepare(unit, options=options)
 
     def _render(self, unit: SourceUnit | Header) -> str:
@@ -2438,7 +2534,10 @@ class CythonWriter(BaseWriter):
         writer = PxdWriter(
             header,
             stub_cimport_prefix=self.stub_cimport_prefix,
+            stub_mode=self.stub_mode,
             header_path=self.header_path,
+            nogil=self.nogil,
+            exception_spec=self.exception_spec,
         )
         return writer.write()
 
@@ -2453,8 +2552,9 @@ class CythonWriter(BaseWriter):
         unit: ReconciledUnit | MultiDimensionalReconciledUnit,
     ) -> str:
         """Render a ReconciledUnit containing common declarations and platform-guarded blocks."""
-        header_path = self.header_path or _cython_string_path(unit.path or "header.h")
+        header_path = self.header_path if self.header_path is not None else (unit.path or "header.h")
         all_cimports: set[str] = set()
+        all_standalone_stubs: dict[str, set[str]] = {}
 
         def _render_chunk(decls: list[Declaration]) -> list[str]:
             if not decls:
@@ -2463,10 +2563,15 @@ class CythonWriter(BaseWriter):
             writer = PxdWriter(
                 sub_header,
                 stub_cimport_prefix=self.stub_cimport_prefix,
+                stub_mode=self.stub_mode,
                 header_path=header_path,
+                nogil=self.nogil,
+                exception_spec=self.exception_spec,
             )
             body = writer._write_body()
             all_cimports.update(writer._cimport_lines())
+            for mod, types in writer.standalone_stub_types.items():
+                all_standalone_stubs.setdefault(mod, set()).update(types)
             return body
 
         sections: list[str] = []
@@ -2515,94 +2620,15 @@ class CythonWriter(BaseWriter):
                 output_lines.append(cimp)
             output_lines.append("")
 
+        if self.stub_mode == "standalone" and all_standalone_stubs:
+            dummy = PxdWriter(Header(path=header_path, declarations=[]), stub_mode="standalone")
+            dummy.standalone_stub_types = all_standalone_stubs
+            output_lines.extend(dummy._standalone_stub_lines())
+
         if sections:
             output_lines.append("\n\n".join(sections))
 
         return "\n".join(output_lines).rstrip() + "\n"
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        pxd_code = self._render(unit)
-
-        pyproject = textwrap.dedent(f"""\
-            [build-system]
-            requires = ["setuptools>=61.0", "Cython>=3.0"]
-            build-backend = "setuptools.build_meta"
-
-            [project]
-            name = "{pkg}"
-            version = "0.1.0"
-            description = "Cython bindings for {pkg}"
-            requires-python = ">=3.9"
-
-            [tool.setuptools.packages.find]
-            where = ["src"]
-        """)
-
-        init_py = textwrap.dedent(f"""\
-            \"\"\"{pkg} package initialization.\"\"\"
-            from {pkg} import {pkg}
-
-            __all__ = ["{pkg}"]
-        """)
-
-        pyx_code = textwrap.dedent(f"""\
-            # cython: language_level=3
-            cimport {pkg}.{pkg} as c_{pkg}
-
-            # High-level Python wrappers can be exposed here
-        """)
-
-        files = [
-            OutputFile(path="pyproject.toml", content=pyproject),
-            OutputFile(path=f"src/{pkg}/__init__.py", content=init_py),
-            OutputFile(path=f"src/{pkg}/{pkg}.pxd", content=pxd_code),
-            OutputFile(path=f"src/{pkg}/{pkg}.pyx", content=pyx_code),
-        ]
-
-        if test_type in ("both", "tripwire"):
-            tripwire = textwrap.dedent(f"""\
-                import pytest
-
-                @pytest.mark.tripwire
-                def test_cython_tripwire():
-                    \"\"\"Tripwire: verify cython wrapper import.\"\"\"
-                    try:
-                        import {pkg}
-                    except ImportError:
-                        pytest.fail("Failed to import cython wrapper module '{pkg}'")
-            """)
-            files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
-
-        if test_type in ("both", "unit"):
-            unit_test = textwrap.dedent(f"""\
-                import inspect
-                import {pkg}
-
-                def test_{pkg}_package_structure():
-                    \"\"\"Verify package import and module structure.\"\"\"
-                    assert inspect.ismodule({pkg})
-                    assert hasattr({pkg}, "{pkg}")
-            """)
-            files.append(OutputFile(path="tests/test_wrapper.py", content=unit_test))
-
-        return ProjectLayout(files=files)
-
-    def _write_custom_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        if options.layout == "wheel":
-            from headerkit.packaging.cython import generate_cython_wheel_layout
-
-            return generate_cython_wheel_layout(unit, options)
-        return self._write_package_layout(unit, options)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Cython comments."""

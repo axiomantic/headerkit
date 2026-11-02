@@ -31,7 +31,6 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.transforms.nim_cleanup import (
     _NIM_BUILTIN_TYPEDEFS,
     _NIM_INTERNAL_EXACT_NAMES,
@@ -39,7 +38,7 @@ from headerkit.transforms.nim_cleanup import (
     _clean_nim_identifier,
     _unmangle_nim_type_name,
 )
-from headerkit.writers.base import BaseWriter, WriterOption
+from headerkit.writers.base import BaseWriter, OutputFile, ProjectLayout, ScaffoldOptions, WriterOption
 
 # =============================================================================
 # Data Structures
@@ -209,7 +208,11 @@ def _is_nim_c_header(unit: Header) -> bool:
         return True
     for decl in unit.declarations:
         name = _decl_name(decl) or ""
-        if name in _NIM_INTERNAL_EXACT_NAMES or name in _NIM_BUILTIN_TYPEDEFS or name.startswith(_NIM_INTERNAL_PREFIXES):
+        if (
+            name in _NIM_INTERNAL_EXACT_NAMES
+            or name in _NIM_BUILTIN_TYPEDEFS
+            or name.startswith(_NIM_INTERNAL_PREFIXES)
+        ):
             return True
         if name.startswith(("tyObject_", "tyEnum_", "tyProc__")):
             return True
@@ -1255,4 +1258,3 @@ register_writer(
     DiffWriter,
     description="API compatibility diff reports (JSON or Markdown)",
 )
-

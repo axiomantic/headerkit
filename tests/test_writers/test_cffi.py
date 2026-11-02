@@ -1,7 +1,6 @@
 """Tests for the CFFI cdef writer."""
 
 import textwrap
-from pathlib import Path
 
 from headerkit.ir import (
     Array,
@@ -55,12 +54,23 @@ class TestTypeToCffi:
     def test_pointer_to_function_pointer(self):
         fp = FunctionPointer(CType("void"), [Parameter("x", CType("int"))])
         result = type_to_cffi(Pointer(fp))
-        assert result == "void(*)(int x)"
+        assert result == "void(**)(int x)"
 
     def test_pointer_to_function_pointer_no_params(self):
         fp = FunctionPointer(CType("void"), [])
         result = type_to_cffi(Pointer(fp))
-        assert result == "void(*)(void)"
+        assert result == "void(**)(void)"
+
+    def test_bare_function_type_zero_stars(self):
+        fp = FunctionPointer(CType("void"), [Parameter("x", CType("int"))], is_pointer=False)
+        assert type_to_cffi(fp) == "void(int x)"
+        assert type_to_cffi(Pointer(fp)) == "void(*)(int x)"
+
+    def test_outer_pointer_qualifiers_filtered(self):
+        t_inner_const = Pointer(Pointer(CType("char"), qualifiers=["const", "restrict", "__restrict", "_Atomic"]))
+        assert type_to_cffi(t_inner_const) == "char * const *"
+        t_outer_const = Pointer(Pointer(CType("char")), qualifiers=["const", "restrict", "__restrict", "_Atomic"])
+        assert type_to_cffi(t_outer_const) == "char ** const"
 
 
 class TestDeclToCffi:
@@ -77,7 +87,12 @@ class TestDeclToCffi:
     def test_typedef_struct(self):
         s = Struct("Point", [Field("x", CType("int"))], is_typedef=True)
         result = decl_to_cffi(s)
-        assert result == "typedef struct Point {\n    int x;\n} Point;"
+        assert result == "typedef struct {\n    int x;\n} Point;"
+
+    def test_typedef_struct_self_referential_preserves_tag(self):
+        s = Struct("Node", [Field("next", Pointer(CType("struct Node")))], is_typedef=True)
+        result = decl_to_cffi(s)
+        assert result == "typedef struct Node {\n    struct Node * next;\n} Node;"
 
     def test_union(self):
         u = Struct("Data", [Field("i", CType("int"))], is_union=True)
@@ -505,137 +520,166 @@ class TestDefinePatterns:
         assert "int bar(int x);" in result
 
 
-class TestMatchDefinesHelper:
-    """Tests for the _match_defines() helper function."""
+class TestDefinePatternsFromIRConstants:
+    """Tests for CffiWriter matching define_patterns against Constant declarations."""
 
-    def test_match_defines(self):
-        """_match_defines scans source for #define names matching patterns."""
-        from headerkit._generate import _match_defines
-
-        source = textwrap.dedent("""\
-            #define NNG_FLAG_ALLOC 1
-            #define NNG_FLAG_NONBLOCK 2
-            #define NNG_VERSION "1.0"
-            #define OTHER_THING 42
-        """)
-        result = _match_defines(source, [r"NNG_FLAG_\w+"])
-        assert result == ["NNG_FLAG_ALLOC", "NNG_FLAG_NONBLOCK"]
-
-    def test_match_defines_no_matches(self):
-        """Returns empty list when no defines match."""
-        from headerkit._generate import _match_defines
-
-        source = "#define FOO 1\n#define BAR 2\n"
-        result = _match_defines(source, [r"NONEXISTENT_\w+"])
-        assert result == []
-
-    def test_match_defines_deduplicates(self):
-        """Duplicate #define names are deduplicated."""
-        from headerkit._generate import _match_defines
-
-        source = "#define FOO 1\n#define FOO 2\n"
-        result = _match_defines(source, [r"FOO"])
-        assert result == ["FOO"]
-
-    def test_match_defines_multiple_patterns(self):
-        """Multiple patterns are all checked."""
-        from headerkit._generate import _match_defines
-
-        source = textwrap.dedent("""\
-            #define AAA_ONE 1
-            #define BBB_TWO 2
-            #define CCC_THREE 3
-        """)
-        result = _match_defines(source, [r"AAA_\w+", r"CCC_\w+"])
-        assert result == ["AAA_ONE", "CCC_THREE"]
-
-    def test_match_defines_indented(self):
-        """Indented #define lines are matched."""
-        from headerkit._generate import _match_defines
-
-        source = "  #define FOO 1\n\t#define BAR 2\n"
-        result = _match_defines(source, [r"FOO", r"BAR"])
-        assert result == ["FOO", "BAR"]
-
-    def test_match_defines_space_after_hash(self):
-        """Space between # and define is handled."""
-        from headerkit._generate import _match_defines
-
-        source = "# define FOO 1\n#  define BAR 2\n"
-        result = _match_defines(source, [r"FOO", r"BAR"])
-        assert result == ["FOO", "BAR"]
-
-
-class TestPopulateMatchedDefinesIncludeResolution:
-    """Tests for _populate_matched_defines resolving #include directives."""
-
-    def test_resolves_includes_from_code(self, tmp_path: Path):
-        """When code= contains #include, resolved files are scanned for defines."""
-        from headerkit._generate import _populate_matched_defines
+    def test_matches_non_integer_constants_and_deduplicates_integers(self):
         from headerkit.writers.cffi import CffiWriter
 
-        inc_dir = tmp_path / "include"
-        inc_dir.mkdir()
-        (inc_dir / "lib.h").write_text("#define LIB_FOO 1\n#define LIB_BAR 2\nint x;\n")
-
-        writer = CffiWriter(define_patterns=[r"LIB_\w+"])
-        _populate_matched_defines(
-            writer,
-            header_path=tmp_path / "umbrella.h",
-            code="#include <lib.h>\n",
-            include_dirs=[str(inc_dir)],
+        header = Header(
+            path="nng.h",
+            declarations=[
+                Constant("NNG_FLAG_ALLOC", 1, is_macro=True),
+                Constant("NNG_FLAG_NONBLOCK", None, is_macro=True),
+                Constant("NNG_VERSION", '"1.0"', is_macro=True),
+                Constant("OTHER_MACRO", None, is_macro=True),
+                Function("nng_alloc", CType("void"), []),
+            ],
         )
-        assert writer._matched_defines == ["LIB_FOO", "LIB_BAR"]
+        writer = CffiWriter(define_patterns=[r"^NNG_FLAG_\w+$"])
+        result = writer.write(header)
+        assert result == ("#define NNG_FLAG_ALLOC 1\nvoid nng_alloc(void);\n#define NNG_FLAG_NONBLOCK ...")
 
-    def test_includes_and_inline_defines(self, tmp_path: Path):
-        """Defines from both the code string and included files are matched."""
-        from headerkit._generate import _populate_matched_defines
+    def test_define_patterns_respects_exclude_patterns(self):
         from headerkit.writers.cffi import CffiWriter
 
-        inc_dir = tmp_path / "include"
-        inc_dir.mkdir()
-        (inc_dir / "lib.h").write_text("#define LIB_FROM_HEADER 1\n")
-
-        writer = CffiWriter(define_patterns=[r"LIB_\w+"])
-        _populate_matched_defines(
-            writer,
-            header_path=tmp_path / "umbrella.h",
-            code="#define LIB_FROM_CODE 99\n#include <lib.h>\n",
-            include_dirs=[str(inc_dir)],
+        header = Header(
+            path="nng.h",
+            declarations=[
+                Constant("NNG_FLAG_PUBLIC", None, is_macro=True),
+                Constant("NNG_FLAG_PRIVATE", None, is_macro=True),
+            ],
         )
-        assert writer._matched_defines == ["LIB_FROM_CODE", "LIB_FROM_HEADER"]
+        writer = CffiWriter(
+            define_patterns=[r"^NNG_FLAG_\w+$"],
+            exclude_patterns=[r"PRIVATE"],
+        )
+        result = writer.write(header)
+        assert result == "#define NNG_FLAG_PUBLIC ..."
 
-    def test_no_include_dirs_skips_resolution(self):
-        """Without include_dirs, #include directives in code are not resolved."""
-        from headerkit._generate import _populate_matched_defines
+
+class TestTaglessStructTypedefAndModuleVarAndExternPython:
+    """Tests for tag-less typedef struct, 0/1/2-star function pointers, module_var, and extern_python."""
+
+    def test_tagless_typedef_struct_and_parameter(self):
+        header = Header(
+            path="nng.h",
+            declarations=[
+                Struct("nng_init_params", [Field("num_task_threads", CType("int16_t"))], is_typedef=True),
+                Typedef("nng_init_params", CType("struct nng_init_params")),
+                Function(
+                    "nng_init",
+                    CType("int"),
+                    [Parameter("params", Pointer(CType("struct nng_init_params", ["const"])))],
+                ),
+            ],
+        )
+        result = header_to_cffi(header)
+        assert result == (
+            "typedef struct {\n"
+            "    int16_t num_task_threads;\n"
+            "} nng_init_params;\n"
+            "int nng_init(const nng_init_params * params);"
+        )
+
+    def test_function_pointer_typedef_zero_one_two_stars(self):
+        header = Header(
+            path="cb.h",
+            declarations=[
+                Typedef(
+                    "bare_fn_t",
+                    FunctionPointer(CType("void"), [Parameter("x", CType("int"))], is_pointer=False),
+                ),
+                Typedef(
+                    "ptr_fn_t",
+                    FunctionPointer(CType("void"), [Parameter("x", CType("int"))], is_pointer=True),
+                ),
+                Typedef(
+                    "dbl_ptr_fn_t",
+                    Pointer(FunctionPointer(CType("void"), [Parameter("x", CType("int"))], is_pointer=True)),
+                ),
+                Struct(
+                    "ops_t",
+                    [
+                        Field(
+                            "malloc_fn",
+                            FunctionPointer(
+                                Pointer(CType("void")),
+                                [Parameter("sz", CType("size_t"))],
+                                is_pointer=True,
+                            ),
+                        ),
+                        Field(
+                            "out_fn",
+                            Pointer(
+                                FunctionPointer(
+                                    Pointer(CType("void")),
+                                    [Parameter("sz", CType("size_t"))],
+                                    is_pointer=True,
+                                )
+                            ),
+                        ),
+                    ],
+                    is_typedef=True,
+                ),
+            ],
+        )
+        result = header_to_cffi(header)
+        assert result == (
+            "typedef void bare_fn_t(int x);\n"
+            "typedef void (*ptr_fn_t)(int x);\n"
+            "typedef void (**dbl_ptr_fn_t)(int x);\n"
+            "typedef struct {\n"
+            "    void * (*malloc_fn)(size_t sz);\n"
+            "    void * (**out_fn)(size_t sz);\n"
+            "} ops_t;"
+        )
+
+    def test_module_var_wraps_python_module(self):
         from headerkit.writers.cffi import CffiWriter
 
-        writer = CffiWriter(define_patterns=[r"MY_\w+"])
-        _populate_matched_defines(
-            writer,
-            header_path=Path("fake.h"),
-            code="#define MY_INLINE 1\n#include <nonexistent.h>\n",
-            include_dirs=None,
+        header = Header(
+            path="lockfree.h",
+            declarations=[
+                Function("ring_push", CType("int"), [Parameter("val", CType("int"))]),
+            ],
         )
-        assert writer._matched_defines == ["MY_INLINE"]
+        writer = CffiWriter(module_var="CDEF")
+        result = writer.write(header)
+        assert result == (
+            '"""Auto-generated CFFI cdef declarations by headerkit from lockfree.h."""\n'
+            "\n"
+            "from __future__ import annotations\n"
+            "\n"
+            "CDEF: str = 'int ring_push(int val);'\n"
+            "\n"
+            "__all__ = ['CDEF']\n"
+        )
+        assert writer.hash_comment_format() == "# {line}"
 
-    def test_quoted_include(self, tmp_path: Path):
-        """Quoted #include "file.h" directives are also resolved."""
-        from headerkit._generate import _populate_matched_defines
+    def test_extern_python_callbacks(self):
         from headerkit.writers.cffi import CffiWriter
 
-        inc_dir = tmp_path / "include"
-        inc_dir.mkdir()
-        (inc_dir / "lib.h").write_text("#define QUOTED_FLAG 42\n")
-
-        writer = CffiWriter(define_patterns=[r"QUOTED_\w+"])
-        _populate_matched_defines(
-            writer,
-            header_path=tmp_path / "umbrella.h",
-            code='#include "lib.h"\n',
-            include_dirs=[str(inc_dir)],
+        header = Header(
+            path="nng.h",
+            declarations=[
+                Function("nng_aio_alloc", CType("int"), []),
+                Function("_nng_pipe_cb", CType("void"), [Parameter("arg", Pointer(CType("void")))]),
+            ],
         )
-        assert writer._matched_defines == ["QUOTED_FLAG"]
+        writer = CffiWriter(
+            extern_python=[
+                "void _async_complete(void *)",
+                "_nng_pipe_cb",
+            ]
+        )
+        result = writer.write(header)
+        assert result == (
+            "int nng_aio_alloc(void);\n"
+            "void _nng_pipe_cb(void * arg);\n"
+            'extern "Python" void _async_complete(void *);\n'
+            'extern "Python" void _nng_pipe_cb(void * arg);'
+        )
 
 
 class TestExtraCdef:

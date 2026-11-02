@@ -311,3 +311,78 @@ def get_libcpp_module_for_type(type_name: str) -> str | None:
     """
     entry = LIBCPP_TYPES.get(type_name)
     return entry[0] if entry else None
+
+
+STANDALONE_STUB_HEADERS: dict[str, str] = {
+    "stdarg": "<stdarg.h>",
+    "dirent": "<dirent.h>",
+    "sys_socket": "<sys/socket.h>",
+    "netinet_in": "<netinet/in.h>",
+    "arpa_inet": "<arpa/inet.h>",
+    "sys_un": "<sys/un.h>",
+    "sys_statvfs": "<sys/statvfs.h>",
+    "sys_select": "<sys/select.h>",
+    "pthread": "<pthread.h>",
+    "semaphore": "<semaphore.h>",
+    "stdatomic": "<stdatomic.h>",
+    "regex": "<regex.h>",
+    "termios": "<termios.h>",
+    "netdb": "<netdb.h>",
+}
+
+STANDALONE_STUB_CTYPEDEFS: dict[str, str] = {
+    "socklen_t": "unsigned int",
+    "sa_family_t": "unsigned short",
+    "in_port_t": "unsigned short",
+    "in_addr_t": "unsigned int",
+    "regoff_t": "long",
+    "tcflag_t": "unsigned int",
+    "cc_t": "unsigned char",
+    "speed_t": "unsigned int",
+}
+
+STANDALONE_STUB_CTYPEDEF_STRUCTS: frozenset[str] = frozenset(
+    {
+        "va_list",
+        "DIR",
+        "fd_set",
+        "sem_t",
+        "regex_t",
+        "pthread_t",
+        "pthread_attr_t",
+        "pthread_mutex_t",
+        "pthread_mutexattr_t",
+        "pthread_cond_t",
+        "pthread_condattr_t",
+        "pthread_key_t",
+        "pthread_once_t",
+        "pthread_rwlock_t",
+        "pthread_rwlockattr_t",
+        "pthread_spinlock_t",
+        "pthread_barrier_t",
+        "pthread_barrierattr_t",
+        "atomic_bool",
+        "atomic_char",
+        "atomic_int",
+        "atomic_uint",
+        "atomic_long",
+        "atomic_ulong",
+        "atomic_size_t",
+        "atomic_intptr_t",
+        "atomic_uintptr_t",
+    }
+)
+
+STANDALONE_STUB_ENUMS: frozenset[str] = frozenset({"memory_order"})
+
+
+def get_standalone_stub_declaration(stub_module: str, type_name: str) -> tuple[str, list[str]]:
+    """Return ``(header_spec, decl_lines)`` for a standalone stub type declaration."""
+    header_spec = STANDALONE_STUB_HEADERS.get(stub_module, f"<{stub_module}.h>")
+    if type_name in STANDALONE_STUB_CTYPEDEFS:
+        return header_spec, [f"ctypedef {STANDALONE_STUB_CTYPEDEFS[type_name]} {type_name}"]
+    if type_name in STANDALONE_STUB_ENUMS:
+        return header_spec, [f"cdef enum {type_name}:", "    pass"]
+    if type_name in STANDALONE_STUB_CTYPEDEF_STRUCTS:
+        return header_spec, [f"ctypedef struct {type_name}:", "    pass"]
+    return header_spec, [f"cdef struct {type_name}:", "    pass"]

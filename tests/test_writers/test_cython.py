@@ -1442,7 +1442,7 @@ class TestCythonWindowsPaths:
 
     def test_cython_scaffold_header_path_option(self) -> None:
         """header_path option in ScaffoldOptions overrides header.path."""
-        from headerkit.scaffold import ScaffoldOptions
+        from headerkit.writers.base import ScaffoldOptions
 
         h = Header(r"C:\Users\admin\include\api.h", [Function("setup", CType("void"), [])])
         writer = CythonWriter()
@@ -1454,6 +1454,80 @@ class TestCythonWindowsPaths:
         layout = writer.write_layout(h, opts)
         pxd_file = next(f for f in layout.files if f.path.endswith(".pxd"))
         assert 'cdef extern from "api.h":' in pxd_file.content
+
+    def test_posix_backslash_and_quote_escaping(self) -> None:
+        """POSIX paths containing literal backslashes or quotes are escaped in extern string literals."""
+        h = Header(r'a\b"c.h', [Function("foo", CType("void"), [])])
+        out = write_pxd(h)
+        assert out == 'cdef extern from "a\\\\b\\"c.h":\n\n    void foo()\n'
+
+    def test_stub_cimport_prefix_none_emits_undeclared_struct_forward(self) -> None:
+        """When stub_cimport_prefix=None, struct sockaddr is forward-declared instead of dropped."""
+        h = Header(
+            "net.h",
+            [Function("bind_addr", CType("int"), [Parameter("addr", Pointer(CType("struct sockaddr")))])],
+        )
+        out = write_pxd(h, stub_cimport_prefix=None)
+        expected = 'cdef extern from "net.h":\n\n    cdef struct sockaddr\n\n    int bind_addr(sockaddr* addr)\n'
+        assert out == expected
+
+    def test_stub_mode_standalone_emits_scoped_extern_blocks(self) -> None:
+        """stub_mode='standalone' emits minimal scoped cdef extern blocks without headerkit.stubs cimports."""
+        h = Header(
+            "log_net.h",
+            [
+                Function("vlog", CType("void"), [Parameter("ap", CType("va_list"))]),
+                Function(
+                    "connect_to",
+                    CType("int"),
+                    [
+                        Parameter("addr", Pointer(CType("struct sockaddr"))),
+                        Parameter("addrlen", CType("socklen_t")),
+                    ],
+                ),
+            ],
+        )
+        out = write_pxd(h, stub_mode="standalone")
+        expected = (
+            'cdef extern from "<stdarg.h>":\n'
+            "    ctypedef struct va_list:\n"
+            "        pass\n"
+            "\n"
+            'cdef extern from "<sys/socket.h>":\n'
+            "    cdef struct sockaddr:\n"
+            "        pass\n"
+            "\n"
+            "    ctypedef unsigned int socklen_t\n"
+            "\n"
+            'cdef extern from "log_net.h":\n'
+            "\n"
+            "    void vlog(va_list ap)\n"
+            "\n"
+            "    int connect_to(sockaddr* addr, socklen_t addrlen)\n"
+        )
+        assert out == expected
+        assert "headerkit.stubs" not in out
+
+    def test_nogil_and_exception_spec_and_noexcept(self) -> None:
+        """nogil, exception_spec, and Function.is_noexcept are emitted on function declarations."""
+        h = Header(
+            "api.h",
+            [
+                Function("compute", CType("int"), [Parameter("x", CType("int"))]),
+                Function("fast_op", CType("void"), [], is_noexcept=True),
+            ],
+        )
+        out_nogil = write_pxd(h, nogil=True)
+        expected_nogil = (
+            'cdef extern from "api.h":\n\n    int compute(int x) nogil\n\n    void fast_op() noexcept nogil\n'
+        )
+        assert out_nogil == expected_nogil
+
+        out_exc = CythonWriter(nogil=True, exception_spec="+").write(h)
+        expected_exc = (
+            'cdef extern from "api.h":\n\n    int compute(int x) except + nogil\n\n    void fast_op() except + nogil\n'
+        )
+        assert out_exc == expected_exc
 
     def test_cython_compiles_pxd_with_windows_path(self, tmp_path: Path) -> None:
         """Verify Cython compiles a pxd generated with a Windows path without line splitting."""
