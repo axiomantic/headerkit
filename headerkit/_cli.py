@@ -320,10 +320,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Input classification (e.g., header, source). Env: HEADERKIT_CLASSIFICATION",
     )
+    try:
+        pkg_version = importlib.metadata.version("headerkit")
+    except importlib.metadata.PackageNotFoundError:
+        pkg_version = "0.0.0+dev"
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {importlib.metadata.version('headerkit')}",
+        version=f"%(prog)s {pkg_version}",
     )
     parser.set_defaults(
         backend=None,

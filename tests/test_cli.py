@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import re
+import subprocess
 import sys
 from collections.abc import Generator
 from pathlib import Path
@@ -838,3 +840,37 @@ class TestBatchCLIIntegration:
         ):
             with pytest.raises(SystemExit):
                 parser.parse_args(flag)
+
+    def test_python_m_headerkit_version_and_help(self) -> None:
+        """Verify ``python -m headerkit --version`` and ``--help`` exit with status 0."""
+        expected_version = importlib.metadata.version("headerkit")
+        ver_proc = subprocess.run(
+            [sys.executable, "-m", "headerkit", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ver_proc.returncode == 0
+        assert ver_proc.stdout.strip().endswith(expected_version)
+
+        help_proc = subprocess.run(
+            [sys.executable, "-m", "headerkit", "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_proc.returncode == 0
+        assert "--writer" in help_proc.stdout
+
+    def test_cli_version_fallback_on_package_not_found(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """_build_parser() falls back cleanly when PackageNotFoundError is raised."""
+        with patch(
+            "headerkit._cli.importlib.metadata.version",
+            side_effect=importlib.metadata.PackageNotFoundError("headerkit"),
+        ):
+            parser = _build_parser()
+            with pytest.raises(SystemExit) as exc_info:
+                parser.parse_args(["--version"])
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip().endswith("0.0.0+dev")

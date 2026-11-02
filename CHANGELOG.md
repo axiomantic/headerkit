@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `headerkit.__main__`: add `python -m headerkit` module execution entry point and fall back to `"0.0.0+dev"` in `headerkit._cli._build_parser()` when `importlib.metadata.version("headerkit")` raises `PackageNotFoundError`.
 - `FunctionPointer`: add `qualifiers: list[str]` and `is_pointer: bool = True` fields so 0-star non-pointer function types (`is_pointer=False`), 1-star function pointers (`FunctionPointer(..., is_pointer=True)`), and 2-star pointers to function pointers (`Pointer(FunctionPointer(..., is_pointer=True))`) are distinguished across `libclang` and `tree-sitter` backends, JSON IR round-trips, and writers.
 - `Parameter`, `Field`, `Function`, `Typedef`, and `Variable`: add `type_overrides: dict[str, str]` field (and JSON IR serialization/deserialization) for per-target writer type overrides.
 - `Constant`: add `is_macro_expr: bool = False` field (and JSON IR serialization/deserialization) to mark macro constants whose RHS is an unevaluated expression (`value=None`).

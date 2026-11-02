@@ -88,7 +88,7 @@ A project renamer registers at `Priority.PROJECT`; a writer registers its
 language's grammar rules at `Priority.FALLBACK` and therefore runs **last**.
 Whatever a project renames a symbol to must still survive the target language's
 lexer, and no configuration can bypass that floor. The Nim writer registers
-[`nim_legality_renamer`][headerkit.writers.nim.nim_legality_renamer] exactly the
+`_nim_legality_renamer` (`headerkit.writers.nim`) exactly the
 way it registers `write_output`.
 
 **`resolve_collision`** (`first_result`) decides what to do when two source
@@ -118,7 +118,7 @@ fails loudly.
 Renaming is not injective, and neither is the C-to-Nim spelling: `__sig` and
 `_sig` collapse under underscore repair, and to Nim `fooBar` and `foo_bar` are
 one identifier whatever the header called them
-([`nim_ident_identity`][headerkit.writers.nim.nim_ident_identity] is the
+(`_nim_ident_identity` in `headerkit.writers.nim` is the
 function that says so). Equality on the emitted string is the wrong test.
 
 ### Known limitation: collision checking is module-scope
