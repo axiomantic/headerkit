@@ -1402,6 +1402,8 @@ class ClangASTConverter:
         self._tu: Any = None
         # Anonymous record/enum declaration key -> stable generated tag name
         self._anon_names: dict[str, str] = {}
+        # Anonymous record/enum declaration keys named directly by a typedef
+        self._typedef_anon_keys: set[str] = set()
         # Counter backing the fallback slug for anonymous tags no declarator names
         self._anon_counter: int = 0
 
@@ -1680,8 +1682,8 @@ class ClangASTConverter:
             cursor = typedef_map[type_name]
             underlying = cursor.underlying_typedef_type
             deps = self._extract_typedef_names_from_type(underlying, include_pointers=include_pointers)
-            decl = underlying.get_declaration()
-            if decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.ENUM_DECL):
+            decl = self._resolve_tag_declaration(underlying) or underlying.get_declaration()
+            if decl is not None and decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.ENUM_DECL):
                 deps.update(self._collect_used_types(decl, include_pointers=include_pointers))
 
             # Discard self-references and return only deps that are in typedef_map
@@ -2649,9 +2651,35 @@ class ClangASTConverter:
         *sibling* of the VAR_DECL, so the binding cannot be discovered while
         processing the record itself. This pre-pass walks the declarators first
         so both the definition and every reference agree on one generated tag.
+
+        Direct ``typedef struct { ... } Name;`` declarations are scanned first
+        because on LLVM 14/15 the anonymous ``STRUCT_DECL`` cursor has an empty
+        spelling and precedes the ``TYPEDEF_DECL`` sibling in the translation
+        unit; binding typedef names first ensures both the top-level record and
+        any nested anonymous field qualifiers resolve to ``Name``.
         """
         for cursor in cursors:
+            self._prescan_typedef_anon_names(cursor)
+        for cursor in cursors:
             self._prescan_cursor_for_anon_names(cursor)
+
+    def _prescan_typedef_anon_names(self, cursor: Any) -> None:
+        if cursor.kind in (CursorKind.TYPEDEF_DECL, CursorKind.TYPE_ALIAS_DECL):
+            with contextlib.suppress(Exception):
+                underlying = cursor.underlying_typedef_type
+                unwrapped = underlying
+                while unwrapped.kind == TypeKind.ELABORATED:
+                    unwrapped = unwrapped.get_named_type()
+                if unwrapped.kind in (TypeKind.RECORD, TypeKind.ENUM):
+                    decl = unwrapped.get_declaration()
+                    if decl is not None and self._is_anonymous_decl(decl) and cursor.spelling:
+                        anon_key = self._anon_key(decl)
+                        self._anon_names.setdefault(anon_key, cursor.spelling)
+                        self._typedef_anon_keys.add(anon_key)
+
+        with contextlib.suppress(Exception):
+            for child in cursor.get_children():
+                self._prescan_typedef_anon_names(child)
 
     def _prescan_cursor_for_anon_names(self, cursor: Any) -> None:
         kind = cursor.kind
@@ -2660,10 +2688,25 @@ class ClangASTConverter:
         elif kind in (
             CursorKind.VAR_DECL,
             CursorKind.PARM_DECL,
+        ):
+            self._bind_anon_name(cursor.spelling, cursor.type)
+        elif kind in (
             CursorKind.TYPEDEF_DECL,
             CursorKind.TYPE_ALIAS_DECL,
         ):
-            self._bind_anon_name(cursor.spelling, cursor.type)
+            with contextlib.suppress(Exception):
+                underlying = cursor.underlying_typedef_type
+                unwrapped = underlying
+                while unwrapped.kind == TypeKind.ELABORATED:
+                    unwrapped = unwrapped.get_named_type()
+                if unwrapped.kind in (TypeKind.RECORD, TypeKind.ENUM):
+                    decl = unwrapped.get_declaration()
+                    if decl is not None and self._is_anonymous_decl(decl) and cursor.spelling:
+                        anon_key = self._anon_key(decl)
+                        self._anon_names.setdefault(anon_key, cursor.spelling)
+                        self._typedef_anon_keys.add(anon_key)
+                else:
+                    self._bind_anon_name(cursor.spelling, underlying)
         elif kind == CursorKind.FUNCTION_DECL:
             with contextlib.suppress(Exception):
                 self._bind_anon_name(cursor.spelling, cursor.result_type)
@@ -2672,8 +2715,7 @@ class ClangASTConverter:
             for child in cursor.get_children():
                 self._prescan_cursor_for_anon_names(child)
 
-    @staticmethod
-    def _record_qualifier(cursor: Any) -> str:
+    def _record_qualifier(self, cursor: Any) -> str:
         """Return the enclosing record's name, used to qualify a field's tag.
 
         Two records in one translation unit may each hold a member named
@@ -2691,7 +2733,7 @@ class ClangASTConverter:
             CursorKind.CLASS_DECL,
         ):
             return ""
-        spelling = parent.spelling
+        spelling = self._normalize_anon_name(parent) or parent.spelling
         if not spelling or "(" in spelling:
             return ""
         return str(spelling)
@@ -3002,6 +3044,7 @@ class ClangASTConverter:
             methods=methods,
             is_union=is_union,
             is_cppclass=is_cppclass,
+            is_typedef=(self._anon_key(cursor) in self._typedef_anon_keys),
             is_packed=is_packed,
             namespace=self._current_namespace,
             cpp_name=cpp_name,
@@ -3368,6 +3411,8 @@ class ClangASTConverter:
         """
         if self.is_cplus:
             return False
+        if self._anon_key(cursor) in self._typedef_anon_keys:
+            return True
         return not str(cursor.type.spelling).startswith("enum ")
 
     def _enum_cpp_name(self, cursor: Any, name: str | None) -> str | None:
@@ -3699,7 +3744,12 @@ class ClangASTConverter:
 
             if record_type.kind == TypeKind.RECORD:
                 decl = record_type.get_declaration()
-                struct_name = decl.spelling
+                if self._is_anonymous_decl(decl) and name:
+                    anon_key = self._anon_key(decl)
+                    self._anon_names.setdefault(anon_key, name)
+                    self._typedef_anon_keys.add(anon_key)
+                    self._prescan_cursor_for_anon_names(decl)
+                struct_name = self._normalize_anon_name(decl) or decl.spelling
                 is_typedef_pattern = struct_name == name
                 key_prefix = "union" if decl.kind == CursorKind.UNION_DECL else "struct"
                 struct_key = self._record_key(key_prefix, struct_name)
@@ -3736,6 +3786,17 @@ class ClangASTConverter:
                                 field = self._convert_field(child)
                                 if field:
                                     fields.append(field)
+                            elif child.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL) and (
+                                self._is_anonymous_decl(child)
+                            ):
+                                if self._normalize_anon_name(child) is None:
+                                    nested = self._build_anonymous_record(child)
+                                    if nested is not None:
+                                        fields.append(self._make_anonymous_field(nested))
+                                else:
+                                    self._process_struct(child, is_union=child.kind == CursorKind.UNION_DECL)
+                            elif child.kind == CursorKind.ENUM_DECL:
+                                self._process_enum(child)
 
                         struct = Struct(
                             name=struct_name or None,
@@ -3806,7 +3867,11 @@ class ClangASTConverter:
 
             elif record_type.kind == TypeKind.ENUM:
                 decl = record_type.get_declaration()
-                enum_name = decl.spelling
+                if self._is_anonymous_decl(decl) and name:
+                    anon_key = self._anon_key(decl)
+                    self._anon_names.setdefault(anon_key, name)
+                    self._typedef_anon_keys.add(anon_key)
+                enum_name = self._normalize_anon_name(decl) or decl.spelling
                 self._process_enum(decl)
                 if enum_name and enum_name != name:
                     underlying_type = CType(name=enum_name, is_elaborated=True)

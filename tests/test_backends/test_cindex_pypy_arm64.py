@@ -165,3 +165,181 @@ class TestBackendCapabilitiesAndIrPrecision:
         funcs = {d.name: d for d in header.declarations if isinstance(d, Function)}
         assert funcs["inner_static"].is_static is True
         assert funcs["mid_exported"].is_static is False
+
+    def test_llvm14_anonymous_typedef_struct_union_enum_cffi_roundtrip(self, tmp_path) -> None:
+        """Verify tag-less typedef struct/union/enum on LLVM 14 (empty spelling, is_anonymous=True)."""
+        import cffi
+
+        from headerkit.backends.libclang import LibclangBackend, _get_cindex
+        from headerkit.ir import CType, Enum, EnumValue, Field, Function, Header, Parameter, Pointer, Struct
+        from headerkit.writers.cffi import header_to_cffi
+
+        lc = LibclangBackend()
+        if not lc.is_available():
+            pytest.skip("libclang not available")
+
+        cindex = _get_cindex()
+        code = """\
+typedef int nng_err;
+typedef struct {
+    short num_task_threads;
+    short max_task_threads;
+    int num_expire_threads;
+} nng_init_params;
+nng_err nng_init(const nng_init_params *params);
+typedef union {
+    int i;
+    float f;
+} nng_val_u;
+typedef enum {
+    NNG_PIPE_EV_ADD_PRE,
+    NNG_PIPE_EV_ADD_POST,
+} nng_pipe_ev;
+void nng_pipe_notify(nng_pipe_ev ev, const nng_val_u *val);
+"""
+
+        orig_spelling = cindex.Cursor.spelling.fget
+        orig_is_anon = cindex.Cursor.is_anonymous
+        orig_type_spelling = cindex.Type.spelling.fget
+
+        tag_kinds = (
+            cindex.CursorKind.STRUCT_DECL,
+            cindex.CursorKind.UNION_DECL,
+            cindex.CursorKind.ENUM_DECL,
+        )
+        anon_tag_names = {"nng_init_params", "nng_val_u", "nng_pipe_ev", "wrapper", "other"}
+
+        def llvm14_spelling(cursor_self):
+            s = orig_spelling(cursor_self)
+            if cursor_self.kind in tag_kinds and s in anon_tag_names:
+                return ""
+            return s
+
+        def llvm14_is_anon(cursor_self):
+            s = orig_spelling(cursor_self)
+            if cursor_self.kind in tag_kinds and s in anon_tag_names:
+                return True
+            return orig_is_anon(cursor_self)
+
+        def llvm14_type_spelling(type_self):
+            s = orig_type_spelling(type_self)
+            if type_self.kind == cindex.TypeKind.ENUM and s == "nng_pipe_ev":
+                return "enum (unnamed at nng.h:12:9)"
+            return s
+
+        cindex.Cursor.spelling = property(llvm14_spelling)
+        cindex.Cursor.is_anonymous = llvm14_is_anon
+        cindex.Type.spelling = property(llvm14_type_spelling)
+        try:
+            header = lc.parse(code, "nng.h")
+            nested_code = (
+                "typedef struct { struct { int x; int y; } pt; } wrapper;\n"
+                "typedef struct { struct { int u; int v; } pt; } other;\n"
+            )
+            nested_header = lc.parse(nested_code, "nested.h")
+
+            inc_file = tmp_path / "nng_types.h"
+            main_file = tmp_path / "nng_main.h"
+            inc_file.write_text(
+                "typedef struct { int threads; } nng_init_params;\n",
+                encoding="utf-8",
+            )
+            main_file.write_text(
+                '#include "nng_types.h"\nint nng_init(const nng_init_params *params);\n',
+                encoding="utf-8",
+            )
+            dep_header = lc.parse(
+                main_file.read_text(encoding="utf-8"),
+                str(main_file),
+                include_dirs=[str(tmp_path)],
+                recursive_includes=False,
+            )
+        finally:
+            cindex.Cursor.spelling = property(orig_spelling)
+            cindex.Cursor.is_anonymous = orig_is_anon
+            cindex.Type.spelling = property(orig_type_spelling)
+
+        structs = {d.name: d for d in header.declarations if isinstance(d, Struct)}
+        enums = {d.name: d for d in header.declarations if isinstance(d, Enum)}
+        assert [(f.name, str(f.type)) for f in structs["nng_init_params"].fields] == [
+            ("num_task_threads", "short"),
+            ("max_task_threads", "short"),
+            ("num_expire_threads", "int"),
+        ]
+        assert structs["nng_init_params"].is_typedef is True
+        assert structs["nng_init_params"].is_union is False
+        assert [(f.name, str(f.type)) for f in structs["nng_val_u"].fields] == [
+            ("i", "int"),
+            ("f", "float"),
+        ]
+        assert structs["nng_val_u"].is_typedef is True
+        assert structs["nng_val_u"].is_union is True
+        assert enums["nng_pipe_ev"].is_typedef is True
+        assert enums["nng_pipe_ev"].values == [
+            EnumValue(name="NNG_PIPE_EV_ADD_PRE", value=0),
+            EnumValue(name="NNG_PIPE_EV_ADD_POST", value=1),
+        ]
+
+        expected_cdef = (
+            "typedef int nng_err;\n"
+            "typedef struct {\n"
+            "    short num_task_threads;\n"
+            "    short max_task_threads;\n"
+            "    int num_expire_threads;\n"
+            "} nng_init_params;\n"
+            "nng_err nng_init(const nng_init_params * params);\n"
+            "typedef union {\n"
+            "    int i;\n"
+            "    float f;\n"
+            "} nng_val_u;\n"
+            "typedef enum {\n"
+            "    NNG_PIPE_EV_ADD_PRE = 0,\n"
+            "    NNG_PIPE_EV_ADD_POST = 1,\n"
+            "} nng_pipe_ev;\n"
+            "void nng_pipe_notify(nng_pipe_ev ev, const nng_val_u * val);"
+        )
+        cdef_out = header_to_cffi(header)
+        assert cdef_out == expected_cdef
+        ffi = cffi.FFI()
+        ffi.cdef(cdef_out)
+
+        nested_names = [(d.name, d.is_typedef) for d in nested_header.declarations if isinstance(d, Struct)]
+        assert nested_names == [
+            ("_wrapper_pt_s", False),
+            ("wrapper", True),
+            ("_other_pt_s", False),
+            ("other", True),
+        ]
+
+        dep_cdef = header_to_cffi(dep_header)
+        assert dep_cdef == (
+            "typedef struct {\n    int threads;\n} nng_init_params;\nint nng_init(const nng_init_params * params);"
+        )
+        cffi.FFI().cdef(dep_cdef)
+
+        # Negative control: if Struct remains unnamed (name=None, is_typedef=False),
+        # CffiWriter drops it and cffi.FFI().cdef raises CDefError on nng_init.
+        broken_header = Header(
+            path="broken.h",
+            declarations=[
+                Struct(
+                    name=None,
+                    fields=[Field(name="threads", type=CType("int"))],
+                    is_typedef=False,
+                ),
+                Function(
+                    name="nng_init",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter(
+                            name="params",
+                            type=Pointer(CType("nng_init_params", qualifiers=["const"])),
+                        )
+                    ],
+                ),
+            ],
+        )
+        broken_cdef = header_to_cffi(broken_header)
+        assert broken_cdef == "int nng_init(const nng_init_params * params);"
+        with pytest.raises(cffi.CDefError):
+            cffi.FFI().cdef(broken_cdef)
