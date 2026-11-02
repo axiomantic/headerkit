@@ -1171,8 +1171,10 @@ def generate_targets(
                 for k, v in t_cfg.options.items():
                     if k not in active_writers or not isinstance(v, dict):
                         wopts[k] = v
-                if wname in t_cfg.options and isinstance(t_cfg.options[wname], dict):
-                    wopts.update(t_cfg.options[wname])  # type: ignore[arg-type]
+                tgt_writer_opts = t_cfg.options.get(wname)
+                if isinstance(tgt_writer_opts, dict):
+                    for wk, wv in tgt_writer_opts.items():
+                        wopts[str(wk)] = wv
             try:
                 supported = list_writer_options(wname)
                 if supported:
