@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from headerkit import get_backend
 from headerkit.ir import (
+    Array,
     CType,
     Enum,
     EnumValue,
+    Field,
     Function,
     Header,
     Parameter,
@@ -237,3 +239,136 @@ def test_negative_controls_distinct_opaque_handles_and_64bit_return_flagged() ->
             target="lf_stack_t**",
         ),
     ]
+
+
+def test_function_parameter_array_decay_c99_matches_pointer_in_abi_mode() -> None:
+    """Verify top-level `Array(T, N)` function parameter (e.g. `int fds[2]`) matches `Pointer(T)` (`int*`) in ABI mode."""
+    baseline = Header(
+        path="nng.h",
+        declarations=[
+            Function(
+                "nng_socket_pair",
+                CType("int"),
+                [Parameter("fds", Array(CType("int"), 2))],
+            ),
+        ],
+    )
+    target = Header(
+        path="cabi.h",
+        declarations=[
+            Function(
+                "nng_socket_pair",
+                CType("NI32"),
+                [Parameter("fds_p0", Pointer(CType("NI32")))],
+            ),
+        ],
+    )
+
+    report = diff_headers(baseline, target, abi_mode=True)
+    assert report.entries == []
+    assert report.breaking_count == 0
+
+    strict_report = diff_headers(baseline, target, abi_mode=False)
+    sig_changes = [e for e in strict_report.entries if e.kind == "function_signature_changed"]
+    assert sig_changes == [
+        DiffEntry(
+            kind="function_signature_changed",
+            severity="breaking",
+            name="nng_socket_pair",
+            detail="return type changed from 'int' to 'NI32'",
+            baseline="int",
+            target="NI32",
+        ),
+        DiffEntry(
+            kind="function_signature_changed",
+            severity="breaking",
+            name="nng_socket_pair",
+            detail="parameter 0 type changed from 'int[2]' to 'NI32*'",
+            baseline="int[2]",
+            target="NI32*",
+        ),
+    ]
+
+
+def test_struct_tag_s_suffix_vs_typedef_stem_matches_in_abi_mode() -> None:
+    """Verify `typedef struct nng_socket_s { uint32_t id; } nng_socket;` matches `struct nng_socket` in ABI mode."""
+    baseline = Header(
+        path="nng.h",
+        declarations=[
+            Struct("nng_socket_s", fields=[Field("id", CType("uint32_t"))]),
+            Typedef("nng_socket", CType("struct nng_socket_s")),
+            Function(
+                "nng_close",
+                CType("int"),
+                [Parameter("s", CType("nng_socket"))],
+            ),
+            Function(
+                "nng_sub0_open",
+                CType("int"),
+                [Parameter("sidp", Pointer(CType("nng_socket")))],
+            ),
+        ],
+    )
+    target = Header(
+        path="cabi.h",
+        declarations=[
+            Struct("nng_socket", fields=[Field("id", CType("NU32"))]),
+            Typedef("nng_socket", CType("struct nng_socket")),
+            Function(
+                "nng_close",
+                CType("NI32"),
+                [Parameter("s_p0", CType("nng_socket"))],
+            ),
+            Function(
+                "nng_sub0_open",
+                CType("NI32"),
+                [Parameter("sidp_p0", Pointer(CType("nng_socket")))],
+            ),
+        ],
+    )
+
+    report = diff_headers(baseline, target, abi_mode=True)
+    assert report.entries == []
+    assert report.breaking_count == 0
+
+
+def test_negative_control_struct_field_array_does_not_decay_to_pointer() -> None:
+    """Verify `Array(int, 2)` vs `Pointer(int)` inside a `Struct` is STILL flagged as a breaking field change."""
+    baseline = Header(
+        path="nng.h",
+        declarations=[
+            Struct(
+                "nng_pair_s",
+                fields=[
+                    Field("fds", Array(CType("int"), 2)),
+                ],
+            ),
+            Typedef("nng_pair", CType("struct nng_pair_s")),
+        ],
+    )
+    target = Header(
+        path="cabi.h",
+        declarations=[
+            Struct(
+                "nng_pair",
+                fields=[
+                    Field("fds", Pointer(CType("int32_t"))),
+                ],
+            ),
+            Typedef("nng_pair", CType("struct nng_pair")),
+        ],
+    )
+
+    report = diff_headers(baseline, target, abi_mode=True)
+    assert report.entries == [
+        DiffEntry(
+            kind="struct_field_type_changed",
+            severity="breaking",
+            name="nng_pair",
+            detail="field 'fds' type changed from 'int[2]' to 'int32_t*'",
+            baseline="int[2]",
+            target="int32_t*",
+        ),
+    ]
+    assert report.breaking_count == 1
+

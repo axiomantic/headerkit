@@ -200,6 +200,19 @@ def _strip_tag_prefix(name: str) -> str:
     return name.strip()
 
 
+def _strip_abi_type_suffix(name: str) -> str:
+    """Strip a trailing '_t' or '_s' suffix from a non-scalar C identifier."""
+    if name.endswith(("_t", "_s")) and len(name) > 2:
+        return name[:-2]
+    return name
+
+
+def _abi_stem_variants(name: str) -> set[str]:
+    """Return ABI tag/typedef stem variants (<stem>, <stem>_t, <stem>_s)."""
+    stem = _strip_abi_type_suffix(name)
+    return {name, stem, f"{stem}_t", f"{stem}_s"}
+
+
 def _is_nim_c_header(unit: Header) -> bool:
     """Detect whether ``unit`` represents a ``nim c --header`` C header IR."""
     if getattr(unit, "source_origin", None) == "nim_c_header" or getattr(unit, "language", None) == "nim":
@@ -236,8 +249,11 @@ def _is_cleaned_nim_comparison(baseline: Header, target: Header) -> bool:
         a_struct_typedefs: set[str] = set()
         for d in a.declarations:
             if isinstance(d, Enum) and d.name:
-                a_enums.add(_strip_tag_prefix(d.name))
-                a_enums.add(f"{_strip_tag_prefix(d.name)}_t")
+                a_enums.update(_abi_stem_variants(_strip_tag_prefix(d.name)))
+            elif isinstance(d, Struct) and d.name:
+                for variant in _abi_stem_variants(_strip_tag_prefix(d.name)):
+                    if variant != _strip_tag_prefix(d.name):
+                        a_struct_typedefs.add(variant)
             elif isinstance(d, Typedef) and d.name and isinstance(d.underlying_type, CType):
                 u_raw = d.underlying_type.name.strip()
                 if u_raw.startswith("enum "):
@@ -285,6 +301,7 @@ def _canonicalize_type(
     abi_mode: bool = True,
     ignore_pointer_const: bool = False,
     _under_pointer: bool = False,
+    _is_param: bool = False,
     _seen_typedefs: frozenset[str] = frozenset(),
 ) -> TypeExpr:
     """Canonicalize a ``TypeExpr`` for ABI comparison."""
@@ -311,6 +328,7 @@ def _canonicalize_type(
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,
                 _under_pointer=_under_pointer,
+                _is_param=_is_param and not _under_pointer,
                 _seen_typedefs=_seen_typedefs | {raw_name},
             )
             if isinstance(resolved, CType) and cv_quals:
@@ -332,6 +350,7 @@ def _canonicalize_type(
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,
                 _under_pointer=True,
+                _is_param=False,
                 _seen_typedefs=_seen_typedefs,
             )
         ptr_quals = [q for q in type_expr.qualifiers if q in ("const", "volatile")]
@@ -344,6 +363,7 @@ def _canonicalize_type(
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,
                 _under_pointer=True,
+                _is_param=False,
                 _seen_typedefs=_seen_typedefs,
             ),
             qualifiers=sorted(set(ptr_quals)),
@@ -358,6 +378,7 @@ def _canonicalize_type(
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,
                 _under_pointer=_under_pointer,
+                _is_param=False,
                 _seen_typedefs=_seen_typedefs,
             ),
             is_rvalue=type_expr.is_rvalue,
@@ -365,6 +386,17 @@ def _canonicalize_type(
         )
 
     if isinstance(type_expr, Array):
+        if _is_param and not _under_pointer:
+            # C99/C11 6.7.6.3p7: A parameter declared as "array of T" decays to "pointer to T" at the C ABI boundary.
+            return _canonicalize_type(
+                Pointer(pointee=type_expr.element_type),
+                typedef_map,
+                abi_mode=abi_mode,
+                ignore_pointer_const=ignore_pointer_const,
+                _under_pointer=_under_pointer,
+                _is_param=False,
+                _seen_typedefs=_seen_typedefs,
+            )
         return Array(
             element_type=_canonicalize_type(
                 type_expr.element_type,
@@ -372,6 +404,7 @@ def _canonicalize_type(
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,
                 _under_pointer=_under_pointer,
+                _is_param=False,
                 _seen_typedefs=_seen_typedefs,
             ),
             size=type_expr.size,
@@ -386,6 +419,7 @@ def _canonicalize_type(
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,
                 _under_pointer=False,
+                _is_param=False,
                 _seen_typedefs=_seen_typedefs,
             ),
             parameters=[
@@ -397,6 +431,7 @@ def _canonicalize_type(
                         abi_mode=abi_mode,
                         ignore_pointer_const=ignore_pointer_const,
                         _under_pointer=False,
+                        _is_param=True,
                         _seen_typedefs=_seen_typedefs,
                     ),
                 )
@@ -418,7 +453,7 @@ _CANONICAL_SCALAR_VALUES: frozenset[str] = frozenset(_CANONICAL_SCALAR_MAP.value
 
 
 def _abi_types_equivalent(b_expr: TypeExpr, t_expr: TypeExpr) -> bool:
-    """Compare two canonicalized TypeExpr trees, matching opaque struct tag ``<stem>`` vs ``<stem>_t``."""
+    """Compare two canonicalized TypeExpr trees, matching struct tag ``<stem>`` vs ``<stem>_t`` / ``<stem>_s``."""
     if b_expr == t_expr:
         return True
     if isinstance(b_expr, CType) and isinstance(t_expr, CType):
@@ -427,7 +462,7 @@ def _abi_types_equivalent(b_expr: TypeExpr, t_expr: TypeExpr) -> bool:
         if b_expr.name == t_expr.name:
             return True
         if b_expr.name not in _CANONICAL_SCALAR_VALUES and t_expr.name not in _CANONICAL_SCALAR_VALUES:
-            return b_expr.name.removesuffix("_t") == t_expr.name.removesuffix("_t")
+            return _strip_abi_type_suffix(b_expr.name) == _strip_abi_type_suffix(t_expr.name)
         return False
     if isinstance(b_expr, Pointer) and isinstance(t_expr, Pointer):
         return b_expr.qualifiers == t_expr.qualifiers and _abi_types_equivalent(b_expr.pointee, t_expr.pointee)
@@ -461,6 +496,7 @@ def _types_equal(
     *,
     abi_mode: bool = True,
     ignore_pointer_const: bool = False,
+    is_param: bool = False,
 ) -> bool:
     """Compare two TypeExpr nodes, optionally using ABI canonicalization."""
     if not abi_mode:
@@ -470,12 +506,14 @@ def _types_equal(
         baseline_typedefs,
         abi_mode=True,
         ignore_pointer_const=ignore_pointer_const,
+        _is_param=is_param,
     )
     t_canon = _canonicalize_type(
         t_type,
         target_typedefs,
         abi_mode=True,
         ignore_pointer_const=ignore_pointer_const,
+        _is_param=is_param,
     )
     return _abi_types_equivalent(b_canon, t_canon)
 
@@ -551,6 +589,7 @@ def _diff_function(
                 t_tds,
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,
+                is_param=True,
             ):
                 entries.append(
                     DiffEntry(
@@ -997,6 +1036,24 @@ def diff_headers(
             norm_name = _unmangle_nim_type_name(key[1]) if abi_mode else key[1]
             target_map[(key[0], norm_name)] = decl
 
+    if abi_mode:
+        unmatched_b_structs = [
+            name for (kind, name) in baseline_map if kind == "struct" and ("struct", name) not in target_map
+        ]
+        for b_name in unmatched_b_structs:
+            candidates = [
+                v
+                for v in _abi_stem_variants(b_name)
+                if v != b_name and ("struct", v) in target_map and ("struct", v) not in baseline_map
+            ]
+            if len(candidates) == 1:
+                t_name = candidates[0]
+                canon_struct_name = _strip_abi_type_suffix(b_name)
+                b_struct = baseline_map.pop(("struct", b_name))
+                t_struct = target_map.pop(("struct", t_name))
+                baseline_map[("struct", canon_struct_name)] = b_struct
+                target_map[("struct", canon_struct_name)] = t_struct
+
     # Removed declarations
     for key, decl in baseline_map.items():
         if key not in target_map:
@@ -1007,29 +1064,22 @@ def diff_headers(
                 if (
                     kind_label == "enum"
                     and is_nim_comparison
-                    and (
-                        ("typedef", decl_name_str) in target_map
-                        or ("typedef", f"{decl_name_str}_t") in target_map
-                    )
+                    and any(("typedef", v) in target_map for v in _abi_stem_variants(decl_name_str))
                 ):
                     continue
                 if (
                     kind_label == "struct"
                     and isinstance(decl, Struct)
                     and not decl.fields
-                    and (
-                        ("typedef", decl_name_str) in target_map
-                        or ("typedef", f"{decl_name_str}_t") in target_map
-                        or ("struct", f"{decl_name_str}_t") in target_map
-                        or ("struct", decl_name_str.removesuffix("_t")) in target_map
+                    and any(
+                        ("typedef", v) in target_map or ("struct", v) in target_map
+                        for v in _abi_stem_variants(decl_name_str)
                     )
                 ):
                     continue
-                if kind_label == "typedef" and (
-                    ("struct", decl_name_str) in target_map
-                    or ("struct", decl_name_str.removesuffix("_t")) in target_map
-                    or ("enum", decl_name_str) in target_map
-                    or ("enum", decl_name_str.removesuffix("_t")) in target_map
+                if kind_label == "typedef" and any(
+                    ("struct", v) in target_map or ("enum", v) in target_map
+                    for v in _abi_stem_variants(decl_name_str)
                 ):
                     continue
             severity = _REMOVED_SEVERITY.get(kind_label, "breaking")
@@ -1053,29 +1103,22 @@ def diff_headers(
                 if (
                     kind_label == "enum"
                     and is_nim_comparison
-                    and (
-                        ("typedef", decl_name_str) in baseline_map
-                        or ("typedef", f"{decl_name_str}_t") in baseline_map
-                    )
+                    and any(("typedef", v) in baseline_map for v in _abi_stem_variants(decl_name_str))
                 ):
                     continue
                 if (
                     kind_label == "struct"
                     and isinstance(decl, Struct)
                     and not decl.fields
-                    and (
-                        ("typedef", decl_name_str) in baseline_map
-                        or ("typedef", f"{decl_name_str}_t") in baseline_map
-                        or ("struct", f"{decl_name_str}_t") in baseline_map
-                        or ("struct", decl_name_str.removesuffix("_t")) in baseline_map
+                    and any(
+                        ("typedef", v) in baseline_map or ("struct", v) in baseline_map
+                        for v in _abi_stem_variants(decl_name_str)
                     )
                 ):
                     continue
-                if kind_label == "typedef" and (
-                    ("struct", decl_name_str) in baseline_map
-                    or ("struct", decl_name_str.removesuffix("_t")) in baseline_map
-                    or ("enum", decl_name_str) in baseline_map
-                    or ("enum", decl_name_str.removesuffix("_t")) in baseline_map
+                if kind_label == "typedef" and any(
+                    ("struct", v) in baseline_map or ("enum", v) in baseline_map
+                    for v in _abi_stem_variants(decl_name_str)
                 ):
                     continue
             severity = _ADDED_SEVERITY.get(kind_label, "non_breaking")
