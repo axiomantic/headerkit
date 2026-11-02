@@ -350,19 +350,27 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
         except RenameError as exc:
             raise ValueError(str(exc)) from exc
 
-    # writer options: [writer.NAME] sections -> writer_options[NAME].options
-    if "writer" in data:
-        val = data["writer"]
-        if not isinstance(val, dict):
-            raise ValueError(f"headerkit: config error in {source}: writer must be a table, got {type(val).__name__}")
-        writer_table: dict[str, object] = cast(dict[str, object], val)
-        for writer_name, writer_opts in writer_table.items():
-            if not isinstance(writer_opts, dict):
+    # writer options: [writer.NAME] or [writer_options.NAME] sections -> writer_options[NAME].options
+    for section_key in ("writer", "writer_options"):
+        if section_key in data:
+            val = data[section_key]
+            if not isinstance(val, dict):
                 raise ValueError(
-                    f"headerkit: config error in {source}: writer.{writer_name} must be a table, "
-                    f"got {type(writer_opts).__name__}"
+                    f"headerkit: config error in {source}: {section_key} must be a table, got {type(val).__name__}"
                 )
-            config.writer_options[writer_name] = WriterConfig(options=cast(dict[str, object], writer_opts))
+            writer_table: dict[str, object] = cast(dict[str, object], val)
+            for writer_name, writer_opts in writer_table.items():
+                if not isinstance(writer_opts, dict):
+                    raise ValueError(
+                        f"headerkit: config error in {source}: {section_key}.{writer_name} must be a table, "
+                        f"got {type(writer_opts).__name__}"
+                    )
+                if writer_name in config.writer_options:
+                    config.writer_options[writer_name].options.update(cast(dict[str, object], writer_opts))
+                else:
+                    config.writer_options[writer_name] = WriterConfig(
+                        options=dict(cast(dict[str, object], writer_opts))
+                    )
 
     # targets: [[targets]] array of tables
     if "targets" in data:

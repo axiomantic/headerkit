@@ -597,6 +597,21 @@ class FilterBySymbol(PipelineFilter):
                 changed = True
             kept_decls = next_decls
 
+        def _prune_struct_excluded_types(st: Struct) -> Struct:
+            new_fields: list[Field] = []
+            for f in st.fields:
+                if self._type_expr_references_excluded(f.type, excluded_types):
+                    continue
+                if f.anonymous_struct is not None:
+                    pruned_anon = _prune_struct_excluded_types(f.anonymous_struct)
+                    if pruned_anon != f.anonymous_struct:
+                        f = replace(f, anonymous_struct=pruned_anon)
+                new_fields.append(f)
+            new_nested = [_prune_struct_excluded_types(nr) for nr in st.nested_records]
+            if new_fields != st.fields or new_nested != st.nested_records:
+                return replace(st, fields=new_fields, nested_records=new_nested)
+            return st
+
         final_decls: list[Declaration] = []
         for decl in kept_decls:
             if isinstance(decl, Function):
@@ -610,10 +625,7 @@ class FilterBySymbol(PipelineFilter):
                     continue
                 final_decls.append(decl)
             elif isinstance(decl, Struct):
-                clean_fields = [
-                    f for f in decl.fields if not self._type_expr_references_excluded(f.type, excluded_types)
-                ]
-                final_decls.append(replace(decl, fields=clean_fields) if clean_fields != decl.fields else decl)
+                final_decls.append(_prune_struct_excluded_types(decl))
             else:
                 final_decls.append(decl)
 
@@ -800,9 +812,11 @@ class FilterUnexportedSymbolsTransform(PipelineFilter):
                 isinstance(decl, (Function, Variable))
                 and not getattr(decl, "is_static", False)
                 and not getattr(decl, "is_inline", False)
-                and decl.name not in self.exported_symbols
             ):
-                continue
+                mangled = getattr(decl, "mangled_name", None)
+                mangled_candidates = normalize_binary_symbol(mangled) if mangled else set()
+                if decl.name not in self.exported_symbols and not (mangled_candidates & self.exported_symbols):
+                    continue
             filtered.append(decl)
         return replace(node, declarations=filtered)
 

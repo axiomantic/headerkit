@@ -713,6 +713,9 @@ def main(argv: list[str] | None = None) -> int:
     if not input_files and config is not None and config.targets:
         cli_project_root = config.source_path.parent if config.source_path is not None else Path.cwd()
         extra_args_list = _parse_defines(defines) + backend_args
+        cfg_writer_opts = (
+            {k: dict(v.options) for k, v in config.writer_options.items()} if config.writer_options else None
+        )
         try:
             target_results = generate_targets(
                 config.targets,
@@ -721,6 +724,7 @@ def main(argv: list[str] | None = None) -> int:
                 default_defines=defines or None,
                 default_extra_args=extra_args_list or None,
                 default_transforms=transforms_raw or None,  # type: ignore[arg-type]
+                default_writer_options=cfg_writer_opts,
                 default_target=args.target,
                 runtime=resolved_runtime,
                 language=resolved_language,

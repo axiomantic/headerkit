@@ -15,11 +15,12 @@ Features
 from __future__ import annotations
 
 import fnmatch
+import re
 import textwrap
 import unicodedata
 from collections.abc import Sequence
 from dataclasses import replace
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 from typing import Any, ClassVar
 
 from headerkit._rename import (
@@ -37,6 +38,7 @@ from headerkit.ir import (
     CType,
     Declaration,
     Enum,
+    Field,
     Function,
     FunctionPointer,
     Header,
@@ -342,10 +344,30 @@ STANDARD_NIM_TYPES: set[str] = {
 }
 
 
+_NIM_PRAGMA_TOKENS: frozenset[str] = frozenset(
+    {
+        "cdecl",
+        "stdcall",
+        "safecall",
+        "fastcall",
+        "thiscall",
+        "syscall",
+        "noconv",
+        "closure",
+        "nimcall",
+        "inline",
+        "varargs",
+        "gcsafe",
+    }
+)
+
+
 def _extract_type_identifiers(type_str: str) -> set[str]:
     """Extract individual identifier tokens from a formatted Nim type expression."""
+    without_pragmas = re.sub(r"\{\.[^}]*\.\}", " ", type_str)
+    without_param_names = re.sub(r"(?:`[^`]+`|\b[A-Za-z_][A-Za-z0-9_]*)\s*:", " ", without_pragmas)
     cleaned = (
-        type_str.replace("[", " ")
+        without_param_names.replace("[", " ")
         .replace("]", " ")
         .replace(",", " ")
         .replace("(", " ")
@@ -360,7 +382,7 @@ def _extract_type_identifiers(type_str: str) -> set[str]:
     tokens: set[str] = set()
     for part in cleaned.split():
         p = part.strip()
-        if p and not p.isdigit() and p not in ("cdecl", "inline"):
+        if p and not p.isdigit() and p not in _NIM_PRAGMA_TOKENS:
             tokens.add(p)
     return tokens
 
@@ -1169,7 +1191,31 @@ class NimWriter(BaseWriter):
     def _resolve_header_file(self, raw_path: str | None) -> str:
         """Resolve the header path for ``{.header.}`` pragmas, applying ``strip_include_prefixes``."""
         effective = _nim_string_path(self.header_path or raw_path or "header.h")
-        if self.header_path or not self.strip_include_prefixes:
+        if self.header_path:
+            return effective
+        if not self.strip_include_prefixes:
+            if raw_path:
+                try:
+                    p = Path(raw_path)
+                    if p.is_absolute() and p.exists():
+                        cur = p.parent.absolute()
+                        home = Path.home().absolute()
+                        proj_root: Path | None = None
+                        while True:
+                            if any(
+                                (cur / m).exists()
+                                for m in (".git", "headerkit.toml", ".headerkit.toml", "pyproject.toml")
+                            ):
+                                proj_root = cur
+                                break
+                            if cur == cur.parent or cur == home:
+                                break
+                            cur = cur.parent
+                        if proj_root is not None and proj_root != p.parent.absolute():
+                            return _nim_string_path(str(p.absolute().relative_to(proj_root)))
+                        return _nim_string_path(p.name)
+                except (OSError, ValueError):
+                    pass
             return effective
         for prefix in self.strip_include_prefixes:
             norm_prefix = _nim_string_path(prefix).strip("/")
@@ -2058,8 +2104,6 @@ class NimWriter(BaseWriter):
                     return "pointer"
                 if raw == "char" and "const" in t.pointee.qualifiers:
                     return "cstring"
-            elif isinstance(t.pointee, FunctionPointer):
-                return self._format_type(t.pointee)
             target_type = self._format_type(t.pointee)
             if target_type in ("auto", "pointer"):
                 return "pointer"
@@ -2087,12 +2131,14 @@ class NimWriter(BaseWriter):
         elif isinstance(t, FunctionPointer):
             ret = self._format_type(t.return_type)
             params = [
-                f"{self._ident(p.name or f'a{i}', kind='param')}: {self._format_type(p.type, in_param=True)}"
+                f"{self._ident(p.name or f'a{i}', kind='param')}: "
+                f"{(p.type_overrides.get('nim') if getattr(p, 'type_overrides', None) else None) or self._format_type(p.type, in_param=True)}"
                 for i, p in enumerate(t.parameters)
             ]
             params_str = f"({', '.join(params)})" if params else "()"
             ret_str = f": {ret}" if ret != "void" else ""
-            return f"proc{params_str}{ret_str} {{.cdecl.}}"
+            cc = t.calling_convention or "cdecl"
+            return f"proc{params_str}{ret_str} {{.{cc}.}}"
 
         return "pointer"
 
@@ -2406,17 +2452,35 @@ class NimWriter(BaseWriter):
         pragma_str = f" {{.{', '.join(pragma_parts)}.}}" if pragma_parts else ""
         lines = [*base_notes, f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
 
-        visible_fields = [f for f in s.fields if not f.is_static and f.access not in ("private", "protected")]
+        def _flatten_visible_fields(field_list: list[Field]) -> list[Field]:
+            flat: list[Field] = []
+            for idx, fld in enumerate(field_list):
+                if fld.is_static or fld.access in ("private", "protected"):
+                    continue
+                if not fld.name:
+                    if fld.anonymous_struct is not None:
+                        flat.extend(_flatten_visible_fields(fld.anonymous_struct.fields))
+                    else:
+                        flat.append(replace(fld, name=f"anon_field_{idx}"))
+                else:
+                    flat.append(fld)
+            return flat
+
+        visible_fields = _flatten_visible_fields(s.fields)
         if not visible_fields:
             lines[0] += ""
         else:
             for f in visible_fields:
                 f_name = self._ident(f.name, kind="field")
-                f_type = self._format_type(f.type)
-                tokens = _extract_type_identifiers(f_type)
-                all_known = getattr(self, "_known_types", set()) | set(tps)
-                if any(tok not in all_known for tok in tokens):
-                    f_type = "pointer"
+                nim_f_override = f.type_overrides.get("nim") if getattr(f, "type_overrides", None) else None
+                if nim_f_override:
+                    f_type = nim_f_override
+                else:
+                    f_type = self._format_type(f.type)
+                    tokens = _extract_type_identifiers(f_type)
+                    all_known = getattr(self, "_known_types", set()) | set(tps)
+                    if any(tok not in all_known for tok in tokens):
+                        f_type = "pointer"
                 bitsize_pragma = f" {{.bitsize: {f.bit_width}.}}" if f.bit_width is not None else ""
                 lines.append(f"  {f_name}*{bitsize_pragma}: {f_type}")
 
@@ -2585,10 +2649,14 @@ class NimWriter(BaseWriter):
 
         for i, p in enumerate(m.parameters):
             p_name = self._ident(p.name or f"a{i}", kind="param")
-            p_type = self._format_type(p.type, in_param=True)
-            tokens = _extract_type_identifiers(p_type)
-            if any(tok not in all_known for tok in tokens):
-                p_type = "auto"
+            nim_p_override = p.type_overrides.get("nim") if getattr(p, "type_overrides", None) else None
+            if nim_p_override:
+                p_type = nim_p_override
+            else:
+                p_type = self._format_type(p.type, in_param=True)
+                tokens = _extract_type_identifiers(p_type)
+                if any(tok not in all_known for tok in tokens):
+                    p_type = "auto"
             formatted_default = _format_default_value(p.default_value, p_type)
             default_str = f" = {formatted_default}" if formatted_default is not None else ""
             params.append(f"{p_name}: {p_type}{default_str}")
@@ -2607,11 +2675,15 @@ class NimWriter(BaseWriter):
                 return []
             self._emitted_proc_sigs.add(sig)
 
-        ret_type = self._format_type(m.return_type)
-        if ret_type != "void":
-            tokens = _extract_type_identifiers(ret_type)
-            if any(tok not in all_known for tok in tokens):
-                ret_type = "auto"
+        nim_ret_override = m.type_overrides.get("nim") if getattr(m, "type_overrides", None) else None
+        if nim_ret_override:
+            ret_type = nim_ret_override
+        else:
+            ret_type = self._format_type(m.return_type)
+            if ret_type != "void":
+                tokens = _extract_type_identifiers(ret_type)
+                if any(tok not in all_known for tok in tokens):
+                    ret_type = "auto"
         ret_str = f": {ret_type}" if ret_type != "void" else ""
 
         # Pragmas
@@ -2687,10 +2759,14 @@ class NimWriter(BaseWriter):
 
         for i, p in enumerate(ctor.parameters):
             p_name = self._ident(p.name or f"a{i}", kind="param")
-            p_type = self._format_type(p.type, in_param=True)
-            tokens = _extract_type_identifiers(p_type)
-            if any(tok not in all_known for tok in tokens):
-                p_type = "auto"
+            nim_p_override = p.type_overrides.get("nim") if getattr(p, "type_overrides", None) else None
+            if nim_p_override:
+                p_type = nim_p_override
+            else:
+                p_type = self._format_type(p.type, in_param=True)
+                tokens = _extract_type_identifiers(p_type)
+                if any(tok not in all_known for tok in tokens):
+                    p_type = "auto"
             formatted_default = _format_default_value(p.default_value, p_type)
             default_str = f" = {formatted_default}" if formatted_default is not None else ""
             params.append(f"{p_name}: {p_type}{default_str}")
@@ -2863,7 +2939,8 @@ class NimWriter(BaseWriter):
             return []
 
         t_name = self._ident(t.name, kind="typedef", namespace=t.namespace)
-        underlying = self._format_type(t.underlying_type)
+        nim_td_override = t.type_overrides.get("nim") if getattr(t, "type_overrides", None) else None
+        underlying = nim_td_override or self._format_type(t.underlying_type)
         if t_name == underlying or t.name == underlying:
             return []
 
@@ -2890,10 +2967,14 @@ class NimWriter(BaseWriter):
 
         for i, p in enumerate(f.parameters):
             p_name = self._ident(p.name or f"a{i}", kind="param")
-            p_type = self._format_type(p.type, in_param=True)
-            tokens = _extract_type_identifiers(p_type)
-            if any(tok not in all_known for tok in tokens):
-                p_type = "auto"
+            nim_p_override = p.type_overrides.get("nim") if getattr(p, "type_overrides", None) else None
+            if nim_p_override:
+                p_type = nim_p_override
+            else:
+                p_type = self._format_type(p.type, in_param=True)
+                tokens = _extract_type_identifiers(p_type)
+                if any(tok not in all_known for tok in tokens):
+                    p_type = "auto"
             formatted_default = _format_default_value(p.default_value, p_type)
             default_str = f" = {formatted_default}" if formatted_default is not None else ""
             params.append(f"{p_name}: {p_type}{default_str}")
@@ -2908,11 +2989,15 @@ class NimWriter(BaseWriter):
                 return []
             self._emitted_proc_sigs.add(sig)
 
-        ret_type = self._format_type(f.return_type)
-        if ret_type != "void":
-            tokens = _extract_type_identifiers(ret_type)
-            if any(tok not in all_known for tok in tokens):
-                ret_type = "auto"
+        nim_ret_override = f.type_overrides.get("nim") if getattr(f, "type_overrides", None) else None
+        if nim_ret_override:
+            ret_type = nim_ret_override
+        else:
+            ret_type = self._format_type(f.return_type)
+            if ret_type != "void":
+                tokens = _extract_type_identifiers(ret_type)
+                if any(tok not in all_known for tok in tokens):
+                    ret_type = "auto"
         ret_str = f": {ret_type}" if ret_type != "void" else ""
 
         pragmas: list[str] = []
@@ -2942,9 +3027,13 @@ class NimWriter(BaseWriter):
     def _write_variable(self, v: Variable, header_file: str) -> list[str]:
         """Render an extern global variable."""
         v_name = self._ident(v.name, kind="function", namespace=v.namespace)
-        v_type = self._format_type(v.type)
-        if v_type in ("`type`", "type", "c_type", "auto"):
-            v_type = "pointer"
+        nim_v_override = v.type_overrides.get("nim") if getattr(v, "type_overrides", None) else None
+        if nim_v_override:
+            v_type = nim_v_override
+        else:
+            v_type = self._format_type(v.type)
+            if v_type in ("`type`", "type", "c_type", "auto"):
+                v_type = "pointer"
         return [f'var {v_name}* {{.importc: "{v.name}", header: "{header_file}".}}: {v_type}']
 
     def _write_constant(self, c: Constant) -> list[str]:

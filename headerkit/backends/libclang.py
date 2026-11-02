@@ -44,6 +44,7 @@ import functools
 import glob
 import json
 import os
+import posixpath
 import re
 import shutil
 import struct
@@ -182,14 +183,21 @@ def _unnamed_bitfields_impose_alignment(args: tuple[str, ...], is_cplus: bool) -
 def normalize_path(path: str) -> str:
     """Normalize a file path for consistent comparison.
 
-    Converts backslashes to forward slashes and lowercases the entire
-    path. This enables platform-agnostic path comparison, particularly
-    for Windows paths where separators and case are inconsistent.
+    Converts backslashes to forward slashes, collapses ``.`` and ``..``
+    segments, and lowercases the entire path. This enables platform-agnostic
+    path comparison, particularly for Windows paths where separators and case
+    are inconsistent.
 
     :param path: File path to normalize.
     :returns: Normalized path string.
     """
-    return path.replace("\\", "/").lower()
+    if not path:
+        return ""
+    slash_path = path.replace("\\", "/")
+    normed = posixpath.normpath(slash_path)
+    if slash_path.startswith("//") and not slash_path.startswith("///") and not normed.startswith("//"):
+        normed = "/" + normed
+    return normed.lower()
 
 
 def _resolve_path(path: str, search_dirs: Sequence[str] = ()) -> str:
@@ -3581,6 +3589,11 @@ class ClangASTConverter:
         else:
             template_parameters = [TemplateParameter(name=p) for p in template_params]
 
+        raw_mangled = getattr(cursor, "mangled_name", None)
+        mangled_name: str | None = None
+        if isinstance(raw_mangled, str) and raw_mangled.startswith(("_Z", "__Z", "?")):
+            mangled_name = raw_mangled[1:] if raw_mangled.startswith("__Z") else raw_mangled
+
         func = Function(
             name=name,
             return_type=return_type,
@@ -3596,6 +3609,7 @@ class ClangASTConverter:
             body=body,
             attributes=attrs,
             is_deprecated=is_deprecated,
+            mangled_name=mangled_name,
             location=self._get_location(cursor),
         )
         self.declarations.append(func)
@@ -3950,6 +3964,10 @@ class ClangASTConverter:
 
         attrs, is_deprecated = self._get_attributes(cursor)
         alignment = self._get_alignment(cursor)
+        raw_mangled = getattr(cursor, "mangled_name", None)
+        mangled_name: str | None = None
+        if isinstance(raw_mangled, str) and raw_mangled.startswith(("_Z", "__Z", "?")):
+            mangled_name = raw_mangled[1:] if raw_mangled.startswith("__Z") else raw_mangled
 
         var = Variable(
             name=name,
@@ -3958,6 +3976,7 @@ class ClangASTConverter:
             attributes=attrs,
             is_deprecated=is_deprecated,
             alignment=alignment,
+            mangled_name=mangled_name,
             location=self._get_location(cursor),
         )
         self.declarations.append(var)

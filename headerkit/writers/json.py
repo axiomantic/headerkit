@@ -257,6 +257,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:
             d["is_deprecated"] = True
+        if decl.mangled_name:
+            d["mangled_name"] = decl.mangled_name
         if decl.type_overrides:
             d["type_overrides"] = dict(decl.type_overrides)
         if decl.location is not None:
@@ -297,6 +299,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["is_deprecated"] = True
         if decl.alignment is not None:
             d["alignment"] = decl.alignment
+        if decl.mangled_name:
+            d["mangled_name"] = decl.mangled_name
         if decl.type_overrides:
             d["type_overrides"] = dict(decl.type_overrides)
         if decl.location is not None:

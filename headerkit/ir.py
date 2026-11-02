@@ -782,6 +782,7 @@ class Function:
     body: str | None = None
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
+    mangled_name: str | None = None
     type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None
@@ -876,6 +877,7 @@ class Variable:
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     alignment: int | None = None
+    mangled_name: str | None = None
     type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None

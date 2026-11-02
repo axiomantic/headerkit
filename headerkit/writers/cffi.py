@@ -58,7 +58,7 @@ def _filter_cffi_qualifiers(qualifiers: Sequence[str]) -> list[str]:
     return [q for q in qualifiers if q in _CFFI_ALLOWED_QUALIFIERS]
 
 
-def _qualify_ctype_name(name: str, tag_kinds: TagKinds) -> str:
+def _qualify_ctype_name(name: str, tag_kinds: TagKinds, *, is_elaborated: bool | None = None) -> str:
     """Add or strip struct/union/enum prefix based on `tag_kinds`.
 
     CFFI's cdef parser (backed by pycparser) requires struct/union/enum
@@ -74,7 +74,22 @@ def _qualify_ctype_name(name: str, tag_kinds: TagKinds) -> str:
     kind = tag_kinds.get(name)
     if kind:
         return f"{kind} {name}"
+    if is_elaborated is True:
+        elab_kind = tag_kinds.get(f"@{name}")
+        if elab_kind:
+            return f"{elab_kind} {name}"
     return name
+
+
+def _unwrap_array(t: TypeExpr) -> tuple[TypeExpr, str]:
+    """Unwrap one or more nested Array nodes into ``(innermost_element_type, '[d1][d2]...')``."""
+    dims: list[str] = []
+    curr: TypeExpr = t
+    while isinstance(curr, Array):
+        size_str = str(curr.size) if curr.size is not None else ""
+        dims.append(f"[{size_str}]")
+        curr = curr.element_type
+    return curr, "".join(dims)
 
 
 def _unwrap_function_pointer(t: TypeExpr) -> tuple[FunctionPointer, int] | None:
@@ -95,10 +110,10 @@ def type_to_cffi(t: TypeExpr, tag_kinds: TagKinds | None = None) -> str:
     tags = tag_kinds or {}
     if isinstance(t, CType):
         quals = _filter_cffi_qualifiers(t.qualifiers)
-        qualified_name = _qualify_ctype_name(t.name, tags)
+        qualified_name = _qualify_ctype_name(t.name, tags, is_elaborated=t.is_elaborated)
         if quals:
             return f"{' '.join(quals)} {qualified_name}"
-        return _qualify_ctype_name(str(t), tags)
+        return _qualify_ctype_name(str(t), tags, is_elaborated=t.is_elaborated)
     elif isinstance(t, (Pointer, FunctionPointer)):
         unwrapped = _unwrap_function_pointer(t)
         if unwrapped is not None:
@@ -149,10 +164,10 @@ def _format_params(
     for p in parameters:
         type_str = type_to_cffi(p.type, tags)
         if p.name:
-            # Arrays: dimension goes after the name
+            # Arrays: dimensions go after the name
             if isinstance(p.type, Array):
-                size_str = str(p.type.size) if p.type.size is not None else ""
-                parts.append(f"{type_to_cffi(p.type.element_type, tags)} {p.name}[{size_str}]")
+                elem_type, dims_str = _unwrap_array(p.type)
+                parts.append(f"{type_to_cffi(elem_type, tags)} {p.name}{dims_str}")
             else:
                 unwrapped = _unwrap_function_pointer(p.type)
                 if unwrapped is not None:
@@ -182,8 +197,8 @@ def _format_field(f: Field, tag_kinds: TagKinds | None = None) -> str:
     bit_suffix = f" : {f.bit_width}" if f.bit_width is not None else ""
 
     if isinstance(f.type, Array):
-        size_str = str(f.type.size) if f.type.size is not None else ""
-        return f"    {type_to_cffi(f.type.element_type, tags)} {f.name}[{size_str}]{bit_suffix};"
+        elem_type, dims_str = _unwrap_array(f.type)
+        return f"    {type_to_cffi(elem_type, tags)} {f.name}{dims_str}{bit_suffix};"
 
     unwrapped = _unwrap_function_pointer(f.type)
     if unwrapped is not None:
@@ -408,10 +423,16 @@ def _typedef_to_cffi(decl: Typedef, tag_kinds: TagKinds | None = None) -> str | 
 
     # Array typedef: typedef int name[10]
     if isinstance(underlying, Array):
-        size_str = str(underlying.size) if underlying.size is not None else ""
-        return f"typedef {type_to_cffi(underlying.element_type, tag_kinds)} {decl.name}[{size_str}];"
+        elem_type, dims_str = _unwrap_array(underlying)
+        return f"typedef {type_to_cffi(elem_type, tag_kinds)} {decl.name}{dims_str};"
 
     # Regular typedef
+    if isinstance(underlying, CType) and underlying.name == decl.name and tag_kinds:
+        elab_kind = tag_kinds.get(f"@{decl.name}")
+        if elab_kind:
+            quals = _filter_cffi_qualifiers(underlying.qualifiers)
+            qual_prefix = f"{' '.join(quals)} " if quals else ""
+            return f"typedef {qual_prefix}{elab_kind} {decl.name} {decl.name};"
     return f"typedef {type_to_cffi(underlying, tag_kinds)} {decl.name};"
 
 
@@ -431,8 +452,8 @@ def _constant_to_cffi(decl: Constant) -> str | None:
 def _variable_to_cffi(decl: Variable, tag_kinds: TagKinds | None = None) -> str | None:
     """Convert a Variable IR node to CFFI cdef."""
     if isinstance(decl.type, Array):
-        size_str = str(decl.type.size) if decl.type.size is not None else ""
-        return f"{type_to_cffi(decl.type.element_type, tag_kinds)} {decl.name}[{size_str}];"
+        elem_type, dims_str = _unwrap_array(decl.type)
+        return f"{type_to_cffi(elem_type, tag_kinds)} {decl.name}{dims_str};"
     return f"{type_to_cffi(decl.type, tag_kinds)} {decl.name};"
 
 
@@ -473,6 +494,8 @@ def _build_tag_kinds(declarations: list[Declaration]) -> TagKinds:
     for name, kind in tags.items():
         if name not in typedef_names:
             tag_kinds[name] = kind
+        else:
+            tag_kinds[f"@{name}"] = kind
     for name in tagless_typedefs:
         if name not in tags:
             tag_kinds[name] = ""

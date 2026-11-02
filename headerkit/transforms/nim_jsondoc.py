@@ -730,7 +730,12 @@ class NimJsonDocEnricher(PipelineFilter):
     def cache_fingerprint(self) -> dict[str, Any]:
         """Return a deterministic fingerprint including SHA-256 digests of all constituent ``.nim`` files."""
         nim_digests: dict[str, str] = {}
+        nim_source_sha256: str | None = None
         if self.nim_source_path is not None and self.nim_source_path.is_file():
+            try:
+                nim_source_sha256 = hashlib.sha256(self.nim_source_path.read_bytes()).hexdigest()
+            except OSError:
+                nim_source_sha256 = None
             proj_root = self.project_root or _detect_nim_project_root(self.nim_source_path)
             for nim_file in _collect_constituent_nim_files(self.nim_source_path, proj_root):
                 try:
@@ -751,6 +756,7 @@ class NimJsonDocEnricher(PipelineFilter):
                 "jsondoc_path": str(self.jsondoc_path) if self.jsondoc_path is not None else None,
                 "jsondoc_sha256": jsondoc_sha256,
                 "nim_source_path": str(self.nim_source_path) if self.nim_source_path is not None else None,
+                "nim_source_sha256": nim_source_sha256,
                 "project_root": str(self.project_root) if self.project_root is not None else None,
                 "nim_file_sha256s": dict(sorted(nim_digests.items())),
                 "entries": _normalize_fingerprint_value(self._explicit_entries),

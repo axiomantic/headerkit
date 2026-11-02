@@ -142,11 +142,15 @@ _WRITER_EXTENSIONS: dict[str, str] = {
     "cffi": ".py",
     "ctypes": ".py",
     "cython": ".pxd",
+    "diff": ".json",
     "json": ".json",
     "lua": ".lua",
+    "nim": ".nim",
     "prompt": ".txt",
     "pyi": ".pyi",
-    "diff": ".json",
+    "rust": ".rs",
+    "ts_wasm": ".d.ts",
+    "zig": ".zig",
 }
 
 
@@ -459,6 +463,7 @@ def _get_output(
     ir_slug: str,
     resolved_cache_dir: Path | None,
     use_output_cache: bool,
+    ir_from_cache: bool = True,
     context: PipelineContext | None = None,
     transforms: Sequence[PipelineFilter] | None = None,
 ) -> tuple[str, bool]:
@@ -481,14 +486,15 @@ def _get_output(
             writer_options=writer_options,
             transforms=resolved_transforms,
         )
-        output = _read_cached_output(
-            cache_dir=resolved_cache_dir,
-            writer_name=writer_name,
-            output_cache_key=output_cache_key,
-            output_ext=output_ext,
-        )
-        if output is not None:
-            output_from_cache = True
+        if ir_from_cache:
+            output = _read_cached_output(
+                cache_dir=resolved_cache_dir,
+                writer_name=writer_name,
+                output_cache_key=output_cache_key,
+                output_ext=output_ext,
+            )
+            if output is not None:
+                output_from_cache = True
 
     if writer_inst is None:
         writer_inst = get_writer(writer_name, **writer_options)
@@ -624,6 +630,14 @@ def _try_output_cache_fallback(
         project_prefixes=project_prefixes or (),
     )
 
+    ir_index_path = cache_dir / "ir" / "index.json"
+    if ir_index_path.exists():
+        ir_index = load_index(ir_index_path)
+        existing_ir_slug = lookup_slug(ir_index, ir_cache_key)
+        if existing_ir_slug is not None:
+            if read_ir_entry(cache_dir=cache_dir, slug=existing_ir_slug) is None:
+                return None
+
     _writer_inst, output_cache_key, output_ext = _compute_output_cache_info(
         ir_cache_key=ir_cache_key,
         writer_name=writer_name,
@@ -752,7 +766,13 @@ def generate(
     parsed_args = parse_extra_args(extra_args, include_dirs, defines)
     project_root = _find_project_root(resolved_path.parent)
 
-    resolved_target = resolve_target(target=target, project_root=project_root)
+    effective_target_arg = target
+    if target is not None and target.strip().lower() == "embedded":
+        effective_target_arg = None
+        if writer_name == "nim":
+            writer_options = {"embedded": True, **writer_options}
+
+    resolved_target = resolve_target(target=effective_target_arg, project_root=project_root)
 
     use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
     use_output_cache = not no_cache and not no_output_cache and resolved_cache_dir is not None
@@ -858,6 +878,7 @@ def generate(
         ir_slug=ir_slug,
         resolved_cache_dir=resolved_cache_dir,
         use_output_cache=use_output_cache,
+        ir_from_cache=ir_from_cache or not use_ir_cache,
         context=ctx,
         transforms=resolved_transforms,
     )
@@ -909,6 +930,7 @@ def generate_all(
             default_defines=defines,
             default_extra_args=extra_args,
             default_transforms=transforms,
+            default_writer_options=writer_options,
             default_target=target,
             runtime=runtime,
             language=language,
@@ -937,7 +959,7 @@ def generate_all(
         wopts = writer_options.get(wname, {})
         opath: str | Path | None = output_paths.get(wname)
         if opath is None and output_dir is not None:
-            ext = _WRITER_EXTENSIONS.get(wname, ".txt")
+            ext = _WRITER_EXTENSIONS.get(wname) or _writer_output_ext(get_writer(wname), wname)
             stem = Path(path_str).stem
             opath = Path(output_dir) / f"{stem}{ext}"
 
@@ -1069,6 +1091,7 @@ def generate_targets(
     default_defines: list[str] | None = None,
     default_extra_args: list[str] | None = None,
     default_transforms: Sequence[PipelineFilter | str | Mapping[str, Any]] | None = None,
+    default_writer_options: dict[str, dict[str, object]] | None = None,
     default_target: str | None = None,
     runtime: str | None = None,
     language: str | None = None,
@@ -1107,7 +1130,10 @@ def generate_targets(
             classification=classification,
         )
         parsed_args = parse_extra_args(eff_extra_args, eff_includes, eff_defines)
-        resolved_triple = resolve_target(target=eff_target, project_root=project_root)
+        target_for_resolve = (
+            None if (eff_target is not None and eff_target.strip().lower() == "embedded") else eff_target
+        )
+        resolved_triple = resolve_target(target=target_for_resolve, project_root=project_root)
 
         group_key = (
             spec.path,
@@ -1134,9 +1160,20 @@ def generate_targets(
                 resolved_out = Path(t_cfg.output[wname])
                 opath = resolved_out if resolved_out.is_absolute() else (project_root / resolved_out)
             elif output_dir is not None:
-                ext = _WRITER_EXTENSIONS.get(wname, ".txt")
+                ext = _WRITER_EXTENSIONS.get(wname) or _writer_output_ext(get_writer(wname), wname)
                 stem = Path(spec.path).stem
                 opath = Path(output_dir) / f"{stem}{ext}"
+
+            wopts: dict[str, object] = {}
+            if default_writer_options and wname in default_writer_options:
+                wopts.update(default_writer_options[wname])
+            if t_cfg.options:
+                if wname in t_cfg.options and isinstance(t_cfg.options[wname], dict):
+                    wopts.update(t_cfg.options[wname])  # type: ignore[arg-type]
+                elif len(active_writers) == 1 or wname == t_cfg.writer:
+                    for k, v in t_cfg.options.items():
+                        if k not in active_writers or not isinstance(v, dict):
+                            wopts[k] = v
 
             meta: dict[str, object] = {}
             pre_ir = ir_group_cache.get(group_key)
@@ -1152,7 +1189,7 @@ def generate_targets(
                 defines=eff_defines or None,
                 extra_args=eff_extra_args or None,
                 transforms=eff_transforms,
-                writer_options=dict(t_cfg.options) if t_cfg.options else None,
+                writer_options=wopts or None,
                 output_path=opath,
                 store_dir=store_dir,
                 no_cache=no_cache,

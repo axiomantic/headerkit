@@ -276,17 +276,24 @@ def _is_cleaned_nim_comparison(baseline: Header, target: Header) -> bool:
 def _build_typedef_map(unit: Header) -> dict[str, TypeExpr]:
     """Build a mapping from typedef name (and enum names) to underlying TypeExpr for a header."""
     td_map: dict[str, TypeExpr] = {}
+    enum_widths: dict[str, str] = {}
     for decl in unit.declarations:
         if isinstance(decl, Enum) and decl.name:
             norm_enum = _unmangle_nim_type_name(_strip_tag_prefix(decl.name))
-            td_map[norm_enum] = CType("int32_t")
-        elif isinstance(decl, Typedef) and decl.name:
+            raw_u = decl.underlying_type.strip() if decl.underlying_type else "int32_t"
+            canon_u = _CANONICAL_SCALAR_MAP.get(raw_u, raw_u)
+            enum_widths[norm_enum] = canon_u
+            td_map[norm_enum] = CType(canon_u)
+    for decl in unit.declarations:
+        if isinstance(decl, Typedef) and decl.name:
             if isinstance(decl.underlying_type, CType):
                 raw_under = decl.underlying_type.name.strip()
                 stripped_under = _strip_tag_prefix(raw_under)
                 if raw_under.startswith("enum "):
-                    td_map[_unmangle_nim_type_name(stripped_under)] = CType("int32_t")
-                    td_map[_unmangle_nim_type_name(decl.name)] = CType("int32_t")
+                    norm_tag = _unmangle_nim_type_name(stripped_under)
+                    width = enum_widths.get(norm_tag, "int32_t")
+                    td_map[norm_tag] = CType(width)
+                    td_map[_unmangle_nim_type_name(decl.name)] = CType(width)
                     continue
                 if stripped_under == decl.name:
                     continue
@@ -799,6 +806,23 @@ def _diff_enum(name: str, baseline: Enum, target: Enum) -> list[DiffEntry]:
     entries: list[DiffEntry] = []
     display_name = name or "(anonymous)"
 
+    if baseline.underlying_type is not None and target.underlying_type is not None:
+        b_under = _CANONICAL_SCALAR_MAP.get(baseline.underlying_type.strip(), baseline.underlying_type.strip())
+        t_under = _CANONICAL_SCALAR_MAP.get(target.underlying_type.strip(), target.underlying_type.strip())
+        if b_under != t_under:
+            entries.append(
+                DiffEntry(
+                    kind="enum_underlying_type_changed",
+                    severity="breaking",
+                    name=display_name,
+                    detail=(
+                        f"enum underlying type changed from '{baseline.underlying_type}' to '{target.underlying_type}'"
+                    ),
+                    baseline=baseline.underlying_type,
+                    target=target.underlying_type,
+                )
+            )
+
     baseline_vals = {v.name: v for v in baseline.values}
     target_vals = {v.name: v for v in target.values}
 
@@ -990,14 +1014,41 @@ def diff_headers(
     if ignore_pointer_const is not None:
         effective_ignore_const = bool(ignore_pointer_const or relax_nim_pointer_const)
     else:
-        effective_ignore_const = bool(relax_nim_pointer_const or abi_mode)
+        effective_ignore_const = bool(relax_nim_pointer_const or (abi_mode and is_nim_comparison))
 
     baseline_typedefs = _build_typedef_map(baseline) if abi_mode else {}
     target_typedefs = _build_typedef_map(target) if abi_mode else {}
     if abi_mode:
+        b_tag_stems: set[str] = set()
+        for d in baseline.declarations:
+            if isinstance(d, (Struct, Enum)) and d.name:
+                b_tag_stems.update(_abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(d.name))))
+        t_tag_stems: set[str] = set()
+        for d in target.declarations:
+            if isinstance(d, (Struct, Enum)) and d.name:
+                t_tag_stems.update(_abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(d.name))))
+
         for td_name, td_val in list(baseline_typedefs.items()):
+            if td_name in t_tag_stems:
+                if not (
+                    isinstance(td_val, CType)
+                    and any(
+                        v in t_tag_stems
+                        for v in _abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(td_val.name)))
+                    )
+                ):
+                    continue
             target_typedefs.setdefault(td_name, td_val)
         for td_name, td_val in list(target_typedefs.items()):
+            if td_name in b_tag_stems:
+                if not (
+                    isinstance(td_val, CType)
+                    and any(
+                        v in b_tag_stems
+                        for v in _abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(td_val.name)))
+                    )
+                ):
+                    continue
             baseline_typedefs.setdefault(td_name, td_val)
 
     def _should_skip_decl(decl: Declaration) -> bool:
@@ -1054,12 +1105,75 @@ def diff_headers(
                 baseline_map[("struct", canon_struct_name)] = b_struct
                 target_map[("struct", canon_struct_name)] = t_struct
 
+    def _collect_ctypes_in_type(te: TypeExpr, out: set[str]) -> None:
+        if isinstance(te, CType):
+            out.add(_unmangle_nim_type_name(_strip_tag_prefix(te.name.strip())))
+        elif isinstance(te, Pointer):
+            _collect_ctypes_in_type(te.pointee, out)
+        elif isinstance(te, Reference):
+            _collect_ctypes_in_type(te.target, out)
+        elif isinstance(te, Array):
+            _collect_ctypes_in_type(te.element_type, out)
+        elif isinstance(te, FunctionPointer):
+            _collect_ctypes_in_type(te.return_type, out)
+            for p in te.parameters:
+                _collect_ctypes_in_type(p.type, out)
+
+    def _collect_referenced_types(
+        src_map: dict[tuple[str, str], Declaration], other_map: dict[tuple[str, str], Declaration]
+    ) -> set[str]:
+        refs: set[str] = set()
+        for k, d in src_map.items():
+            if k not in other_map:
+                continue
+            if isinstance(d, Function):
+                _collect_ctypes_in_type(d.return_type, refs)
+                for p in d.parameters:
+                    _collect_ctypes_in_type(p.type, refs)
+            elif isinstance(d, Struct):
+                for f in d.fields:
+                    _collect_ctypes_in_type(f.type, refs)
+            elif isinstance(d, Variable):
+                _collect_ctypes_in_type(d.type, refs)
+        return refs
+
+    b_referenced_in_shared = (
+        _collect_referenced_types(baseline_map, target_map) if (abi_mode and is_nim_comparison) else set()
+    )
+    t_referenced_in_shared = (
+        _collect_referenced_types(target_map, baseline_map) if (abi_mode and is_nim_comparison) else set()
+    )
+
+    def _typedef_matches_tag_in_map(td_decl: Declaration, other_map: dict[tuple[str, str], Declaration]) -> bool:
+        if not isinstance(td_decl, Typedef) or not isinstance(td_decl.underlying_type, CType):
+            return False
+        raw_u = td_decl.underlying_type.name.strip()
+        under_stem = _unmangle_nim_type_name(_strip_tag_prefix(raw_u))
+        for v in _abi_stem_variants(under_stem):
+            if ("struct", v) in other_map or ("enum", v) in other_map:
+                return True
+        if is_nim_comparison and raw_u in (
+            "int32_t",
+            "int",
+            "NI32",
+            "int8_t",
+            "uint8_t",
+            "int16_t",
+            "uint16_t",
+            "int64_t",
+            "uint64_t",
+        ):
+            for v in _abi_stem_variants(_unmangle_nim_type_name(td_decl.name)):
+                if ("enum", v) in other_map:
+                    return True
+        return False
+
     # Removed declarations
     for key, decl in baseline_map.items():
         if key not in target_map:
             kind_label, decl_name_str = key
             if abi_mode:
-                if kind_label == "typedef" and is_nim_comparison:
+                if kind_label == "typedef" and is_nim_comparison and decl_name_str in b_referenced_in_shared:
                     continue
                 if (
                     kind_label == "enum"
@@ -1077,9 +1191,7 @@ def diff_headers(
                     )
                 ):
                     continue
-                if kind_label == "typedef" and any(
-                    ("struct", v) in target_map or ("enum", v) in target_map for v in _abi_stem_variants(decl_name_str)
-                ):
+                if kind_label == "typedef" and _typedef_matches_tag_in_map(decl, target_map):
                     continue
             severity = _REMOVED_SEVERITY.get(kind_label, "breaking")
             entries.append(
@@ -1097,7 +1209,7 @@ def diff_headers(
         if key not in baseline_map:
             kind_label, decl_name_str = key
             if abi_mode:
-                if kind_label == "typedef" and is_nim_comparison:
+                if kind_label == "typedef" and is_nim_comparison and decl_name_str in t_referenced_in_shared:
                     continue
                 if (
                     kind_label == "enum"
@@ -1115,10 +1227,7 @@ def diff_headers(
                     )
                 ):
                     continue
-                if kind_label == "typedef" and any(
-                    ("struct", v) in baseline_map or ("enum", v) in baseline_map
-                    for v in _abi_stem_variants(decl_name_str)
-                ):
+                if kind_label == "typedef" and _typedef_matches_tag_in_map(decl, baseline_map):
                     continue
             severity = _ADDED_SEVERITY.get(kind_label, "non_breaking")
             entries.append(

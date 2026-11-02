@@ -76,6 +76,7 @@ _NIM_INTERNAL_PREFIXES: tuple[str, ...] = (
     "atmdotdotats",
     "callDepthLimitReached__",
     "framePtr__",
+    "tySequence__",
 )
 
 _NIM_SCALAR_TYPE_MAP: dict[str, str] = {
