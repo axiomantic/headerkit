@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -201,6 +202,7 @@ def compute_output_cache_key(
     writer_options: dict[str, object] | None = None,
     writer_cache_version: str | None = None,
     rename_fingerprint: str | None = None,
+    transforms_fingerprint: Sequence[Mapping[str, object]] | None = None,
 ) -> str:
     """Compute SHA-256 cache key for output layer.
 
@@ -210,6 +212,8 @@ def compute_output_cache_key(
         identifiers in the generated output, so leaving it out of the key makes
         a changed rename rule read back the previous output under the previous
         names and report a hit.
+    :param transforms_fingerprint: Ordered list of ``cache_fingerprint()`` dicts
+        from the Layer-2 ``transforms`` pipeline.
     :returns: Hex digest string.
     """
     hasher = hashlib.sha256()
@@ -227,5 +231,10 @@ def compute_output_cache_key(
 
     if rename_fingerprint is not None:
         hasher.update(f"rename:{rename_fingerprint}\0".encode())
+
+    if transforms_fingerprint:
+        for fp in transforms_fingerprint:
+            canonical = json.dumps(dict(fp), sort_keys=True, separators=(",", ":"))
+            hasher.update(f"transform:{canonical}\0".encode())
 
     return hasher.hexdigest()
