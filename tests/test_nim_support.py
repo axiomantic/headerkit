@@ -264,7 +264,7 @@ class TestNimCleanupTransform:
                         Parameter(name="alpha", type=CType("int32_t")),
                         Parameter(name="beta", type=CType("float")),
                         Parameter(name="tag", type=Pointer(CType("char", is_elaborated=False))),
-                        Parameter(name="flag", type=CType("bool")),
+                        Parameter(name="flag", type=CType("bool"), type_overrides={"pyi": "bool"}),
                         Parameter(name="normal_param", type=CType("int")),
                         Parameter(name="p0", type=CType("int")),
                         Parameter(name="_p0", type=CType("int")),
@@ -336,10 +336,10 @@ class TestNimCleanupTransform:
                         Parameter(name="pkt", type=Pointer(CType("Packet"))),
                         Parameter(name="cb", type=expected_fp),
                     ],
+                    type_overrides={"pyi": "bool"},
                 ),
             ],
         )
-
 
 
 class TestNimJsonDocEnricher:
@@ -407,7 +407,7 @@ class TestNimJsonDocEnricher:
 
             class Mode(enum.IntEnum):
                 \"\"\"Execution mode.\"\"\"
-                FAST: int = 0
+                FAST = 0
 
             class Point:
                 \"\"\"2D Cartesian point.\"\"\"
@@ -601,6 +601,7 @@ class TestNimJsonDocEnricher:
                     return_type=CType("bool"),
                     parameters=[Parameter("threads", CType("int"))],
                     doc="Initialize the engine with a thread count.",
+                    type_overrides={"pyi": "bool"},
                 ),
                 Function(
                     name="mylib_compute",
@@ -630,7 +631,6 @@ class TestNimJsonDocEnricher:
         enricher_frag = NimJsonDocEnricher(nim_source_path=frag_nim)
         _ = unit >> enricher_frag
         assert called_cmds == []
-
 
 
 class TestRealNimHeaderBackends:

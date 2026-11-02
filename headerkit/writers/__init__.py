@@ -45,9 +45,11 @@ from typing import Any, Protocol, runtime_checkable
 
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
 from headerkit.ir import Header, SourceUnit
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers.base import (
     BaseWriter,
+    OutputFile,
+    ProjectLayout,
+    ScaffoldOptions,
     WriterOption,
     canonicalize_type_brackets,
     split_template_args,
@@ -405,6 +407,7 @@ def _ensure_writers_loaded() -> None:
     import headerkit.writers.nim  # noqa: F401
     import headerkit.writers.prompt  # noqa: F401
     import headerkit.writers.pyi  # noqa: F401
+    import headerkit.writers.ts_wasm  # noqa: F401
 
 
 def _load_writer_plugins() -> None:

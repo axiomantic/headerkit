@@ -72,4 +72,3 @@ def test_pipeline_filter_and_chained_filter_cache_fingerprint() -> None:
     }
     # Negative control: different parameter value changes cache_fingerprint()
     assert filt1.cache_fingerprint() != filt2.cache_fingerprint()
-

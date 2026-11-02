@@ -948,4 +948,3 @@ class TestSemanticAbiDiffMode:
                 "target": "uint8_t*",
             }
         ]
-

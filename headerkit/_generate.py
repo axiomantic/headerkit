@@ -427,7 +427,7 @@ def resolve_transforms(
                 raise ValueError(f"Transform mapping must specify a string 'name' key: {item!r}")
             resolved.append(_instantiate_transform(t_name, d))
         elif isinstance(item, PipelineFilter) or callable(getattr(item, "transform", None)):
-            resolved.append(item)  # type: ignore[arg-type]
+            resolved.append(item)
         else:
             raise TypeError(f"Invalid transform specification: {item!r}")
     return resolved

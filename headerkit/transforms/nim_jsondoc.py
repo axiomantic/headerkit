@@ -310,7 +310,8 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
             paren_depth = raw_line.count("(") - raw_line.count(")")
             j = i + 1
             while j < n and (
-                paren_depth > 0 or (header_lines[-1].rstrip().endswith((",", ";", "{.", "*")) and "=" not in header_lines[-1])
+                paren_depth > 0
+                or (header_lines[-1].rstrip().endswith((",", ";", "{.", "*")) and "=" not in header_lines[-1])
             ):
                 next_l = lines[j]
                 if next_l.strip().startswith("#"):
@@ -400,7 +401,9 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
             stripped = rest
 
         if in_type_section and (raw_line.startswith((" ", "\t")) or re.match(r"^[A-Za-z_`]", stripped)):
-            if re.match(r"^(?:proc|func|method|iterator|converter|template|var|let|const|include|import|from|when)\b", stripped):
+            if re.match(
+                r"^(?:proc|func|method|iterator|converter|template|var|let|const|include|import|from|when)\b", stripped
+            ):
                 in_type_section = False
             else:
                 m_type = re.match(
@@ -672,7 +675,7 @@ class NimJsonDocEnricher(PipelineFilter):
                 if nim_t == "bool" and hasattr(p_new, "type_overrides"):
                     overrides = dict(getattr(p_new, "type_overrides", {}) or {})
                     overrides.setdefault("pyi", "bool")
-                    p_new = replace(p_new, type_overrides=overrides)  # type: ignore[call-arg]
+                    p_new = replace(p_new, type_overrides=overrides)
                 updated_params.append(p_new)
             new_params = updated_params
 
@@ -683,7 +686,7 @@ class NimJsonDocEnricher(PipelineFilter):
         if meta and meta.return_nim_type == "bool" and hasattr(fn, "type_overrides"):
             overrides = dict(getattr(fn, "type_overrides", {}) or {})
             overrides.setdefault("pyi", "bool")
-            fn = replace(fn, type_overrides=overrides)  # type: ignore[call-arg]
+            fn = replace(fn, type_overrides=overrides)
         return fn
 
     def visit_Struct(self, node: Struct, context: PipelineContext | None = None) -> Struct:
@@ -753,4 +756,3 @@ class NimJsonDocEnricher(PipelineFilter):
                 "entries": _normalize_fingerprint_value(self._explicit_entries),
             },
         }
-

@@ -205,7 +205,7 @@ def _rewrite_nim_type(
             if was_nim_bool and hasattr(p_clean, "type_overrides"):
                 overrides = dict(getattr(p_clean, "type_overrides", {}) or {})
                 overrides.setdefault("pyi", "bool")
-                p_clean = replace(p_clean, type_overrides=overrides)  # type: ignore[call-arg]
+                p_clean = replace(p_clean, type_overrides=overrides)
             new_params.append(p_clean)
         return replace(
             type_expr,
@@ -213,7 +213,6 @@ def _rewrite_nim_type(
             parameters=new_params,
         )
     return type_expr
-
 
 
 class NimCleanupTransform(PipelineFilter):
@@ -308,7 +307,7 @@ class NimCleanupTransform(PipelineFilter):
         if was_nim_bool and hasattr(fn, "type_overrides"):
             overrides = dict(getattr(fn, "type_overrides", {}) or {})
             overrides.setdefault("pyi", "bool")
-            fn = replace(fn, type_overrides=overrides)  # type: ignore[call-arg]
+            fn = replace(fn, type_overrides=overrides)
         return fn
 
     def visit_Parameter(self, node: Parameter, context: PipelineContext | None = None) -> Parameter:
@@ -321,7 +320,7 @@ class NimCleanupTransform(PipelineFilter):
         if was_nim_bool and hasattr(param, "type_overrides"):
             overrides = dict(getattr(param, "type_overrides", {}) or {})
             overrides.setdefault("pyi", "bool")
-            param = replace(param, type_overrides=overrides)  # type: ignore[call-arg]
+            param = replace(param, type_overrides=overrides)
         return param
 
     def visit_Field(self, node: Field, context: PipelineContext | None = None) -> Field:
@@ -334,7 +333,7 @@ class NimCleanupTransform(PipelineFilter):
         if was_nim_bool and hasattr(fld, "type_overrides"):
             overrides = dict(getattr(fld, "type_overrides", {}) or {})
             overrides.setdefault("pyi", "bool")
-            fld = replace(fld, type_overrides=overrides)  # type: ignore[call-arg]
+            fld = replace(fld, type_overrides=overrides)
         return fld
 
     def visit_Struct(self, node: Struct, context: PipelineContext | None = None) -> Struct | None:
@@ -374,7 +373,7 @@ class NimCleanupTransform(PipelineFilter):
         if was_nim_bool and hasattr(td, "type_overrides"):
             overrides = dict(getattr(td, "type_overrides", {}) or {})
             overrides.setdefault("pyi", "bool")
-            td = replace(td, type_overrides=overrides)  # type: ignore[call-arg]
+            td = replace(td, type_overrides=overrides)
         return td
 
     def visit_Variable(self, node: Variable, context: PipelineContext | None = None) -> Variable | None:
@@ -386,7 +385,7 @@ class NimCleanupTransform(PipelineFilter):
         if was_nim_bool and hasattr(var, "type_overrides"):
             overrides = dict(getattr(var, "type_overrides", {}) or {})
             overrides.setdefault("pyi", "bool")
-            var = replace(var, type_overrides=overrides)  # type: ignore[call-arg]
+            var = replace(var, type_overrides=overrides)
         return var
 
     def visit_Constant(self, node: Constant, context: PipelineContext | None = None) -> Constant | None:
@@ -398,4 +397,3 @@ class NimCleanupTransform(PipelineFilter):
         if self._is_internal_symbol(node.name):
             return None
         return node
-
