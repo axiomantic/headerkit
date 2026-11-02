@@ -798,3 +798,43 @@ class TestBatchCLIIntegration:
         assert explicit == {"pyi": "mylib.pyi"}
         inferred = _parse_output_specs(["mylib.pyi"])
         assert inferred == {"pyi": "mylib.pyi"}
+
+    def test_cli_transform_flags_parsed_and_forwarded(self, tmp_path: Path) -> None:
+        """Verify -t and --transform are repeatable and forwarded to generate()."""
+        hdr = tmp_path / "api.h"
+        hdr.write_text("int foo(void);\n", encoding="utf-8")
+        mock_generate = MagicMock(return_value="{}")
+        with (
+            patch("headerkit._cli.generate", mock_generate),
+            patch("headerkit._cli._load_backend_plugins"),
+            patch("headerkit._cli._load_writer_plugins"),
+            patch("headerkit._cli._load_hook_plugins"),
+        ):
+            rc = main(
+                [
+                    str(hdr),
+                    "--no-config",
+                    "-t",
+                    "nim_cleanup",
+                    "--transform",
+                    "filter_by_symbol:exclude=_*",
+                ]
+            )
+        assert rc == 0
+        assert mock_generate.call_args.kwargs["transforms"] == [
+            "nim_cleanup",
+            "filter_by_symbol:exclude=_*",
+        ]
+
+    def test_cli_purged_scaffolding_flags_rejected(self) -> None:
+        """Purged scaffolding flags (--layout, --package-name, --pkg, --test-type, --no-input) raise SystemExit."""
+        parser = _build_parser()
+        for flag in (
+            ["test.h", "--layout", "package"],
+            ["test.h", "--package-name", "mypkg"],
+            ["test.h", "--pkg", "mypkg"],
+            ["test.h", "--test-type", "unit"],
+            ["test.h", "--no-input"],
+        ):
+            with pytest.raises(SystemExit):
+                parser.parse_args(flag)

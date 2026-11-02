@@ -221,8 +221,6 @@ class _PathSet:
         }
 
 
-
-
 def rewrite_type_references(type_expr: TypeExpr, mapping: dict[str, str]) -> TypeExpr:
     """Recursively rewrite type names in a TypeExpr according to mapping."""
     if isinstance(type_expr, CType):
@@ -521,10 +519,16 @@ class FilterBySymbol(PipelineFilter):
         patterns: Sequence[str] | None = None,
         mode: Literal["include", "exclude"] = "include",
         *,
+        include: Sequence[str] | None = None,
+        exclude: Sequence[str] | None = None,
         include_patterns: Sequence[str] | None = None,
         exclude_patterns: Sequence[str] | None = None,
         cascade_excluded_types: bool = True,
     ) -> None:
+        if include is not None and include_patterns is None:
+            include_patterns = list(include)
+        if exclude is not None and exclude_patterns is None:
+            exclude_patterns = list(exclude)
         if patterns is not None:
             if mode == "include" and include_patterns is None:
                 include_patterns = list(patterns)
@@ -835,4 +839,3 @@ class StripPaddingFields(PipelineFilter):
         ]
         new_nested = [self.visit_Struct(n, context=context) for n in node.nested_records]
         return replace(node, fields=new_fields, nested_records=new_nested)
-

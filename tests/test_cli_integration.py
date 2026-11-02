@@ -603,115 +603,35 @@ class TestCliConfigFile:
 # ===========================================================================
 
 
-class TestGenerateWithDefinePatterns:
-    """Integration test for define_patterns through the generate() pipeline."""
+class TestGenerateWithTransforms:
+    """Integration test for Layer-2 transforms through the generate() pipeline."""
 
-    def test_generate_with_define_patterns(self, tmp_path: Path) -> None:
-        """generate() with define_patterns scans the header and appends matched #defines."""
+    def test_generate_with_transforms_filters_declarations(self, tmp_path: Path) -> None:
+        """generate() with transforms filters the IR before running the writer."""
+        import json
         import textwrap
 
         from headerkit._generate import generate
+        from headerkit.transforms import FilterBySymbol
 
         header = tmp_path / "test.h"
         header.write_text(
             textwrap.dedent("""\
-                #define TEST_FOO 1
-                #define TEST_BAR 2
-                #define OTHER_THING 99
-
-                int some_func(void);
+                int public_func(void);
+                int _internal_func(void);
             """)
         )
         (tmp_path / ".git").mkdir()
 
         output = generate(
             header_path=header,
-            writer_name="cffi",
-            writer_options={"define_patterns": [r"TEST_\w+"]},
+            writer_name="json",
+            transforms=[FilterBySymbol(exclude=["_*"])],
             no_cache=True,
         )
-
-        # define_patterns appends CFFI "resolve at verify-time" #define NAME ... lines
-        assert "#define TEST_FOO ..." in output
-        assert "#define TEST_BAR ..." in output
-        # OTHER_THING should NOT appear as a "..." define (it may appear via IR as a resolved constant)
-        assert "#define OTHER_THING ..." not in output
-        assert "some_func" in output
-
-    @pytest.mark.libclang
-    def test_define_patterns_resolves_includes(self, tmp_path: Path) -> None:
-        """define_patterns scans resolved #include files when code= is provided."""
-        import textwrap
-
-        from headerkit._generate import generate
-
-        inc_dir = tmp_path / "include"
-        inc_dir.mkdir()
-        header = inc_dir / "mylib.h"
-        header.write_text(
-            textwrap.dedent("""\
-                #define MY_FLAG_ONE 1
-                #define MY_FLAG_TWO 2
-                int myfunc(void);
-            """)
-        )
-        (tmp_path / ".git").mkdir()
-
-        output = generate(
-            header_path=tmp_path / "umbrella.h",
-            writer_name="cffi",
-            code="#include <mylib.h>\n",
-            include_dirs=[str(inc_dir)],
-            writer_options={"define_patterns": [r"MY_FLAG_\w+"]},
-            no_cache=True,
-        )
-
-        assert "#define MY_FLAG_ONE ..." in output
-        assert "#define MY_FLAG_TWO ..." in output
-
-
-class TestScaffoldCarriesTheParseFlags:
-    """`-I` and `-D` reached the parse and nothing else.
-
-    ``ScaffoldOptions.extra_context`` existed, the Nim writer read
-    ``include_dirs`` and ``defines`` out of it, and the guide and the changelog
-    both said the generated ``nim.cfg`` carries them -- but the only code that
-    ever put anything in it was the writer's own tests. A package scaffolded with
-    ``-I``/``-D`` was generated with neither: an inert feature with passing tests
-    and documentation describing behaviour it did not have.
-    """
-
-    def test_include_dirs_and_defines_reach_the_generated_nim_cfg(self, tmp_path: Path) -> None:
-        include_dir = tmp_path / "vendor"
-        include_dir.mkdir()
-        (include_dir / "shared.h").write_text("typedef int shared_handle;\n")
-        header = tmp_path / "api.h"
-        header.write_text('#include "shared.h"\nshared_handle open_it(void);\n')
-
-        out_dir = tmp_path / "pkg"
-        rc = main(
-            [
-                str(header),
-                "--writer",
-                "nim",
-                "--layout",
-                "package",
-                "--package-name",
-                "apilib",
-                "--no-input",
-                "-I",
-                str(include_dir),
-                "-D",
-                "HK_FEATURE=1",
-                "-o",
-                f"nim:{out_dir}",
-            ]
-        )
-        assert rc == 0
-
-        cfg = (out_dir / "nim.cfg").read_text()
-        assert f'-I\\"{include_dir.resolve().as_posix()}\\"' in cfg, cfg
-        assert '--passC:"-DHK_FEATURE=1"' in cfg, cfg
+        parsed = json.loads(output)
+        decl_names = [d["name"] for d in parsed["declarations"]]
+        assert decl_names == ["public_func"]
 
 
 class TestCliSubdirectoryExecution:

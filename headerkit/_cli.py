@@ -17,7 +17,7 @@ from headerkit._config import (
     load_config,
     merge_config,
 )
-from headerkit._generate import batch_generate, generate
+from headerkit._generate import batch_generate, generate, generate_targets
 from headerkit._rename import register_config_hooks as register_rename_config
 from headerkit.backends import _load_backend_plugins
 from headerkit.hooks import _load_hook_plugins
@@ -90,7 +90,9 @@ class HeaderkitArgumentParser(argparse.ArgumentParser):
             p.add_argument("--target", required=True, help="Target architecture triple to add")
             p.add_argument("--lang", default=None, help="Target language")
             return p.parse_args(raw, namespace)
-        res = super().parse_args(args, namespace)
+        if raw and raw[0] == "generate":
+            raw = raw[1:]
+        res = super().parse_args(raw, namespace)
         if not hasattr(res, "command"):
             res.command = None
         return res
@@ -170,7 +172,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="headerkit",
         description="Parse C/C++ header files and emit output via configurable writers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Subcommands:\n  add-target          Add target to existing generated binding matrix\n  new, new-plugin     Scaffold a new extension project (writer, backend, plugin)\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index, populate)\n  store                Store operations (merge)",
+        epilog="Subcommands:\n  generate            Generate outputs from headers or [[targets]] config\n  add-target          Add target to existing generated binding matrix\n  install-libclang    Install libclang for the current platform (run with --help for options)\n  cache                Cache management (status, clear, rebuild-index, populate)\n  store                Store operations (merge)",
     )
     parser.add_argument(
         "input_files",
@@ -217,6 +219,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Writer to use (repeatable)",
     )
     parser.add_argument(
+        "-t",
+        "--transform",
+        dest="transforms",
+        action="append",
+        metavar="TRANSFORM",
+        help="Layer-2 IR transform to apply before writer (repeatable)",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         dest="output_specs",
@@ -237,34 +247,6 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         metavar="WRITER:KEY=VALUE",
         help="Writer option",
-    )
-    parser.add_argument(
-        "--layout",
-        dest="layout",
-        choices=["file", "package", "project", "wheel", "scikit-build", "cmake"],
-        default=None,
-        help="Layout mode for output (default: file, or package if directory output)",
-    )
-    parser.add_argument(
-        "--package-name",
-        "--pkg",
-        dest="package_name",
-        default=None,
-        help="Package name when scaffolding a package layout",
-    )
-    parser.add_argument(
-        "--test-type",
-        dest="test_type",
-        choices=["both", "tripwire", "unit", "none"],
-        default="both",
-        help="Type of test stubs to generate when scaffolding (default: both)",
-    )
-    parser.add_argument(
-        "--no-input",
-        dest="no_input",
-        action="store_true",
-        default=False,
-        help="Disable interactive prompting in terminal",
     )
     parser.add_argument(
         "--config",
@@ -355,6 +337,7 @@ def _build_parser() -> argparse.ArgumentParser:
         defines=[],
         backend_args=[],
         writers=[],
+        transforms=[],
         writer_opts_raw=[],
         plugins=[],
     )
@@ -564,12 +547,6 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(raw_args)
         return add_target_command(args)
 
-    # Subcommand dispatch: `headerkit new [args]` / `headerkit new-plugin [args]`
-    if raw_args and raw_args[0] in ("new", "new-plugin"):
-        from headerkit.scaffold_plugin import plugin_scaffold_main
-
-        return plugin_scaffold_main(raw_args[1:])
-
     # Subcommand dispatch: `headerkit install-libclang [args]`
     if raw_args and raw_args[0] == "install-libclang":
         from headerkit.install_libclang import main as _install_main
@@ -732,6 +709,41 @@ def main(argv: list[str] | None = None) -> int:
     specs = _merge_config_writer_opts(config, specs)
 
     # Resolve input files: CLI positional args win, else fall back to config
+    transforms_raw: list[object] = list(getattr(args, "transforms", None) or [])
+    if not input_files and config is not None and config.targets:
+        cli_project_root = config.source_path.parent if config.source_path is not None else Path.cwd()
+        extra_args_list = _parse_defines(defines) + backend_args
+        try:
+            target_results = generate_targets(
+                config.targets,
+                default_backend_name=backend_name,
+                default_include_dirs=include_dirs or None,
+                default_defines=defines or None,
+                default_extra_args=extra_args_list or None,
+                default_transforms=transforms_raw or None,  # type: ignore[arg-type]
+                default_target=args.target,
+                runtime=resolved_runtime,
+                language=resolved_language,
+                classification=resolved_classification,
+                store_dir=resolved_store_dir,
+                no_cache=resolved_no_cache,
+                no_ir_cache=resolved_no_ir_cache,
+                no_output_cache=resolved_no_output_cache,
+                auto_install_libclang=None,
+                project_root=cli_project_root,
+            )
+        except (ValueError, RuntimeError, FileNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+        for r in target_results:
+            if r.output_path is None:
+                print(r.output, end="")
+            else:
+                cached_tag = " (cached)" if r.from_cache else ""
+                print(f"  {r.writer_name}: {r.output_path}{cached_tag}", file=sys.stderr)
+        return 0
+
     use_config_headers = False
     if not input_files:
         if config is not None and config.headers:
@@ -740,7 +752,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(
                 "headerkit: no input files provided (pass header paths or configure "
-                "[[tool.headerkit.headers]] in pyproject.toml)",
+                "[[tool.headerkit.headers]] or [[targets]] in headerkit.toml / pyproject.toml)",
                 file=sys.stderr,
             )
             return 1
@@ -750,73 +762,6 @@ def main(argv: list[str] | None = None) -> int:
     if config is not None:
         merged_output_templates.update(config.output)
     merged_output_templates.update(output_templates)
-
-    # Check for package / project layout scaffolding
-    layout_mode = getattr(args, "layout", None)
-    pkg_name_arg = getattr(args, "package_name", None)
-    test_type = getattr(args, "test_type", "both")
-    no_input = getattr(args, "no_input", False)
-
-    if (layout_mode is not None and layout_mode != "file") or (layout_mode is None and pkg_name_arg is not None):
-        from headerkit.backends import get_backend
-        from headerkit.scaffold import ScaffoldOptions, prompt_scaffold_options, scaffold
-
-        backend = get_backend(backend_name)
-        backend_args_list = _parse_defines(defines) + backend_args
-
-        if not input_files:
-            print("Error: no input files provided for scaffolding", file=sys.stderr)
-            return 1
-
-        first_path = Path(input_files[0]).resolve()
-        unit = backend.parse(
-            first_path.read_text(encoding="utf-8"),
-            str(first_path),
-            include_dirs or None,
-            backend_args_list or None,
-            project_prefixes=(str(first_path.parent),),
-        )
-
-        for spec in specs:
-            pkg_name = pkg_name_arg or (Path(spec.output_template).name if spec.output_template else first_path.stem)
-            target_dir = Path(spec.output_template) if spec.output_template else Path(pkg_name)
-
-            scaffold_wopts: dict[str, object] = {}
-            if spec.options:
-                for key, values in spec.options.items():
-                    scaffold_wopts[key] = values[0] if len(values) == 1 else values
-
-            # The include paths and defines the parse was given, carried to the
-            # writer so a generated build configuration can state the flags the
-            # header was actually parsed with. Without this the fields existed and
-            # the writer read them, but nothing outside the tests ever filled them:
-            # a package scaffolded with `-I`/`-D` was generated with neither.
-            extra_ctx: dict[str, object] = {
-                "include_dirs": list(include_dirs),
-                "defines": list(defines),
-            }
-            if getattr(args, "target", None):
-                extra_ctx["target"] = getattr(args, "target", None)
-            defaults = ScaffoldOptions(
-                package_name=pkg_name,
-                target_language=spec.name,
-                layout=layout_mode or "package",
-                test_type=test_type,
-                options=scaffold_wopts,
-                extra_context=extra_ctx,
-            )
-            scaffold_opts = prompt_scaffold_options(defaults, is_tty=False if no_input else None)
-            try:
-                project_layout = scaffold(unit, scaffold_opts)
-            except (ValueError, RuntimeError, FileNotFoundError) as exc:
-                print(f"Error: {exc}", file=sys.stderr)
-                return 1
-            written = project_layout.write_to_disk(target_dir)
-            print(
-                f"headerkit: scaffolded {len(written)} files into {target_dir}",
-                file=sys.stderr,
-            )
-        return 0
 
     # Determine whether to use batch_generate() or direct generate()
     # Use direct generate() only for: single explicit file, single writer, no output template
@@ -866,6 +811,7 @@ def main(argv: list[str] | None = None) -> int:
                 include_dirs=include_dirs or None,
                 defines=defines or None,
                 extra_args=extra_args_list or None,
+                transforms=transforms_raw or None,  # type: ignore[arg-type]
                 writer_options=batch_writer_options or None,
                 output_templates=merged_output_templates or None,
                 store_dir=resolved_store_dir,
@@ -936,6 +882,7 @@ def main(argv: list[str] | None = None) -> int:
                 classification=resolved_classification,
                 include_dirs=include_dirs or None,
                 extra_args=extra_args or None,
+                transforms=transforms_raw or None,  # type: ignore[arg-type]
                 writer_options=writer_kwargs or None,
                 store_dir=resolved_store_dir,
                 no_cache=resolved_no_cache,

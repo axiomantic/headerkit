@@ -643,9 +643,9 @@ class TestPlatformScopedEntries:
 
     def test_the_shipped_windows_entry_declares_its_platform(self) -> None:
         """Otherwise it is the 6-in-7 false warning this class exists to prevent."""
-        windows_entry = next(e for e in ALLOWED_SKIPS if "implicit_enumerator" in e.nodeid)
+        platform_entry = next(e for e in ALLOWED_SKIPS if "test_cross_platform.py" in e.nodeid)
 
-        assert windows_entry.platforms == ("win32",)
+        assert platform_entry.platforms == ("darwin", "win32")
 
 
 class TestMatchedEntryKeying:

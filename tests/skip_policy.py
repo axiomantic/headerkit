@@ -205,20 +205,6 @@ ALLOWED_SKIPS: tuple[AllowedSkip, ...] = (
         ),
     ),
     AllowedSkip(
-        nodeid="tests/test_scaffold_runs.py::TestScaffoldedCtypesPackageRuns::test_an_implicit_enumerator_past_int_range_is_refused*",
-        reason="parser and compiler disagree, so the writer cannot see the overflow",
-        platforms=("win32",),
-        why=(
-            "The test asserts that the ctypes writer refuses an enumerator past int range. On a "
-            "host whose libclang reports that enumerator as in-range while its C compiler gives it "
-            "0x80000000, the writer has nothing to refuse and the assertion has no subject -- "
-            "observed on the Windows runner, with every toolchain present. The refusal behaviour is "
-            "not thereby left unproven: the structural refusal case in the same class keys on the "
-            "declaration rather than on any enumerator value, runs on every host including that one, "
-            "and a sibling test asserts that it ran."
-        ),
-    ),
-    AllowedSkip(
         nodeid="tests/test_integration/test_cross_platform.py::TestCrossPlatformIntegration::test_reconciled_bindings_typecheck_in_docker",
         reason="docker CLI not found on PATH",
         platforms=("darwin", "win32"),

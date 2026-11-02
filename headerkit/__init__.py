@@ -1,7 +1,15 @@
 """headerkit - The universal C/C++ interop toolkit."""
 
-from headerkit._config import HeaderkitConfig, load_config
-from headerkit._generate import BatchResult, GenerateResult, batch_generate, generate, generate_all
+from headerkit._config import HeaderkitConfig, TargetConfig, load_config
+from headerkit._generate import (
+    BatchResult,
+    GenerateResult,
+    batch_generate,
+    generate,
+    generate_all,
+    generate_targets,
+    resolve_transforms,
+)
 from headerkit._ir_json import json_to_header
 from headerkit._populate import PopulateResult, PopulateTarget, populate
 from headerkit._rename import (
@@ -85,16 +93,6 @@ from headerkit.matrix import (
     inject_overrides,
     probe_configuration,
 )
-from headerkit.packaging import (
-    generate_cffi_wheel_layout,
-    generate_ctypes_wheel_layout,
-    generate_cython_wheel_layout,
-    generate_nim_cmake,
-    generate_nim_pyproject,
-    generate_nim_python_wrapper,
-    generate_nim_source,
-    generate_nim_wheel_layout,
-)
 from headerkit.reconcile import (
     MatrixCondition,
     MatrixGuardedBlock,
@@ -109,33 +107,13 @@ from headerkit.reconcile import (
     reconcile_matrix,
     reconcile_units,
 )
-from headerkit.scaffold import (
-    BYOScaffolder,
-    CTestExtractor,
-    NimTestExtractor,
-    OutputFile,
-    ProjectLayout,
-    PythonTestExtractor,
-    ScaffoldOptions,
-    ScaffoldTestExtractor,
-    StdlibScaffolder,
-    TestBlockExtractor,
-    extract_function_names,
-    extract_header_version,
-    get_test_extractor,
-    merge_incremental_tests,
-    prompt_scaffold_options,
-    register_test_extractor,
-    scaffold,
-)
-from headerkit.scaffold_plugin import (
-    PluginScaffoldOptions,
-    prompt_plugin_scaffold_options,
-    scaffold_plugin,
-)
 from headerkit.transforms import (
     ChainedFilter,
     FilterByHeader,
+    FilterBySymbol,
+    FilterDeprecated,
+    FilterUnexportedSymbols,
+    FilterUnexportedSymbolsTransform,
     IRTransformer,
     MakeOpaque,
     NimCleanupTransform,
@@ -145,15 +123,6 @@ from headerkit.transforms import (
     StripPaddingFields,
     StripPrefix,
     rewrite_type_references,
-)
-from headerkit.workorder import (
-    DEFINITION_OF_DONE,
-    WORK_ORDER_MARKER,
-    Stub,
-    Tier1Test,
-    WorkOrder,
-    analyze_work_order,
-    build_work_order_files,
 )
 from headerkit.writers import (
     BaseWriter,
@@ -229,6 +198,8 @@ __all__ = [
     # Generate API
     "generate",
     "generate_all",
+    "generate_targets",
+    "resolve_transforms",
     "GenerateResult",
     # Batch API
     "batch_generate",
@@ -263,44 +234,6 @@ __all__ = [
     "HookDispatcher",
     "HookCaller",
     "execute_pipeline",
-    # Scaffolding API
-    "OutputFile",
-    "ProjectLayout",
-    "ScaffoldOptions",
-    "BYOScaffolder",
-    "StdlibScaffolder",
-    "ScaffoldTestExtractor",
-    "TestBlockExtractor",
-    "NimTestExtractor",
-    "PythonTestExtractor",
-    "CTestExtractor",
-    "get_test_extractor",
-    "register_test_extractor",
-    "extract_function_names",
-    "extract_header_version",
-    "merge_incremental_tests",
-    "prompt_scaffold_options",
-    "scaffold",
-    "PluginScaffoldOptions",
-    "prompt_plugin_scaffold_options",
-    "scaffold_plugin",
-    # Work-order API
-    "WorkOrder",
-    "Tier1Test",
-    "Stub",
-    "analyze_work_order",
-    "build_work_order_files",
-    "WORK_ORDER_MARKER",
-    "DEFINITION_OF_DONE",
-    # Packaging API
-    "generate_cffi_wheel_layout",
-    "generate_ctypes_wheel_layout",
-    "generate_cython_wheel_layout",
-    "generate_nim_cmake",
-    "generate_nim_pyproject",
-    "generate_nim_python_wrapper",
-    "generate_nim_source",
-    "generate_nim_wheel_layout",
     # Renaming API -- published in docs/reference/hooks.md, so it is public here
     # rather than reachable only through a private module.
     "RenameConfig",
@@ -313,6 +246,7 @@ __all__ = [
     "rename_cache_fingerprint",
     # Config API
     "HeaderkitConfig",
+    "TargetConfig",
     "load_config",
     # Reconciliation API
     "PlatformCondition",
@@ -338,6 +272,10 @@ __all__ = [
     "RenameTypes",
     "StripPaddingFields",
     "FilterByHeader",
+    "FilterBySymbol",
+    "FilterDeprecated",
+    "FilterUnexportedSymbols",
+    "FilterUnexportedSymbolsTransform",
     "rewrite_type_references",
     # Matrix API
     "ConfigCondition",
