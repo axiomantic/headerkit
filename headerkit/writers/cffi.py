@@ -287,17 +287,22 @@ def _type_references_name(t: TypeExpr, target: str) -> bool:
     return False
 
 
+def _struct_references_name(decl: Struct, target: str) -> bool:
+    """Return True if any field of *decl* references *target*."""
+    for f in decl.fields:
+        if f.anonymous_struct is not None:
+            if any(_type_references_name(inner.type, target) for inner in f.anonymous_struct.fields):
+                return True
+        elif _type_references_name(f.type, target):
+            return True
+    return False
+
+
 def _struct_is_self_referential(decl: Struct) -> bool:
     """Return True if any field of *decl* references *decl.name*."""
     if not decl.name:
         return False
-    for f in decl.fields:
-        if f.anonymous_struct is not None:
-            if any(_type_references_name(inner.type, decl.name) for inner in f.anonymous_struct.fields):
-                return True
-        elif _type_references_name(f.type, decl.name):
-            return True
-    return False
+    return _struct_references_name(decl, decl.name)
 
 
 def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | None:
@@ -327,9 +332,9 @@ def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | No
         lines.append("   declaration, or cffi will lay it out with padding the header does not")
         lines.append("   have. packed=True applies to the whole cdef() call, so a header mixing")
         lines.append("   packed and unpacked records needs them split across separate calls. */")
-    self_ref = _struct_is_self_referential(decl)
+    needs_tag = _struct_is_self_referential(decl) or bool(tag_kinds and f"#fwd:{decl.name}" in tag_kinds)
     if decl.is_typedef:
-        if self_ref:
+        if needs_tag:
             lines.append(f"typedef {kind} {decl.name} {{")
         else:
             lines.append(f"typedef {kind} {{")
@@ -337,8 +342,13 @@ def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | No
         lines.append(f"{kind} {decl.name} {{")
 
     field_tags = dict(tag_kinds) if tag_kinds else {}
-    if self_ref and decl.name:
+    if needs_tag and decl.name:
         field_tags[decl.name] = kind
+    if tag_kinds and decl.name:
+        fwd_prefix = f"#fwd_in:{decl.name}:"
+        for k, v in tag_kinds.items():
+            if k.startswith(fwd_prefix):
+                field_tags[k[len(fwd_prefix) :]] = v
 
     for f in decl.fields:
         lines.append(_format_field(f, field_tags))
@@ -451,6 +461,14 @@ def _constant_to_cffi(decl: Constant) -> str | None:
 
 def _variable_to_cffi(decl: Variable, tag_kinds: TagKinds | None = None) -> str | None:
     """Convert a Variable IR node to CFFI cdef."""
+    unwrapped = _unwrap_function_pointer(decl.type)
+    if unwrapped is not None:
+        fp, stars = unwrapped
+        fp_params = _format_params(fp.parameters, fp.is_variadic, tag_kinds)
+        ret = type_to_cffi(fp.return_type, tag_kinds)
+        if stars == 0:
+            return f"{ret} {decl.name}({fp_params});"
+        return f"{ret}({'*' * stars}{decl.name})({fp_params});"
     if isinstance(decl.type, Array):
         elem_type, dims_str = _unwrap_array(decl.type)
         return f"{type_to_cffi(elem_type, tag_kinds)} {decl.name}{dims_str};"
@@ -472,12 +490,14 @@ def _build_tag_kinds(declarations: list[Declaration]) -> TagKinds:
     """
     tags: TagKinds = {}
     tagless_typedefs: set[str] = set()
+    all_struct_kinds: dict[str, str] = {}
     for decl in declarations:
         if isinstance(decl, Struct) and decl.name and not _is_anonymous_name(decl.name):
+            kind = "union" if decl.is_union else "struct"
+            all_struct_kinds[decl.name] = kind
             if decl.is_typedef:
                 tagless_typedefs.add(decl.name)
             else:
-                kind = "union" if decl.is_union else "struct"
                 tags[decl.name] = kind
         elif isinstance(decl, Enum) and decl.name and not _is_anonymous_name(decl.name):
             if decl.is_typedef:
@@ -499,6 +519,16 @@ def _build_tag_kinds(declarations: list[Declaration]) -> TagKinds:
     for name in tagless_typedefs:
         if name not in tags:
             tag_kinds[name] = ""
+
+    seen_structs: set[str] = set()
+    for decl in declarations:
+        if isinstance(decl, Struct) and decl.name and not _is_anonymous_name(decl.name):
+            for target_name, target_kind in all_struct_kinds.items():
+                if target_name != decl.name and target_name not in seen_structs:
+                    if _struct_references_name(decl, target_name):
+                        tag_kinds[f"#fwd:{target_name}"] = target_kind
+                        tag_kinds[f"#fwd_in:{decl.name}:{target_name}"] = target_kind
+            seen_structs.add(decl.name)
     return tag_kinds
 
 
@@ -518,6 +548,10 @@ def _find_opaque_typedef_structs(declarations: list[Declaration]) -> set[str]:
     for decl in declarations:
         if isinstance(decl, Typedef):
             typedef_names.add(decl.name)
+            if isinstance(decl.underlying_type, CType):
+                u_name = decl.underlying_type.name.strip()
+                bare = u_name.split(" ", 1)[1] if u_name.startswith(("struct ", "union ", "enum ")) else u_name
+                typedef_names.add(bare)
 
     return opaque_structs & typedef_names
 

@@ -329,7 +329,7 @@ def _build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {importlib.metadata.version('headerkit')}",
     )
     parser.set_defaults(
-        backend="libclang",
+        backend=None,
         runtime=None,
         language=None,
         classification=None,
@@ -597,7 +597,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     # typed locals (F2: use correct dest= names, not design doc section 10.2 names)
-    backend_name: str = args.backend
+    backend_name: str = args.backend or "libclang"
     include_dirs: list[str] = args.include_dirs
     defines: list[str] = args.defines
     backend_args: list[str] = args.backend_args
@@ -628,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
     # Merge config into args (CLI wins)
     args = merge_config(config, args)
     # re-extract after merge
+    args.backend = args.backend or "libclang"
     backend_name = args.backend
     include_dirs = args.include_dirs
     defines = args.defines

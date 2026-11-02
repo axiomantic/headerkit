@@ -1785,11 +1785,10 @@ class PxdWriter:
         name = self._collision_declared_name(typedef) or self._escape_name(typedef.name, include_c_name=True)
 
         # Function pointer typedefs
-        if isinstance(typedef.underlying_type, Pointer):
-            if isinstance(typedef.underlying_type.pointee, FunctionPointer):
-                return self._write_func_ptr_typedef(name, typedef.underlying_type.pointee)
-        if isinstance(typedef.underlying_type, FunctionPointer):
-            return self._write_func_ptr_typedef(name, typedef.underlying_type)
+        unwrapped_fp = self._unwrap_func_ptr(typedef.underlying_type)
+        if unwrapped_fp is not None:
+            fp, stars = unwrapped_fp
+            return self._write_func_ptr_typedef(name, fp, stars=stars)
 
         self._reset_unsupported()
         self._reject_rvalue("aliases", typedef.underlying_type)
@@ -1840,7 +1839,7 @@ class PxdWriter:
 
         return [f"ctypedef {underlying} {name}"]
 
-    def _write_func_ptr_typedef(self, name: str, fp: FunctionPointer) -> list[str]:
+    def _write_func_ptr_typedef(self, name: str, fp: FunctionPointer, *, stars: int = 1) -> list[str]:
         """Write a function pointer typedef."""
         is_func_ptr_return = isinstance(fp.return_type, FunctionPointer) or (
             isinstance(fp.return_type, Pointer) and isinstance(fp.return_type.pointee, FunctionPointer)
@@ -1851,7 +1850,8 @@ class PxdWriter:
             return_type = self._format_type(fp.return_type)
 
         params = self._format_params(fp.parameters, fp.is_variadic)
-        return [f"ctypedef {return_type} (*{name})({params})"]
+        star_str = "*" * max(1, stars)
+        return [f"ctypedef {return_type} ({star_str}{name})({params})"]
 
     # -----------------------------------------------------------------
     # Variable
@@ -1861,13 +1861,19 @@ class PxdWriter:
         """Write a variable declaration."""
         name = self._collision_declared_name(var) or self._escape_name(var.name, include_c_name=True)
 
-        func_ptr = self._as_func_ptr(var.type)
-        if func_ptr is not None:
+        unwrapped_fp = self._unwrap_func_ptr(var.type)
+        if unwrapped_fp is not None:
             # _format_type yields the *abstract* declarator ``void (*)(int)``,
             # which cannot take a name suffix. Emit a named typedef and declare
             # the variable through it.
+            func_ptr, stars = unwrapped_fp
             typedef_name = f"_{var.name}_ft"
-            return [*self._write_func_ptr_typedef(typedef_name, func_ptr), "", f"{typedef_name} {name}"]
+            extra_stars = "*" * max(0, stars - 1)
+            return [
+                *self._write_func_ptr_typedef(typedef_name, func_ptr, stars=1),
+                "",
+                f"{typedef_name}{extra_stars} {name}",
+            ]
 
         self._reset_unsupported()
         self._reject_rvalue("has", var.type)

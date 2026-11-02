@@ -171,12 +171,43 @@ def _is_direct_nim_bool(type_expr: TypeExpr) -> bool:
     return isinstance(type_expr, CType) and type_expr.name == "NIM_BOOL"
 
 
+def _parse_c_type_str(type_str: str) -> TypeExpr:
+    """Parse a C type string (such as ``const char **`` or ``NI32 *``) into a ``TypeExpr``."""
+    s = type_str.strip()
+    m_ptr = re.search(r"\*\s*((?:(?:const|volatile|restrict|__restrict)\b\s*)*)$", s)
+    if m_ptr:
+        prefix = s[: m_ptr.start()].strip()
+        qual_str = m_ptr.group(1).strip()
+        ptr_quals = [q for q in qual_str.split() if q]
+        return Pointer(pointee=_parse_c_type_str(prefix), qualifiers=ptr_quals)
+
+    quals: list[str] = []
+    tokens = s.split()
+    base_tokens: list[str] = []
+    for tok in tokens:
+        if tok in ("const", "volatile", "restrict", "__restrict"):
+            quals.append(tok)
+        else:
+            base_tokens.append(tok)
+    base_name = " ".join(base_tokens) if base_tokens else s
+    if base_name == "NCSTRING":
+        return Pointer(pointee=CType(name="char", qualifiers=quals, is_elaborated=False))
+    mapped = _NIM_SCALAR_TYPE_MAP.get(base_name)
+    if mapped is not None:
+        return CType(name=mapped, qualifiers=quals)
+    unmangled = _unmangle_nim_type_name(base_name)
+    return CType(name=unmangled, qualifiers=quals)
+
+
 def _rewrite_nim_type(
     type_expr: TypeExpr,
     typroc_map: dict[str, FunctionPointer] | None = None,
 ) -> TypeExpr:
     """Recursively normalize Nim ``nimbase.h`` and ``ccgtypes.nim`` C types into standard C99 ``TypeExpr`` nodes."""
     if isinstance(type_expr, CType):
+        if "*" in type_expr.name:
+            qual_prefix = f"{' '.join(type_expr.qualifiers)} " if type_expr.qualifiers else ""
+            return _parse_c_type_str(f"{qual_prefix}{type_expr.name}")
         if typroc_map and type_expr.name in typroc_map:
             return typroc_map[type_expr.name]
         if type_expr.name == "NCSTRING":
@@ -296,7 +327,7 @@ class NimCleanupTransform(PipelineFilter):
                     continue
                 seen_typedefs.add(key)
             deduped_decls.append(decl)
-        return replace(transformed, declarations=deduped_decls)
+        return replace(transformed, declarations=deduped_decls, source_origin="nim_c_header")
 
     def visit_Function(self, node: Function, context: PipelineContext | None = None) -> Function | None:
         if self._is_internal_symbol(node.name):

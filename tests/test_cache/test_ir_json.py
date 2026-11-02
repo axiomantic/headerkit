@@ -20,6 +20,7 @@ from headerkit.ir import (
     Reference,
     SourceLocation,
     Struct,
+    TemplateParameter,
     Typedef,
     Variable,
 )
@@ -496,11 +497,21 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
         exactly how five of them stayed broken.
         """
         loc = SourceLocation(file="h.h", line=3, column=9)
-        inner = Struct("Inner", [Field("q", CType("int"), type_overrides={"nim": "cint"})])
+        tpl_param = TemplateParameter(
+            "N",
+            default_value="4",
+            is_type=False,
+            type_name="size_t",
+            is_parameter_pack=True,
+        )
+        inner = Struct("Inner", [Field("q", CType("int"), type_overrides={"nim": "cint"})], access="protected")
         method = Function(
             "m",
             CType("void"),
             [Parameter("p", CType("int"), type_overrides={"cffi": "int32_t"})],
+            template_params=["N"],
+            template_parameters=[tpl_param],
+            mangled_name="_ZN2ns1mEi",
             type_overrides={"cython": "void"},
             location=loc,
         )
@@ -517,6 +528,7 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     attributes=["deprecated"],
                     is_abstract=True,
                     is_deprecated=True,
+                    access="public",
                     fields=[
                         Field(
                             "a",
@@ -531,7 +543,8 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     is_typedef=True,
                     is_cppclass=True,
                     namespace="ns",
-                    template_params=["T"],
+                    template_params=["N"],
+                    template_parameters=[tpl_param],
                     cpp_name="ns::S",
                     is_packed=True,
                     notes=["n1"],
@@ -570,6 +583,7 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     CType("int"),
                     namespace="ns",
                     is_deprecated=True,
+                    mangled_name="_ZN2ns5g_valE",
                     type_overrides={"nim": "cint"},
                     location=loc,
                 ),
@@ -583,6 +597,7 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     location=loc,
                 ),
             ],
+            source_origin="nim_c_header",
         )
 
     def test_a_maximal_header_round_trips_unchanged(self) -> None:
@@ -608,15 +623,15 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
         header = self._maximal_header()
         data = header_to_json_dict(header)
 
-        seen: dict[str, tuple[set[str], object]] = {}
+        seen: dict[str, tuple[set[str], list[object]]] = {}
 
         def walk(obj: object, d: object) -> None:
             if not dataclasses.is_dataclass(obj) or not isinstance(d, dict):
                 return
             name = type(obj).__name__
-            keys, _ = seen.setdefault(name, (set(), obj))
+            keys, objs = seen.setdefault(name, (set(), []))
             keys.update(d)
-            seen[name] = (keys, obj)
+            objs.append(obj)
             for f in dataclasses.fields(obj):
                 value = getattr(obj, f.name)
                 rendered = d.get(f.name)
@@ -626,21 +641,23 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                 else:
                     walk(value, rendered)
 
-        for decl, rendered in zip(header.declarations, data["declarations"], strict=False):
-            walk(decl, rendered)
+        walk(header, data)
 
         # Only a field carrying a *non-default* value is required to appear:
         # the serializer omits defaults by design, so demanding a key for one
         # would assert the format rather than the invariant. Which is why the
         # fixture above sets every field away from its default.
         missing: dict[str, list[str]] = {}
-        for name, (keys, obj) in seen.items():
+        for name, (keys, objs) in seen.items():
             gap = sorted(
-                f.name
-                for f in dataclasses.fields(type(obj))
-                if f.name not in keys
-                and f.name not in unwritten.get(name, set())
-                and getattr(obj, f.name) != _default_of(f)
+                {
+                    f.name
+                    for obj in objs
+                    for f in dataclasses.fields(type(obj))
+                    if f.name not in keys
+                    and f.name not in unwritten.get(name, set())
+                    and getattr(obj, f.name) != _default_of(f)
+                }
             )
             if gap:
                 missing[name] = gap

@@ -62,7 +62,7 @@ from headerkit.transforms import (
     StripPaddingFields,
     StripPrefix,
 )
-from headerkit.writers import get_writer
+from headerkit.writers import get_writer, list_writer_options
 
 _HK_GET_BACKEND = get_backend
 logger = logging.getLogger("headerkit.cache")
@@ -1168,12 +1168,18 @@ def generate_targets(
             if default_writer_options and wname in default_writer_options:
                 wopts.update(default_writer_options[wname])
             if t_cfg.options:
+                for k, v in t_cfg.options.items():
+                    if k not in active_writers or not isinstance(v, dict):
+                        wopts[k] = v
                 if wname in t_cfg.options and isinstance(t_cfg.options[wname], dict):
                     wopts.update(t_cfg.options[wname])  # type: ignore[arg-type]
-                elif len(active_writers) == 1 or wname == t_cfg.writer:
-                    for k, v in t_cfg.options.items():
-                        if k not in active_writers or not isinstance(v, dict):
-                            wopts[k] = v
+            try:
+                supported = list_writer_options(wname)
+                if supported:
+                    allowed_keys = {opt.name for opt in supported}
+                    wopts = {k: v for k, v in wopts.items() if k in allowed_keys}
+            except ValueError:
+                pass
 
             meta: dict[str, object] = {}
             pre_ir = ir_group_cache.get(group_key)

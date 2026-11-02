@@ -790,7 +790,7 @@ class TestBatchCLIIntegration:
         args_long = parser.parse_args(["test.h", "--backend", "libclang"])
         assert args_long.backend == "libclang"
         args_default = parser.parse_args(["test.h"])
-        assert args_default.backend == "libclang"
+        assert args_default.backend is None
 
     def test_cli_pyi_output_spec_routing(self) -> None:
         """Verify -o pyi:mylib.pyi and bare -o mylib.pyi route to pyi writer."""

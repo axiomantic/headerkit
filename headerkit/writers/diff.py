@@ -217,6 +217,8 @@ def _is_nim_c_header(unit: Header) -> bool:
     """Detect whether ``unit`` represents a ``nim c --header`` C header IR."""
     if getattr(unit, "source_origin", None) == "nim_c_header" or getattr(unit, "language", None) == "nim":
         return True
+    if getattr(unit, "source_origin", None) == "nim_c_header":
+        return True
     if "nimbase.h" in getattr(unit, "included_headers", set()):
         return True
     for decl in unit.declarations:
@@ -246,29 +248,22 @@ def _is_cleaned_nim_comparison(baseline: Header, target: Header) -> bool:
         return True
     for a, b in ((baseline, target), (target, baseline)):
         a_enums: set[str] = set()
-        a_struct_typedefs: set[str] = set()
+        b_enums: set[str] = {_strip_tag_prefix(d.name) for d in b.declarations if isinstance(d, Enum) and d.name}
         for d in a.declarations:
             if isinstance(d, Enum) and d.name:
                 a_enums.update(_abi_stem_variants(_strip_tag_prefix(d.name)))
-            elif isinstance(d, Struct) and d.name:
-                for variant in _abi_stem_variants(_strip_tag_prefix(d.name)):
-                    if variant != _strip_tag_prefix(d.name):
-                        a_struct_typedefs.add(variant)
             elif isinstance(d, Typedef) and d.name and isinstance(d.underlying_type, CType):
                 u_raw = d.underlying_type.name.strip()
                 if u_raw.startswith("enum "):
                     a_enums.add(d.name)
-                elif u_raw.startswith("struct ") and _strip_tag_prefix(u_raw) != d.name:
-                    a_struct_typedefs.add(d.name)
         for d in b.declarations:
             if (
                 isinstance(d, Typedef)
                 and d.name in a_enums
+                and d.name not in b_enums
                 and isinstance(d.underlying_type, CType)
                 and d.underlying_type.name in ("int32_t", "int", "NI32")
             ):
-                return True
-            if isinstance(d, Struct) and d.name in a_struct_typedefs:
                 return True
     return False
 
@@ -350,9 +345,9 @@ def _canonicalize_type(
         return CType(name=canonical_name, qualifiers=sorted(set(cv_quals)), is_elaborated=None)
 
     if isinstance(type_expr, Pointer):
-        if isinstance(type_expr.pointee, FunctionPointer):
+        if isinstance(type_expr.pointee, FunctionPointer) and not type_expr.pointee.is_pointer:
             return _canonicalize_type(
-                type_expr.pointee,
+                replace(type_expr.pointee, is_pointer=True),
                 typedef_map,
                 abi_mode=abi_mode,
                 ignore_pointer_const=ignore_pointer_const,

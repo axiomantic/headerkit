@@ -445,13 +445,21 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
                 t_transforms = list(config.transforms)
 
             t_options: dict[str, object] = {}
-            if t_writer in config.writer_options:
+            if len(t_writers) == 1 and t_writer in config.writer_options:
                 t_options.update(config.writer_options[t_writer].options)
+            elif len(t_writers) > 1:
+                for w in t_writers:
+                    if w in config.writer_options:
+                        t_options[w] = dict(config.writer_options[w].options)
             raw_opts = td.get("options", td.get("writer_options"))
             if raw_opts is not None:
                 if not isinstance(raw_opts, dict):
                     raise ValueError(f"headerkit: config error in {source}: targets[{idx}].options must be a table")
-                t_options.update(cast(dict[str, object], raw_opts))
+                for k, v in raw_opts.items():
+                    if k in t_options and isinstance(t_options[k], dict) and isinstance(v, dict):
+                        t_options[k] = {**cast(dict[str, object], t_options[k]), **cast(dict[str, object], v)}
+                    else:
+                        t_options[k] = v
 
             t_target = td.get("target", config.target)
             if t_target is not None and not isinstance(t_target, str):

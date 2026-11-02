@@ -402,6 +402,7 @@ class TestFunctionPointerTypedef:
                         FunctionPointer(
                             CType("void"),
                             [Parameter("data", Pointer(CType("void")))],
+                            is_pointer=False,
                         )
                     ),
                 ),
@@ -416,7 +417,7 @@ class TestFunctionPointerTypedef:
             [
                 Typedef(
                     "VoidFn",
-                    Pointer(FunctionPointer(CType("void"), [])),
+                    Pointer(FunctionPointer(CType("void"), [], is_pointer=False)),
                 ),
             ],
         )

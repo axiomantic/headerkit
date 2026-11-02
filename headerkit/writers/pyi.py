@@ -18,6 +18,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    Parameter,
     Pointer,
     Reference,
     SourceUnit,
@@ -170,6 +171,18 @@ class PyiWriter(BaseWriter):
             choices=("any", "ctypes"),
             type=str,
         ),
+        WriterOption(
+            name="define_patterns",
+            description="Regex patterns of preprocessor macros to include on _Lib in cffi mode",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="extern_python",
+            description='Function prototypes or names to emit on _Lib in cffi mode as extern "Python" callbacks',
+            default=None,
+            type=list,
+        ),
     )
     writer_options: ClassVar[list[WriterOption]] = list(supported_options)
 
@@ -179,6 +192,8 @@ class PyiWriter(BaseWriter):
         mode: Literal["pep484", "cffi"] = "pep484",
         module_var: str | None = None,
         pointer_style: Literal["any", "ctypes"] = "any",
+        define_patterns: Sequence[str] | None = None,
+        extern_python: Sequence[str] | None = None,
     ) -> None:
         if mode not in ("pep484", "cffi"):
             raise ValueError(f"Unsupported PyiWriter mode: {mode!r}; expected 'pep484' or 'cffi'")
@@ -188,7 +203,10 @@ class PyiWriter(BaseWriter):
         self.mode: Literal["pep484", "cffi"] = mode
         self.module_var: str | None = module_var
         self.pointer_style: Literal["any", "ctypes"] = pointer_style
+        self.define_patterns: list[str] = list(define_patterns) if define_patterns else []
+        self.extern_python: list[str] = list(extern_python) if extern_python else []
         self._compiled_excludes = [re.compile(p) for p in self.exclude_patterns]
+        self._compiled_defines = [re.compile(p) for p in self.define_patterns]
         self._needs_cffi = False
         self._needs_ctypes = False
         self._needs_enum = False
@@ -232,7 +250,13 @@ class PyiWriter(BaseWriter):
             self._needs_callable = True
         return cleaned
 
-    def _format_type(self, type_expr: TypeExpr, *, is_param: bool = False) -> str:
+    def _format_type(
+        self,
+        type_expr: TypeExpr,
+        *,
+        is_param: bool = False,
+        _seen_typedefs: frozenset[str] = frozenset(),
+    ) -> str:
         if isinstance(type_expr, CType):
             key = _normalize_ctype_key(type_expr)
             if type_expr.is_elaborated is True:
@@ -251,8 +275,12 @@ class PyiWriter(BaseWriter):
                 return "int"
             if key in _FLOAT_TYPES:
                 return "float"
-            if key in self._contested_tags and type_expr.is_elaborated is False:
-                return self._format_type(self._typedef_map[key], is_param=is_param)
+            if key in self._contested_tags and type_expr.is_elaborated is False and key not in _seen_typedefs:
+                return self._format_type(
+                    self._typedef_map[key],
+                    is_param=is_param,
+                    _seen_typedefs=_seen_typedefs | {key},
+                )
             resolved = self._record_tags.get(key) or self._enum_tags.get(key)
             if resolved is not None:
                 return resolved
@@ -263,7 +291,7 @@ class PyiWriter(BaseWriter):
 
         if isinstance(type_expr, Pointer):
             pointee = type_expr.pointee
-            if isinstance(pointee, FunctionPointer):
+            if isinstance(pointee, FunctionPointer) and (not pointee.is_pointer or self.pointer_style != "ctypes"):
                 return self._format_function_pointer(pointee)
             if self.pointer_style == "ctypes":
                 if isinstance(pointee, CType):
@@ -273,7 +301,7 @@ class PyiWriter(BaseWriter):
                     if pointee.is_elaborated is not True and p_key == "void":
                         self._needs_ctypes = True
                         return "ctypes.c_void_p"
-                inner = self._format_type(pointee, is_param=False)
+                inner = self._format_type(pointee, is_param=False, _seen_typedefs=_seen_typedefs)
                 self._needs_ctypes = True
                 return f"ctypes._Pointer[{inner}]"
             if isinstance(pointee, CType):
@@ -294,8 +322,12 @@ class PyiWriter(BaseWriter):
                 if p_key in _BOOL_TYPES or p_key in _INT_TYPES or p_key in _FLOAT_TYPES:
                     self._needs_any = True
                     return "Any"
-                if p_key in self._contested_tags and pointee.is_elaborated is False:
-                    return self._format_type(Pointer(self._typedef_map[p_key]), is_param=is_param)
+                if p_key in self._contested_tags and pointee.is_elaborated is False and p_key not in _seen_typedefs:
+                    return self._format_type(
+                        Pointer(self._typedef_map[p_key]),
+                        is_param=is_param,
+                        _seen_typedefs=_seen_typedefs | {p_key},
+                    )
                 resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
                 if resolved is not None:
                     return resolved
@@ -567,14 +599,16 @@ class PyiWriter(BaseWriter):
 
         for td_name, underlying in self._typedef_map.items():
             if td_name in raw_record_tags:
+                u_name = underlying.name.strip() if isinstance(underlying, CType) else ""
                 if not (
                     isinstance(underlying, CType)
-                    and self._record_tags.get(underlying.name.strip()) == _sanitize_identifier(td_name)
+                    and (self._record_tags.get(u_name) or self._enum_tags.get(u_name)) == _sanitize_identifier(td_name)
                 ):
                     self._contested_tags.add(td_name)
 
         body_blocks: list[str] = []
         lib_member_lines: list[str] = []
+        emitted_lib_funcs: set[str] = set()
 
         for decl in unit.declarations:
             decl_name = getattr(decl, "name", None)
@@ -583,7 +617,23 @@ class PyiWriter(BaseWriter):
 
             if isinstance(decl, Constant):
                 if self.mode == "cffi":
-                    lib_member_lines.extend(self._format_constant(decl, indent="    "))
+                    is_cffi_int = (
+                        decl.value is not None
+                        and isinstance(decl.value, int)
+                        and not isinstance(decl.value, bool)
+                        and not getattr(decl, "is_unsized_macro", False)
+                    )
+                    matches_define = bool(
+                        self._compiled_defines and any(p.search(decl.name) for p in self._compiled_defines)
+                    )
+                    if is_cffi_int:
+                        lib_member_lines.extend(self._format_constant(decl, indent="    "))
+                    elif matches_define:
+                        c_name = _sanitize_identifier(decl.name)
+                        lib_member_lines.append(f"    {c_name}: int = ...")
+                        doc = getattr(decl, "doc", None)
+                        if isinstance(doc, str) and doc.strip():
+                            lib_member_lines.extend(self._format_docstring(doc, indent="    "))
                 else:
                     const_lines = self._format_constant(decl)
                     body_blocks.append("\n".join(const_lines))
@@ -629,12 +679,84 @@ class PyiWriter(BaseWriter):
                     body_blocks.append("\n".join(var_lines))
             elif isinstance(decl, Function):
                 if self.mode == "cffi":
+                    emitted_lib_funcs.add(_sanitize_identifier(decl.name))
                     lib_member_lines.extend(self._format_function(decl, indent="    ", include_self=True))
                 else:
                     fn_lines = self._format_function(decl)
                     body_blocks.append("\n".join(fn_lines))
 
         if self.mode == "cffi":
+            for ext_entry in self.extern_python:
+                stripped = ext_entry.strip()
+                if stripped.startswith('extern "Python"'):
+                    stripped = stripped[len('extern "Python"') :].strip()
+                if stripped.endswith(";"):
+                    stripped = stripped[:-1].strip()
+                if not stripped:
+                    continue
+                if "(" in stripped:
+                    m_proto = re.match(r"^(.*?)\b([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$", stripped)
+                    if m_proto:
+                        ret_raw, cb_name, params_raw = (
+                            m_proto.group(1).strip(),
+                            m_proto.group(2),
+                            m_proto.group(3).strip(),
+                        )
+                        py_cb_name = _sanitize_identifier(cb_name)
+                        if py_cb_name in emitted_lib_funcs:
+                            continue
+                        emitted_lib_funcs.add(py_cb_name)
+                        ret_t: TypeExpr = (
+                            Pointer(CType(ret_raw.rstrip("*").strip()))
+                            if ret_raw.endswith("*")
+                            else CType(ret_raw or "void")
+                        )
+                        cb_params: list[Parameter] = []
+                        if params_raw and params_raw != "void":
+                            for p_idx, p_str in enumerate(params_raw.split(",")):
+                                p_clean = p_str.strip()
+                                if not p_clean or p_clean == "void":
+                                    continue
+                                if "*" in p_clean:
+                                    lhs, rhs = p_clean.rsplit("*", 1)
+                                    p_n = rhs.strip() or f"arg{p_idx}"
+                                    p_t: TypeExpr = Pointer(CType(lhs.rstrip("*").strip() or "void"))
+                                else:
+                                    parts = p_clean.rsplit(None, 1)
+                                    if (
+                                        len(parts) == 2
+                                        and parts[1].isidentifier()
+                                        and parts[0] not in ("unsigned", "signed", "const", "struct", "enum", "union")
+                                    ):
+                                        p_t = CType(parts[0].strip())
+                                        p_n = parts[1].strip()
+                                    else:
+                                        p_t = CType(p_clean)
+                                        p_n = f"arg{p_idx}"
+                                cb_params.append(Parameter(p_n, p_t))
+                        synth_fn = Function(cb_name, ret_t, cb_params)
+                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+                else:
+                    py_cb_name = _sanitize_identifier(stripped)
+                    if py_cb_name in emitted_lib_funcs:
+                        continue
+                    matched_td = self._typedef_map.get(stripped)
+                    while isinstance(matched_td, Pointer):
+                        matched_td = matched_td.pointee
+                    if isinstance(matched_td, FunctionPointer):
+                        emitted_lib_funcs.add(py_cb_name)
+                        synth_fn = Function(
+                            stripped,
+                            matched_td.return_type,
+                            list(matched_td.parameters),
+                            is_variadic=matched_td.is_variadic,
+                        )
+                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+                    else:
+                        emitted_lib_funcs.add(py_cb_name)
+                        synth_fn = Function(stripped, CType("void"), [])
+                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+
             body_blocks.append("ffi: cffi.FFI")
             lib_cls_lines = ["@final", "class _Lib:"]
             if lib_member_lines:

@@ -33,6 +33,7 @@ from headerkit.ir import (
     Reference,
     SourceLocation,
     Struct,
+    TemplateParameter,
     Typedef,
     TypeExpr,
     Variable,
@@ -144,6 +145,16 @@ def _dict_to_base(d: dict[str, Any]) -> BaseSpecifier:
     )
 
 
+def _dict_to_template_param(d: dict[str, Any]) -> TemplateParameter:
+    return TemplateParameter(
+        name=d["name"],
+        default_value=d.get("default_value", _default(TemplateParameter, "default_value")),
+        is_type=d.get("is_type", _default(TemplateParameter, "is_type")),
+        type_name=d.get("type_name", _default(TemplateParameter, "type_name")),
+        is_parameter_pack=d.get("is_parameter_pack", _default(TemplateParameter, "is_parameter_pack")),
+    )
+
+
 def _dict_to_field(d: dict[str, Any]) -> Field:
     return Field(
         name=d["name"],
@@ -189,6 +200,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         is_packed=d.get("is_packed", _default(Struct, "is_packed")),
         namespace=d.get("namespace"),
         template_params=d.get("template_params", []),
+        template_parameters=[_dict_to_template_param(tp) for tp in d.get("template_parameters", [])],
         cpp_name=d.get("cpp_name"),
         notes=d.get("notes", []),
         inner_typedefs=d.get("inner_typedefs", {}),
@@ -201,6 +213,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         vtable_entries=([_dict_to_function(v) for v in d["vtable_entries"]] if "vtable_entries" in d else []),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
+        access=d.get("access", _default(Struct, "access")),
         alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
@@ -231,6 +244,7 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         calling_convention=d.get("calling_convention"),
         namespace=d.get("namespace"),
         template_params=d.get("template_params", []),
+        template_parameters=[_dict_to_template_param(tp) for tp in d.get("template_parameters", [])],
         is_static=d.get("is_static", False),
         is_const=d.get("is_const", False),
         is_virtual=d.get("is_virtual", False),
@@ -367,4 +381,5 @@ def json_to_header(data: str | dict[str, Any]) -> Header:
         included_headers=set(d.get("included_headers", [])),
         language=d.get("language", "c"),
         classification=d.get("classification", "header"),
+        source_origin=d.get("source_origin"),
     )

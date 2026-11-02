@@ -246,7 +246,7 @@ class TsWasmWriter(BaseWriter):
         doc_lines: list[str] = []
         if func.doc:
             for line in func.doc.strip().splitlines():
-                doc_lines.append(line.strip())
+                doc_lines.append(line.strip().replace("*/", "*\\/"))
         if func.is_deprecated:
             if not any(line.startswith("@deprecated") for line in doc_lines):
                 doc_lines.append("@deprecated")

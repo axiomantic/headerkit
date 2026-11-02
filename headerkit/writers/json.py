@@ -30,6 +30,7 @@ from headerkit.ir import (
     SourceLocation,
     SourceUnit,
     Struct,
+    TemplateParameter,
     Typedef,
     TypeExpr,
     Variable,
@@ -121,6 +122,20 @@ def _base_to_dict(b: BaseSpecifier) -> dict[str, Any]:
     return d
 
 
+def _template_param_to_dict(tp: TemplateParameter) -> dict[str, Any]:
+    """Convert a TemplateParameter to a dict."""
+    d: dict[str, Any] = {"name": tp.name}
+    if tp.default_value is not None:
+        d["default_value"] = tp.default_value
+    if not tp.is_type:
+        d["is_type"] = False
+    if tp.type_name is not None:
+        d["type_name"] = tp.type_name
+    if tp.is_parameter_pack:
+        d["is_parameter_pack"] = True
+    return d
+
+
 def _field_to_dict(f: Field) -> dict[str, Any]:
     """Convert a Field to a dict."""
     d: dict[str, Any] = {"name": f.name, "type": _type_to_dict(f.type)}
@@ -136,8 +151,6 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["access"] = f.access
     if f.is_static:
         d["is_static"] = True
-    if f.is_padding:
-        d["is_padding"] = True
     if f.type_overrides:
         d["type_overrides"] = dict(f.type_overrides)
     return d
@@ -161,6 +174,14 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["namespace"] = decl.namespace
         if decl.template_params:
             d["template_params"] = decl.template_params
+        if decl.template_parameters and (
+            [tp.name for tp in decl.template_parameters] != decl.template_params
+            or any(
+                tp.default_value is not None or not tp.is_type or tp.type_name is not None or tp.is_parameter_pack
+                for tp in decl.template_parameters
+            )
+        ):
+            d["template_parameters"] = [_template_param_to_dict(tp) for tp in decl.template_parameters]
         if decl.cpp_name:
             d["cpp_name"] = decl.cpp_name
         if decl.is_packed:
@@ -187,6 +208,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:
             d["is_deprecated"] = True
+        if decl.access is not None:
+            d["access"] = decl.access
         if decl.alignment is not None:
             d["alignment"] = decl.alignment
         if decl.location is not None:
@@ -231,6 +254,14 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["namespace"] = decl.namespace
         if decl.template_params:
             d["template_params"] = decl.template_params
+        if decl.template_parameters and (
+            [tp.name for tp in decl.template_parameters] != decl.template_params
+            or any(
+                tp.default_value is not None or not tp.is_type or tp.type_name is not None or tp.is_parameter_pack
+                for tp in decl.template_parameters
+            )
+        ):
+            d["template_parameters"] = [_template_param_to_dict(tp) for tp in decl.template_parameters]
         if decl.is_static:
             d["is_static"] = True
         if decl.is_const:
@@ -391,6 +422,8 @@ def header_to_json_dict(header: Header) -> dict[str, Any]:
         data["language"] = header.language
     if header.classification != "header":
         data["classification"] = header.classification
+    if header.source_origin is not None:
+        data["source_origin"] = header.source_origin
     return data
 
 

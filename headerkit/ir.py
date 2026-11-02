@@ -1123,6 +1123,7 @@ class SourceUnit:
     included_headers: set[str] = field(default_factory=set)
     language: str = "c"
     classification: str = "header"
+    source_origin: str | None = None
 
     def __str__(self) -> str:
         return f"SourceUnit({self.path}, {len(self.declarations)} declarations)"
