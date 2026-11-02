@@ -362,4 +362,3 @@ def test_filter_unexported_symbols_and_binary_symbol_normalization() -> None:
             const_val,
         ],
     )
-

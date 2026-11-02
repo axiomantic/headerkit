@@ -34,4 +34,3 @@ __all__ = [
     "StripPrefix",
     "rewrite_type_references",
 ]
-

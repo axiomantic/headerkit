@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import textwrap
 from pathlib import Path
 
@@ -26,12 +25,12 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
-from headerkit.scaffold import ScaffoldOptions
 from headerkit.writers import get_writer
+from headerkit.writers.base import ScaffoldOptions
 from headerkit.writers.nim import (
     NimWriter,
-    _cfg_path_flag,
     _type_name_requires_cpp,
+    unit_requires_cpp,
     write_nim,
 )
 from tests.skip_policy import NIM_INSTALL, require_program
@@ -1107,43 +1106,6 @@ class TestNimLexicalCorrectness:
             HookRegistry.restore(saved)
 
 
-def _nim_cfg(header: Header, **options: object) -> str:
-    """Scaffold ``header`` as a package and return the generated ``nim.cfg``."""
-    layout = get_writer("nim").write_layout(
-        header,
-        ScaffoldOptions(package_name="demo", target_language="nim", layout="package", options=dict(options)),
-    )
-    return next(f.content for f in layout.files if f.path == "nim.cfg")
-
-
-class TestCfgPathQuoting:
-    """A path with a space must survive Nim's config parsing."""
-
-    def test_path_is_single_quoted(self) -> None:
-        """Nim strips the outer quotes and word-splits; the inner quotes survive."""
-        assert _cfg_path_flag("-I", "/opt/na me") == '"-I\\"/opt/na me\\""'
-
-    def test_single_quote_in_path_is_safe(self) -> None:
-        """`\'` opens a character literal to Nim's config lexer, so it must not be the quote."""
-        rendered = _cfg_path_flag("-I", "/opt/it's")
-        assert rendered == '"-I\\"/opt/it\'s\\""', rendered
-
-    def test_windows_separators_become_forward_slashes(self) -> None:
-        """A backslash inside a Nim string literal would be read as an escape.
-
-        Asserted on the flag the writer renders, not on `pathlib`: the separator to
-        normalise is a property of the path, so this holds on any host rather than
-        only on the one whose paths look like this.
-        """
-        rendered = _cfg_path_flag("-I", "C:\\Users\\a b")
-        assert rendered == '"-I\\"C:/Users/a b\\""', rendered
-
-    def test_double_quote_in_path_is_refused(self) -> None:
-        """No quoting of this exists in the format, so say so rather than emit a wrong flag."""
-        with pytest.raises(ValueError, match="double quote"):
-            _cfg_path_flag("-I", '/opt/sa"y')
-
-
 class TestTypeNameCppDetection:
     """The C++-only test on a type name, at the granularity the parse produces."""
 
@@ -1186,204 +1148,6 @@ class TestTypeNameCppDetection:
         assert _type_name_requires_cpp(name, unit_is_cpp=True, is_elaborated=True) is False
 
 
-class TestNimCfg:
-    """The generated nim.cfg carries the flags the package needs, and nothing invented."""
-
-    def test_cpp_unit_selects_the_cpp_backend(self) -> None:
-        cfg = _nim_cfg(Header(path="c.hpp", declarations=[Struct(name="C", is_cppclass=True)]))
-        assert "--backend:cpp" in cfg
-
-    def test_c_unit_does_not_select_the_cpp_backend(self) -> None:
-        cfg = _nim_cfg(Header(path="c.h", declarations=[Function(name="add", return_type=CType("int"))]))
-        assert "--backend:cpp" not in cfg
-
-    def test_package_resolves_its_own_source_directory(self) -> None:
-        """Without this the package builds only under nimble, which supplies srcDir."""
-        assert '--path:"$config/src"' in _nim_cfg(Header(path="c.h", declarations=[]))
-
-    def test_library_option_becomes_link_flags(self, tmp_path) -> None:
-        """A real directory, not a POSIX literal: library_dirs is emitted resolved."""
-        libdir = tmp_path / "counter"
-        libdir.mkdir()
-        cfg = _nim_cfg(
-            Header(path="c.hpp", declarations=[Struct(name="C", is_cppclass=True)]),
-            library="counter",
-            library_dirs=str(libdir),
-        )
-        assert '--passL:"-lcounter"' in cfg
-        assert f'--passL:"-L\\"{libdir.resolve().as_posix()}\\""' in cfg, cfg
-
-    def test_multiple_libraries_each_get_a_flag(self) -> None:
-        cfg = _nim_cfg(Header(path="c.h", declarations=[]), library=["a", "b"])
-        assert '--passL:"-la"' in cfg
-        assert '--passL:"-lb"' in cfg
-
-    def test_no_library_is_declared_rather_than_guessed(self) -> None:
-        """A guessed -l resolves to the wrong library or to none; say so instead."""
-        cfg = _nim_cfg(Header(path="c.h", declarations=[]))
-        assert '--passL:"-l' not in cfg
-        assert "# No native library to link: pass --writer-opt nim:library=" in cfg
-
-    def test_header_directory_becomes_an_include_path(self, tmp_path) -> None:
-        header = tmp_path / "inc" / "c.hpp"
-        header.parent.mkdir()
-        header.write_text("")
-        cfg = _nim_cfg(Header(path=str(header), declarations=[]))
-        assert f'--passC:"-I\\"{header.parent.resolve().as_posix()}\\""' in cfg, cfg
-
-    def test_parse_include_dirs_and_defines_reach_the_config(self, tmp_path) -> None:
-        """A real directory, not a POSIX literal: include paths are emitted resolved."""
-        extra = tmp_path / "extra"
-        extra.mkdir()
-        layout = get_writer("nim").write_layout(
-            Header(path="c.h", declarations=[]),
-            ScaffoldOptions(
-                package_name="demo",
-                target_language="nim",
-                layout="package",
-                extra_context={"include_dirs": [str(extra)], "defines": ["FOO=1"]},
-            ),
-        )
-        cfg = next(f.content for f in layout.files if f.path == "nim.cfg")
-        assert f'--passC:"-I\\"{extra.resolve().as_posix()}\\""' in cfg, cfg
-        assert '--passC:"-DFOO=1"' in cfg
-
-    def test_library_dirs_are_resolved(self, tmp_path) -> None:
-        """A relative -L resolves against the linker's working directory, not the package's."""
-        libdir = tmp_path / "lib"
-        libdir.mkdir()
-        relative = str(libdir) + os.sep + "."
-        cfg = _nim_cfg(Header(path="c.h", declarations=[]), library="demo", library_dirs=relative)
-        assert f'--passL:"-L\\"{libdir.resolve().as_posix()}\\""' in cfg, cfg
-        assert relative not in cfg, cfg
-
-    def test_unordered_option_values_are_emitted_in_a_stable_order(self) -> None:
-        """A set would order the flags by iteration, defeating regenerate-and-diff.
-
-        The order asserted is the SORTED one, which is the whole claim. Comparing
-        two sets built in one process establishes nothing on its own: set
-        iteration order is a function of the hash seed, so within a process two
-        equal sets always iterate alike and the comparison cannot fail. The
-        cross-process half of the property is measured by
-        ``test_the_order_is_the_same_under_a_different_hash_seed``, which is where
-        the seed can actually differ.
-        """
-        first = _nim_cfg(Header(path="c.h", declarations=[]), library={"zlib", "png", "aaa"})
-        order = [line for line in first.splitlines() if line.startswith('--passL:"-l')]
-        assert order == ['--passL:"-laaa"', '--passL:"-lpng"', '--passL:"-lzlib"'], order
-
-    def test_unordered_extra_context_values_are_emitted_in_a_stable_order(self) -> None:
-        """`extra_context` bypasses option coercion, so the writer sorts it itself."""
-
-        def cfg_for(defines: set[str]) -> str:
-            layout = get_writer("nim").write_layout(
-                Header(path="c.h", declarations=[]),
-                ScaffoldOptions(
-                    package_name="demo",
-                    target_language="nim",
-                    layout="package",
-                    extra_context={"defines": defines},
-                ),
-            )
-            return next(f.content for f in layout.files if f.path == "nim.cfg")
-
-        first = cfg_for({"ZED=1", "ALPHA=1", "MID=1"})
-        order = [line for line in first.splitlines() if line.startswith('--passC:"-D')]
-        assert order == ['--passC:"-DALPHA=1"', '--passC:"-DMID=1"', '--passC:"-DZED=1"'], order
-
-    def test_relatively_passed_include_dir_does_not_duplicate_the_header_directory(self, tmp_path) -> None:
-        """The dedup compares resolved paths, or the same directory is emitted twice."""
-        header = tmp_path / "inc" / "c.h"
-        header.parent.mkdir()
-        header.write_text("")
-        layout = get_writer("nim").write_layout(
-            Header(path=str(header), declarations=[]),
-            ScaffoldOptions(
-                package_name="demo",
-                target_language="nim",
-                layout="package",
-                extra_context={"include_dirs": [str(header.parent) + os.sep + "."]},
-            ),
-        )
-        cfg = next(f.content for f in layout.files if f.path == "nim.cfg")
-        # Count the flags, not one spelling of them: an unresolved duplicate is a
-        # *different* string ("<dir>/." vs "<dir>"), so counting the resolved form
-        # alone would report 1 whether or not the dedup ran.
-        include_flags = [line for line in cfg.splitlines() if line.startswith('--passC:"-I')]
-        assert len(include_flags) == 1, include_flags
-        assert f'-I\\"{header.parent.resolve().as_posix()}\\"' in include_flags[0]
-
-
-class TestNimCppTripwire:
-    """A C++ target gets a compile-and-link tripwire instead of a loadLib one."""
-
-    HEADER = Header(
-        path="counter.hpp",
-        declarations=[
-            Struct(
-                name="Counter",
-                is_cppclass=True,
-                fields=[Field("total", CType("int"))],
-                constructors=[
-                    Function(name="Counter", return_type=CType("void"), parameters=[Parameter("start", CType("int"))])
-                ],
-                methods=[
-                    Function(name="add", return_type=CType("void"), parameters=[Parameter("n", CType("int"))]),
-                    Function(name="value", return_type=CType("int"), is_const=True),
-                    Function(
-                        name="addFrom",
-                        return_type=CType("void"),
-                        parameters=[Parameter("source", Reference(CType("int")))],
-                    ),
-                ],
-            )
-        ],
-    )
-
-    def _tripwire(self, header: Header) -> str:
-        layout = get_writer("nim").write_layout(
-            header,
-            ScaffoldOptions(package_name="counter", target_language="nim", layout="package"),
-        )
-        return next(f.content for f in layout.files if f.path == "tests/test_tripwire.nim")
-
-    def test_cpp_tripwire_does_not_use_dynlib(self) -> None:
-        """loadLib looks for an unmangled name that an importcpp binding never has."""
-        tripwire = self._tripwire(self.HEADER)
-        assert "loadLib" not in tripwire
-        assert "symAddr" not in tripwire
-
-    def test_cpp_tripwire_references_every_entry_point(self) -> None:
-        """Referencing each entry point is what forces the linker to resolve it."""
-        tripwire = self._tripwire(self.HEADER)
-        assert "add(self[], a0[])" in tripwire
-        assert "discard value(self[])" in tripwire
-        assert "discard constructCounter(a0[])" in tripwire
-
-    def test_cpp_tripwire_probes_are_not_executed(self) -> None:
-        """A probe that ran would dereference nil; the build is the assertion."""
-        tripwire = self._tripwire(self.HEADER)
-        assert "var hkRunLinkProbes = false" in tripwire
-        assert "if hkRunLinkProbes:" in tripwire
-
-    def test_reference_parameter_is_probed_by_pointer(self) -> None:
-        """A `var T` parameter cannot be wrapped as `ptr var T`; `ptr T` derefs to it."""
-        tripwire = self._tripwire(self.HEADER)
-        assert "ptr var" not in tripwire
-        assert "addFrom(self[], a0[])" in tripwire
-        assert "a0: ptr cint" in tripwire
-
-    def test_cpp_tripwire_asserts_type_completeness(self) -> None:
-        """sizeof is answered by the C++ compiler, so a forward declaration fails it."""
-        assert "check sizeof(Counter) > 0" in self._tripwire(self.HEADER)
-
-    def test_c_target_keeps_the_dynlib_tripwire(self) -> None:
-        """A C library does have unmangled symbols in a shared object; keep checking them."""
-        tripwire = self._tripwire(Header(path="c.h", declarations=[Function(name="add", return_type=CType("int"))]))
-        assert "loadLib" in tripwire
-        assert 'symAddr("add")' in tripwire
-
-
 class TestGeneratedPathsSurviveNimStringLiterals:
     """Every path the writer emits lands inside a Nim string literal."""
 
@@ -1399,17 +1163,6 @@ class TestGeneratedPathsSurviveNimStringLiterals:
         out = write_nim(Header(path=self.WINDOWS_PATH, declarations=[Function(name="f", return_type=CType("void"))]))
         assert "\\" not in out, out
         assert 'header: "C:/Users/runneradmin/AppData/Local/Temp/pkg/shape.hpp"' in out, out
-
-    def test_cfg_flag_path_has_no_backslash(self) -> None:
-        """The separators must be gone; the two escaping the inner quotes must remain.
-
-        Asserted against the whole rendered flag. The previous form tested for two
-        *consecutive* backslashes, which no path on any platform produces, so it
-        passed with the normalisation patched out -- while its two siblings here
-        went red under exactly that mutation.
-        """
-        rendered = _cfg_path_flag("-I", self.WINDOWS_PATH)
-        assert rendered == '"-I\\"C:/Users/runneradmin/AppData/Local/Temp/pkg/shape.hpp\\""', rendered
 
     def test_posix_paths_are_untouched(self) -> None:
         """The normalisation must be a no-op where there is nothing to normalise."""
@@ -1553,170 +1306,149 @@ class TestTheRendererReadsTheUnitsLanguage:
         assert 'importcpp: "take(@)"' in out, out
 
     def test_the_pragma_and_the_backend_selection_agree(self) -> None:
-        """One fact, read twice, must not give two answers.
-
-        ``nim.cfg`` omitting ``--backend:cpp`` while the bindings carry
-        ``importcpp`` is the exact contradiction that shipped: neither half is
-        wrong on its own and the package cannot be built.
-        """
-        layout = get_writer("nim").write_layout(
-            self.header("c"),
-            ScaffoldOptions(package_name="unit", target_language="nim", layout="package"),
-        )
-        cfg = next(f.content for f in layout.files if f.path == "nim.cfg")
-        bindings = next(f.content for f in layout.files if f.path.endswith("unit.nim"))
-        assert "--backend:cpp" not in cfg, cfg
+        """One fact, read twice, must not give two answers."""
+        header = self.header("c")
+        bindings = write_nim(header, header_path="unit.h")
+        assert unit_requires_cpp(header) is False
         assert "importcpp" not in bindings, bindings
 
-
-@pytest.mark.allow("subprocess")
-class TestSetOrderingIsStableAcrossProcesses:
-    """The property is cross-process, so it is measured across processes.
-
-    ``set`` iteration order is a function of the interpreter's hash seed. Two
-    sets built inside one process therefore always iterate alike, and a
-    same-process ``first == second`` comparison of two equal sets cannot fail
-    whatever the writer does with them -- it reads as a regenerate-and-diff gate
-    and is one only by coincidence of never having been run twice with different
-    seeds.
-    """
-
-    #: Members chosen so that no observed hash seed iterates them in sorted order,
-    #: and the sorted order is therefore a real claim rather than a coin flip.
-    LIBRARIES = ("zlib", "png", "aaa")
-
-    @staticmethod
-    def _cfg_under_seed(seed: str) -> str:
-        import subprocess
-        import sys
-
-        script = textwrap.dedent("""\
-            from headerkit.ir import Header
-            from headerkit.scaffold import ScaffoldOptions
-            from headerkit.writers import get_writer
-
-            layout = get_writer("nim").write_layout(
-                Header(path="c.h", declarations=[]),
-                ScaffoldOptions(
-                    package_name="demo",
-                    target_language="nim",
-                    layout="package",
-                    options={"library": {"zlib", "png", "aaa"}},
-                    extra_context={"defines": {"ZED=1", "ALPHA=1", "MID=1"}},
-                ),
-            )
-            print(next(f.content for f in layout.files if f.path == "nim.cfg"))
-        """)
-        result = subprocess.run(  # noqa: S603
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={**os.environ, "PYTHONHASHSEED": seed},
-        )
-        assert result.returncode == 0, result.stderr
-        return result.stdout
-
-    def test_the_order_is_the_same_under_a_different_hash_seed(self) -> None:
-        """Both paths at once: writer-option coercion and the writer's own sort."""
-        # Seeds measured to iterate these members differently from one another,
-        # so the two runs really do disagree about set order before the sort.
-        first = self._cfg_under_seed("0")
-        second = self._cfg_under_seed("1")
-        assert first == second, f"the generated nim.cfg depends on the hash seed:\n{first}\n---\n{second}"
-        libs = [line for line in first.splitlines() if line.startswith('--passL:"-l')]
-        defines = [line for line in first.splitlines() if line.startswith('--passC:"-D')]
-        assert libs == ['--passL:"-laaa"', '--passL:"-lpng"', '--passL:"-lzlib"'], libs
-        assert defines == ['--passC:"-DALPHA=1"', '--passC:"-DMID=1"', '--passC:"-DZED=1"'], defines
-
-
-class TestNephyrNimEnhancements:
-    """Tests for safe package regeneration, incremental test merging, bitfields, and embedded profile."""
-
-    def test_package_layout_preserve_existing_and_incremental_merge(self, tmp_path: Path) -> None:
-        unit_v1 = Header(
-            path="zephyr_gpio.h",
+    def test_c_identifiers_containing_cpp_substrings_do_not_trigger_cpp_helpers(self) -> None:
+        """Pure-C identifiers like lv_color_map_t, nng_id_map, atomic_t, nng_duration must never emit importcpp helpers."""
+        header = Header(
+            path="lvgl_nng.h",
+            language="c",
             declarations=[
-                Function(
-                    name="gpio_pin_configure",
-                    return_type=CType("int"),
-                    parameters=[Parameter("pin", CType("int")), Parameter("flags", CType("uint32_t"))],
+                Typedef(name="lv_color_map_t", underlying_type=CType("uint32_t")),
+                Typedef(name="nng_duration", underlying_type=CType("int32_t")),
+                Typedef(name="atomic_t", underlying_type=CType("int")),
+                Struct(
+                    name="nng_id_map",
+                    fields=[
+                        Field("color_map", CType("lv_color_map_t")),
+                        Field("timeout_duration", CType("nng_duration")),
+                        Field("atomic_count", CType("atomic_t")),
+                        Field("optional_flags", CType("int")),
+                        Field("pair_index", CType("int")),
+                    ],
+                    is_typedef=True,
+                ),
+            ],
+        )
+        out = write_nim(header, header_path="lvgl_nng.h")
+        assert out == textwrap.dedent("""\
+            # Generated by headerkit
+
+            type
+              lv_color_map_t* = uint32
+              nng_duration* = int32
+              atomic_t* = cint
+              nng_id_map* {.importc: "nng_id_map", header: "lvgl_nng.h", bycopy.} = object
+                color_map*: lv_color_map_t
+                timeout_duration*: nng_duration
+                atomic_count*: atomic_t
+                optional_flags*: cint
+                pair_index*: cint
+        """)
+        assert "importcpp" not in out
+        assert "std_map" not in out
+        assert "Atomic" not in out
+        assert "std_optional" not in out
+        assert "std_pair" not in out
+        assert "std::chrono::duration" not in out
+
+    def test_cpp_unit_emits_helpers_when_std_types_are_formatted(self) -> None:
+        """C++ units using std::map, std::atomic, std::optional, std::pair, std::chrono::duration emit helper types."""
+        header = Header(
+            path="containers.hpp",
+            language="cpp",
+            declarations=[
+                Struct(
+                    name="Widget",
+                    is_cppclass=True,
+                    fields=[
+                        Field("table", CType("std::map<int, int>")),
+                        Field("lookup", CType("std::unordered_map<int, int>")),
+                        Field("bounds", CType("std::pair<int, int>")),
+                        Field("maybe_id", CType("std::optional<int>")),
+                        Field("counter", CType("std::atomic<int>")),
+                        Field("items", CType("std::initializer_list<int>")),
+                        Field("timeout", CType("std::chrono::duration<long>")),
+                    ],
                 )
             ],
         )
-        opts = ScaffoldOptions(package_name="nephyr_gpio", target_language="nim", layout="package", test_type="both")
-        layout_v1 = get_writer("nim").write_layout(unit_v1, opts)
-
-        nimble_file = layout_v1.get_file("nephyr_gpio.nimble")
-        main_file = layout_v1.get_file("src/nephyr_gpio.nim")
-        bindings_file = layout_v1.get_file("src/nephyr_gpio/bindings.nim")
-        cfg_file = layout_v1.get_file("nim.cfg")
-        unit_test_file = layout_v1.get_file("tests/test_nephyr_gpio.nim")
-
-        assert nimble_file is not None and nimble_file.preserve_existing is True
-        assert main_file is not None and main_file.preserve_existing is True
-        assert bindings_file is not None and bindings_file.preserve_existing is False
-        assert cfg_file is not None and cfg_file.preserve_existing is True
-        assert unit_test_file is not None and unit_test_file.merge_strategy == "append_new_tests"
-
-        # Write initial package to disk
-        layout_v1.write_to_disk(tmp_path)
-
-        # Simulate user adding high-level DSL code in src/nephyr_gpio.nim, custom nimble & cfg, and custom unit test
-        custom_dsl = textwrap.dedent("""\
-            import nephyr_gpio/bindings
-            export bindings
-
-            template withPin*(pin: cint, body: untyped) =
-              discard gpio_pin_configure(pin, 0'u32)
-              body
-        """)
-        (tmp_path / "src" / "nephyr_gpio.nim").write_text(custom_dsl, encoding="utf-8")
-        (tmp_path / "nephyr_gpio.nimble").write_text(
-            nimble_file.content + '\nrequires "stew >= 0.1.0"\n',
-            encoding="utf-8",
+        out = write_nim(header, header_path="containers.hpp")
+        assert 'Atomic*[T] {.importcpp: "std::atomic<\'0>", header: "<atomic>".} = object' in out
+        assert 'std_map*[K, V] {.importcpp: "std::map<\'0, \'1>", header: "<map>".} = object' in out
+        assert (
+            'std_unordered_map*[K, V] {.importcpp: "std::unordered_map<\'0, \'1>", header: "<unordered_map>".} = object'
+            in out
         )
-        (tmp_path / "nim.cfg").write_text(
-            cfg_file.content + "--define:customEmbeddedFlag\n",
-            encoding="utf-8",
+        assert 'std_pair*[T1, T2] {.importcpp: "std::pair<\'0, \'1>", header: "<utility>".} = object' in out
+        assert 'std_optional*[T] {.importcpp: "std::optional<\'0>", header: "<optional>".} = object' in out
+        assert (
+            'initializer_list*[T] {.importcpp: "std::initializer_list", header: "<initializer_list>".} = object' in out
         )
-        existing_test = (tmp_path / "tests" / "test_nephyr_gpio.nim").read_text(encoding="utf-8")
-        custom_test = existing_test + textwrap.dedent("""\
+        assert (
+            'duration*[Rep, Period = pointer] {.importcpp: "std::chrono::duration", header: "<chrono>".} = object'
+            in out
+        )
 
-              test "custom DSL withPin template":
-                check declared(withPin)
-        """)
-        (tmp_path / "tests" / "test_nephyr_gpio.nim").write_text(custom_test, encoding="utf-8")
 
-        # Regenerate with a v2 header that adds gpio_pin_set
-        unit_v2 = Header(
-            path="zephyr_gpio.h",
+class TestNimOptionsStripPrefixesAndDiscardable:
+    """Tests for strip_include_prefixes and discardable_procs options on NimWriter."""
+
+    def test_strip_include_prefixes_and_discardable_procs(self) -> None:
+        header = Header(
+            path="/opt/sdk/lvgl/src/widgets/lv_btn.h",
+            language="c",
             declarations=[
-                Function(
-                    name="gpio_pin_configure",
-                    return_type=CType("int"),
-                    parameters=[Parameter("pin", CType("int")), Parameter("flags", CType("uint32_t"))],
-                ),
-                Function(
-                    name="gpio_pin_set",
-                    return_type=CType("int"),
-                    parameters=[Parameter("pin", CType("int")), Parameter("value", CType("int"))],
-                ),
+                Function(name="lv_btn_create", return_type=CType("int"), parameters=[]),
+                Function(name="lv_obj_set_size", return_type=CType("int"), parameters=[]),
+                Function(name="helper_internal", return_type=CType("int"), parameters=[]),
             ],
         )
-        layout_v2 = get_writer("nim").write_layout(unit_v2, opts)
-        layout_v2.write_to_disk(tmp_path)
+        out = write_nim(
+            header,
+            strip_include_prefixes=["/opt/sdk/lvgl/src/"],
+            discardable_procs=["lv_btn_*", "lv_obj_set_size"],
+        )
+        assert out == textwrap.dedent("""\
+            # Generated by headerkit
 
-        # Verify human-authored files were preserved while bindings.nim updated
-        assert "template withPin*" in (tmp_path / "src" / "nephyr_gpio.nim").read_text(encoding="utf-8")
-        assert 'requires "stew >= 0.1.0"' in (tmp_path / "nephyr_gpio.nimble").read_text(encoding="utf-8")
-        assert "--define:customEmbeddedFlag" in (tmp_path / "nim.cfg").read_text(encoding="utf-8")
-        updated_bindings = (tmp_path / "src" / "nephyr_gpio" / "bindings.nim").read_text(encoding="utf-8")
-        assert "proc gpio_pin_configure*" in updated_bindings
-        assert "proc gpio_pin_set*" in updated_bindings
-        merged_test = (tmp_path / "tests" / "test_nephyr_gpio.nim").read_text(encoding="utf-8")
-        assert 'test "custom DSL withPin template":' in merged_test
-        assert "check declared(withPin)" in merged_test
+            proc lv_btn_create*(): cint {.importc: "lv_btn_create", header: "widgets/lv_btn.h", cdecl, discardable.}
+            proc lv_obj_set_size*(): cint {.importc: "lv_obj_set_size", header: "widgets/lv_btn.h", cdecl, discardable.}
+            proc helper_internal*(): cint {.importc: "helper_internal", header: "widgets/lv_btn.h", cdecl.}
+        """)
+
+    def test_scaffold_options_forwards_strip_include_prefixes_and_discardable_procs(self) -> None:
+        header = Header(
+            path="submodules/nng/include/nng/nng.h",
+            language="c",
+            declarations=[
+                Function(name="nng_close", return_type=CType("int"), parameters=[]),
+            ],
+        )
+        opts = ScaffoldOptions(
+            package_name="nng",
+            target_language="nim",
+            layout="file",
+            options={
+                "strip_include_prefixes": ["submodules/nng/include"],
+                "discardable_procs": ["nng_*"],
+            },
+        )
+        layout = NimWriter().write_layout(header, opts)
+        assert len(layout.files) == 1
+        assert layout.files[0].content == textwrap.dedent("""\
+            # Generated by headerkit
+
+            proc nng_close*(): cint {.importc: "nng_close", header: "nng/nng.h", cdecl, discardable.}
+        """)
+
+
+class TestNephyrNimEnhancements:
+    """Tests for bitfields and C ABI layout."""
 
     def test_struct_bitfield_bitsize_pragma(self) -> None:
         reg_struct = Struct(
@@ -1805,146 +1537,3 @@ class TestNephyrNimEnhancements:
             text=True,
         )
         assert res.returncode == 0, f"Nim bitfield ABI test failed:\n{res.stdout}\n{res.stderr}"
-
-    def test_embedded_profile_scaffolding_avoids_dynlib(self) -> None:
-        unit = Header(
-            path="zephyr_kernel.h",
-            declarations=[
-                Struct(name="k_timer", fields=[Field("status", CType("uint32_t"))]),
-                Function(
-                    name="k_msleep",
-                    return_type=CType("int32_t"),
-                    parameters=[Parameter("ms", CType("int32_t"))],
-                ),
-            ],
-        )
-        opts = ScaffoldOptions(
-            package_name="zephyr_kern",
-            target_language="nim",
-            layout="package",
-            options={"embedded": True},
-        )
-        layout = get_writer("nim").write_layout(unit, opts)
-        cfg = layout.get_file("nim.cfg")
-        tw = layout.get_file("tests/test_tripwire.nim")
-
-        assert cfg is not None
-        assert "--os:standalone" in cfg.content
-        assert "--mm:arc" in cfg.content
-        assert "--exceptions:goto" in cfg.content
-        assert "--threads:off" in cfg.content
-        assert "--mm:orc" not in cfg.content
-
-        assert tw is not None
-        assert "dynlib" not in tw.content
-        assert "loadLib" not in tw.content
-        assert "hkLinkProbe0" in tw.content
-        assert "hkForceLinkage()" in tw.content
-        assert "check declared(k_msleep)" in tw.content
-        assert "check sizeof(k_timer) > 0" in tw.content
-
-    def test_embedded_profile_via_target_extra_context(self) -> None:
-        unit = Header(
-            path="zephyr_kernel.h",
-            declarations=[Function(name="k_yield", return_type=CType("void"), parameters=[])],
-        )
-        opts = ScaffoldOptions(
-            package_name="zephyr_kern",
-            target_language="nim",
-            layout="package",
-            extra_context={"target": "embedded"},
-        )
-        layout = get_writer("nim").write_layout(unit, opts)
-        cfg = layout.get_file("nim.cfg")
-        tw = layout.get_file("tests/test_tripwire.nim")
-        assert cfg is not None and "--os:standalone" in cfg.content
-        assert tw is not None and "dynlib" not in tw.content
-        assert "check declared(k_yield)" in tw.content
-
-    def test_embedded_profile_inconclusive_tripwire_on_empty_unit(self) -> None:
-        unit = Header(path="empty.h", declarations=[])
-        opts = ScaffoldOptions(
-            package_name="empty_pkg",
-            target_language="nim",
-            layout="package",
-            options={"embedded": True},
-        )
-        layout = get_writer("nim").write_layout(unit, opts)
-        tw = layout.get_file("tests/test_tripwire.nim")
-        assert tw is not None
-        assert "TRIPWIRE INCONCLUSIVE" in tw.content
-        assert "fail()" in tw.content
-
-    @pytest.mark.allow("subprocess")
-    def test_embedded_tripwire_compiles_and_links_static_c_object(self, tmp_path: Path) -> None:
-        import shutil
-        import subprocess
-
-        if not shutil.which("nim") or not shutil.which("cc"):
-            pytest.skip("nim or C compiler is not installed on PATH")
-
-        c_hdr = tmp_path / "rtos_timer.h"
-        c_src = tmp_path / "rtos_timer.c"
-        c_hdr.write_text(
-            textwrap.dedent("""\
-                #pragma once
-                #include <stdint.h>
-
-                typedef struct {
-                    uint32_t period_ms;
-                } rtos_timer_t;
-
-                int32_t rtos_timer_start(int32_t ticks);
-            """),
-            encoding="utf-8",
-        )
-        c_src.write_text(
-            textwrap.dedent("""\
-                #include "rtos_timer.h"
-
-                int32_t rtos_timer_start(int32_t ticks) {
-                    return ticks * 2;
-                }
-            """),
-            encoding="utf-8",
-        )
-        unit = Header(
-            path=str(c_hdr),
-            declarations=[
-                Struct(name="rtos_timer_t", fields=[Field("period_ms", CType("uint32_t"))], is_typedef=True),
-                Function(
-                    name="rtos_timer_start",
-                    return_type=CType("int32_t"),
-                    parameters=[Parameter("ticks", CType("int32_t"))],
-                ),
-            ],
-        )
-        opts = ScaffoldOptions(
-            package_name="rtos_timer",
-            target_language="nim",
-            layout="package",
-            options={"header_path": str(c_hdr), "embedded": True},
-        )
-        layout = get_writer("nim").write_layout(unit, opts)
-        pkg_dir = tmp_path / "pkg"
-        layout.write_to_disk(pkg_dir)
-
-        tw_path = pkg_dir / "tests" / "test_tripwire.nim"
-        res = subprocess.run(
-            [
-                "nim",
-                "c",
-                "-r",
-                "--hints:off",
-                "--skipParentCfg:on",
-                "--skipProjCfg:on",
-                f"--path:{pkg_dir / 'src'}",
-                f"--compile:{c_src}",
-                f"--passC:-I{tmp_path}",
-                f"--nimcache:{tmp_path / 'nc'}",
-                str(tw_path),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        assert res.returncode == 0, f"Embedded tripwire compile/run failed:\n{res.stdout}\n{res.stderr}"

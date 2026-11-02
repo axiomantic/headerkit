@@ -14,11 +14,12 @@ Features
 
 from __future__ import annotations
 
+import fnmatch
 import textwrap
 import unicodedata
 from collections.abc import Sequence
 from dataclasses import replace
-from pathlib import Path, PureWindowsPath
+from pathlib import PureWindowsPath
 from typing import Any, ClassVar
 
 from headerkit._rename import (
@@ -40,7 +41,6 @@ from headerkit.ir import (
     FunctionPointer,
     Header,
     MacroFunction,
-    Parameter,
     Pointer,
     Reference,
     SourceUnit,
@@ -55,9 +55,7 @@ from headerkit.reconcile import (
     PlatformGuardedBlock,
     ReconciledUnit,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
-from headerkit.workorder import build_work_order_files
-from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
+from headerkit.writers.base import BaseWriter, ScaffoldOptions, WriterOption
 
 NIM_KEYWORDS: set[str] = {
     "addr",
@@ -335,6 +333,12 @@ STANDARD_NIM_TYPES: set[str] = {
     "CppString",
     "std_optional",
     "initializer_list",
+    "wchar_t",
+    "std_input_iterator_tag",
+    "std_output_iterator_tag",
+    "std_forward_iterator_tag",
+    "std_bidirectional_iterator_tag",
+    "std_random_access_iterator_tag",
 }
 
 
@@ -646,6 +650,58 @@ CPP_HELPER_DECLARATIONS: dict[str, tuple[str, tuple[str, ...]]] = {
         'WeakPtr*[T] {.importcpp: "std::weak_ptr<\'0>", header: "<memory>".} = object',
         ('proc lock*[T](p: WeakPtr[T]): SharedPtr[T] {.importcpp: "#.lock()", header: "<memory>".}',),
     ),
+    "Atomic": ('Atomic*[T] {.importcpp: "std::atomic<\'0>", header: "<atomic>".} = object', ()),
+    "wchar_t": ('wchar_t* {.importc: "wchar_t".} = cint', ()),
+    "std_optional": (
+        'std_optional*[T] {.importcpp: "std::optional<\'0>", header: "<optional>".} = object\noptional*[T] = std_optional[T]',
+        (),
+    ),
+    "std_map": ('std_map*[K, V] {.importcpp: "std::map<\'0, \'1>", header: "<map>".} = object', ()),
+    "std_unordered_map": (
+        'std_unordered_map*[K, V] {.importcpp: "std::unordered_map<\'0, \'1>", header: "<unordered_map>".} = object\nunordered_map*[K, V] = std_unordered_map[K, V]',
+        (),
+    ),
+    "std_pair": ('std_pair*[T1, T2] {.importcpp: "std::pair<\'0, \'1>", header: "<utility>".} = object', ()),
+    "initializer_list": (
+        'initializer_list*[T] {.importcpp: "std::initializer_list", header: "<initializer_list>".} = object',
+        (),
+    ),
+    "duration": (
+        'duration*[Rep, Period = pointer] {.importcpp: "std::chrono::duration", header: "<chrono>".} = object\n'
+        'std_ratio*[Num = pointer, Denom = pointer] {.importcpp: "std::ratio", header: "<ratio>".} = object\n'
+        'std_milli* {.importcpp: "std::milli", header: "<ratio>".} = object\n'
+        'std_micro* {.importcpp: "std::micro", header: "<ratio>".} = object\n'
+        'std_nano* {.importcpp: "std::nano", header: "<ratio>".} = object',
+        (),
+    ),
+    "std_false_type": (
+        'std_false_type* {.importcpp: "std::false_type", header: "<type_traits>", inheritable.} = object',
+        (),
+    ),
+    "std_true_type": (
+        'std_true_type* {.importcpp: "std::true_type", header: "<type_traits>", inheritable.} = object',
+        (),
+    ),
+    "std_input_iterator_tag": (
+        'std_input_iterator_tag* {.importcpp: "std::input_iterator_tag", header: "<iterator>".} = object',
+        (),
+    ),
+    "std_output_iterator_tag": (
+        'std_output_iterator_tag* {.importcpp: "std::output_iterator_tag", header: "<iterator>".} = object',
+        (),
+    ),
+    "std_forward_iterator_tag": (
+        'std_forward_iterator_tag* {.importcpp: "std::forward_iterator_tag", header: "<iterator>".} = object',
+        (),
+    ),
+    "std_bidirectional_iterator_tag": (
+        'std_bidirectional_iterator_tag* {.importcpp: "std::bidirectional_iterator_tag", header: "<iterator>".} = object',
+        (),
+    ),
+    "std_random_access_iterator_tag": (
+        'std_random_access_iterator_tag* {.importcpp: "std::random_access_iterator_tag", header: "<iterator>".} = object',
+        (),
+    ),
 }
 
 #: Helpers whose companion procs name another helper, which must therefore be
@@ -753,34 +809,6 @@ def _nim_string_path(path: str) -> str:
     return PureWindowsPath(path).as_posix()
 
 
-def _cfg_path_flag(flag: str, path: str) -> str:
-    """Render a ``-I``/``-L`` flag for ``nim.cfg`` so a path with spaces survives.
-
-    Nim strips the outer quotes from a config value and passes the result to the C
-    compiler after word-splitting it, so ``--passC:"-I/opt/na me"`` reaches clang as
-    ``-I/opt/na`` and ``me`` and fails with ``no such file or directory: 'me'``. An
-    inner quote survives that split and the compiler driver removes it.
-
-    That inner quote must be a **double** quote, escaped. A config file is read by
-    Nim's own lexer, where ``'`` opens a character literal, so a single-quoted path
-    is a syntax error in the generated file rather than a flag -- ``nim.cfg(5, 18)
-    Error: invalid character constant``, on every Nim invocation the package makes.
-
-    The path is emitted with forward slashes for the same reason: a Windows path
-    inside a Nim string literal would put ``\\U`` in front of ``Users`` and be read
-    as an escape. Every compiler in the matrix accepts ``/`` as a separator on
-    Windows, so this costs nothing and removes the escape question entirely.
-    """
-    if '"' in path:
-        raise ValueError(
-            f"cannot place {path!r} in nim.cfg: a double quote in an include or library "
-            f"path cannot be quoted in Nim's config format"
-        )
-    # PureWindowsPath, not PurePath: the separator to normalise is a property of the
-    # path, not of the host generating the config, and it leaves a POSIX path alone.
-    return f'"{flag}\\"{PureWindowsPath(path).as_posix()}\\""'
-
-
 def _bare_type_head(raw: str) -> str:
     """Strip qualifiers, tag keywords and template arguments down to the head name."""
     name = raw.strip()
@@ -807,6 +835,20 @@ CPP_STDLIB_MARKERS: frozenset[str] = frozenset(
         "shared_ptr",
         "weak_ptr",
         "vector",
+        "atomic",
+        "optional",
+        "map",
+        "unordered_map",
+        "pair",
+        "initializer_list",
+        "duration",
+        "false_type",
+        "true_type",
+        "input_iterator_tag",
+        "output_iterator_tag",
+        "forward_iterator_tag",
+        "bidirectional_iterator_tag",
+        "random_access_iterator_tag",
     }
 )
 
@@ -1031,19 +1073,25 @@ class NimWriter(BaseWriter):
     default_extension: str = ".nim"
     min_access_floor: ClassVar[str | None] = "public"
     filter_bases_by_access_floor: ClassVar[bool] = False
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel", "scikit-build")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
-        WriterOption(
-            name="test_type",
-            description="Type of test stubs to generate",
-            default="both",
-            choices=("both", "tripwire", "unit", "none"),
-        ),
         WriterOption(
             name="header_path",
             description="Header path to reference in {.header.} pragmas",
             default=None,
             type=str,
+        ),
+        WriterOption(
+            name="strip_include_prefixes",
+            description="Path prefixes to strip from {.header.} pragmas",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="discardable_procs",
+            description="Function names or glob patterns to mark with {.discardable.}",
+            default=None,
+            type=list,
         ),
         WriterOption(
             name="library",
@@ -1093,12 +1141,16 @@ class NimWriter(BaseWriter):
         self,
         *,
         header_path: str | None = None,
+        strip_include_prefixes: Sequence[str] | str | None = None,
+        discardable_procs: Sequence[str] | str | None = None,
         context: PipelineContext | None = None,
         macro_types: dict[str, dict[str, Any]] | None = None,
         emit_macro_shims: bool = False,
         embedded: bool = False,
     ) -> None:
         self.header_path = header_path.replace("\\", "/") if header_path else None
+        self.strip_include_prefixes: list[str] = self._as_list(strip_include_prefixes)
+        self.discardable_procs: list[str] = self._as_list(discardable_procs)
         self._used_helpers: set[str] = set()
         # ``writer="nim"`` is what makes this writer's own legality renamer
         # match; a caller-supplied context is honoured otherwise so a rename can
@@ -1113,6 +1165,40 @@ class NimWriter(BaseWriter):
         self.macro_types: dict[str, dict[str, Any]] = dict(macro_types) if macro_types else {}
         self.emit_macro_shims = emit_macro_shims
         self.embedded = embedded
+
+    def _resolve_header_file(self, raw_path: str | None) -> str:
+        """Resolve the header path for ``{.header.}`` pragmas, applying ``strip_include_prefixes``."""
+        effective = _nim_string_path(self.header_path or raw_path or "header.h")
+        if self.header_path or not self.strip_include_prefixes:
+            return effective
+        for prefix in self.strip_include_prefixes:
+            norm_prefix = _nim_string_path(prefix).strip("/")
+            if not norm_prefix:
+                continue
+            prefix_with_slash = f"{norm_prefix}/"
+            if effective.startswith(prefix_with_slash):
+                effective = effective[len(prefix_with_slash) :]
+                break
+            if effective.startswith(f"/{prefix_with_slash}"):
+                effective = effective[len(prefix_with_slash) + 1 :]
+                break
+            marker = f"/{prefix_with_slash}"
+            if marker in effective:
+                effective = effective.split(marker, 1)[1]
+                break
+        return effective
+
+    def _is_discardable(self, raw_name: str, nim_name: str) -> bool:
+        """Return whether a proc matches ``discardable_procs``."""
+        if not self.discardable_procs:
+            return False
+        bare_nim = nim_name.strip("`")
+        for pat in self.discardable_procs:
+            if pat in (raw_name, bare_nim, nim_name):
+                return True
+            if fnmatch.fnmatchcase(raw_name, pat) or fnmatch.fnmatchcase(bare_nim, pat):
+                return True
+        return False
 
     def _is_embedded(self, options: ScaffoldOptions | None = None) -> bool:
         """Return whether the target profile is bare-metal / standalone embedded."""
@@ -1138,6 +1224,10 @@ class NimWriter(BaseWriter):
                 self.macro_types.update(options.macro_types)
             if "header_path" in options.options and options.options["header_path"]:
                 self.header_path = str(options.options["header_path"]).replace("\\", "/")
+            if "strip_include_prefixes" in options.options and options.options["strip_include_prefixes"] is not None:
+                self.strip_include_prefixes = self._as_list(options.options["strip_include_prefixes"])
+            if "discardable_procs" in options.options and options.options["discardable_procs"] is not None:
+                self.discardable_procs = self._as_list(options.options["discardable_procs"])
             if "emit_macro_shims" in options.options and options.options["emit_macro_shims"] is not None:
                 self.emit_macro_shims = bool(options.options["emit_macro_shims"])
             if self._is_embedded(options):
@@ -1277,7 +1367,7 @@ class NimWriter(BaseWriter):
         if not header.declarations:
             return "# Generated by headerkit\n"
 
-        header_file = _nim_string_path(self.header_path or header.path or "header.h")
+        header_file = self._resolve_header_file(header.path)
         lines.append("# Generated by headerkit")
         lines.append("")
 
@@ -1395,153 +1485,6 @@ class NimWriter(BaseWriter):
             emitted_types.add(_decl_identity("std_exception", "struct", None))
             emitted_types.add("std_exception")
 
-        def _type_contains(t: TypeExpr, target_prefix: str) -> bool:
-            """Check structurally whether a TypeExpr contains target_prefix in its type names."""
-            if isinstance(t, CType):
-                return target_prefix in t.name
-            elif isinstance(t, Pointer):
-                return _type_contains(t.pointee, target_prefix)
-            elif isinstance(t, Reference):
-                return _type_contains(t.target, target_prefix)
-            elif isinstance(t, Array):
-                return _type_contains(t.element_type, target_prefix)
-            elif isinstance(t, FunctionPointer):
-                if _type_contains(t.return_type, target_prefix):
-                    return True
-                return any(_type_contains(p.type, target_prefix) for p in t.parameters)
-            return False
-
-        def _decl_contains(d: object, target_prefix: str) -> bool:
-            """Check structurally whether a Declaration references target_prefix."""
-            if isinstance(d, Struct):
-                for b in d.bases:
-                    if b.name and target_prefix in b.name:
-                        return True
-                for inner_k, inner_v in d.inner_typedefs.items():
-                    if target_prefix in inner_k or target_prefix in inner_v:
-                        return True
-                for nested in d.nested_records:
-                    if _decl_contains(nested, target_prefix):
-                        return True
-                for f in d.fields:
-                    if _type_contains(f.type, target_prefix):
-                        return True
-                for m in d.methods + d.constructors:
-                    if _type_contains(m.return_type, target_prefix):
-                        return True
-                    if any(_type_contains(p.type, target_prefix) for p in m.parameters):
-                        return True
-                if d.destructor and any(_type_contains(p.type, target_prefix) for p in d.destructor.parameters):
-                    return True
-            elif isinstance(d, Function):
-                if _type_contains(d.return_type, target_prefix):
-                    return True
-                if any(_type_contains(p.type, target_prefix) for p in d.parameters):
-                    return True
-            elif isinstance(d, Typedef):
-                if _type_contains(d.underlying_type, target_prefix):
-                    return True
-            elif isinstance(d, Variable):
-                if _type_contains(d.type, target_prefix):
-                    return True
-            return False
-
-        has_atomic = any(_decl_contains(decl, "atomic") for decl in header.declarations)
-        if has_atomic and "Atomic" not in emitted_types:
-            types_section.append('Atomic*[T] {.importcpp: "std::atomic<\'0>", header: "<atomic>".} = object')
-            emitted_types.add("Atomic")
-
-        has_wchar = any(_decl_contains(decl, "wchar") for decl in header.declarations)
-        if has_wchar and "wchar_t" not in emitted_types:
-            types_section.append('wchar_t* {.importc: "wchar_t".} = cint')
-            emitted_types.add("wchar_t")
-
-        has_optional = any(_decl_contains(decl, "optional") for decl in header.declarations)
-        if has_optional and "std_optional" not in emitted_types:
-            types_section.append('std_optional*[T] {.importcpp: "std::optional<\'0>", header: "<optional>".} = object')
-            types_section.append("optional*[T] = std_optional[T]")
-            emitted_types.update({"std_optional", "optional"})
-
-        has_map = any(_decl_contains(decl, "map") for decl in header.declarations)
-        if has_map and "std_map" not in emitted_types:
-            types_section.append('std_map*[K, V] {.importcpp: "std::map<\'0, \'1>", header: "<map>".} = object')
-            emitted_types.add("std_map")
-
-        has_unordered_map = any(_decl_contains(decl, "unordered_map") for decl in header.declarations)
-        if has_unordered_map and "std_unordered_map" not in emitted_types:
-            types_section.append(
-                'std_unordered_map*[K, V] {.importcpp: "std::unordered_map<\'0, \'1>", header: "<unordered_map>".} = object'
-            )
-            types_section.append("unordered_map*[K, V] = std_unordered_map[K, V]")
-            emitted_types.update({"std_unordered_map", "unordered_map"})
-
-        has_pair = any(_decl_contains(decl, "pair") for decl in header.declarations)
-        if has_pair and "std_pair" not in emitted_types:
-            types_section.append('std_pair*[T1, T2] {.importcpp: "std::pair<\'0, \'1>", header: "<utility>".} = object')
-            emitted_types.add("std_pair")
-
-        has_traits = any(
-            _decl_contains(decl, "type_traits")
-            or _decl_contains(decl, "false_type")
-            or _decl_contains(decl, "true_type")
-            for decl in header.declarations
-        )
-        if has_traits and "std_false_type" not in emitted_types:
-            types_section.append(
-                'std_false_type* {.importcpp: "std::false_type", header: "<type_traits>", inheritable.} = object'
-            )
-            types_section.append(
-                'std_true_type* {.importcpp: "std::true_type", header: "<type_traits>", inheritable.} = object'
-            )
-            emitted_types.update({"std_false_type", "std_true_type"})
-
-        has_iterator_tags = any(_decl_contains(decl, "iterator_tag") for decl in header.declarations)
-        if has_iterator_tags and "std_input_iterator_tag" not in emitted_types:
-            types_section.append(
-                'std_input_iterator_tag* {.importcpp: "std::input_iterator_tag", header: "<iterator>".} = object'
-            )
-            types_section.append(
-                'std_output_iterator_tag* {.importcpp: "std::output_iterator_tag", header: "<iterator>".} = object'
-            )
-            types_section.append(
-                'std_forward_iterator_tag* {.importcpp: "std::forward_iterator_tag", header: "<iterator>".} = object'
-            )
-            types_section.append(
-                'std_bidirectional_iterator_tag* {.importcpp: "std::bidirectional_iterator_tag", header: "<iterator>".} = object'
-            )
-            types_section.append(
-                'std_random_access_iterator_tag* {.importcpp: "std::random_access_iterator_tag", header: "<iterator>".} = object'
-            )
-            emitted_types.update(
-                {
-                    "std_input_iterator_tag",
-                    "std_output_iterator_tag",
-                    "std_forward_iterator_tag",
-                    "std_bidirectional_iterator_tag",
-                    "std_random_access_iterator_tag",
-                }
-            )
-
-        has_init_list = any(_decl_contains(decl, "initializer_list") for decl in header.declarations)
-        if has_init_list and "initializer_list" not in emitted_types:
-            types_section.append(
-                'initializer_list*[T] {.importcpp: "std::initializer_list", header: "<initializer_list>".} = object'
-            )
-            emitted_types.add("initializer_list")
-
-        has_duration = any(_decl_contains(decl, "duration") for decl in header.declarations)
-        if has_duration and "duration" not in emitted_types:
-            types_section.append(
-                'duration*[Rep, Period = pointer] {.importcpp: "std::chrono::duration", header: "<chrono>".} = object'
-            )
-            types_section.append(
-                'std_ratio*[Num = pointer, Denom = pointer] {.importcpp: "std::ratio", header: "<ratio>".} = object'
-            )
-            types_section.append('std_milli* {.importcpp: "std::milli", header: "<ratio>".} = object')
-            types_section.append('std_micro* {.importcpp: "std::micro", header: "<ratio>".} = object')
-            types_section.append('std_nano* {.importcpp: "std::nano", header: "<ratio>".} = object')
-            emitted_types.update({"duration", "std_ratio", "std_milli", "std_micro", "std_nano"})
-
         # Collect opaque pointer targets referenced across declarations
         known_decl_names = {
             decl.name for decl in header.declarations if isinstance(decl, (Struct, Enum, Typedef)) and decl.name
@@ -1555,13 +1498,23 @@ class NimWriter(BaseWriter):
                 known_decl_names.update(decl.template_params)
         known_decl_names.update(t if isinstance(t, str) else t[0] for t in emitted_types)
         known_decl_names.update(C_TO_NIM_PRIMITIVES.keys())
+        known_decl_names.add("wchar_t")
 
         def _collect_opaque_pointer_names(t: TypeExpr) -> set[str]:
             names: set[str] = set()
             if isinstance(t, Pointer):
                 if isinstance(t.pointee, CType):
                     raw = t.pointee.name.removeprefix("struct ").removeprefix("union ").strip()
-                    if raw and raw not in known_decl_names and raw != "void" and "<" not in raw and "::" not in raw:
+                    if (
+                        raw
+                        and raw not in known_decl_names
+                        and raw != "void"
+                        and "<" not in raw
+                        and "::" not in raw
+                        and not _type_name_requires_cpp(
+                            t.pointee.name, unit_is_cpp=self._unit_is_cpp, is_elaborated=t.pointee.is_elaborated
+                        )
+                    ):
                         names.add(raw)
                 else:
                     names.update(_collect_opaque_pointer_names(t.pointee))
@@ -1713,10 +1666,14 @@ class NimWriter(BaseWriter):
         helper_procs: list[str] = []
         for helper in sorted(self._used_helpers):
             ident = _decl_identity(helper, "struct", None)
-            if ident in emitted_types or helper in emitted_types:
+            if (
+                ident in emitted_types
+                or _decl_identity(helper, "typedef", None) in emitted_types
+                or helper in emitted_types
+            ):
                 continue
             declaration, companions = CPP_HELPER_DECLARATIONS[helper]
-            helper_types.append(declaration)
+            helper_types.extend(declaration.splitlines())
             emitted_types.add(ident)
             emitted_types.add(helper)
             for companion in companions:
@@ -1834,7 +1791,7 @@ class NimWriter(BaseWriter):
                 or "(*" in name
                 or ") const" in name
                 or name.endswith("::")
-                or ("::" in name and " " in name)
+                or ("::" in name and " " in name and "<" not in name)
             ):
                 return "pointer"
 
@@ -1862,6 +1819,9 @@ class NimWriter(BaseWriter):
                 for p in ("std::enable_if_t<", "enable_if_t<", "std::underlying_type_t<", "underlying_type_t<")
             ):
                 return "auto"
+
+            if name == "wchar_t" and "wchar_t" not in getattr(self, "_type_refs", {}):
+                return self._use_helper("wchar_t")
 
             # C++ Smart Pointers & Containers mapping
             if not _type_name_requires_cpp(t.name, unit_is_cpp=self._unit_is_cpp, is_elaborated=t.is_elaborated):
@@ -1894,26 +1854,30 @@ class NimWriter(BaseWriter):
                 if len(args) >= 2:
                     k_type = self._format_type(CType(args[0]))
                     v_type = self._format_type(CType(args[1]))
-                    return f"std_map[{k_type}, {v_type}]"
-                return "std_map[pointer, pointer]"
+                    return f"{self._use_helper('std_map')}[{k_type}, {v_type}]"
+                return f"{self._use_helper('std_map')}[pointer, pointer]"
+            elif name in ("std::map", "map"):
+                return f"{self._use_helper('std_map')}[pointer, pointer]"
             elif name.startswith("std::pair<") or name.startswith("pair<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
                 args = _split_template_args(inner)
                 if len(args) >= 2:
                     t1_type = self._format_type(CType(args[0]))
                     t2_type = self._format_type(CType(args[1]))
-                    return f"std_pair[{t1_type}, {t2_type}]"
-                return "std_pair[pointer, pointer]"
+                    return f"{self._use_helper('std_pair')}[{t1_type}, {t2_type}]"
+                return f"{self._use_helper('std_pair')}[pointer, pointer]"
+            elif name in ("std::pair", "pair"):
+                return f"{self._use_helper('std_pair')}[pointer, pointer]"
             elif name.startswith("std::optional<") or name.startswith("optional<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
-                return f"std_optional[{self._format_type(CType(inner))}]"
+                return f"{self._use_helper('std_optional')}[{self._format_type(CType(inner))}]"
             elif name in ("std::optional", "optional"):
-                return "std_optional[pointer]"
+                return f"{self._use_helper('std_optional')}[pointer]"
             elif name.startswith("std::initializer_list<") or name.startswith("initializer_list<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
-                return f"initializer_list[{self._format_type(CType(inner))}]"
+                return f"{self._use_helper('initializer_list')}[{self._format_type(CType(inner))}]"
             elif name in ("std::initializer_list", "initializer_list"):
-                return "initializer_list[pointer]"
+                return f"{self._use_helper('initializer_list')}[pointer]"
             elif name.startswith("std::atomic<") or name.startswith("atomic<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
                 if inner.endswith("*"):
@@ -1922,7 +1886,9 @@ class NimWriter(BaseWriter):
                     inner_t = Reference(CType(inner[:-1].strip()))
                 else:
                     inner_t = CType(inner)
-                return f"Atomic[{self._format_type(inner_t)}]"
+                return f"{self._use_helper('Atomic')}[{self._format_type(inner_t)}]"
+            elif name in ("std::atomic", "atomic"):
+                return f"{self._use_helper('Atomic')}[pointer]"
             elif name.startswith("std::function<") or name.startswith("function<"):
                 inner = name[name.index("<") + 1 : name.rindex(">")].strip()
                 l_paren = inner.find("(")
@@ -1952,10 +1918,10 @@ class NimWriter(BaseWriter):
                 if len(args) >= 2:
                     k_type = self._format_type(CType(args[0]))
                     v_type = self._format_type(CType(args[1]))
-                    return f"std_unordered_map[{k_type}, {v_type}]"
-                return "std_unordered_map[pointer, pointer]"
+                    return f"{self._use_helper('std_unordered_map')}[{k_type}, {v_type}]"
+                return f"{self._use_helper('std_unordered_map')}[pointer, pointer]"
             elif name in ("std::unordered_map", "unordered_map"):
-                return "std_unordered_map[pointer, pointer]"
+                return f"{self._use_helper('std_unordered_map')}[pointer, pointer]"
             elif name.startswith("std::string_view") or name == "string_view":
                 return "cstring"
             elif name in ("std::nullopt_t", "nullopt_t", "std::nullptr_t", "nullptr_t", "decltype(nullptr)"):
@@ -1968,8 +1934,26 @@ class NimWriter(BaseWriter):
                 or name.startswith("time_point")
             ):
                 return "pointer"
-            elif name.startswith("std::chrono::duration") or name.startswith("duration<"):
-                return "duration[pointer, pointer]"
+            elif (
+                name.startswith("std::chrono::duration")
+                or name.startswith("duration<")
+                or name in ("std::chrono::duration", "duration")
+            ):
+                return f"{self._use_helper('duration')}[pointer, pointer]"
+            elif name in ("std::false_type", "false_type"):
+                return self._use_helper("std_false_type")
+            elif name in ("std::true_type", "true_type"):
+                return self._use_helper("std_true_type")
+            elif name in ("std::input_iterator_tag", "input_iterator_tag"):
+                return self._use_helper("std_input_iterator_tag")
+            elif name in ("std::output_iterator_tag", "output_iterator_tag"):
+                return self._use_helper("std_output_iterator_tag")
+            elif name in ("std::forward_iterator_tag", "forward_iterator_tag"):
+                return self._use_helper("std_forward_iterator_tag")
+            elif name in ("std::bidirectional_iterator_tag", "bidirectional_iterator_tag"):
+                return self._use_helper("std_bidirectional_iterator_tag")
+            elif name in ("std::random_access_iterator_tag", "random_access_iterator_tag"):
+                return self._use_helper("std_random_access_iterator_tag")
             elif "<" in name and name.endswith(">"):
                 idx = name.index("<")
                 r_idx = name.rindex(">")
@@ -2068,7 +2052,7 @@ class NimWriter(BaseWriter):
                     raw == "void"
                     or "::*" in raw
                     or raw.endswith("::")
-                    or ("::" in raw and " " in raw)
+                    or ("::" in raw and " " in raw and "<" not in raw)
                     or "type-parameter-" in raw
                 ):
                     return "pointer"
@@ -2949,6 +2933,9 @@ class NimWriter(BaseWriter):
         else:
             pragmas.append("cdecl")
 
+        if self._is_discardable(f.name, f_name):
+            pragmas.append("discardable")
+
         t_params = f"[{', '.join(_template_param_ident(tp) for tp in f.template_params)}]" if f.template_params else ""
         return [f"proc {f_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"]
 
@@ -3006,7 +2993,7 @@ class NimWriter(BaseWriter):
 
     def _build_macro_shims_files(self, unit: SourceUnit | Header) -> tuple[str, str]:
         """Render companion ``_shims.h`` and ``_shims.c`` files for macro shims."""
-        header_file = _nim_string_path(self.header_path or getattr(unit, "path", None) or "header.h")
+        header_file = self._resolve_header_file(getattr(unit, "path", None))
         shimmed_macros = [d for d in unit.declarations if isinstance(d, MacroFunction) and d.has_token_pasting]
         h_lines = [
             "/* Auto-generated C macro shims by HeaderKit */",
@@ -3046,10 +3033,12 @@ class NimWriter(BaseWriter):
                 f'proc {proc_name}*({params_joined}): {ret_type} {{.importc: "{importc_target}", header: "{header_file}", nodecl.}}'
             ]
 
-        c_bridge_name = f"c_{m.name}"
+        escaped_macro = _escape_ident(m.name).strip("`")
+        c_bridge_name = _escape_ident(f"c_{escaped_macro}")
         template_name = _escape_ident(m.name.lower())
-        if c_bridge_name.lower() == template_name:
-            c_bridge_name = f"c_macro_{m.name}"
+        if nim_ident_identity(c_bridge_name) == nim_ident_identity(template_name):
+            c_bridge_name = _escape_ident(f"c_macro_{escaped_macro}")
+        c_bridge_name = self._synthesized_ident(c_bridge_name, what=f"the C bridge proc for macro {m.name!r}")
 
         if not m.parameters:
             ret_val = "void" if (m.is_statement or not m.body.strip()) else "cint"
@@ -3107,444 +3096,6 @@ class NimWriter(BaseWriter):
             return [str(v) for v in value if str(v)]
         return [str(value)]
 
-    def _build_nim_cfg(self, unit: SourceUnit | Header, options: ScaffoldOptions) -> str:
-        """Render ``nim.cfg`` -- the flags the generated package needs to compile.
-
-        Every flag here is either invariant, derived from the IR, or supplied by
-        the caller. Nothing is guessed: a package whose library the caller did not
-        name links against nothing and says so, rather than carrying a plausible
-        ``-l`` that resolves to the wrong library or to none.
-        """
-        if self._is_embedded(options):
-            lines = ["--os:standalone", "--mm:arc", "--exceptions:goto", "--threads:off", "--styleCheck:hint"]
-        else:
-            lines = ["--mm:orc", "--threads:on", "--styleCheck:hint"]
-
-        # `$config` is the directory holding this file, so the package builds with a
-        # bare `nim c tests/...` and not only under `nimble`, which supplies srcDir.
-        lines.append('--path:"$config/src"')
-
-        if unit_requires_cpp(unit):
-            # The bindings carry `importcpp` pragmas and `#include` a C++ header.
-            # The default C backend hands both to the C compiler, which rejects
-            # `class` outright. Set in nim.cfg rather than in the .nimble test task
-            # because a config backend selection also overrides a plain `nim c`.
-            lines.append("--backend:cpp")
-
-        include_dirs = [str(Path(d).resolve()) for d in self._as_list(options.extra_context.get("include_dirs"))]
-        # The header's own directory: the one include path the writer always knows,
-        # and the one a header's quoted includes of its siblings need. Compared
-        # after resolving both sides, or a relatively-passed `-I` naming the same
-        # directory is emitted twice.
-        unit_path = getattr(unit, "path", "") or ""
-        if unit_path:
-            parent = str(Path(unit_path).resolve().parent)
-            if parent not in include_dirs:
-                include_dirs = [*include_dirs, parent]
-
-        lines.extend(f"--passC:{_cfg_path_flag('-I', d)}" for d in include_dirs)
-        lines.extend(f'--passC:"-D{d}"' for d in self._as_list(options.extra_context.get("defines")))
-
-        # Resolved for the same reason include_dirs are: a relative -L resolves
-        # against the linker's working directory, not the package's.
-        library_dirs = [str(Path(d).resolve()) for d in self._as_list(options.get_option("library_dirs"))]
-        libraries = self._as_list(options.get_option("library"))
-        lines.extend(f"--passL:{_cfg_path_flag('-L', d)}" for d in library_dirs)
-        lines.extend(f'--passL:"-l{lib}"' for lib in libraries)
-        if not libraries:
-            lines.append(
-                "# No native library to link: pass --writer-opt nim:library=<name> "
-                "(and nim:library_dirs=<dir>) to add the -l/-L flags this package needs."
-            )
-
-        return "\n".join(lines) + "\n"
-
-    def _probe_param(self, type_expr: TypeExpr) -> str:
-        """Render ``type_expr`` as the pointer a link probe takes it by.
-
-        A probe takes every argument by pointer so that a call site can name the
-        probe with ``nil`` whatever the argument type is. Without that, probing an
-        entry point would mean inventing a value of each parameter's type -- and a
-        C++ class with no default constructor has no value to invent.
-        """
-        formatted = self._format_type(type_expr, in_param=True)
-        # `ptr (var T)` is not a type; `T` is, and `x[]` on a `ptr T` is the lvalue
-        # a `var T` parameter binds to.
-        formatted = formatted.removeprefix("var ")
-        return f"ptr {formatted}"
-
-    def _link_probe(self, name: str, index: int, self_type: str | None, params: list[Parameter], returns: str) -> str:
-        """Render one probe proc that references ``name`` so the linker must resolve it."""
-        probe_params: list[str] = []
-        call_args: list[str] = []
-        if self_type is not None:
-            probe_params.append(f"self: ptr {self_type}")
-            call_args.append("self[]")
-        for i, p in enumerate(params):
-            arg = f"a{i}"
-            probe_params.append(f"{arg}: {self._probe_param(p.type)}")
-            call_args.append(f"{arg}[]")
-        call = f"{name}({', '.join(call_args)})"
-        body = f"discard {call}" if returns != "void" else call
-        return f"proc hkLinkProbe{index}({', '.join(probe_params)}) =\n  {body}"
-
-    @staticmethod
-    def _is_probeable(f: Function) -> bool:
-        """Whether a link probe may reference this member.
-
-        A probe referencing a non-public member fails to **compile**, not to link,
-        which takes the whole generated package down. The writer declares such a
-        member regardless of access, so the collector declines instead. An access
-        the backend left unset is public, which is what C members are.
-
-        A template is skipped for a different reason: a generic emits no symbol
-        until it is instantiated, so probing one establishes nothing.
-        """
-        if (f.access or "public") != "public":
-            return False
-        return not (f.template_params or f.name in CPP_OPERATOR_MAP)
-
-    def _collect_link_probes(self, unit: SourceUnit | Header) -> tuple[list[str], list[str], list[str]]:
-        """Return the probe definitions, their call sites, and the complete C++ types."""
-        self._unit_is_cpp = getattr(unit, "language", None) == "cpp"
-        if not self._name_map:
-            self._name_map = self._build_name_map(unit)
-        probes: list[str] = []
-        calls: list[str] = []
-        complete_types: list[str] = []
-
-        def add(name: str, self_type: str | None, params: list[Parameter], returns: str) -> None:
-            index = len(probes)
-            probes.append(self._link_probe(name, index, self_type, params, returns))
-            args = ["nil"] * (len(params) + (1 if self_type is not None else 0))
-            calls.append(f"hkLinkProbe{index}({', '.join(args)})")
-
-        for decl in unit.declarations:
-            if isinstance(decl, Function) and not decl.template_params and not decl.is_variadic and decl.name:
-                add(
-                    self._ident(decl.name, kind="function", namespace=decl.namespace),
-                    None,
-                    decl.parameters,
-                    self._format_type(decl.return_type),
-                )
-            elif isinstance(decl, Struct) and _struct_requires_cpp(decl) and decl.name and not decl.template_params:
-                struct_type = self._ident(decl.name, kind="struct", namespace=decl.namespace)
-                complete_types.append(struct_type)
-                for m in decl.methods:
-                    if not self._is_probeable(m):
-                        continue
-                    self_type = None if m.is_static else struct_type
-                    add(
-                        self._ident(m.name, kind="function", namespace=decl.namespace),
-                        self_type,
-                        m.parameters,
-                        self._format_type(m.return_type),
-                    )
-                for ctor in decl.constructors:
-                    if not self._is_probeable(ctor):
-                        continue
-                    add(self._constructor_proc_name(decl), None, ctor.parameters, struct_type)
-
-        return probes, calls, complete_types
-
-    def _build_cpp_tripwire(self, pkg: str, unit: SourceUnit | Header) -> str:
-        """Render the tripwire for a package whose bindings use ``importcpp``.
-
-        ``loadLib``/``symAddr`` cannot serve a C++ target. It looks for an
-        unmangled name in a shared object, and an ``importcpp`` binding has neither:
-        the C++ name is mangled, and a header-only or statically-linked library has
-        no shared object at all. Such a tripwire fails for a reason unrelated to
-        whether the bindings work.
-
-        What this tripwire establishes instead is a build-time property, and the
-        build is where it fails: the bindings compile under the C++ backend against
-        the real header, every non-generic entry point resolves at link time, and
-        every bound C++ class is a complete type rather than a forward declaration.
-        It does not establish that a shared library is findable at run time -- a
-        statically linked package has none to find.
-        """
-        probes, calls, complete_types = self._collect_link_probes(unit)
-
-        if not probes and not complete_types:
-            return self._build_inconclusive_tripwire(pkg)
-
-        probe_block = "\n\n".join(probes) if probes else ""
-        call_block = "\n".join(f"    {call}" for call in calls) if calls else "    discard"
-        # No fallback assertion when a unit binds entry points but no complete class:
-        # the probes carry the claim, and `check declared(pkg)` is true by
-        # construction, so adding it would weaken the suite rather than strengthen it.
-        size_checks = "\n".join(f"    check sizeof({t}) > 0" for t in complete_types)
-        title = "every bound entry point compiles and links against"
-        if not probes:
-            title = "every bound class is a complete type in"
-
-        # The template is dedented before the blocks go in: dedent() strips the
-        # common prefix of every line it is given, and an interpolated block that
-        # starts at column zero would leave it with nothing to strip.
-        template = textwrap.dedent("""\
-            # Tripwire for a C++ target.
-            #
-            # The assertion this file makes is its own build. Compiling it proves the
-            # bindings are valid C++ against the real header; linking it proves every
-            # bound entry point resolves against the real native library. A missing
-            # library fails the link with undefined symbols and the test never runs.
-            #
-            # The probes below are never executed -- `hkRunLinkProbes` is false. They
-            # exist so the C++ compiler must emit a reference to each entry point and
-            # the linker must resolve it. Every probe argument is a pointer so a call
-            # site can pass `nil` without inventing a value of a type that may have no
-            # default constructor.
-            import std/unittest
-            import {pkg}
-
-            var hkRunLinkProbes = false
-
-            {probe_block}
-
-            proc hkForceLinkage() =
-              if hkRunLinkProbes:
-            {call_block}
-
-            suite "Tripwire Compile & Link Verification":
-              test "{title} '{pkg}'":
-                hkForceLinkage()
-            {size_checks}
-            """)
-        return template.format(
-            pkg=pkg,
-            probe_block=probe_block,
-            call_block=call_block,
-            size_checks=size_checks,
-            title=title,
-        )
-
-    @staticmethod
-    def _build_inconclusive_tripwire(pkg: str) -> str:
-        """Render a tripwire for a unit that offers nothing a tripwire can check.
-
-        A unit binding only templates has no symbol to link -- a generic emits none
-        until it is instantiated -- and no complete class to size.
-
-        It **fails**, loudly, rather than reporting skipped. A skip is not a
-        failure to ``std/unittest``, so the generated file exited 0, and a tripwire
-        that exits 0 without establishing linkage is exactly the green mirage the
-        tripwire invariant in ``AGENTS.md`` forbids: the package's own test command
-        reported success while nothing anywhere had checked that the native library
-        resolves. The two states a caller must be able to tell apart -- "the
-        entry points link" and "nobody established that they link" -- were the same
-        exit status, and the second is the one that needs a person to act.
-
-        Acting on it is a few lines: instantiate the generics the package binds in a
-        test of your own, and that test establishes the linkage this one cannot.
-        """
-        return textwrap.dedent(f"""\
-            # Tripwire for a C++ target that binds no linkable entry point.
-            #
-            # Every binding in this package is a template or has no complete class
-            # behind it. A generic emits no symbol until it is instantiated, so there
-            # is nothing here whose linkage a tripwire could establish.
-            #
-            # This file therefore FAILS. It is not reporting that the bindings are
-            # broken -- it is reporting that nothing has checked them, which a
-            # passing or skipped tripwire would have been unable to say. A tripwire
-            # exists to fail when the native library is missing or an entry point
-            # does not resolve; one that exits 0 without having established either is
-            # indistinguishable from one that verified them.
-            #
-            # To resolve it: instantiate the generics you use in a test of your own,
-            # and delete this file. That test establishes the linkage this one cannot.
-            import std/unittest
-            import {pkg}
-
-            suite "Tripwire Compile & Link Verification":
-              test "linkage of '{pkg}' is not established by this tripwire":
-                echo "TRIPWIRE INCONCLUSIVE: no non-generic entry point and no complete class is bound by '{pkg}'"
-                echo "TRIPWIRE INCONCLUSIVE: nothing here establishes that the native library links"
-                echo "TRIPWIRE INCONCLUSIVE: failing rather than exiting 0, so this cannot be read as verification"
-                fail()
-            """)
-
-    def _build_embedded_tripwire(self, pkg: str, unit: SourceUnit | Header) -> str:
-        """Render the tripwire for an embedded / standalone static-link target.
-
-        Bare-metal RTOS targets (such as Zephyr) have no dynamic loader and cannot
-        import ``std/dynlib`` or call ``loadLib``. Symbols are statically linked into
-        the target ELF image. This tripwire verifies at compile and link time that
-        bound entry points are declared and resolve against the static library, and
-        that bound record types have complete C ABI layouts.
-        """
-        probes, calls, complete_types = self._collect_link_probes(unit)
-        fn_names = extract_function_names(unit)
-        for decl in unit.declarations:
-            if isinstance(decl, Struct) and decl.name and decl.fields and not decl.template_params:
-                st_ident = self._ident(
-                    decl.name,
-                    kind="union" if decl.is_union else "struct",
-                    namespace=decl.namespace,
-                )
-                if st_ident not in complete_types:
-                    complete_types.append(st_ident)
-
-        if not probes and not complete_types and not fn_names:
-            return self._build_inconclusive_tripwire(pkg)
-
-        probe_block = "\n\n".join(probes) if probes else ""
-        call_block = "\n".join(f"    {call}" for call in calls) if calls else "    discard"
-        check_lines: list[str] = []
-        for fn in fn_names:
-            fn_ident = self._ident(fn, kind="function")
-            check_lines.append(f"    check declared({fn_ident})")
-        for t in complete_types:
-            check_lines.append(f"    check sizeof({t}) > 0")
-        checks_block = "\n".join(check_lines)
-
-        template = textwrap.dedent("""\
-            # Tripwire for an embedded / standalone static-link target.
-            #
-            # Bare-metal RTOS targets link foreign C symbols statically into the firmware
-            # image rather than loading shared libraries at runtime.
-            import std/unittest
-            import {pkg}
-
-            var hkRunLinkProbes = false
-
-            {probe_block}
-
-            proc hkForceLinkage() =
-              if hkRunLinkProbes:
-            {call_block}
-
-            suite "Tripwire Static Symbol & ABI Verification":
-              test "verify static foreign library symbols declare and link in '{pkg}'":
-                hkForceLinkage()
-            {checks_block}
-            """)
-        return template.format(
-            pkg=pkg,
-            probe_block=probe_block,
-            call_block=call_block,
-            checks_block=checks_block,
-        )
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        bindings_code = self._render(unit)
-        fn_names = extract_function_names(unit)
-
-        files: list[OutputFile] = []
-
-        # 1. Nimble package spec
-        nimble = textwrap.dedent(f"""\
-            # Package
-            version       = "0.1.0"
-            author        = "HeaderKit"
-            description   = "Nim bindings for {pkg}"
-            license       = "MIT"
-            srcDir        = "src"
-            packageName   = "{pkg}"
-
-            # Dependencies
-            requires "nim >= 2.0.0"
-
-            task test, "Run tests":
-              exec "nim c -r tests/test_tripwire.nim"
-        """)
-        files.append(OutputFile(path=f"{pkg}.nimble", content=nimble, preserve_existing=True))
-
-        # 2. Main package re-export
-        main_src = textwrap.dedent(f"""\
-            # Primary export module for {pkg}
-            import {pkg}/bindings
-            export bindings
-        """)
-        files.append(OutputFile(path=f"src/{pkg}.nim", content=main_src, preserve_existing=True))
-
-        # 3. Generated bindings module (and optional companion C macro shims)
-        files.append(OutputFile(path=f"src/{pkg}/bindings.nim", content=bindings_code, preserve_existing=False))
-        if self.emit_macro_shims or options.get_option("emit_macro_shims", False):
-            shims_h, shims_c = self._build_macro_shims_files(unit)
-            files.append(OutputFile(path=f"src/{pkg}/_shims.h", content=shims_h, preserve_existing=False))
-            files.append(OutputFile(path=f"src/{pkg}/_shims.c", content=shims_c, preserve_existing=False))
-
-        # 4. nim.cfg compiler flags
-        files.append(OutputFile(path="nim.cfg", content=self._build_nim_cfg(unit, options), preserve_existing=True))
-
-        # 5. Tests
-        if test_type in ("tripwire", "both") and self._is_embedded(options):
-            files.append(OutputFile(path="tests/test_tripwire.nim", content=self._build_embedded_tripwire(pkg, unit)))
-        elif test_type in ("tripwire", "both") and unit_requires_cpp(unit):
-            files.append(OutputFile(path="tests/test_tripwire.nim", content=self._build_cpp_tripwire(pkg, unit)))
-        elif test_type in ("tripwire", "both"):
-            stub_lines = []
-            for fn in fn_names:
-                stub_lines.append(
-                    f"    if lib.symAddr(\"{fn}\") == nil:\n      checkpoint \"Entry point '{fn}' missing from native library '{pkg}'\"\n      fail()"
-                )
-            stubs = "\n".join(stub_lines) if stub_lines else f"    checkpoint \"Verified native library '{pkg}' loads\""
-
-            tripwire = render_block_template(
-                f"""\
-                import std/[unittest, dynlib]
-                import {pkg}
-
-                suite "Tripwire Symbol & ABI Verification":
-                  test "verify foreign library entrypoints exist and link":
-                    let lib = loadLib("{pkg}")
-                    if lib == nil:
-                      checkpoint "Native dynamic library '{pkg}' not found in system library path"
-                      fail()
-                {DEDENT_BLOCK}
-            """,
-                stubs,
-            )
-            files.append(OutputFile(path="tests/test_tripwire.nim", content=tripwire))
-
-        if test_type in ("unit", "both"):
-            decl_checks = (
-                "\n".join(f"    check declared({fn})" for fn in fn_names[:10])
-                if fn_names
-                else f"    check declared({pkg})"
-            )
-            unit_test = render_block_template(
-                f"""\
-                import std/unittest
-                import {pkg} except TestResult
-
-                suite "{pkg} Unit Tests":
-                  test "module exports expected declarations":
-                {DEDENT_BLOCK}
-            """,
-                decl_checks,
-            )
-            files.append(
-                OutputFile(
-                    path=f"tests/test_{pkg}.nim",
-                    content=unit_test,
-                    merge_strategy="append_new_tests",
-                )
-            )
-
-        if test_type in ("unit", "both"):
-            files.extend(build_work_order_files(unit, pkg, "nim"))
-
-        return ProjectLayout(files=files)
-
-    def _write_custom_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        if options.layout in ("wheel", "scikit-build"):
-            from headerkit.packaging.nim import generate_nim_wheel_layout
-
-            return generate_nim_wheel_layout(unit, options)
-        return self._write_package_layout(unit, options)
-
     def write(self, header: Any) -> str:
         if isinstance(header, (ReconciledUnit, MultiDimensionalReconciledUnit)):
             return self.write_reconciled(header)
@@ -3573,7 +3124,7 @@ class NimWriter(BaseWriter):
                 delattr(self, "_type_aliases")
 
     def _write_reconciled_impl(self, unit: ReconciledUnit | MultiDimensionalReconciledUnit) -> str:
-        header_file = (self.header_path or unit.path or "header.h").replace("\\", "/")
+        header_file = self._resolve_header_file(unit.path)
         lines: list[str] = ["# Generated by headerkit", ""]
 
         all_decls: list[Declaration] = []
@@ -3724,6 +3275,8 @@ def write_nim(
     header: Header | SourceUnit | ReconciledUnit | MultiDimensionalReconciledUnit,
     *,
     header_path: str | None = None,
+    strip_include_prefixes: Sequence[str] | str | None = None,
+    discardable_procs: Sequence[str] | str | None = None,
     macro_types: dict[str, dict[str, Any]] | None = None,
     emit_macro_shims: bool = False,
     embedded: bool = False,
@@ -3731,6 +3284,8 @@ def write_nim(
     """Convenience function to generate Nim bindings from a Header IR or ReconciledUnit."""
     writer = NimWriter(
         header_path=header_path,
+        strip_include_prefixes=strip_include_prefixes,
+        discardable_procs=discardable_procs,
         macro_types=macro_types,
         emit_macro_shims=emit_macro_shims,
         embedded=embedded,

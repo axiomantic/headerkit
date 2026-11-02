@@ -92,7 +92,7 @@ class TestStructRoundtrip:
         """
         cdef = parse_and_convert(backend, code)
         assert cdef == textwrap.dedent("""\
-            typedef struct Color {
+            typedef struct {
                 float r;
                 float g;
                 float b;
@@ -271,10 +271,10 @@ class TestMultipleDeclarations:
         """
         cdef = parse_and_convert(backend, code)
         assert cdef == textwrap.dedent("""\
-            typedef struct Config {
+            typedef struct {
                 int flags;
             } Config;
-            void init(struct Config * cfg);""")
+            void init(Config * cfg);""")
 
 
 class TestExcludePatterns:

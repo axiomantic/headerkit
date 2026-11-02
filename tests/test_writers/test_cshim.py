@@ -915,7 +915,7 @@ def test_cshim_header_path_override() -> None:
 
 def test_cshim_scaffold_header_path_option() -> None:
     """header_path option in ScaffoldOptions overrides header.path and normalizes."""
-    from headerkit.scaffold import ScaffoldOptions
+    from headerkit.writers.base import ScaffoldOptions
 
     fn = Function(name="setup", return_type=CType("void"), parameters=[])
     h = Header(path=r"C:\Users\admin\include\api.h", declarations=[fn])
@@ -923,7 +923,7 @@ def test_cshim_scaffold_header_path_option() -> None:
     opts = ScaffoldOptions(
         package_name="testshim",
         target_language="cshim",
-        layout="package",
+        layout="file",
         options={"header_path": r"custom\api.h"},
     )
     layout = writer.write_layout(h, opts)

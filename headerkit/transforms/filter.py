@@ -82,4 +82,3 @@ class ChainedFilter(PipelineFilter):
             "filter": self.__class__.__name__,
             "filters": [f.cache_fingerprint() for f in self.filters],
         }
-

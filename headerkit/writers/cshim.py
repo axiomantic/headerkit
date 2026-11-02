@@ -26,8 +26,7 @@ from headerkit.ir import (
     Struct,
     TypeExpr,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
+from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, ScaffoldOptions, WriterOption, render_block_template
 
 
 def _cshim_string_path(path: str | None) -> str:
@@ -251,14 +250,8 @@ class CShimWriter(BaseWriter):
     format_description: str = "C-ABI shim wrapper generator (extern C)"
     default_output_pattern: str = "{dir}/{stem}_cshim.cpp"
     default_extension: str = ".cpp"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "cmake")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
-        WriterOption(
-            name="test_type",
-            description="Type of test stubs to generate",
-            default="both",
-            choices=("both", "tripwire", "unit", "none"),
-        ),
         WriterOption(
             name="catch_exceptions",
             description="Wrap C++ functions in try-catch blocks for exception safety across ABI boundaries",
@@ -640,130 +633,6 @@ class CShimWriter(BaseWriter):
         ]
 
         return "\n".join(lines)
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
-        header_content, cpp_lines, fn_names = self._render_parts(unit)
-
-        cpp_header_includes = [
-            f'#include "{pkg}_cshim.h"',
-            "#include <new>",
-        ]
-        if any("std::string" in stmt or "_ret_str" in stmt for stmt in cpp_lines):
-            cpp_header_includes.append("#include <string>")
-        if any("std::vector" in stmt for stmt in cpp_lines):
-            cpp_header_includes.append("#include <vector>")
-        if any("size_t" in stmt or "std::vector" in stmt for stmt in cpp_lines):
-            cpp_header_includes.append("#include <cstddef>")
-        if self.catch_exceptions:
-            cpp_header_includes.append("#include <exception>")
-        include_path = self.header_path or _cshim_string_path(header.path)
-        if include_path:
-            cpp_header_includes.append(f'#include "{include_path}"')
-
-        cpp_code = "\n".join(
-            [
-                f"// Implementation for {pkg} C-ABI shim",
-                *cpp_header_includes,
-                "",
-                *cpp_lines,
-            ]
-        )
-        if not cpp_code.endswith("\n"):
-            cpp_code += "\n"
-
-        if test_type != "none":
-            cmake = textwrap.dedent(f"""\
-                cmake_minimum_required(VERSION 3.15)
-                project({pkg}_cshim C CXX)
-
-                set(CMAKE_CXX_STANDARD 17)
-                set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-                add_library({pkg}_cshim SHARED
-                    src/{pkg}_cshim.cpp
-                )
-
-                target_include_directories({pkg}_cshim PUBLIC
-                    include
-                )
-
-                enable_testing()
-                add_executable(test_{pkg}_cshim tests/test_cshim.c)
-                target_link_libraries(test_{pkg}_cshim PRIVATE {pkg}_cshim ${{CMAKE_DL_LIBS}})
-                add_test(NAME test_{pkg}_cshim COMMAND test_{pkg}_cshim)
-            """)
-        else:
-            cmake = textwrap.dedent(f"""\
-                cmake_minimum_required(VERSION 3.15)
-                project({pkg}_cshim C CXX)
-
-                set(CMAKE_CXX_STANDARD 17)
-                set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-                add_library({pkg}_cshim SHARED
-                    src/{pkg}_cshim.cpp
-                )
-
-                target_include_directories({pkg}_cshim PUBLIC
-                    include
-                )
-            """)
-
-        files = [
-            OutputFile(path="CMakeLists.txt", content=cmake),
-            OutputFile(path=f"include/{pkg}_cshim.h", content=header_content + "\n"),
-            OutputFile(path=f"src/{pkg}_cshim.cpp", content=cpp_code),
-        ]
-        if test_type != "none":
-            checks = (
-                "\n".join(
-                    f'    assert(resolve_symbol("{fn}") != NULL && "Entry point \'{fn}\' missing from native library");'
-                    for fn in fn_names[:10]
-                )
-                if fn_names
-                else '    printf("Shim header included successfully\\n");'
-            )
-            test_c = render_block_template(
-                f"""\
-                #include <stdio.h>
-                #include <stdlib.h>
-                #include <assert.h>
-                #include "{pkg}_cshim.h"
-
-                #ifdef _WIN32
-                #include <windows.h>
-                static void* resolve_symbol(const char* name) {{
-                    HMODULE mod = GetModuleHandleA("{pkg}_cshim.dll");
-                    if (!mod) mod = GetModuleHandleA(NULL);
-                    return mod ? (void*)GetProcAddress(mod, name) : NULL;
-                }}
-                #else
-                #include <dlfcn.h>
-                static void* resolve_symbol(const char* name) {{
-                    void* handle = dlopen(NULL, RTLD_NOW);
-                    if (!handle) return NULL;
-                    return dlsym(handle, name);
-                }}
-                #endif
-
-                int main(void) {{
-                    printf("Testing {pkg} C-ABI shim symbol resolution...\\n");
-                {DEDENT_BLOCK}
-                    return 0;
-                }}
-            """,
-                checks,
-            )
-            files.append(OutputFile(path="tests/test_cshim.c", content=test_c))
-
-        return ProjectLayout(files=files)
 
 
 def write_cshim(
