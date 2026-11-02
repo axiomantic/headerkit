@@ -104,6 +104,9 @@ class c_interop_string(c_char_p):
     @staticmethod
     def to_python_string(x, *args):
         return x.value
+from headerkit._clang import _NEEDS_INTEROP_STRING_PATCH, _compat_c_interop_string
+if _NEEDS_INTEROP_STRING_PATCH:
+    c_interop_string = _compat_c_interop_string
 
 
 def b(x):
@@ -1442,7 +1445,7 @@ class Cursor(Structure):
         return cursor
 
     def __eq__(self, other):
-        return conf.lib.clang_equalCursors(self, other)
+        return conf.lib.clang_equalCursors(Cursor.from_buffer_copy(self), Cursor.from_buffer_copy(other))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -1944,7 +1947,7 @@ class Cursor(Structure):
             assert child != conf.lib.clang_getNullCursor()
 
             # Create reference to TU so it isn't GC'd before Cursor.
-            child._tu = self._tu
+            child = Cursor.from_buffer_copy(child); child._tu = self._tu
             children.append(child)
             return 1  # continue
 
@@ -2536,7 +2539,7 @@ class Type(Structure):
             assert field != conf.lib.clang_getNullCursor()
 
             # Create reference to TU so it isn't GC'd before Cursor.
-            field._tu = self._tu
+            field = Cursor.from_buffer_copy(field); field._tu = self._tu
             fields.append(field)
             return 1  # continue
 
@@ -3049,8 +3052,8 @@ class TranslationUnit(ClangObject):
 
         def visitor(fobj, lptr, depth, includes):
             if depth > 0:
-                loc = lptr.contents
-                includes.append(FileInclusion(loc.file, File(fobj), loc, depth))
+                loc = SourceLocation.from_buffer_copy(lptr.contents)
+                includes.append(FileInclusion(loc.file, File(c_object_p.from_buffer_copy(fobj)), loc, depth))
 
         # Automatically adapt CIndex/ctype pointers to python objects
         includes = []

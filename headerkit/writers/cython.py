@@ -1386,7 +1386,7 @@ class PxdWriter:
                 method_line = f'{return_type} {alias} "{method.name}"({params_str})'
                 lines.append(f"{self.INDENT}{method_line}")
             else:
-                method_lines = self._write_function(method)
+                method_lines = self._write_function(method, is_method=True)
                 for line in method_lines:
                     lines.append(f"{self.INDENT}{line}")
 
@@ -1522,16 +1522,13 @@ class PxdWriter:
             if fld.bit_width is not None:
                 bit_comment = f"  # bitfield: {fld.bit_width} bit{'' if fld.bit_width == 1 else 's'}"
 
-            if isinstance(fld.type, FunctionPointer):
-                if self._is_nested_func_ptr(fld.type):
+            unwrapped_fp = self._unwrap_func_ptr(fld.type)
+            if unwrapped_fp is not None:
+                fp, fp_stars = unwrapped_fp
+                if self._is_nested_func_ptr(fp):
                     lines.append(f"{self.INDENT}void* {field_name}{bit_comment}")
                 else:
-                    lines.append(f"{self.INDENT}{self._format_func_ptr(fld.type, field_name)}{bit_comment}")
-            elif isinstance(fld.type, Pointer) and isinstance(fld.type.pointee, FunctionPointer):
-                if self._is_nested_func_ptr(fld.type.pointee):
-                    lines.append(f"{self.INDENT}void* {field_name}{bit_comment}")
-                else:
-                    lines.append(f"{self.INDENT}{self._format_func_ptr(fld.type.pointee, field_name)}{bit_comment}")
+                    lines.append(f"{self.INDENT}{self._format_func_ptr(fp, field_name, fp_stars)}{bit_comment}")
             elif isinstance(fld.type, Array):
                 field_type = self._format_type(fld.type)
                 dims = self._format_array_dims(fld.type)
@@ -1671,7 +1668,7 @@ class PxdWriter:
     # Function
     # -----------------------------------------------------------------
 
-    def _write_function(self, func: Function) -> list[str]:
+    def _write_function(self, func: Function, *, is_method: bool = False) -> list[str]:
         """Write a function declaration.
 
         A signature carrying a dependent name that Cython cannot express is
@@ -1681,7 +1678,7 @@ class PxdWriter:
         if func.access in ("private", "protected"):
             return []
         lines: list[str] = []
-        if func.is_static:
+        if func.is_static and (is_method or func.access is not None):
             lines.append("@staticmethod")
 
         outer_template_params = self._current_template_params
@@ -1987,17 +1984,17 @@ class PxdWriter:
 
     def _format_pointer(self, ptr: Pointer) -> str:
         """Format a Pointer type."""
-        if isinstance(ptr.pointee, FunctionPointer):
+        if isinstance(ptr.pointee, FunctionPointer) and not ptr.pointee.is_pointer:
             return self._format_func_ptr_as_ptr(ptr.pointee, ptr.qualifiers)
 
-        unwrapped = self._unwrap_func_ptr(ptr.pointee)
+        unwrapped = self._unwrap_func_ptr(ptr)
         if unwrapped is not None:
-            fp, inner_stars = unwrapped
+            fp, total_stars = unwrapped
             return_type = self._format_type(fp.return_type)
             params = self._format_params(fp.parameters, fp.is_variadic)
             if not params:
                 params = "void"
-            result = f"{return_type} ({'*' * (inner_stars + 1)})({params})"
+            result = f"{return_type} ({'*' * total_stars})({params})"
             if ptr.qualifiers:
                 quals = " ".join(ptr.qualifiers)
                 result = f"{result} {quals}"
@@ -2038,9 +2035,10 @@ class PxdWriter:
     def _unwrap_func_ptr(typ: TypeExpr) -> tuple[FunctionPointer, int] | None:
         """Unwrap a pointer chain that bottoms out in a function pointer.
 
-        A bare :class:`FunctionPointer` and a ``Pointer`` wrapping one both mean
-        a single-star declarator, so the star count is the pointer depth floored
-        at one.
+        A ``FunctionPointer(is_pointer=True)`` and a ``Pointer`` wrapping a
+        ``FunctionPointer(is_pointer=False)`` both mean a single-star declarator,
+        whereas ``Pointer(FunctionPointer(is_pointer=True))`` means a two-star
+        declarator (``void (**cb)(int)``).
 
         :returns: The function pointer and the number of stars its declarator
             needs, or ``None`` if ``typ`` is not a function pointer.
@@ -2051,7 +2049,8 @@ class PxdWriter:
             stars += 1
             current = current.pointee
         if isinstance(current, FunctionPointer):
-            return current, max(stars, 1)
+            base_stars = 1 if current.is_pointer else 0
+            return current, max(stars + base_stars, 1)
         return None
 
     def _format_func_ptr(self, fp: FunctionPointer, name: str | None = None, stars: int = 1) -> str:
@@ -2059,7 +2058,11 @@ class PxdWriter:
         return_type = self._format_type(fp.return_type)
         params = self._format_params(fp.parameters, fp.is_variadic)
         declarator = "*" * stars + (name or "")
-        return f"{return_type} ({declarator})({params})"
+        result = f"{return_type} ({declarator})({params})"
+        if name is None and fp.qualifiers:
+            quals = " ".join(fp.qualifiers)
+            result = f"{result} {quals}"
+        return result
 
     def _format_func_ptr_as_ptr(self, fp: FunctionPointer, ptr_quals: list[str]) -> str:
         """Format a pointer to function pointer."""

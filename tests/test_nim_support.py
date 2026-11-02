@@ -89,14 +89,12 @@ class TestTreeSitterNimHeaderSupport:
             ),
             Typedef(
                 name="CompareCb",
-                underlying_type=Pointer(
-                    FunctionPointer(
-                        return_type=c_int,
-                        parameters=[
-                            Parameter(name="a_p0", type=c_int),
-                            Parameter(name="b_p1", type=c_int),
-                        ],
-                    )
+                underlying_type=FunctionPointer(
+                    return_type=c_int,
+                    parameters=[
+                        Parameter(name="a_p0", type=c_int),
+                        Parameter(name="b_p1", type=c_int),
+                    ],
                 ),
                 location=loc(6, 15),
             ),

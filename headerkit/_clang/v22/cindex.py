@@ -157,6 +157,9 @@ class c_interop_string(c_char_p):
     @staticmethod
     def to_python_string(x: c_interop_string) -> str | None:
         return x.value
+from headerkit._clang import _NEEDS_INTEROP_STRING_PATCH, _compat_c_interop_string
+if _NEEDS_INTEROP_STRING_PATCH:
+    c_interop_string = _compat_c_interop_string
 
 
 def b(x: str | bytes) -> bytes:
@@ -1651,7 +1654,7 @@ class Cursor(Structure):
     # This function is not null-guarded because it is used in cursor_null_guard itself
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Cursor) and bool(
-            conf.lib.clang_equalCursors(self, other)
+            conf.lib.clang_equalCursors(Cursor.from_buffer_copy(self), Cursor.from_buffer_copy(other))
         )
 
     # Not null-guarded for consistency with __eq__
@@ -2283,7 +2286,7 @@ class Cursor(Structure):
             assert not child.is_null()
 
             # Create reference to TU so it isn't GC'd before Cursor.
-            child._tu = self._tu
+            child = Cursor.from_buffer_copy(child); child._tu = self._tu
             children.append(child)
             return 1  # continue
 
@@ -2933,7 +2936,7 @@ class Type(Structure):
             assert not field.is_null()
 
             # Create reference to TU so it isn't GC'd before Cursor.
-            field._tu = self._tu
+            field = Cursor.from_buffer_copy(field); field._tu = self._tu
             fields.append(field)
             return 1  # continue
 
@@ -2948,7 +2951,7 @@ class Type(Structure):
             assert not base.is_null()
 
             # Create reference to TU so it isn't GC'd before Cursor.
-            base._tu = self._tu
+            base = Cursor.from_buffer_copy(base); base._tu = self._tu
             bases.append(base)
             return 1  # continue
 
@@ -2963,7 +2966,7 @@ class Type(Structure):
             assert not method.is_null()
 
             # Create reference to TU so it isn't GC'd before Cursor.
-            method._tu = self._tu
+            method = Cursor.from_buffer_copy(method); method._tu = self._tu
             methods.append(method)
             return 1  # continue
 
@@ -3489,8 +3492,8 @@ class TranslationUnit(ClangObject):
 
         def visitor(fobj, lptr, depth, includes):
             if depth > 0:
-                loc = lptr.contents
-                includes.append(FileInclusion(loc.file, File(fobj), loc, depth))
+                loc = SourceLocation.from_buffer_copy(lptr.contents)
+                includes.append(FileInclusion(loc.file, File(c_object_p.from_buffer_copy(fobj)), loc, depth))
 
         # Automatically adapt CIndex/ctype pointers to python objects
         includes = []

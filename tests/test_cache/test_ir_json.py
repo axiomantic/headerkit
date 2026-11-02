@@ -496,8 +496,14 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
         exactly how five of them stayed broken.
         """
         loc = SourceLocation(file="h.h", line=3, column=9)
-        inner = Struct("Inner", [Field("q", CType("int"))])
-        method = Function("m", CType("void"), [Parameter("p", CType("int"))], location=loc)
+        inner = Struct("Inner", [Field("q", CType("int"), type_overrides={"nim": "cint"})])
+        method = Function(
+            "m",
+            CType("void"),
+            [Parameter("p", CType("int"), type_overrides={"cffi": "int32_t"})],
+            type_overrides={"cython": "void"},
+            location=loc,
+        )
         return Header(
             "h.h",
             [
@@ -512,7 +518,12 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     is_abstract=True,
                     is_deprecated=True,
                     fields=[
-                        Field("a", CType("const unsigned int", qualifiers=["const"], is_elaborated=True), bit_width=4),
+                        Field(
+                            "a",
+                            CType("const unsigned int", qualifiers=["const"], is_elaborated=True),
+                            bit_width=4,
+                            type_overrides={"nim": " cuint"},
+                        ),
                         Field("", CType("unsigned int"), bit_width=3, is_padding=True),
                         Field("st", CType("int"), is_static=True, access="private"),
                         Field("an", CType("int"), anonymous_struct=inner, is_anonymous_transparent=True),
@@ -539,6 +550,36 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     is_typedef=True,
                     namespace="ns",
                     cpp_name="ns::E",
+                    location=loc,
+                ),
+                Typedef(
+                    "fn_t",
+                    FunctionPointer(
+                        CType("int"),
+                        [Parameter("x", CType("int"), type_overrides={"nim": "cint"})],
+                        is_variadic=True,
+                        calling_convention="stdcall",
+                        qualifiers=["const"],
+                        is_pointer=False,
+                    ),
+                    type_overrides={"cffi": "int(*)(int, ...)"},
+                    location=loc,
+                ),
+                Variable(
+                    "g_val",
+                    CType("int"),
+                    namespace="ns",
+                    is_deprecated=True,
+                    type_overrides={"nim": "cint"},
+                    location=loc,
+                ),
+                Constant(
+                    "EXPR_MACRO",
+                    None,
+                    type=CType("int"),
+                    is_macro=True,
+                    is_macro_expr=True,
+                    raw_expression="(FOO + 1)",
                     location=loc,
                 ),
             ],

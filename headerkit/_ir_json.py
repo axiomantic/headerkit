@@ -97,6 +97,8 @@ def _dict_to_function_pointer(d: dict[str, Any]) -> FunctionPointer:
         parameters=[_dict_to_parameter(p) for p in d.get("parameters", [])],
         is_variadic=d.get("is_variadic", False),
         calling_convention=d.get("calling_convention"),
+        qualifiers=d.get("qualifiers", _default(FunctionPointer, "qualifiers")),
+        is_pointer=d.get("is_pointer", _default(FunctionPointer, "is_pointer")),
     )
 
 
@@ -130,6 +132,7 @@ def _dict_to_parameter(d: dict[str, Any]) -> Parameter:
         name=d.get("name"),
         type=_dict_to_type(d["type"]),
         default_value=d.get("default_value"),
+        type_overrides=d.get("type_overrides", _default(Parameter, "type_overrides")),
     )
 
 
@@ -151,6 +154,7 @@ def _dict_to_field(d: dict[str, Any]) -> Field:
         is_anonymous_transparent=d.get("is_anonymous_transparent", _default(Field, "is_anonymous_transparent")),
         access=d.get("access", _default(Field, "access")),
         is_static=d.get("is_static", _default(Field, "is_static")),
+        type_overrides=d.get("type_overrides", _default(Field, "type_overrides")),
     )
 
 
@@ -240,6 +244,7 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         body=d.get("body"),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
+        type_overrides=d.get("type_overrides", _default(Function, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )
@@ -252,6 +257,7 @@ def _dict_to_typedef(d: dict[str, Any]) -> Typedef:
         namespace=d.get("namespace"),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
+        type_overrides=d.get("type_overrides", _default(Typedef, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )
@@ -265,6 +271,7 @@ def _dict_to_variable(d: dict[str, Any]) -> Variable:
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),
+        type_overrides=d.get("type_overrides", _default(Variable, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )
@@ -278,6 +285,7 @@ def _dict_to_constant(d: dict[str, Any]) -> Constant:
         raw_expression=d.get("raw_expression"),
         type=_dict_to_ctype(d["type"]) if "type" in d else None,
         is_macro=d.get("is_macro", False),
+        is_macro_expr=d.get("is_macro_expr", _default(Constant, "is_macro_expr")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )

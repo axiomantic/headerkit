@@ -1312,11 +1312,12 @@ def _is_function_like_macro(tokens: list[Any]) -> bool:
 
 def _same_macro_value(a: Constant, b: Constant) -> bool:
     """Report whether two macro Constants carry the same value and type."""
-    return (a.value, a.evaluated_value, a.raw_expression, a.type) == (
+    return (a.value, a.evaluated_value, a.raw_expression, a.type, a.is_macro_expr) == (
         b.value,
         b.evaluated_value,
         b.raw_expression,
         b.type,
+        b.is_macro_expr,
     )
 
 
@@ -1974,13 +1975,15 @@ class ClangASTConverter:
             column=loc.column,
         )
 
+        resolved_val = value if value is not None else evaluated_value
         return Constant(
             name=name,
-            value=value if value is not None else evaluated_value,
+            value=resolved_val,
             evaluated_value=evaluated_value,
             raw_expression=raw_expr,
             type=macro_type,
             is_macro=True,
+            is_macro_expr=resolved_val is None,
             location=location,
         )
 
@@ -3282,6 +3285,7 @@ class ClangASTConverter:
                 )
 
         vtable_entries = [m for m in methods if m.is_virtual or m.is_pure_virtual]
+        attrs, is_deprecated = self._get_attributes(cursor)
 
         struct = Struct(
             name=name,
@@ -3301,6 +3305,8 @@ class ClangASTConverter:
             destructor=destructor,
             conversions=conversions,
             vtable_entries=vtable_entries,
+            attributes=attrs,
+            is_deprecated=is_deprecated,
             location=self._get_location(cursor),
         )
         if emit:
@@ -3519,6 +3525,8 @@ class ClangASTConverter:
 
         is_noexcept = self._is_noexcept(cursor)
         is_inline, body = self._is_inline_function(cursor)
+        is_static = self._is_static_function(cursor)
+        calling_convention = self._extract_calling_convention(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
         parsed_tpl_params = self._extract_template_parameters(cursor)
@@ -3533,9 +3541,11 @@ class ClangASTConverter:
             return_type=return_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            calling_convention=calling_convention,
             namespace=self._current_namespace,
             template_params=template_params,
             template_parameters=template_parameters,
+            is_static=is_static,
             is_noexcept=is_noexcept,
             is_inline=is_inline,
             body=body,
@@ -3623,6 +3633,7 @@ class ClangASTConverter:
 
         is_noexcept = self._is_noexcept(cursor)
         is_inline, body = self._is_inline_function(cursor)
+        calling_convention = self._extract_calling_convention(cursor)
         access = self._get_access_specifier(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
@@ -3638,6 +3649,7 @@ class ClangASTConverter:
             return_type=return_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            calling_convention=calling_convention,
             template_params=template_params,
             template_parameters=template_parameters,
             is_static=is_static,
@@ -3965,7 +3977,7 @@ class ClangASTConverter:
         declaring cursor does carry them, as PARM_DECL children.
         """
         func_ptr = type_expr
-        if isinstance(func_ptr, Pointer):
+        while isinstance(func_ptr, Pointer):
             func_ptr = func_ptr.pointee
         if not isinstance(func_ptr, FunctionPointer):
             return
@@ -4109,10 +4121,7 @@ class ClangASTConverter:
             # ``()`` functions, which are legal C and must not fall through to
             # the opaque basic-type tail.
             if pointee.kind in (TypeKind.FUNCTIONPROTO, TypeKind.FUNCTIONNOPROTO):
-                func_ptr = self._convert_function_type(pointee)
-                if func_ptr:
-                    return Pointer(pointee=func_ptr, qualifiers=ptr_quals)
-                return None
+                return self._convert_function_type(pointee, qualifiers=ptr_quals, is_pointer=True)
 
             pointee_type = self._convert_type(pointee)
             if pointee_type:
@@ -4143,9 +4152,9 @@ class ClangASTConverter:
             # Return as pointer since Cython can't represent dependent array sizes
             return Pointer(pointee=element_type)
 
-        # Handle function types (for function pointer types)
-        if kind == TypeKind.FUNCTIONPROTO:
-            return self._convert_function_type(clang_type)
+        # Handle function types (for non-pointer function typedefs and function pointer types)
+        if kind in (TypeKind.FUNCTIONPROTO, TypeKind.FUNCTIONNOPROTO):
+            return self._convert_function_type(clang_type, is_pointer=False)
 
         # Handle elaborated types (struct X, enum Y, etc.)
         if kind == TypeKind.ELABORATED:
@@ -4252,7 +4261,58 @@ class ClangASTConverter:
 
         return CType(name=base_type, qualifiers=qualifiers)
 
-    def _convert_function_type(self, clang_type: Any) -> FunctionPointer | None:
+    @staticmethod
+    def _extract_calling_convention_from_spelling(spelling: str) -> str | None:
+        """Extract calling convention from a type or token spelling."""
+        if not spelling:
+            return None
+        conv_patterns = (
+            ("stdcall", r"(?:\b__stdcall\b|__attribute__\s*\(\(\s*(?:__)?stdcall(?:__)?\s*\)\))"),
+            ("fastcall", r"(?:\b__fastcall\b|__attribute__\s*\(\(\s*(?:__)?fastcall(?:__)?\s*\)\))"),
+            ("cdecl", r"(?:\b__cdecl\b|__attribute__\s*\(\(\s*(?:__)?cdecl(?:__)?\s*\)\))"),
+            ("thiscall", r"(?:\b__thiscall\b|__attribute__\s*\(\(\s*(?:__)?thiscall(?:__)?\s*\)\))"),
+            ("vectorcall", r"(?:\b__vectorcall\b|__attribute__\s*\(\(\s*(?:__)?vectorcall(?:__)?\s*\)\))"),
+        )
+        for conv_name, pattern in conv_patterns:
+            if re.search(pattern, spelling):
+                return conv_name
+        return None
+
+    def _extract_calling_convention(self, cursor: Any) -> str | None:
+        """Extract calling convention from a function cursor or its type."""
+        with contextlib.suppress(Exception):
+            conv = self._extract_calling_convention_from_spelling(cursor.type.spelling)
+            if conv:
+                return conv
+        with contextlib.suppress(Exception):
+            toks = " ".join(t.spelling for t in cursor.get_tokens())
+            conv = self._extract_calling_convention_from_spelling(toks)
+            if conv:
+                return conv
+        return None
+
+    @staticmethod
+    def _is_static_function(cursor: Any) -> bool:
+        """Check whether a free function cursor has ``static`` storage class."""
+        with contextlib.suppress(Exception):
+            sc = getattr(cursor, "storage_class", None)
+            if sc is not None and str(sc).endswith("STATIC"):
+                return True
+        with contextlib.suppress(Exception):
+            for tok in cursor.get_tokens():
+                if tok.spelling == "(":
+                    break
+                if tok.spelling == "static":
+                    return True
+        return False
+
+    def _convert_function_type(
+        self,
+        clang_type: Any,
+        *,
+        qualifiers: list[str] | None = None,
+        is_pointer: bool = True,
+    ) -> FunctionPointer | None:
         """Convert a function type to FunctionPointer."""
         result_type = self._convert_type(clang_type.get_result())
         if not result_type:
@@ -4276,10 +4336,15 @@ class ClangASTConverter:
                 # recovered from the declaring cursor by _apply_param_names().
                 parameters.append(Parameter(name=None, type=param_type))
 
+        calling_convention = self._extract_calling_convention_from_spelling(getattr(clang_type, "spelling", "") or "")
+
         return FunctionPointer(
             return_type=result_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            calling_convention=calling_convention,
+            qualifiers=list(qualifiers) if qualifiers else [],
+            is_pointer=is_pointer,
         )
 
     def _get_location(self, cursor: Any) -> SourceLocation | None:
@@ -4426,6 +4491,14 @@ class LibclangBackend:
     def supports_cpp(self) -> bool:
         return True
 
+    @property
+    def follows_includes(self) -> bool:
+        return True
+
+    @property
+    def supports_compiler_args(self) -> bool:
+        return True
+
     def is_available(self) -> bool:
         return _configure_libclang()
 
@@ -4539,6 +4612,7 @@ class LibclangBackend:
             return main_header
 
         all_declarations: list[Declaration] = list(main_header.declarations)
+        merged_included_headers: set[str] = set(main_header.included_headers)
         main_dir = os.path.dirname(os.path.abspath(main_path))
 
         for include_path in sorted(main_header.included_headers):
@@ -4556,6 +4630,8 @@ class LibclangBackend:
             if abs_path is None:
                 # Could not resolve - skip
                 continue
+
+            merged_included_headers.add(abs_path)
 
             # Check if already visited (circular include)
             if abs_path in self._visited:
@@ -4596,8 +4672,9 @@ class LibclangBackend:
                     denylist_paths,
                 )
 
-                # Add declarations from sub-header
+                # Add declarations and transitive included headers from sub-header
                 all_declarations.extend(sub_header.declarations)
+                merged_included_headers.update(sub_header.included_headers)
 
             except (OSError, RuntimeError, ValueError):
                 import logging
@@ -4612,7 +4689,7 @@ class LibclangBackend:
         return Header(
             path=main_header.path,
             declarations=unique_declarations,
-            included_headers=main_header.included_headers,
+            included_headers=merged_included_headers,
         )
 
     def parse(

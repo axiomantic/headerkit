@@ -44,7 +44,7 @@ from headerkit._rename import rename_cache_fingerprint
 from headerkit._resolve import check_output_collisions, resolve_headers, resolve_output_path
 from headerkit._slug import build_slug, load_index, lookup_slug
 from headerkit._target import resolve_target
-from headerkit.backends import LibclangUnavailableError, get_backend, is_backend_available
+from headerkit.backends import LibclangUnavailableError, get_backend, is_backend_available, resolve_backend
 from headerkit.hooks import HookDispatcher, PipelineContext, Priority
 from headerkit.install_libclang import auto_install
 from headerkit.ir import Header, InputSpec, SourceUnit
@@ -187,7 +187,7 @@ def _writer_default_output_pattern(writer: Any, writer_name: str) -> str:
     return "{dir}/{stem}" + ext
 
 
-def _get_ir(
+def _try_ir_cache_lookup(
     *,
     backend_name: str,
     header_path: Path,
@@ -198,12 +198,9 @@ def _get_ir(
     use_ir_cache: bool,
     project_prefixes: tuple[str, ...] | None,
     target: str,
-    context: PipelineContext | None = None,
-) -> tuple[SourceUnit, str, str, bool]:
-    """Resolve IR from cache or by parsing with the backend.
-
-    :returns: (header, ir_cache_key, ir_slug, ir_from_cache)
-    """
+    input_spec: InputSpec | None = None,
+) -> tuple[SourceUnit | None, str, str]:
+    """Compute the IR cache key/slug and attempt a Layer-1 IR cache read before touching any backend."""
     ir_cache_key = compute_ir_cache_key(
         backend_name=backend_name,
         header_path=header_path,
@@ -211,6 +208,8 @@ def _get_ir(
         parsed_args=parsed_args,
         code=code,
         target=target,
+        input_spec=input_spec,
+        project_prefixes=project_prefixes or (),
     )
 
     ir_slug = build_slug(
@@ -223,8 +222,6 @@ def _get_ir(
     )
 
     header: SourceUnit | None = None
-    ir_from_cache = False
-
     if use_ir_cache:
         assert resolved_cache_dir is not None
         ir_index_path = resolved_cache_dir / "ir" / "index.json"
@@ -233,8 +230,45 @@ def _get_ir(
             existing_slug = lookup_slug(ir_index, ir_cache_key)
             if existing_slug is not None:
                 header = read_ir_entry(cache_dir=resolved_cache_dir, slug=existing_slug)
-                if header is not None:
-                    ir_from_cache = True
+
+    return header, ir_cache_key, ir_slug
+
+
+def _get_ir(
+    *,
+    backend_name: str,
+    header_path: Path,
+    project_root: Path,
+    parsed_args: ParsedArgs,
+    code: str | None,
+    resolved_cache_dir: Path | None,
+    use_ir_cache: bool,
+    project_prefixes: tuple[str, ...] | None,
+    target: str,
+    context: PipelineContext | None = None,
+    input_spec: InputSpec | None = None,
+    prechecked_ir: tuple[SourceUnit | None, str, str] | None = None,
+) -> tuple[SourceUnit, str, str, bool]:
+    """Resolve IR from cache or by parsing with the backend.
+
+    :returns: (header, ir_cache_key, ir_slug, ir_from_cache)
+    """
+    if prechecked_ir is not None:
+        header, ir_cache_key, ir_slug = prechecked_ir
+    else:
+        header, ir_cache_key, ir_slug = _try_ir_cache_lookup(
+            backend_name=backend_name,
+            header_path=header_path,
+            project_root=project_root,
+            parsed_args=parsed_args,
+            code=code,
+            resolved_cache_dir=resolved_cache_dir,
+            use_ir_cache=use_ir_cache,
+            project_prefixes=project_prefixes,
+            target=target,
+            input_spec=input_spec,
+        )
+    ir_from_cache = header is not None
 
     if header is None:
         parse_code = code if code is not None else header_path.read_text(encoding="utf-8")
@@ -258,12 +292,20 @@ def _get_ir(
 
         if header is None:
             backend = get_backend(backend_name)
+            parse_kwargs: dict[str, Any] = {"project_prefixes": project_prefixes}
+            if input_spec is not None:
+                if not input_spec.recursive_includes:
+                    parse_kwargs["recursive_includes"] = False
+                if input_spec.max_depth is not None:
+                    parse_kwargs["max_depth"] = input_spec.max_depth
+                if not input_spec.use_default_includes:
+                    parse_kwargs["use_default_includes"] = False
             header = backend.parse(
                 parse_code,
                 str(header_path),
                 [],
                 all_args,
-                project_prefixes=project_prefixes,
+                **parse_kwargs,
             )
 
         if use_ir_cache:
@@ -494,6 +536,8 @@ def _try_output_cache_fallback(
     writer_options: dict[str, object],
     code: str | None,
     target: str,
+    input_spec: InputSpec | None = None,
+    project_prefixes: tuple[str, ...] | None = None,
 ) -> str | None:
     """Try to serve from the output cache without needing a backend.
 
@@ -507,6 +551,8 @@ def _try_output_cache_fallback(
         parsed_args=parsed_args,
         code=code,
         target=target,
+        input_spec=input_spec,
+        project_prefixes=project_prefixes or (),
     )
 
     _writer_inst, output_cache_key, output_ext = _compute_output_cache_info(
@@ -586,6 +632,11 @@ def generate(
             language=language if language is not None else header_path.language,
             classification=classification if classification is not None else header_path.classification,
             content=code if code is not None else header_path.content,
+            headers=header_path.headers,
+            project_prefixes=project_prefixes if project_prefixes is not None else header_path.project_prefixes,
+            recursive_includes=header_path.recursive_includes,
+            max_depth=header_path.max_depth,
+            use_default_includes=header_path.use_default_includes,
         )
     else:
         spec = InputSpec.from_path(
@@ -593,14 +644,19 @@ def generate(
             language=language,
             classification=classification,
             content=code,
+            project_prefixes=project_prefixes or (),
         )
 
+    effective_project_prefixes = project_prefixes if project_prefixes is not None else (spec.project_prefixes or None)
     resolved_path = Path(spec.path)
     code = code if code is not None else spec.content
     if code is None and not resolved_path.exists():
         raise FileNotFoundError(f"Header file not found: {resolved_path}")
 
-    backend_name = backend_name or "libclang"
+    if backend_name is not None and backend_name.strip().lower() == "auto":
+        backend_name = resolve_backend("auto")
+    else:
+        backend_name = backend_name or "libclang"
     writer_name = writer_name or "json"
     writer_options = writer_options or {}
 
@@ -635,6 +691,22 @@ def generate(
         options=writer_options,
     )
 
+    # Check Layer-1 IR cache BEFORE checking is_backend_available("libclang")
+    # so offline builds (32-bit targets, sdist with pre-warmed .headerkit/ir/)
+    # can load cached IR and run transforms/writers without libclang installed.
+    prechecked_ir = _try_ir_cache_lookup(
+        backend_name=backend_name,
+        header_path=resolved_path,
+        project_root=project_root,
+        parsed_args=parsed_args,
+        code=code,
+        resolved_cache_dir=resolved_cache_dir,
+        use_ir_cache=use_ir_cache,
+        project_prefixes=effective_project_prefixes,
+        target=resolved_target,
+        input_spec=spec,
+    )
+
     def _resolve_ir() -> tuple[SourceUnit, str, str, bool]:
         return _get_ir(
             backend_name=backend_name,
@@ -644,15 +716,16 @@ def generate(
             code=code,
             resolved_cache_dir=resolved_cache_dir,
             use_ir_cache=use_ir_cache,
-            project_prefixes=project_prefixes,
+            project_prefixes=effective_project_prefixes,
             target=resolved_target,
             context=ctx,
+            input_spec=spec,
+            prechecked_ir=prechecked_ir,
         )
 
-    # For libclang, check availability before parsing to enable the
-    # output-cache fallback and auto-install flow.  Other backends skip
-    # this check and let parse errors propagate naturally.
-    if backend_name == "libclang" and not is_backend_available(backend_name):
+    # Only check backend availability and output-cache fallback when Layer-1 IR
+    # cache missed (or was disabled) and we actually need to parse the header.
+    if prechecked_ir[0] is None and backend_name == "libclang" and not is_backend_available(backend_name):
         # Library not loadable -- try output cache first (cheaper than install)
         if use_output_cache:
             assert resolved_cache_dir is not None  # guaranteed by use_output_cache
@@ -666,6 +739,8 @@ def generate(
                 writer_options=writer_options,
                 code=code,
                 target=resolved_target,
+                input_spec=spec,
+                project_prefixes=effective_project_prefixes,
             )
             if cached_output is not None:
                 if output_path is not None:

@@ -766,3 +766,47 @@ class TestGenerateStoreDirEnvVar:
         auto_store = project_dir / ".headerkit"
         assert auto_store.exists()
         assert (auto_store / "ir").exists()
+
+
+class TestGenerateLayer1CacheBeforeBackendAvailability:
+    """Verify Layer-1 IR cache hit succeeds even when libclang is unavailable."""
+
+    def test_layer1_ir_cache_hit_without_output_cache_when_libclang_unavailable(
+        self, project_dir: Path, header_file: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        mock_header = Header(
+            str(header_file),
+            [Function("add", CType("int"), [Parameter("a", CType("int")), Parameter("b", CType("int"))])],
+        )
+        mock_backend = MagicMock()
+        mock_backend.parse.return_value = mock_header
+        mock_backend.name = "libclang"
+
+        monkeypatch.setattr("headerkit._generate.get_backend", lambda _name: mock_backend)
+        monkeypatch.setattr("headerkit._generate.is_backend_available", lambda _name: True)
+
+        cache_path = project_dir / ".headerkit"
+
+        # 1. Populate Layer-1 IR cache and Layer-2 output cache
+        output1 = generate(
+            header_path=header_file,
+            writer_name="json",
+            backend_name="libclang",
+            store_dir=cache_path,
+        )
+
+        # 2. Remove Layer-2 output cache, leaving ONLY Layer-1 IR cache
+        shutil.rmtree(cache_path / "output")
+        assert (cache_path / "ir").exists()
+        assert not (cache_path / "output").exists()
+
+        # 3. Make libclang unavailable; Layer-1 IR cache hit must still succeed!
+        _make_backend_unavailable(monkeypatch)
+        output2 = generate(
+            header_path=header_file,
+            writer_name="json",
+            backend_name="libclang",
+            store_dir=cache_path,
+            no_output_cache=True,
+        )
+        assert output2 == output1

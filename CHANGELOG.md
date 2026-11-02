@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `FunctionPointer`: add `qualifiers: list[str]` and `is_pointer: bool = True` fields so 0-star non-pointer function types (`is_pointer=False`), 1-star function pointers (`FunctionPointer(..., is_pointer=True)`), and 2-star pointers to function pointers (`Pointer(FunctionPointer(..., is_pointer=True))`) are distinguished across `libclang` and `tree-sitter` backends, JSON IR round-trips, and writers.
+- `Parameter`, `Field`, `Function`, `Typedef`, and `Variable`: add `type_overrides: dict[str, str]` field (and JSON IR serialization/deserialization) for per-target writer type overrides.
+- `Constant`: add `is_macro_expr: bool = False` field (and JSON IR serialization/deserialization) to mark macro constants whose RHS is an unevaluated expression (`value=None`).
+- `InputSpec`: add `headers`, `project_prefixes`, `recursive_includes`, `max_depth`, and `use_default_includes` fields to `InputSpec` and `InputSpec.from_path`, and hash them into `compute_ir_cache_key` (bumping `_IR_SCHEMA_VERSION` to `"8"`).
+- `ParserBackend` and `headerkit.backends`: add `follows_includes` and `supports_compiler_args` capability properties to `ParserBackend`, `LibclangBackend`, and `TreeSitterBackend`, and add `resolve_backend("auto")` (preferring `"libclang"` when available and falling back to `"tree-sitter"`).
+
+### Fixed
+- Layer-1 IR cache soundness: accumulate transitive `included_headers` across `_parse_recursively` in `LibclangBackend`, record per-file `mtime_ns`, `size`, and `sha256` for all `included_headers` in `.headerkit/ir/<slug>/metadata.json`, and validate them in `read_ir_entry()` so edits or deletions in included sub-headers invalidate cached umbrella IR.
+- Check the Layer-1 IR cache in `generate()` before checking `is_backend_available("libclang")` so pre-populated IR caches work in environments without `libclang` installed.
+- `LibclangBackend`: populate `Function.is_static` on `static` free functions and `calling_convention` on `Function` and `FunctionPointer` nodes.
+- Vendored `headerkit/_clang/v14..v23/cindex.py`: bind `_compat_c_interop_string` before `FUNCTION_LIST` / `functionList` construction when `_NEEDS_INTEROP_STRING_PATCH` is active, copy callback cursor/location/file buffers via `from_buffer_copy` before storing in Python lists, and pass `Cursor.from_buffer_copy` copies to `clang_equalCursors` to prevent in-place `Cursor.data[1]` mutation under PyPy and ARM64 AAPCS64.
+
 ## [0.49.4] - 2026-10-30
 
 ### Added

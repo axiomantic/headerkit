@@ -61,6 +61,7 @@ __all__ = [
     "is_backend_available",
     "list_backends",
     "register_backend",
+    "resolve_backend",
 ]
 
 
@@ -204,13 +205,52 @@ def get_backend_info() -> list[dict[str, str | bool]]:
     return result
 
 
+def resolve_backend(name: str | None = None) -> str:
+    """Resolve a backend name, expanding ``"auto"`` to the best available backend.
+
+    When *name* is ``None``, returns the default backend name (``"libclang"``).
+    When *name* is ``"auto"``, returns ``"libclang"`` if loadable, otherwise
+    ``"tree-sitter"`` if available, otherwise raises :class:`RuntimeError`
+    with an actionable error message.
+
+    :param name: Requested backend name (e.g. ``"auto"``, ``"libclang"``,
+        ``"tree-sitter"``), or ``None`` for the default backend.
+    :returns: Canonical registered backend name.
+    :raises RuntimeError: If ``name == "auto"`` and no backend is available.
+    :raises ValueError: If an explicit backend name is unknown.
+    """
+    _ensure_backends_loaded()
+
+    if name is None:
+        if _DEFAULT_BACKEND is None:
+            raise ValueError("No backends available")
+        return _DEFAULT_BACKEND
+
+    normalized = _normalize_backend_name(name)
+    if normalized == "auto":
+        if is_backend_available("libclang"):
+            return "libclang"
+        if is_backend_available("tree-sitter"):
+            return "tree-sitter"
+        raise RuntimeError(
+            "No C/C++ parser backend is available (tried 'libclang' and 'tree-sitter'). "
+            "Install LLVM/libclang or install tree-sitter support (pip install tree-sitter tree-sitter-c)."
+        )
+
+    if normalized in _BACKEND_REGISTRY:
+        return normalized
+
+    available = ", ".join(list_backends()) or "(none)"
+    raise ValueError(f"Unknown backend: {name!r}. Available: {available}")
+
+
 def get_backend(name: str | None = None) -> ParserBackend:
     """Get a parser backend instance.
 
     Returns a new instance of the requested backend. If no name is provided,
     returns the default backend (libclang).
 
-    :param name: Backend name (e.g., ``"libclang"``),
+    :param name: Backend name (e.g., ``"libclang"``, ``"auto"``),
         or None for the default backend.
     :returns: New instance of the requested backend.
     :raises ValueError: If the requested backend is not available.
@@ -237,7 +277,8 @@ def get_backend(name: str | None = None) -> ParserBackend:
             raise ValueError("No backends available")
         name = _DEFAULT_BACKEND
     else:
-        name = _normalize_backend_name(name)
+        normalized = _normalize_backend_name(name)
+        name = resolve_backend("auto") if normalized == "auto" else normalized
 
     ctx = PipelineContext(backend=name)
     backend_inst = HookDispatcher().first_result("get_backend", context=ctx)

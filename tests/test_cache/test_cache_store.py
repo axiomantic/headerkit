@@ -146,6 +146,50 @@ class TestWriteReadIrEntry:
         result = read_ir_entry(cache_dir=cache_dir, slug="libclang.bad")
         assert result is None
 
+    def test_transitive_included_header_modification_invalidates_ir_cache(self, tmp_path: Path) -> None:
+        """Modifying or deleting a recorded included sub-header forces a Layer-1 cache miss."""
+        cache_dir = tmp_path / ".headerkit"
+        (cache_dir / "ir").mkdir(parents=True)
+
+        umbrella = tmp_path / "umbrella.h"
+        sub_h = tmp_path / "sub.h"
+        umbrella.write_text('#include "sub.h"\n', encoding="utf-8")
+        sub_h.write_text("int sub_fn(int a);\n", encoding="utf-8")
+
+        header = Header(
+            str(umbrella),
+            [Function("sub_fn", CType("int"), [Parameter("a", CType("int"))])],
+            included_headers={str(sub_h)},
+        )
+
+        write_ir_entry(
+            cache_dir=cache_dir,
+            slug="libclang.umbrella",
+            cache_key="abc123",
+            header=header,
+            backend_name="libclang",
+            header_path=str(umbrella),
+            target="x86_64-pc-linux-gnu",
+            defines=[],
+            includes=[str(tmp_path)],
+            other_args=[],
+        )
+
+        # Unmodified sub-header hits the cache
+        assert read_ir_entry(cache_dir=cache_dir, slug="libclang.umbrella") == header
+
+        # Modifying sub.h (same or different size) invalidates the cache entry
+        sub_h.write_text("int sub_fn(int b);\n", encoding="utf-8")
+        assert read_ir_entry(cache_dir=cache_dir, slug="libclang.umbrella") is None
+
+        # Restore original sub.h content -> cache hits again
+        sub_h.write_text("int sub_fn(int a);\n", encoding="utf-8")
+        assert read_ir_entry(cache_dir=cache_dir, slug="libclang.umbrella") == header
+
+        # Deleting sub.h invalidates the cache entry
+        sub_h.unlink()
+        assert read_ir_entry(cache_dir=cache_dir, slug="libclang.umbrella") is None
+
 
 class TestWriteReadOutputEntry:
     """Tests for output cache entry write/read."""

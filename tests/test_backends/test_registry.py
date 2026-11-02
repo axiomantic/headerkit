@@ -9,6 +9,7 @@ from headerkit.backends import (
     is_backend_available,
     list_backends,
     register_backend,
+    resolve_backend,
 )
 from headerkit.ir import Header
 
@@ -36,6 +37,14 @@ class MockBackend:
     def supported_classifications(self) -> set[str]:
         return {"header"}
 
+    @property
+    def follows_includes(self) -> bool:
+        return False
+
+    @property
+    def supports_compiler_args(self) -> bool:
+        return False
+
     def parse(self, code: str, filename: str, **kwargs) -> Header:
         return Header(path=filename, declarations=[])
 
@@ -46,6 +55,7 @@ class TestBackendRegistry:
         import headerkit.backends as b
         from headerkit.hooks import HookRegistry
 
+        b._ensure_backends_loaded()
         self._saved_registry = dict(b._BACKEND_REGISTRY)
         self._saved_default = b._DEFAULT_BACKEND
         self._saved_loaded = b._BACKENDS_LOADED
@@ -294,3 +304,31 @@ class TestBackendRegistry:
 
         backend2 = get_backend("tree_sitter")
         assert backend2.name == "mock"
+
+    def test_resolve_backend_auto_prefers_libclang(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import headerkit.backends as b
+
+        register_backend("libclang", MockBackend, is_default=True)
+        b._BACKENDS_LOADED = True
+        monkeypatch.setattr(b, "is_backend_available", lambda name: name in ("libclang", "tree-sitter"))
+        assert resolve_backend("auto") == "libclang"
+        assert resolve_backend(None) == "libclang"
+
+    def test_resolve_backend_auto_falls_back_to_treesitter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import headerkit.backends as b
+
+        register_backend("tree-sitter", MockBackend)
+        b._BACKENDS_LOADED = True
+        monkeypatch.setattr(b, "is_backend_available", lambda name: name == "tree-sitter")
+        assert resolve_backend("auto") == "tree-sitter"
+        backend = get_backend("auto")
+        assert isinstance(backend, MockBackend)
+
+    def test_resolve_backend_auto_raises_when_none_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Negative control: resolve_backend('auto') raises RuntimeError when no backend is available."""
+        import headerkit.backends as b
+
+        b._BACKENDS_LOADED = True
+        monkeypatch.setattr(b, "is_backend_available", lambda _name: False)
+        with pytest.raises(RuntimeError, match=r"No C/C\+\+ parser backend is available"):
+            resolve_backend("auto")

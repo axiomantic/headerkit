@@ -367,8 +367,16 @@ class _compat_c_interop_string(c_void_p):
             if x == 0:
                 return None
             return ctypes.string_at(x).decode("utf8")
+        if isinstance(x, c_void_p):
+            val_attr = getattr(c_void_p, "value", None)
+            ptr = val_attr.__get__(x) if val_attr is not None and hasattr(val_attr, "__get__") else None
+            if not isinstance(ptr, int) or ptr == 0:
+                return None
+            return ctypes.string_at(ptr).decode("utf8")
         if hasattr(x, "value"):
             v = x.value
+            if v is None:
+                return None
             if isinstance(v, bytes):
                 return v.decode("utf8")
             if isinstance(v, str):

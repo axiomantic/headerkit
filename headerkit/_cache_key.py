@@ -13,6 +13,10 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from headerkit.ir import InputSpec
 
 # Bump when IR dataclass structure changes in a way that invalidates
 # cached JSON. This is NOT the headerkit version.
@@ -27,7 +31,7 @@ from pathlib import Path
 # ``test_cache_key.py`` fingerprints the IR dataclasses and fails when this
 # constant has not moved with them, so the reminder is a check rather than a
 # comment nobody reads.
-_IR_SCHEMA_VERSION = "7"
+_IR_SCHEMA_VERSION = "8"
 
 
 @dataclass
@@ -115,6 +119,12 @@ def compute_ir_cache_key(
     project_root: Path,
     parsed_args: ParsedArgs,
     code: str | None = None,
+    input_spec: InputSpec | None = None,
+    headers: tuple[Path, ...] = (),
+    project_prefixes: tuple[str, ...] = (),
+    recursive_includes: bool = True,
+    max_depth: int | None = None,
+    use_default_includes: bool = True,
 ) -> str:
     """Compute SHA-256 cache key for IR layer.
 
@@ -124,8 +134,26 @@ def compute_ir_cache_key(
     :param project_root: Project root directory (contains .headerkit/ or is git root).
     :param parsed_args: Structured representation of extra_args.
     :param code: Raw code string. If provided, used instead of reading header_path.
+    :param input_spec: Optional InputSpec carrying traversal parameters.
+    :param headers: Additional header paths in the parse unit.
+    :param project_prefixes: Project prefix directories for non-system classification.
+    :param recursive_includes: Whether recursive include traversal is enabled.
+    :param max_depth: Maximum recursion depth for include traversal.
+    :param use_default_includes: Whether system default include dirs are enabled.
     :returns: Hex digest string.
     """
+    if input_spec is not None:
+        if not headers and input_spec.headers:
+            headers = input_spec.headers
+        if not project_prefixes and input_spec.project_prefixes:
+            project_prefixes = input_spec.project_prefixes
+        if recursive_includes is True and not input_spec.recursive_includes:
+            recursive_includes = input_spec.recursive_includes
+        if max_depth is None and input_spec.max_depth is not None:
+            max_depth = input_spec.max_depth
+        if use_default_includes is True and not input_spec.use_default_includes:
+            use_default_includes = input_spec.use_default_includes
+
     hasher = hashlib.sha256()
 
     hasher.update(f"ir-schema:{_IR_SCHEMA_VERSION}\0".encode())
@@ -138,6 +166,21 @@ def compute_ir_cache_key(
     hasher.update(f"header:{rel_path}\0".encode())
     hasher.update(content.encode("utf-8"))
     hasher.update(b"\0")
+
+    for extra_hdr in headers:
+        extra_p = Path(extra_hdr)
+        extra_rel = _relative_header_path(extra_p, project_root)
+        extra_content = extra_p.read_text(encoding="utf-8") if extra_p.exists() else ""
+        hasher.update(f"extra-header:{extra_rel}\0".encode())
+        hasher.update(extra_content.encode("utf-8"))
+        hasher.update(b"\0")
+
+    for prefix in sorted(project_prefixes):
+        hasher.update(f"project-prefix:{prefix}\0".encode())
+
+    hasher.update(f"recursive-includes:{recursive_includes}\0".encode())
+    hasher.update(f"max-depth:{max_depth}\0".encode())
+    hasher.update(f"use-default-includes:{use_default_includes}\0".encode())
 
     for d in sorted(parsed_args.defines):
         hasher.update(f"define:{d}\0".encode())

@@ -492,6 +492,14 @@ class TreeSitterBackend:
     def supports_cpp(self) -> bool:
         return _HAS_TREESITTER_CPP
 
+    @property
+    def follows_includes(self) -> bool:
+        return False
+
+    @property
+    def supports_compiler_args(self) -> bool:
+        return False
+
     def __init__(self) -> None:
         self._defined_records: set[str] = set()
         self._forward_records: dict[str, Struct] = {}
@@ -1338,14 +1346,25 @@ class TreeSitterBackend:
                 return self._unwrap_declarator(decl, curr_type)
             return None, curr_type, node
 
-        if node.type == "parenthesized_declarator":
+        if node.type in ("parenthesized_declarator", "abstract_parenthesized_declarator"):
             for c in node.children:
                 if c.type not in ("(", ")"):
                     return self._unwrap_declarator(c, curr_type)
             return None, curr_type, node
 
         if node.type in ("pointer_declarator", "abstract_pointer_declarator"):
-            ptr_type: TypeExpr = Pointer(curr_type, qualifiers=_pointer_qualifiers(node))
+            quals = _pointer_qualifiers(node)
+            if isinstance(curr_type, FunctionPointer) and not curr_type.is_pointer:
+                ptr_type: TypeExpr = FunctionPointer(
+                    return_type=curr_type.return_type,
+                    parameters=curr_type.parameters,
+                    is_variadic=curr_type.is_variadic,
+                    calling_convention=curr_type.calling_convention,
+                    qualifiers=quals,
+                    is_pointer=True,
+                )
+            else:
+                ptr_type = Pointer(curr_type, qualifiers=quals)
             inner_decl = node.child_by_field_name("declarator")
             if not inner_decl:
                 for c in node.children:
@@ -1384,7 +1403,7 @@ class TreeSitterBackend:
                 return self._unwrap_declarator(inner_decl, arr_type)
             return None, arr_type, node
 
-        if node.type == "function_declarator":
+        if node.type in ("function_declarator", "abstract_function_declarator"):
             params_node = node.child_by_field_name("parameters")
             params: list[Parameter] = []
             is_variadic = False
@@ -1396,8 +1415,18 @@ class TreeSitterBackend:
                             params.append(param)
                     elif child.type in ("...", "variadic_parameter"):
                         is_variadic = True
-            fn_type: TypeExpr = FunctionPointer(return_type=curr_type, parameters=params, is_variadic=is_variadic)
+            fn_type: TypeExpr = FunctionPointer(
+                return_type=curr_type,
+                parameters=params,
+                is_variadic=is_variadic,
+                is_pointer=False,
+            )
             inner_decl = node.child_by_field_name("declarator")
+            if not inner_decl:
+                for c in node.children:
+                    if c.type not in ("parameter_list", "type_qualifier", "const", "volatile"):
+                        inner_decl = c
+                        break
             if inner_decl:
                 return self._unwrap_declarator(inner_decl, fn_type)
             return None, fn_type, node

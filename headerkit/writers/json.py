@@ -77,6 +77,10 @@ def _type_to_dict(t: TypeExpr) -> dict[str, Any]:
         }
         if t.calling_convention:
             d["calling_convention"] = t.calling_convention
+        if t.qualifiers:
+            d["qualifiers"] = list(t.qualifiers)
+        if not t.is_pointer:
+            d["is_pointer"] = False
         return d
     else:
         return {"kind": "unknown", "repr": repr(t)}
@@ -97,6 +101,8 @@ def _param_to_dict(p: Parameter) -> dict[str, Any]:
         d["name"] = p.name
     if p.default_value is not None:
         d["default_value"] = p.default_value
+    if p.type_overrides:
+        d["type_overrides"] = dict(p.type_overrides)
     return d
 
 
@@ -133,6 +139,8 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["is_static"] = True
     if f.is_padding:
         d["is_padding"] = True
+    if f.type_overrides:
+        d["type_overrides"] = dict(f.type_overrides)
     return d
 
 
@@ -250,6 +258,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:
             d["is_deprecated"] = True
+        if decl.type_overrides:
+            d["type_overrides"] = dict(decl.type_overrides)
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
@@ -267,6 +277,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["attributes"] = decl.attributes
         if decl.is_deprecated:
             d["is_deprecated"] = True
+        if decl.type_overrides:
+            d["type_overrides"] = dict(decl.type_overrides)
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
@@ -286,6 +298,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["is_deprecated"] = True
         if decl.alignment is not None:
             d["alignment"] = decl.alignment
+        if decl.type_overrides:
+            d["type_overrides"] = dict(decl.type_overrides)
         if decl.location is not None:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
@@ -304,6 +318,8 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["raw_expression"] = decl.raw_expression
         if decl.is_macro:
             d["is_macro"] = True
+        if decl.is_macro_expr:
+            d["is_macro_expr"] = True
         if decl.type is not None:
             d["type"] = _type_to_dict(decl.type)
         if decl.location is not None:
