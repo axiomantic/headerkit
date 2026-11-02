@@ -371,4 +371,3 @@ def test_negative_control_struct_field_array_does_not_decay_to_pointer() -> None
         ),
     ]
     assert report.breaking_count == 1
-

@@ -1078,8 +1078,7 @@ def diff_headers(
                 ):
                     continue
                 if kind_label == "typedef" and any(
-                    ("struct", v) in target_map or ("enum", v) in target_map
-                    for v in _abi_stem_variants(decl_name_str)
+                    ("struct", v) in target_map or ("enum", v) in target_map for v in _abi_stem_variants(decl_name_str)
                 ):
                     continue
             severity = _REMOVED_SEVERITY.get(kind_label, "breaking")
