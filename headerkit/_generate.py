@@ -296,6 +296,18 @@ def _get_ir(
             all_args.append(f"-I{inc}")
         all_args.extend(extra_parse_args)
 
+        parse_kwargs: dict[str, Any] = {
+            "project_prefixes": project_prefixes,
+            **transform_backend_kwargs,
+        }
+        if input_spec is not None:
+            if not input_spec.recursive_includes:
+                parse_kwargs["recursive_includes"] = False
+            if input_spec.max_depth is not None:
+                parse_kwargs["max_depth"] = input_spec.max_depth
+            if not input_spec.use_default_includes:
+                parse_kwargs["use_default_includes"] = False
+
         disp = HookDispatcher()
         if get_backend is _HK_GET_BACKEND and context is not None:
             header = disp.first_result(
@@ -303,24 +315,12 @@ def _get_ir(
                 parse_code,
                 str(header_path),
                 extra_args=all_args,
-                project_prefixes=project_prefixes,
                 context=context,
-                **transform_backend_kwargs,
+                **parse_kwargs,
             )
 
         if header is None:
             backend = get_backend(backend_name)
-            parse_kwargs: dict[str, Any] = {
-                "project_prefixes": project_prefixes,
-                **transform_backend_kwargs,
-            }
-            if input_spec is not None:
-                if not input_spec.recursive_includes:
-                    parse_kwargs["recursive_includes"] = False
-                if input_spec.max_depth is not None:
-                    parse_kwargs["max_depth"] = input_spec.max_depth
-                if not input_spec.use_default_includes:
-                    parse_kwargs["use_default_includes"] = False
             header = backend.parse(
                 parse_code,
                 str(header_path),

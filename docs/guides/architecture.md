@@ -223,12 +223,12 @@ from headerkit.ir import SourceUnit
 
 Writers convert [`SourceUnit`][headerkit.ir.SourceUnit] IR into code, definitions, or packages. Concrete writers inherit from [`BaseWriter`][headerkit.writers.BaseWriter] (which satisfies the underlying [`WriterBackend`][headerkit.writers.WriterBackend] protocol).
 
-`BaseWriter` unifies single-string rendering (`write()`) and multi-file package scaffolding (`write_layout()`):
+`BaseWriter` unifies single-string rendering (`write()`) and multi-file layout emission (`write_layout()`):
 
 ```python
 from headerkit.ir import SourceUnit
-from headerkit.scaffold import ProjectLayout, ScaffoldOptions
 from headerkit.writers import BaseWriter, WriterOption
+from headerkit.writers.base import ProjectLayout, ScaffoldOptions
 
 
 class MyWriter(BaseWriter):

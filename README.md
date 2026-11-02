@@ -7,9 +7,9 @@
 [![License](https://img.shields.io/github/license/axiomantic/headerkit)](https://github.com/axiomantic/headerkit/blob/main/LICENSE)
 
 > **The universal C/C++ interop toolkit.**
-> Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.
+> Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.
 
-HeaderKit parses native C and C++ headers into a normalized intermediate representation (IR). From that single IR, it generates foreign language bindings, scaffolds turnkey packages with verification tests, tracks breaking API diffs, and compresses headers for LLM prompt windows.
+HeaderKit parses native C and C++ headers into a normalized intermediate representation (IR). From that single IR, it generates foreign language bindings, tracks breaking API/ABI diffs, reconciles multi-platform matrices, and compresses headers for LLM prompt windows.
 
 ---
 
@@ -21,24 +21,23 @@ HeaderKit parses native C and C++ headers into a normalized intermediate represe
 | **Generate Mojo, Nim, or LuaJIT bindings** | `headerkit mylib.h -w mojo -o mojo:mylib.mojo` | [Systems & Scripting](#2-generate-systems--scripting-bindings-mojo-nim-luajit) |
 | **Wrap C++ classes in a C-ABI shim** (`extern "C"`) | `headerkit mylib.hpp -w cshim -o cshim:mylib_cshim.cpp` | [C Shim Wrappers](#3-wrap-c-classes-in-a-c-abi-shim) |
 | **Parse C/C++ without LLVM/libclang** | `headerkit mylib.h -b tree-sitter -w ctypes` | [Zero-Dependency Parsing](#4-zero-dependency-parsing-with-tree-sitter) |
-| **Scaffold a turnkey package with tests** | `headerkit mylib.h -w nim --layout package --package-name mypkg` | [Package Scaffolding](#5-scaffold-turnkey-packages-with-tests) |
-| **Detect breaking API changes between versions** | `DiffWriter(baseline=v1, format="markdown").write(v2)` | [API Diffing](#6-detect-breaking-api-changes) |
-| **Compress headers for LLM prompt windows** | `headerkit mylib.h -w prompt` | [LLM Context](#7-compress-headers-for-llm-prompts) |
-| **Ship wheels without requiring libclang on user machines** | `headerkit cache populate mylib.h -w cffi` | [Build Backend & Cache](#8-ship-wheels-without-requiring-libclang) |
-| **Inspect IR programmatically** | `headerkit mylib.h -w json -o json:ast.json` | [Programmatic IR](#9-inspect-ir-programmatically) |
-| **Transform IR with composable pipelines** | `unit >> StripPrefix("ma_") >> MakeOpaque("device")` | [IR Pipelines](#10-transform-ir-with-composable-pipelines) |
-| **Reconcile multi-target configuration matrices** | `headerkit add-target bindings.nim --target x86_64-pc-windows-msvc` | [Matrix Reconciliation](#11-reconcile-multi-platform-matrices--incremental-updates) |
+| **Detect breaking API changes between versions** | `DiffWriter(baseline=v1, format="markdown").write(v2)` | [API Diffing](#5-detect-breaking-api-changes) |
+| **Compress headers for LLM prompt windows** | `headerkit mylib.h -w prompt` | [LLM Context](#6-compress-headers-for-llm-prompts) |
+| **Ship wheels without requiring libclang on user machines** | `headerkit cache populate mylib.h -w cffi` | [Build Backend & Cache](#7-ship-wheels-without-requiring-libclang) |
+| **Inspect IR programmatically** | `headerkit mylib.h -w json -o json:ast.json` | [Programmatic IR](#8-inspect-ir-programmatically) |
+| **Transform IR with composable pipelines** | `unit >> StripPrefix("ma_") >> MakeOpaque("device")` | [IR Pipelines](#9-transform-ir-with-composable-pipelines) |
+| **Reconcile multi-target configuration matrices** | `headerkit add-target bindings.nim --target x86_64-pc-windows-msvc` | [Matrix Reconciliation](#10-reconcile-multi-platform-matrices--incremental-updates) |
 
 ---
 
 ## Why HeaderKit?
 
-Traditional binding generators (SWIG, bindgen, ctypesgen) dump raw, isolated binding code into the void. Integrating those files into a project requires handwritten Makefiles, setup scripts, package manifests, and linking glue. Keeping bindings updated as upstream libraries evolve is an error-prone chore.
+Traditional binding generators (SWIG, bindgen, ctypesgen) couple parser internals directly to single-target code emitters. Keeping bindings updated across multiple languages and platforms as upstream libraries evolve is an error-prone chore.
 
 HeaderKit solves this with three core design pillars:
 
-1. **Turnkey Packages vs. Raw Code Dumps**: HeaderKit's `--layout package` doesn't just emit binding syntax; it scaffolds complete, idiomatic packages (e.g. Nimble packages with `--mm:orc`, Mojo packages with dynamic library handles, Python packages with build backends) along with automated tests that immediately verify foreign symbol resolution.
-2. **Easily Extended to Any Source or Target Language**: Built on a unified hook engine (`headerkit.hooks`). Write a custom backend or target writer in ~50 lines of Python using typed [`SourceUnit`][headerkit.ir.SourceUnit] IR, register it via standard Python entry points or config files, or customize layout scaffolding templates without touching core code.
+1. **Strictly Layered Compiler Pipeline**: HeaderKit separates C/C++ parsing (`LibclangBackend`, `TreeSitterBackend`), composable AST transforms (`IRTransform`), and target code generation (`BaseWriter`) across a language-agnostic Intermediate Representation (`SourceUnit`).
+2. **Easily Extended to Any Source or Target Language**: Built on a unified hook engine (`headerkit.hooks`). Write a custom backend, transform, or target writer in ~50 lines of Python using typed [`SourceUnit`][headerkit.ir.SourceUnit] IR and register it via standard Python entry points or config files without touching core code.
 3. **Automated Upstream Updates & Zero-Dependency Downstream**: Keep bindings in lockstep with upstream releases. HeaderKit's PEP 517 build backend and committed cache store (`.headerkit/`) let downstream consumers `pip install` wheels without needing `libclang` or system compilers installed.
 
 ---
@@ -122,35 +121,7 @@ headerkit mylib.hpp -b tree-sitter -w cython -o cython:mylib.pxd
 
 *See the [Tree-sitter Backend Guide](https://axiomantic.github.io/headerkit/reference/treesitter/).*
 
-### 5. Scaffold Turnkey Packages with Tests
-
-Generate complete, buildable multi-file packages containing package manifests, compiler configs, and automated test stubs that verify foreign symbol resolution:
-
-```bash
-# Scaffold a full Nimble package with tests
-headerkit mylib.h -w nim --layout package --package-name nim_vector -o nim:./nim_vector
-
-# Scaffold with specific test stub styles (tripwire, unit, or both)
-headerkit mylib.h -w nim --layout package --package-name nim_vector --test-type tripwire
-```
-
-Generated project structure:
-```text
-nim_vector/
-├── nim_vector.nimble          # Package manifest with test tasks
-├── nim.cfg                    # Compiler and link configuration (backend, include and library flags)
-├── src/
-│   ├── nim_vector.nim         # Public API module
-│   └── nim_vector/
-│       └── bindings.nim       # Generated foreign function interface
-└── tests/
-    ├── test_tripwire.nim      # Symbol resolution (C) or compile-and-link (C++) verification
-    └── test_nim_vector.nim    # High-level unit test skeleton
-```
-
-*See the [Scaffolding Guide](https://axiomantic.github.io/headerkit/guides/scaffolding/).*
-
-### 6. Detect Breaking API Changes
+### 5. Detect Breaking API Changes
 
 Compare two versions of a C/C++ header to detect signature mutations, missing struct fields, altered enum values, and type changes:
 
@@ -167,7 +138,7 @@ print(DiffWriter(baseline=old_api, format="markdown").write(new_api))
 
 *See the [Diff Writer Reference](https://axiomantic.github.io/headerkit/reference/diff/).*
 
-### 7. Compress Headers for LLM Prompts
+### 6. Compress Headers for LLM Prompts
 
 Large C/C++ headers waste tokens and clutter context windows with preprocessor noise and implementation details. The `prompt` writer produces a dense, token-optimized summary designed for LLM prompts:
 
@@ -183,7 +154,7 @@ FUNC distance(a:const Point*, b:const Point*) -> int
 
 *See the [Prompt Writer Reference](https://axiomantic.github.io/headerkit/reference/prompt/).*
 
-### 8. Ship Wheels Without Requiring libclang
+### 7. Ship Wheels Without Requiring libclang
 
 HeaderKit includes a two-layer cache (`.headerkit/`) storing parsed IR and generated bindings. Commit the cache to version control and downstream users can install wheels without having `libclang` or LLVM installed:
 
@@ -203,7 +174,7 @@ build-backend = "headerkit.build_backend"
 
 *See the [Cache Guide](https://axiomantic.github.io/headerkit/guides/cache/) and [Build Backend Guide](https://axiomantic.github.io/headerkit/guides/build-backend/).*
 
-### 9. Inspect IR Programmatically
+### 8. Inspect IR Programmatically
 
 Parse headers directly into a strongly typed Python AST or serialize them to JSON for downstream code generators, linters, or analysis tools:
 
@@ -223,7 +194,7 @@ for decl in unit.declarations:
 
 *See the [IR Reference](https://axiomantic.github.io/headerkit/reference/ir/) and [JSON Reference](https://axiomantic.github.io/headerkit/reference/json/).*
 
-### 10. Transform IR with Composable Pipelines
+### 9. Transform IR with Composable Pipelines
 
 Mutate, filter, rename, or splice IR trees between parser extraction and code generation using visitor pipelines and the `>>` operator:
 
@@ -241,7 +212,7 @@ transformed_unit = pipeline.transform(unit)
 
 *See the [IR Transformations Guide](https://axiomantic.github.io/headerkit/guides/ir_transformations/) and [Transforms Reference](https://axiomantic.github.io/headerkit/reference/transforms/).*
 
-### 11. Reconcile Multi-Platform Matrices & Incremental Updates
+### 10. Reconcile Multi-Platform Matrices & Incremental Updates
 
 Evaluate headers across multi-dimensional matrices (target platforms, library versions, feature flags), minimize boolean guards algebraically, and evolve bindings incrementally:
 
@@ -297,7 +268,7 @@ Or install it via your system package manager:
 | **Fedora / RHEL** | `sudo dnf install clang-devel` |
 | **Windows** | `winget install LLVM.LLVM` or [LLVM releases](https://github.com/llvm/llvm-project/releases) |
 
-*HeaderKit vendors LLVM bindings supporting libclang 18, 19, 20, 21, 22, and 23.*
+*HeaderKit vendors LLVM bindings supporting libclang 14 through 23.*
 
 ---
 
@@ -314,9 +285,6 @@ headerkit [options] HEADER_OR_GLOB [HEADER_OR_GLOB ...]
 | `-b NAME`, `--backend NAME` | Parser backend (default: `libclang`, or `tree-sitter`) |
 | `-w WRITER`, `--writer WRITER` | Output writer to invoke (repeatable) |
 | `-o WRITER:PATH`, `--output` | Output destination template (repeatable, e.g. `ctypes:bindings.py`) |
-| `--layout {file,package,project}` | Output layout mode (`file` or `package`) |
-| `--package-name NAME` | Package name when scaffolding package layouts |
-| `--test-type {both,tripwire,unit,none}` | Test stub style to scaffold (default: `both`) |
 | `-I DIR`, `--include-dir DIR` | Add include directory (repeatable) |
 | `-D MACRO[=VALUE]` | Define preprocessor macro (repeatable) |
 | `--backend-arg ARG` | Pass extra argument to the parser backend |
@@ -351,42 +319,9 @@ Values support `${ENV_VAR}` expansion for build-time paths injected by CMake or 
 
 ---
 
-## Test Work Orders
-
-Scaffolding a project also generates its tests. A generator knows what an API *is*,
-but not what it is *for*, so HeaderKit splits generated tests into three tiers and is
-explicit about which is which.
-
-| Tier | What HeaderKit knows | What it emits |
-|---|---|---|
-| 1 | The call and the expected result | A **real, passing** test -- struct field round-trip, unsigned bit-field bounds, enum value coverage |
-| 2 | The cases, but not the expectation | One **failing** case per enumerator, per overload, or a NULL case |
-| 3 | Only that the function exists | One **failing** stub |
-
-Stubs fail loudly and carry their instruction on the failing assertion, together with
-the signature verbatim and a definition of done:
-
-```
-FAILED tests/test_workorder.py::test_ct_scale[null_s] - Failed: WORK ORDER: for the
-`behaviour` case, describe what `ct_scale` is for and assert it. For the `null_s`
-case, decide what it does when `s` is NULL -- an error, or undefined and therefore
-untestable? Done means: call it and assert on the result. Asserting that it does not
-raise is insufficient.
-```
-
-The test run is the progress meter -- a stub turns from red to green when it is
-written. Scaffolded projects also get `WORK_ORDER.md` (the same list in prose),
-`SUGGESTIONS.md` (generic wrapper design ideas), and an `AGENTS.md` telling the next
-AI session to **ask you** before working through any of it.
-
-Re-running the scaffolder never overwrites a test you have written.
-
-See [Test work orders](docs/guides/work-orders.md) for the full tier rules, the
-deliberate exclusions, and the Nim macro that makes per-case reporting work.
-
 ## Extensibility & Plugins
 
-HeaderKit's hook architecture makes it straightforward to add new source languages, target writers, or custom package layouts without modifying the core repository.
+HeaderKit's hook architecture makes it straightforward to add new source languages, transforms, or target writers without modifying the core repository.
 
 Register third-party plugins in your own package via `pyproject.toml` entry points:
 

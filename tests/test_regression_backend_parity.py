@@ -1569,7 +1569,16 @@ class TestR14AllPaddingLayoutIsResolvedOnImport:
 
 @libclang
 class TestR15IncludeMergeOrderIsDeterministic:
-    """Recursive include merging produces deterministic declaration order across PYTHONHASHSEED values."""
+    """Recursive include processing must not depend on ``PYTHONHASHSEED``.
+
+    ``_parse_recursively`` walked ``SourceUnit.included_headers``, which is a
+    ``set``, so the order in which included headers were parsed and merged --
+    and therefore the declaration order handed to every writer -- changed from
+    one interpreter run to the next. Two runs over the same header produced two
+    different ``.pxd`` files, and since the Cython writer's cycle path is
+    sensitive to that order, some runs produced a ``.pxd`` that Cython rejected
+    and others one that it accepted.
+    """
 
     NAMES = ("alpha", "beta", "gamma", "delta", "epsilon", "zeta")
     SEEDS = ("0", "1", "2", "3", "4", "5")
@@ -1613,6 +1622,7 @@ class TestR15IncludeMergeOrderIsDeterministic:
         return run.stdout.strip()
 
     def test_the_seeds_really_reorder_a_set(self) -> None:
+        """Negative control: without it, an ignored ``PYTHONHASHSEED`` would make the next test vacuous."""
         code = "import sys; print(' '.join(set(sys.argv[1:])))"
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -1647,7 +1657,21 @@ class TestR15IncludeMergeOrderIsDeterministic:
 
 @libclang
 class TestR16CyclicTypedefsAreOrdered:
-    """Typedefs emitted on the Cython cycle path are topologically ordered among themselves."""
+    """A typedef emitted on the cycle path must follow the typedefs it names.
+
+    ``struct value`` holds a ``value_destructor_cb_t``, whose parameter is a
+    ``value_t``, which is a typedef of ``struct value``: a cycle, so the writer
+    takes its phased path. That path forwards every record first and then emits
+    *all* typedefs in the order the IR delivered them. Records are forwarded,
+    so a typedef naming a record is always fine there -- but a typedef naming
+    another *typedef* was not ordered at all, and when the IR listed the
+    callback first Cython stopped at ``'value_t' is not a type identifier``.
+
+    The headers below are the shape that delivers that order: the callback and
+    the record live in one header, the typedef they share in another that both
+    the root and a sibling header include, and the root names the callback, so
+    the root unit pulls the callback in ahead of the typedef it uses.
+    """
 
     TYPES_H = textwrap.dedent("""\
         #ifndef TYPES_H
@@ -1712,6 +1736,13 @@ class TestR16CyclicTypedefsAreOrdered:
             """)
 
     def test_cyclic_typedefs_compile_link_and_execute(self) -> None:
+        """The end-to-end proof: the callback typedef must resolve to the C type.
+
+        ``root_use`` stores the callback in the record, and ``list_release``
+        invokes it and returns the field it left behind. The callback adds 1 to ``x``, so a
+        binding whose callback or record type were mis-declared yields something
+        other than 42 rather than merely failing to build.
+        """
         compiler = _require_c_toolchain()
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -1775,7 +1806,17 @@ class TestR16CyclicTypedefsAreOrdered:
 
 @libclang
 class TestR17DefinitionSurvivesIncludeMerge:
-    """Definitions from included headers replace earlier forward declarations during merge."""
+    """Merging included headers must keep a type's definition over its forward declaration.
+
+    Every included header is parsed as its own translation unit and the results
+    are merged by ``_deduplicate_declarations``, which kept the *first*
+    declaration of each name. When the header that only forward-declares
+    ``struct rec`` was merged before the header that defines it, the definition
+    was discarded: the ``.pxd`` declared ``rec`` opaque, and any Cython code
+    touching a field or declaring a ``rec`` value failed. Within one translation
+    unit the converter already replaced a forward declaration with its
+    definition; the merge across units did not.
+    """
 
     FORWARD_H = textwrap.dedent("""\
         #ifndef FORWARD_H
@@ -1801,6 +1842,7 @@ class TestR17DefinitionSurvivesIncludeMerge:
         return unit.declarations
 
     def test_definition_merged_after_forward_declaration_is_kept(self) -> None:
+        """``a_forward.h`` is merged first: the definition must still win."""
         with tempfile.TemporaryDirectory() as tmp:
             decls = self._declarations(Path(tmp), "a_forward.h", "b_definition.h")
 
@@ -1821,6 +1863,7 @@ class TestR17DefinitionSurvivesIncludeMerge:
         ]
 
     def test_definition_merged_before_forward_declaration_is_kept(self) -> None:
+        """Negative control: the order that always worked must keep working."""
         with tempfile.TemporaryDirectory() as tmp:
             decls = self._declarations(Path(tmp), "b_forward.h", "a_definition.h")
 
@@ -1841,6 +1884,7 @@ class TestR17DefinitionSurvivesIncludeMerge:
         ]
 
     def test_merged_definition_reaches_the_pxd_and_cython_accepts_it(self) -> None:
+        """A field access only compiles against the definition, not an opaque forward."""
         _require_cython()
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -2086,3 +2130,43 @@ class TestR17DefinitionSurvivesIncludeMerge:
         ]
         cimport = "from libcpp cimport bool\n\n" if member_kind == "conversions" else ""
         assert pxd == f'{cimport}cdef extern from "test.hpp":\n\n{expected_pxd_body}\n'
+
+
+# ---------------------------------------------------------------------------
+# R18 -- non-self-contained included headers survive recursive merge
+# ---------------------------------------------------------------------------
+
+
+@libclang
+class TestR18NonSelfContainedIncludeSurvivesMerge:
+    """An included header that relies on an earlier include's typedefs must not be dropped.
+
+    When ``_parse_recursively`` re-parses an included header in isolation and
+    that header uses a typedef defined in an earlier ``#include`` of the
+    umbrella header without including it directly, isolated parsing raises
+    ``RuntimeError``. Rather than silently discarding all of that header's
+    declarations, ``_parse_recursively`` falls back to converting the header's
+    declarations from the already-parsed top-level translation unit.
+    """
+
+    def test_non_self_contained_included_header_declarations_are_merged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "a_types.h").write_text("typedef int custom_id_t;\n")
+            # b_api.h does NOT #include "a_types.h" directly; it relies on the umbrella header
+            (workdir / "b_api.h").write_text("custom_id_t compute_next_id(custom_id_t current);\n")
+            umbrella = '#include "a_types.h"\n#include "b_api.h"\n'
+            unit = get_backend("libclang").parse(umbrella, "umbrella.h", include_dirs=[str(workdir)])
+            pxd = write_pxd(unit)
+
+        assert [(type(d).__name__, d.name) for d in unit.declarations] == [
+            ("Typedef", "custom_id_t"),
+            ("Function", "compute_next_id"),
+        ]
+        assert pxd == textwrap.dedent("""\
+            cdef extern from "umbrella.h":
+
+                ctypedef int custom_id_t
+
+                custom_id_t compute_next_id(custom_id_t current)
+            """)

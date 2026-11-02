@@ -982,3 +982,29 @@ class TestCindexShutdownSafety:
         )
         assert res.returncode == 0
         assert res.stderr == ""
+
+    @pytest.mark.skipif(not is_backend_available("libclang"), reason="libclang not available")
+    def test_generate_pipeline_with_nim_cleanup_forwards_skip_function_bodies_to_libclang_hook(
+        self, tmp_path: Path
+    ) -> None:
+        """headerkit.generate() with NimCleanupTransform forwards skip_function_bodies=True to _libclang_parse_hook."""
+        from headerkit import generate
+
+        header_path = tmp_path / "nim_inline.h"
+        header_path.write_text(
+            textwrap.dedent("""\
+                static inline void nimFrame(void) {
+                    undeclared_nim_internal_helper(42);
+                }
+                int exported_add(int a_p0, int b_p1);
+            """),
+            encoding="utf-8",
+        )
+        cdef_out = generate(
+            header_path,
+            "cffi",
+            backend_name="libclang",
+            transforms=[NimCleanupTransform()],
+            no_cache=True,
+        )
+        assert cdef_out.strip() == "int exported_add(int a, int b);"

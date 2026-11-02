@@ -1847,6 +1847,10 @@ class ClangASTConverter:
         # cannot be denied out of existence.
         if normalize_path(file_path) == normalize_path(self.filename):
             return True
+        if os.path.isabs(self.filename) and (
+            _resolve_path(file_path, [os.path.dirname(self.filename)]) == _resolve_path(self.filename)
+        ):
+            return True
 
         if not self.project_prefixes and not self.allowlist_paths and not self.denylist_paths:
             return False
@@ -3202,9 +3206,18 @@ class ClangASTConverter:
         # Skip if already processed
         if emit:
             key = f"template:{name}"
-            if key in self._seen:
-                return None
-            self._seen.add(key)
+            definition_key = f"{key}:definition"
+            if cursor.is_definition():
+                if definition_key in self._seen:
+                    return None
+                if key in self._seen:
+                    self._remove_forward_declaration(name, "class")
+                self._seen.add(key)
+                self._seen.add(definition_key)
+            else:
+                if key in self._seen:
+                    return None
+                self._seen.add(key)
 
         # Extract template type parameters and track non-type parameters
         template_params: list[str] = []
@@ -4641,6 +4654,9 @@ class LibclangBackend:
         allowlist_paths: _PathSet | None = None,
         denylist_paths: _PathSet | None = None,
         system_headers: Collection[str] = (),
+        root_tu: Any = None,
+        is_cplus: bool = False,
+        parse_args: tuple[str, ...] = (),
     ) -> Header:
         """Recursively parse included headers and combine declarations.
 
@@ -4721,6 +4737,9 @@ class LibclangBackend:
                     allowlist_paths,
                     denylist_paths,
                     system_headers=system_headers,
+                    root_tu=root_tu,
+                    is_cplus=is_cplus,
+                    parse_args=parse_args,
                 )
 
                 # Add declarations and transitive included headers from sub-header
@@ -4728,6 +4747,21 @@ class LibclangBackend:
                 merged_included_headers.update(sub_header.included_headers)
 
             except (OSError, RuntimeError, ValueError):
+                if root_tu is not None:
+                    try:
+                        fallback_converter = ClangASTConverter(
+                            abs_path,
+                            project_prefixes=project_prefixes,
+                            is_cplus=is_cplus,
+                            allowlist_paths=allowlist_paths,
+                            denylist_paths=denylist_paths,
+                            parse_args=parse_args,
+                        )
+                        fallback_header = fallback_converter.convert(root_tu)
+                        all_declarations.extend(fallback_header.declarations)
+                        continue
+                    except Exception:
+                        pass
                 import logging
 
                 logging.getLogger(__name__).debug("Failed to parse included header: %s", abs_path, exc_info=True)
@@ -4994,6 +5028,9 @@ class LibclangBackend:
                 allowlist_paths=allowlist_paths,
                 denylist_paths=denylist_paths,
                 system_headers=system_headers,
+                root_tu=tu,
+                is_cplus=is_cplus,
+                parse_args=tuple(args),
             )
 
         # Included headers are parsed in isolation, so a macro that a *later*
@@ -5128,7 +5165,7 @@ def _libclang_parse_hook(
     context: PipelineContext | None = None,
     **kwargs: Any,
 ) -> SourceUnit | None:
-    _ = (context, kwargs)
+    _ = context
     backend = LibclangBackend()
     return backend.parse(
         code,
@@ -5141,6 +5178,7 @@ def _libclang_parse_hook(
         project_prefixes=project_prefixes,
         allowlist=allowlist,
         denylist=denylist,
+        **kwargs,
     )
 
 
