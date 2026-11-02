@@ -23,14 +23,17 @@ class ProbeOptions:
     extra_include_dirs: tuple[str, ...] = ()
     allow_missing_sysroot: bool = True
     compiler_flags: tuple[str, ...] = ()
+    backend_name: str | None = None
 
 
 def probe_configuration(
     header_path: str,
     condition: ConfigCondition,
     options: ProbeOptions | None = None,
+    *,
+    backend_name: str | None = None,
 ) -> SourceUnit:
-    """Invokes libclang backend with target flags and catches sysroot diagnostics."""
+    """Invoke parser backend with target flags and catch sysroot diagnostics."""
     opts = options or ProbeOptions()
     flags = list(condition.to_compiler_flags())
 
@@ -50,6 +53,6 @@ def probe_configuration(
             )
             flags.extend(["-nobuiltininc", "-nostdinc"])
 
-    backend = get_backend("libclang")
+    backend = get_backend(backend_name or opts.backend_name)
     code = Path(header_path).read_text(encoding="utf-8")
     return backend.parse(code, filename=header_path, extra_args=flags)

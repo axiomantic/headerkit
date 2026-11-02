@@ -422,8 +422,6 @@ def header_to_json_dict(header: Header) -> dict[str, Any]:
         data["language"] = header.language
     if header.classification != "header":
         data["classification"] = header.classification
-    if header.source_origin is not None:
-        data["source_origin"] = header.source_origin
     return data
 
 

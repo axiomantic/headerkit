@@ -7,7 +7,7 @@ import textwrap
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from headerkit.ir import (
     Declaration,
@@ -20,6 +20,9 @@ from headerkit.ir import (
     filter_access_floor,
 )
 from headerkit.transforms.builtin import StripPaddingFields
+
+if TYPE_CHECKING:
+    from headerkit.reconcile import MatrixCondition, PlatformCondition
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +72,7 @@ class ScaffoldOptions:
     """Configuration options for writer layout generation."""
 
     package_name: str = "bindings"
-    target_language: str = "nim"
+    target_language: str = ""
     layout: str = "file"
     options: dict[str, Any] = field(default_factory=dict)
     interactive: bool = False
@@ -299,8 +302,90 @@ class BaseWriter:
     format_description: str = ""
     default_output_pattern: str = "{dir}/{stem}.txt"
     default_extension: str = ".txt"
+    file_extensions: ClassVar[tuple[str, ...] | None] = None
+    comment_prefix: ClassVar[str] = "#"
+    language_aliases: ClassVar[tuple[str, ...]] = ()
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = ()
+
+    @staticmethod
+    def _platform_to_python(tag: str) -> str:
+        """Map a target triple or OS tag to its Python ``sys.platform`` identifier."""
+        lower = tag.lower()
+        if "darwin" in lower or "apple" in lower or "mac" in lower:
+            return "darwin"
+        if "linux" in lower:
+            return "linux"
+        if "windows" in lower or "msvc" in lower or "win32" in lower:
+            return "win32"
+        return "posix"
+
+    def format_platform_condition(self, cond: PlatformCondition) -> str:
+        """Format a language-agnostic :class:`PlatformCondition` for this writer's target language."""
+        raw_tags = [tag for term in cond.terms for tag in term] if cond.terms else sorted(cond.tags)
+        py_plats = tuple(sorted({self._platform_to_python(t) for t in raw_tags if t}))
+        if len(py_plats) > 1:
+            return f"sys.platform in {py_plats!r}"
+        if py_plats:
+            return f"sys.platform == {py_plats[0]!r}"
+        return "True"
+
+    def format_matrix_condition(
+        self,
+        cond: MatrixCondition,
+        domain_matrix: dict[str, set[Any]] | None = None,
+    ) -> str:
+        """Format a language-agnostic :class:`MatrixCondition` for this writer's target language."""
+        from headerkit.reconcile import minimize_conditions
+
+        effective = cond
+        if domain_matrix and cond.raw_conditions and cond.is_tautology:
+            effective = minimize_conditions(cond.raw_conditions, domain_matrix)
+
+        clauses: list[str] = []
+        platforms = effective.platforms
+        if not platforms and cond.raw_conditions and not domain_matrix:
+            platforms = tuple(sorted({str(c["target"]) for c in cond.raw_conditions if "target" in c}))
+        if platforms:
+            py_plats = tuple(sorted({self._platform_to_python(p) for p in platforms}))
+            if len(py_plats) > 1:
+                clauses.append(f"sys.platform in {py_plats!r}")
+            elif py_plats:
+                clauses.append(f"sys.platform == {py_plats[0]!r}")
+
+        if effective.version_op == "==":
+            clauses.append(f"version == {effective.version_min!r}")
+        elif effective.version_op == ">=":
+            clauses.append(f"version >= {effective.version_min!r}")
+        elif effective.version_op == "range":
+            clauses.append(f"({effective.version_min!r} <= version <= {effective.version_max!r})")
+
+        if effective.feature_implicants:
+            imp_clauses: list[str] = []
+            for imp in effective.feature_implicants:
+                term_parts = [feat if val else f"not {feat}" for feat, val in imp]
+                if term_parts:
+                    imp_clauses.append(" and ".join(term_parts))
+            if len(imp_clauses) > 1:
+                clauses.append(f"({' or '.join(f'({c})' if ' ' in c else c for c in imp_clauses)})")
+            elif imp_clauses:
+                clauses.append(imp_clauses[0])
+
+        return " and ".join(clauses) if clauses else "True"
+
+    def format_guard_condition(
+        self,
+        cond: PlatformCondition | MatrixCondition,
+        domain_matrix: dict[str, set[Any]] | None = None,
+    ) -> str:
+        """Format either a :class:`PlatformCondition` or :class:`MatrixCondition`."""
+        from headerkit.reconcile import MatrixCondition, PlatformCondition
+
+        if isinstance(cond, PlatformCondition):
+            return self.format_platform_condition(cond)
+        if isinstance(cond, MatrixCondition):
+            return self.format_matrix_condition(cond, domain_matrix=domain_matrix)
+        return "True"
 
     #: Whether this writer reconstructs record layout itself and therefore needs
     #: unnamed-bitfield padding. Only the ctypes writer does; a writer that emits
@@ -315,6 +400,8 @@ class BaseWriter:
     ) -> ProjectLayout:
         """Convert parsed unit IR into a complete ProjectLayout."""
         opts = options or ScaffoldOptions(target_language=self.name, layout="file")
+        if not opts.target_language:
+            opts.target_language = self.name
         if opts.layout not in self.supported_layouts:
             raise ValueError(
                 f"Writer '{self.name}' does not support layout '{opts.layout}'. "

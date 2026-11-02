@@ -597,7 +597,6 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     location=loc,
                 ),
             ],
-            source_origin="nim_c_header",
         )
 
     def test_a_maximal_header_round_trips_unchanged(self) -> None:

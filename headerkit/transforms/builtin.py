@@ -12,7 +12,7 @@ import sys
 from collections.abc import Sequence, Set
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from headerkit.hooks import PipelineContext
 from headerkit.ir import (
@@ -34,7 +34,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.transforms.filter import PipelineFilter
+from headerkit.transforms.filter import PipelineFilter, TransformOption, register_transform
 
 _GLOB_METACHARACTERS = ("*", "?", "[")
 
@@ -245,8 +245,12 @@ def rewrite_type_references(type_expr: TypeExpr, mapping: dict[str, str]) -> Typ
 class RenameTypes(PipelineFilter):
     """Rename types and update all CType references across the entire AST."""
 
-    def __init__(self, mapping: dict[str, str]) -> None:
-        self.mapping = dict(mapping)
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption("mapping", "Dictionary mapping old type names to new type names", default={}, type=dict),
+    )
+
+    def __init__(self, mapping: dict[str, str] | None = None) -> None:
+        self.mapping = dict(mapping) if mapping is not None else {}
 
     def visit_CType(self, node: CType, context: PipelineContext | None = None) -> CType:
         if node.name in self.mapping:
@@ -284,10 +288,15 @@ class RenameTypes(PipelineFilter):
 class StripPrefix(PipelineFilter):
     """Strip a symbol prefix from declarations and rewrite cross-referenced types."""
 
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption("prefix", "Symbol prefix to strip", default="", type=str),
+        TransformOption("targets", "Declaration categories to strip", default=(), type=list),
+    )
+
     def __init__(
         self,
-        prefix: str,
-        targets: tuple[str, ...] = (
+        prefix: str = "",
+        targets: Sequence[str] = (
             "functions",
             "structs",
             "enums",
@@ -377,7 +386,11 @@ class StripPrefix(PipelineFilter):
 class MakeOpaque(PipelineFilter):
     """Converts named struct definitions into opaque handles by stripping fields."""
 
-    def __init__(self, names: str | Sequence[str]) -> None:
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption("names", "Struct names to convert to opaque handles", default=[], type=list),
+    )
+
+    def __init__(self, names: str | Sequence[str] = ()) -> None:
         self.names = {names} if isinstance(names, str) else set(names)
 
     def visit_Struct(self, node: Struct, context: PipelineContext | None = None) -> Struct:
@@ -395,6 +408,19 @@ class FilterByHeader(PipelineFilter):
     Deny rules always take precedence over allow rules (``deny wins over allow``).
     When an allowlist is active, declarations with ``location is None`` are dropped.
     """
+
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption("patterns", "Header path patterns", default=[], type=list),
+        TransformOption("mode", "Filter mode", default="include", choices=("include", "exclude"), type=str),
+        TransformOption("allowlist", "Allowed header path patterns", default=[], type=list),
+        TransformOption("denylist", "Denied header path patterns", default=[], type=list),
+        TransformOption("allow", "Alias for allowlist", default=[], type=list),
+        TransformOption("deny", "Alias for denylist", default=[], type=list),
+        TransformOption("header_path", "Primary header path", default="", type=str),
+        TransformOption("hdrname", "Alias for header_path", default="", type=str),
+        TransformOption("include_dirs", "Include search directories", default=[], type=list),
+        TransformOption("search_dirs", "Explicit search directories", default=[], type=list),
+    )
 
     def __init__(
         self,
@@ -513,6 +539,16 @@ class FilterBySymbol(PipelineFilter):
     ``Variable``, ``Typedef``, or ``Struct`` field that references an excluded
     type (such as an internal opaque struct excluded by pattern) is also pruned.
     """
+
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption("patterns", "Symbol patterns", default=[], type=list),
+        TransformOption("mode", "Filter mode", default="include", choices=("include", "exclude"), type=str),
+        TransformOption("include", "Included symbol patterns", default=[], type=list),
+        TransformOption("exclude", "Excluded symbol patterns", default=[], type=list),
+        TransformOption("include_patterns", "Included symbol patterns", default=[], type=list),
+        TransformOption("exclude_patterns", "Excluded symbol patterns", default=[], type=list),
+        TransformOption("cascade_excluded_types", "Prune symbols referencing excluded types", default=True, type=bool),
+    )
 
     def __init__(
         self,
@@ -794,7 +830,11 @@ class FilterUnexportedSymbolsTransform(PipelineFilter):
     are unconditionally preserved.
     """
 
-    def __init__(self, exported_symbols: Set[str] | Sequence[str] | Path | str) -> None:
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption("exported_symbols", "Exported symbol list or path to binary", default=(), type=str),
+    )
+
+    def __init__(self, exported_symbols: Set[str] | Sequence[str] | Path | str = ()) -> None:
         self.binary_path: Path | None = None
         raw_symbols: set[str] = set()
         if isinstance(exported_symbols, (Path, str)):
@@ -853,3 +893,23 @@ class StripPaddingFields(PipelineFilter):
         ]
         new_nested = [self.visit_Struct(n, context=context) for n in node.nested_records]
         return replace(node, fields=new_fields, nested_records=new_nested)
+
+
+register_transform("rename_types", RenameTypes, description="Rename types and update CType references")
+register_transform("strip_prefix", StripPrefix, description="Strip symbol prefixes from declarations")
+register_transform("make_opaque", MakeOpaque, description="Convert named structs into opaque handles")
+register_transform("filter_by_header", FilterByHeader, description="Filter declarations by source header path")
+register_transform("filter_by_symbol", FilterBySymbol, description="Filter declarations by symbol pattern")
+register_transform("filter_deprecated", FilterDeprecated, description="Filter out deprecated declarations")
+register_transform(
+    "filter_unexported_symbols",
+    FilterUnexportedSymbolsTransform,
+    aliases=("filter_unexported",),
+    description="Filter external-linkage symbols against binary exports",
+)
+register_transform(
+    "strip_padding_fields",
+    StripPaddingFields,
+    aliases=("strip_padding",),
+    description="Strip unnamed bitfield padding fields from structs",
+)

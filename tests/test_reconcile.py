@@ -113,9 +113,11 @@ class TestReconcileUnits:
         cond_mac, decls_mac = block.branches[0]
         cond_linux, decls_linux = block.branches[1]
         assert isinstance(cond_mac, PlatformCondition)
-        assert cond_mac.nim_predicate == "defined(macosx)"
+        assert cond_mac.tags == frozenset({"darwin", "macosx", "apple"})
+        assert cond_mac.terms == (("darwin",),)
         assert decls_mac == [mac_func]
-        assert cond_linux.nim_predicate == "defined(linux)"
+        assert cond_linux.tags == frozenset({"linux"})
+        assert cond_linux.terms == (("linux",),)
         assert decls_linux == [linux_func]
 
     def test_same_name_different_layout_reconciled_into_guard(self) -> None:
@@ -130,9 +132,11 @@ class TestReconcileUnits:
         block = reconciled.items[0]
         assert isinstance(block, PlatformGuardedBlock)
         assert len(block.branches) == 2
-        assert block.branches[0][0].nim_predicate == "defined(linux)"
+        assert block.branches[0][0].tags == frozenset({"linux"})
+        assert block.branches[0][0].terms == (("linux",),)
         assert block.branches[0][1] == [struct_linux]
-        assert block.branches[1][0].nim_predicate == "defined(windows)"
+        assert block.branches[1][0].tags == frozenset({"windows", "msvc"})
+        assert block.branches[1][0].terms == (("windows",),)
         assert block.branches[1][1] == [struct_win]
 
     def test_preserves_topological_sequence(self) -> None:

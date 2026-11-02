@@ -44,25 +44,28 @@ from headerkit._rename import rename_cache_fingerprint
 from headerkit._resolve import check_output_collisions, resolve_headers, resolve_output_path
 from headerkit._slug import build_slug, load_index, lookup_slug
 from headerkit._target import resolve_target
-from headerkit.backends import LibclangUnavailableError, get_backend, is_backend_available, resolve_backend
+from headerkit.backends import (
+    LibclangUnavailableError,
+    get_backend,
+    get_default_backend,
+    is_backend_available,
+    resolve_backend,
+    supports_backend_auto_install,
+)
 from headerkit.hooks import HookDispatcher, PipelineContext, Priority
 from headerkit.install_libclang import auto_install
 from headerkit.ir import Header, InputSpec, SourceUnit
 from headerkit.transforms import (
     ChainedFilter,
-    FilterByHeader,
-    FilterBySymbol,
-    FilterDeprecated,
-    FilterUnexportedSymbols,
-    MakeOpaque,
-    NimCleanupTransform,
-    NimJsonDocEnricher,
     PipelineFilter,
-    RenameTypes,
-    StripPaddingFields,
-    StripPrefix,
+    get_transform,
+    list_transform_options,
 )
-from headerkit.writers import get_writer, list_writer_options
+from headerkit.writers import (
+    get_writer,
+    get_writer_extension,
+    list_writer_options,
+)
 
 _HK_GET_BACKEND = get_backend
 logger = logging.getLogger("headerkit.cache")
@@ -138,22 +141,6 @@ def _is_auto_install_allowed(
     return False
 
 
-_WRITER_EXTENSIONS: dict[str, str] = {
-    "cffi": ".py",
-    "ctypes": ".py",
-    "cython": ".pxd",
-    "diff": ".json",
-    "json": ".json",
-    "lua": ".lua",
-    "nim": ".nim",
-    "prompt": ".txt",
-    "pyi": ".pyi",
-    "rust": ".rs",
-    "ts_wasm": ".d.ts",
-    "zig": ".zig",
-}
-
-
 @dataclass
 class GenerateResult:
     """Result of a single writer's generation."""
@@ -187,12 +174,12 @@ def _writer_output_ext(writer: Any, writer_name: str) -> str:
     """Get file extension for a writer's output.
 
     Checks writer for output_extension attribute first (plugin support),
-    then falls back to built-in mapping, then defaults to .txt.
+    then queries the writer registry, then defaults to .txt.
     """
     ext: str | None = getattr(writer, "output_extension", None)
     if ext is not None:
         return ext
-    return _WRITER_EXTENSIONS.get(writer_name, ".txt")
+    return get_writer_extension(writer_name)
 
 
 def _writer_default_output_pattern(writer: Any, writer_name: str) -> str:
@@ -200,9 +187,8 @@ def _writer_default_output_pattern(writer: Any, writer_name: str) -> str:
     pattern: str | None = getattr(writer, "default_output_pattern", None)
     if pattern is not None:
         return pattern
-    # Fallback for plugin writers that don't declare the attribute
-    ext = _WRITER_EXTENSIONS.get(writer_name, ".txt")
-    return "{dir}/{stem}" + ext
+    ext = get_writer_extension(writer_name)
+    return f"{{dir}}/{{stem}}{ext}"
 
 
 def _try_ir_cache_lookup(
@@ -266,6 +252,7 @@ def _get_ir(
     context: PipelineContext | None = None,
     input_spec: InputSpec | None = None,
     prechecked_ir: tuple[SourceUnit | None, str, str] | None = None,
+    transforms: Sequence[PipelineFilter] | None = None,
 ) -> tuple[SourceUnit, str, str, bool]:
     """Resolve IR from cache or by parsing with the backend.
 
@@ -290,12 +277,24 @@ def _get_ir(
 
     if header is None:
         parse_code = code if code is not None else header_path.read_text(encoding="utf-8")
+        inc_dirs: list[str] = list(parsed_args.includes)
+        extra_parse_args: list[str] = [f"-D{d}" for d in parsed_args.defines] + list(parsed_args.other_args)
+        transform_backend_kwargs: dict[str, Any] = {}
+        if transforms:
+            for t in transforms:
+                if hasattr(t, "prepare_parse"):
+                    inc_dirs, extra_parse_args, t_kwargs = t.prepare_parse(
+                        parse_code,
+                        str(header_path),
+                        inc_dirs,
+                        extra_parse_args,
+                    )
+                    transform_backend_kwargs.update(t_kwargs)
+
         all_args: list[str] = ["-target", target]
-        for d in parsed_args.defines:
-            all_args.append(f"-D{d}")
-        for inc in parsed_args.includes:
+        for inc in inc_dirs:
             all_args.append(f"-I{inc}")
-        all_args.extend(parsed_args.other_args)
+        all_args.extend(extra_parse_args)
 
         disp = HookDispatcher()
         if get_backend is _HK_GET_BACKEND and context is not None:
@@ -306,11 +305,15 @@ def _get_ir(
                 extra_args=all_args,
                 project_prefixes=project_prefixes,
                 context=context,
+                **transform_backend_kwargs,
             )
 
         if header is None:
             backend = get_backend(backend_name)
-            parse_kwargs: dict[str, Any] = {"project_prefixes": project_prefixes}
+            parse_kwargs: dict[str, Any] = {
+                "project_prefixes": project_prefixes,
+                **transform_backend_kwargs,
+            }
             if input_spec is not None:
                 if not input_spec.recursive_includes:
                     parse_kwargs["recursive_includes"] = False
@@ -348,33 +351,12 @@ def _get_ir(
 
 
 def _instantiate_transform(name: str, kwargs: dict[str, Any]) -> PipelineFilter:
-    """Instantiate a built-in Layer-2 transform from its shorthand name and kwargs."""
-    key = name.strip().lower().replace("-", "_")
-    if key == "nim_cleanup":
-        return NimCleanupTransform(**kwargs)
-    if key == "nim_jsondoc":
-        return NimJsonDocEnricher(**kwargs)
-    if key == "filter_by_header":
-        return FilterByHeader(**kwargs)
-    if key == "filter_by_symbol":
-        return FilterBySymbol(**kwargs)
-    if key == "filter_deprecated":
-        return FilterDeprecated(**kwargs)
-    if key in ("filter_unexported", "filter_unexported_symbols"):
-        return FilterUnexportedSymbols(**kwargs)
-    if key in ("strip_padding", "strip_padding_fields"):
-        return StripPaddingFields(**kwargs)
-    if key == "strip_prefix":
-        return StripPrefix(**kwargs) if kwargs else StripPrefix("")
-    if key == "make_opaque":
-        return MakeOpaque(**kwargs) if kwargs else MakeOpaque([])
-    if key == "rename_types":
-        return RenameTypes(**kwargs) if kwargs else RenameTypes({})
-    raise ValueError(f"Unknown transform: {name!r}")
+    """Instantiate a registered Layer-2 transform from its name and kwargs."""
+    return get_transform(name, **kwargs)
 
 
 def _parse_transform_str(spec: str) -> PipelineFilter:
-    """Parse a transform string shorthand (e.g. ``'nim_cleanup'`` or ``'filter_by_symbol:exclude=_*'``)."""
+    """Parse a transform string shorthand (e.g. ``'filter_by_symbol:exclude=_*'``)."""
     name, sep, rest = spec.partition(":")
     if not sep or not rest:
         return _instantiate_transform(name, {})
@@ -388,25 +370,16 @@ def _parse_transform_str(spec: str) -> PipelineFilter:
             raise ValueError(f"Malformed transform argument {pair!r} in {spec!r}; expected KEY=VALUE")
         raw_lists.setdefault(k.strip(), []).append(v.strip())
 
-    key_norm = name.strip().lower().replace("-", "_")
-    list_keys = {
-        "include",
-        "exclude",
-        "include_patterns",
-        "exclude_patterns",
-        "allow",
-        "deny",
-        "filtered_functions",
-        "names",
-        "extra_flags",
-    }
-    bool_keys = {"keep_nim_main", "cascade_excluded_types"}
+    try:
+        opt_specs = {opt.name: opt for opt in list_transform_options(name)}
+    except ValueError:
+        opt_specs = {}
+
     kwargs: dict[str, Any] = {}
     for k, vals in raw_lists.items():
-        if k in bool_keys:
-            kwargs[k] = vals[-1].lower() in ("1", "true", "yes")
-        elif k in list_keys or (key_norm == "make_opaque" and k == "names"):
-            kwargs[k] = vals
+        opt = opt_specs.get(k)
+        if opt is not None:
+            kwargs[k] = opt.coerce(vals[-1] if opt.type is not list else vals)
         else:
             kwargs[k] = vals[0] if len(vals) == 1 else vals
     return _instantiate_transform(name, kwargs)
@@ -746,7 +719,7 @@ def generate(
     if backend_name is not None and backend_name.strip().lower() == "auto":
         backend_name = resolve_backend("auto")
     else:
-        backend_name = backend_name or "libclang"
+        backend_name = backend_name or get_default_backend()
     writer_name = writer_name or "json"
     writer_options = writer_options or {}
 
@@ -769,8 +742,11 @@ def generate(
     effective_target_arg = target
     if target is not None and target.strip().lower() == "embedded":
         effective_target_arg = None
-        if writer_name == "nim":
-            writer_options = {"embedded": True, **writer_options}
+        try:
+            if any(opt.name == "embedded" for opt in list_writer_options(writer_name)):
+                writer_options = {"embedded": True, **writer_options}
+        except ValueError:
+            pass
 
     resolved_target = resolve_target(target=effective_target_arg, project_root=project_root)
 
@@ -790,9 +766,9 @@ def generate(
     if _pre_resolved_ir is not None:
         header, ir_cache_key, ir_slug, ir_from_cache = _pre_resolved_ir
     else:
-        # Check Layer-1 IR cache BEFORE checking is_backend_available("libclang")
+        # Check Layer-1 IR cache BEFORE checking is_backend_available(backend_name)
         # so offline builds (32-bit targets, sdist with pre-warmed .headerkit/ir/)
-        # can load cached IR and run transforms/writers without libclang installed.
+        # can load cached IR and run transforms/writers without native libraries installed.
         prechecked_ir = _try_ir_cache_lookup(
             backend_name=backend_name,
             header_path=resolved_path,
@@ -820,11 +796,16 @@ def generate(
                 context=ctx,
                 input_spec=spec,
                 prechecked_ir=prechecked_ir,
+                transforms=resolved_transforms,
             )
 
         # Only check backend availability and output-cache fallback when Layer-1 IR
         # cache missed (or was disabled) and we actually need to parse the header.
-        if prechecked_ir[0] is None and backend_name == "libclang" and not is_backend_available(backend_name):
+        if (
+            prechecked_ir[0] is None
+            and supports_backend_auto_install(backend_name)
+            and not is_backend_available(backend_name)
+        ):
             # Library not loadable -- try output cache first (cheaper than install)
             if use_output_cache:
                 assert resolved_cache_dir is not None  # guaranteed by use_output_cache
@@ -959,7 +940,7 @@ def generate_all(
         wopts = writer_options.get(wname, {})
         opath: str | Path | None = output_paths.get(wname)
         if opath is None and output_dir is not None:
-            ext = _WRITER_EXTENSIONS.get(wname) or _writer_output_ext(get_writer(wname), wname)
+            ext = _writer_output_ext(get_writer(wname), wname)
             stem = Path(path_str).stem
             opath = Path(output_dir) / f"{stem}{ext}"
 
@@ -1113,7 +1094,7 @@ def generate_targets(
     ir_group_cache: dict[tuple[Any, ...], tuple[SourceUnit, str, str, bool]] = {}
 
     for t_cfg in targets:
-        eff_backend = t_cfg.backend or default_backend_name or "libclang"
+        eff_backend = t_cfg.backend or default_backend_name or get_default_backend()
         if eff_backend.strip().lower() == "auto":
             eff_backend = resolve_backend("auto")
         eff_includes = list(t_cfg.include_dirs) if t_cfg.include_dirs else list(default_include_dirs or [])
@@ -1160,7 +1141,7 @@ def generate_targets(
                 resolved_out = Path(t_cfg.output[wname])
                 opath = resolved_out if resolved_out.is_absolute() else (project_root / resolved_out)
             elif output_dir is not None:
-                ext = _WRITER_EXTENSIONS.get(wname) or _writer_output_ext(get_writer(wname), wname)
+                ext = _writer_output_ext(get_writer(wname), wname)
                 stem = Path(spec.path).stem
                 opath = Path(output_dir) / f"{stem}{ext}"
 

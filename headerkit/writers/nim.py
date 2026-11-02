@@ -52,8 +52,10 @@ from headerkit.ir import (
     Variable,
 )
 from headerkit.reconcile import (
+    MatrixCondition,
     MatrixGuardedBlock,
     MultiDimensionalReconciledUnit,
+    PlatformCondition,
     PlatformGuardedBlock,
     ReconciledUnit,
 )
@@ -1245,6 +1247,77 @@ class NimWriter(BaseWriter):
             if fnmatch.fnmatchcase(raw_name, pat) or fnmatch.fnmatchcase(bare_nim, pat):
                 return True
         return False
+
+    @staticmethod
+    def _platform_to_nim(tag: str) -> str:
+        """Map a target triple or OS tag to its Nim ``when defined(...)`` identifier."""
+        lower = tag.lower()
+        if "darwin" in lower or "apple" in lower or "mac" in lower:
+            return "macosx"
+        if "linux" in lower:
+            return "linux"
+        if "windows" in lower or "msvc" in lower or "win32" in lower:
+            return "windows"
+        return "posix"
+
+    def format_platform_condition(self, cond: object) -> str:
+        """Format a :class:`PlatformCondition` into a Nim ``when`` condition."""
+        from headerkit.reconcile import PlatformCondition
+
+        if not isinstance(cond, PlatformCondition):
+            return "true"
+        raw_tags = [tag for term in cond.terms for tag in term] if cond.terms else sorted(cond.tags)
+        plat_strs = sorted({self._platform_to_nim(t) for t in raw_tags if t})
+        if len(plat_strs) > 1:
+            return f"({' or '.join(f'defined({p})' for p in plat_strs)})"
+        if plat_strs:
+            return f"defined({plat_strs[0]})"
+        return "true"
+
+    def format_matrix_condition(
+        self,
+        cond: object,
+        domain_matrix: dict[str, set[Any]] | None = None,
+    ) -> str:
+        """Format a :class:`MatrixCondition` into a Nim ``when`` condition."""
+        from headerkit.reconcile import MatrixCondition, minimize_conditions
+
+        if not isinstance(cond, MatrixCondition):
+            return "true"
+        effective = cond
+        if domain_matrix and cond.raw_conditions and cond.is_tautology:
+            effective = minimize_conditions(cond.raw_conditions, domain_matrix)
+
+        clauses: list[str] = []
+        platforms = effective.platforms
+        if not platforms and cond.raw_conditions and not domain_matrix:
+            platforms = tuple(sorted({str(c["target"]) for c in cond.raw_conditions if "target" in c}))
+        if platforms:
+            plat_strs = sorted({self._platform_to_nim(p) for p in platforms})
+            if len(plat_strs) > 1:
+                clauses.append(f"({' or '.join(f'defined({p})' for p in plat_strs)})")
+            elif plat_strs:
+                clauses.append(f"defined({plat_strs[0]})")
+
+        if effective.version_op == "==":
+            clauses.append(f"version == {effective.version_min!r}")
+        elif effective.version_op == ">=":
+            clauses.append(f"version >= {effective.version_min!r}")
+        elif effective.version_op == "range":
+            clauses.append(f"({effective.version_min!r} <= version and version <= {effective.version_max!r})")
+
+        if effective.feature_implicants:
+            imp_clauses: list[str] = []
+            for imp in effective.feature_implicants:
+                term_parts = [f"defined({feat})" if val else f"not defined({feat})" for feat, val in imp]
+                if term_parts:
+                    imp_clauses.append(" and ".join(term_parts))
+            if len(imp_clauses) > 1:
+                clauses.append(f"({' or '.join(f'({c})' if ' ' in c else c for c in imp_clauses)})")
+            elif imp_clauses:
+                clauses.append(imp_clauses[0])
+
+        return " and ".join(clauses) if clauses else "true"
 
     def _is_embedded(self, options: ScaffoldOptions | None = None) -> bool:
         """Return whether the target profile is bare-metal / standalone embedded."""
@@ -3302,6 +3375,15 @@ class NimWriter(BaseWriter):
                     sections.append(rendered_chunk)
                 decl_accumulator.clear()
 
+        domain_matrix: dict[str, set[Any]] = {}
+        for item in unit.items:
+            if isinstance(item, MatrixGuardedBlock):
+                for m_cond, _ in item.branches:
+                    if hasattr(m_cond, "raw_conditions"):
+                        for rc in m_cond.raw_conditions:
+                            for k, v in rc.items():
+                                domain_matrix.setdefault(k, set()).add(v)
+
         for item in unit.items:
             if isinstance(item, (PlatformGuardedBlock, MatrixGuardedBlock)):
                 flush_accumulator()
@@ -3314,14 +3396,15 @@ class NimWriter(BaseWriter):
                 renames_base = dict(getattr(self, "_type_renames", {}))
                 aliases_base = dict(getattr(self, "_type_aliases", {}))
 
-                for idx, (cond, branch_decls) in enumerate(item.branches):
+                branches_seq: Sequence[tuple[PlatformCondition | MatrixCondition, list[Declaration]]] = item.branches
+                for idx, (cond, branch_decls) in enumerate(branches_seq):
                     self._emitted_proc_sigs = set(sigs_base)
                     self._emitted_normalized_types = dict(types_base)
                     self._type_renames = dict(renames_base)
                     self._type_aliases = dict(aliases_base)
 
                     kw = "when" if idx == 0 else "elif"
-                    pred = getattr(cond, "nim_predicate", None) or getattr(cond, "predicate", "")
+                    pred = self.format_guard_condition(cond, domain_matrix)
                     block_lines.append(f"{kw} {pred}:")
                     rendered_branch = _render_decl_list(branch_decls)
                     if not rendered_branch:

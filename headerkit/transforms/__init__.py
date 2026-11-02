@@ -13,7 +13,16 @@ from headerkit.transforms.builtin import (
     StripPrefix,
     rewrite_type_references,
 )
-from headerkit.transforms.filter import ChainedFilter, PipelineFilter
+from headerkit.transforms.filter import (
+    ChainedFilter,
+    PipelineFilter,
+    TransformOption,
+    coerce_transform_options,
+    get_transform,
+    list_transform_options,
+    list_transforms,
+    register_transform,
+)
 from headerkit.transforms.nim_cleanup import NimCleanupTransform
 from headerkit.transforms.nim_jsondoc import NimJsonDocEnricher
 
@@ -32,5 +41,11 @@ __all__ = [
     "RenameTypes",
     "StripPaddingFields",
     "StripPrefix",
+    "TransformOption",
+    "coerce_transform_options",
+    "get_transform",
+    "list_transform_options",
+    "list_transforms",
+    "register_transform",
     "rewrite_type_references",
 ]

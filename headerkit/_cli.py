@@ -21,7 +21,12 @@ from headerkit._generate import batch_generate, generate, generate_targets
 from headerkit._rename import register_config_hooks as register_rename_config
 from headerkit.backends import _load_backend_plugins
 from headerkit.hooks import _load_hook_plugins
-from headerkit.writers import _load_writer_plugins, coerce_writer_options, get_default_writer
+from headerkit.writers import (
+    _load_writer_plugins,
+    coerce_writer_options,
+    get_default_writer,
+    infer_writer_from_extension,
+)
 
 
 def parse_writer_options(
@@ -105,21 +110,13 @@ def add_target_command(args: argparse.Namespace) -> int:
         print(f"Error: target file not found: {output_path}", file=sys.stderr)
         return 1
 
-    lang = args.lang
+    lang = args.lang or infer_writer_from_extension(output_path)
     if not lang:
-        suffix = output_path.suffix.lstrip(".")
-        if suffix in ("nim", "nimble"):
-            lang = "nim"
-        elif suffix in ("pyx", "pxd"):
-            lang = "cython"
-        elif suffix in ("py", "pyi"):
-            lang = "python"
-        elif suffix in ("c", "h"):
-            lang = "c"
-        elif suffix in ("cpp", "hpp", "cc"):
-            lang = "cpp"
-        else:
-            lang = "nim"
+        print(
+            f"Error: cannot infer writer from extension for {output_path}; specify --lang",
+            file=sys.stderr,
+        )
+        return 1
 
     existing_content = output_path.read_text(encoding="utf-8")
     from headerkit.ir import SourceUnit
@@ -154,7 +151,7 @@ def add_target_command(args: argparse.Namespace) -> int:
         unit = probe_configuration(manifest.header_path, cond)
         matrix_units.append((cond, unit))
 
-    reconciled = reconcile_matrix(matrix_units, matrix=manifest.matrix, target_lang=lang)
+    reconciled = reconcile_matrix(matrix_units, matrix=manifest.matrix)
     writer = get_writer(lang)
     generated_code = writer.write(reconciled)  # type: ignore[arg-type]
 
@@ -389,22 +386,9 @@ def _parse_writer_specs(
     return specs
 
 
-_EXTENSION_TO_WRITER: dict[str, str] = {
-    ".pxd": "cython",
-    ".pyx": "cython",
-    ".json": "json",
-    ".lua": "lua",
-    ".txt": "prompt",
-    ".nim": "nim",
-    ".py": "cffi",
-    ".pyi": "pyi",
-}
-
-
 def _infer_writer_from_path(path: str) -> str | None:
     """Infer writer name from output file extension."""
-    suffix = Path(path).suffix.lower()
-    return _EXTENSION_TO_WRITER.get(suffix)
+    return infer_writer_from_extension(path)
 
 
 def _parse_output_specs(

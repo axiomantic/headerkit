@@ -411,6 +411,7 @@ class LuaWriter(BaseWriter):
     format_description: str = "LuaJIT FFI bindings"
     default_output_pattern: str = "{dir}/{stem}_ffi.lua"
     default_extension: str = ".lua"
+    comment_prefix: ClassVar[str] = "--"
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = ()
 

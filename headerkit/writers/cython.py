@@ -2392,54 +2392,6 @@ def write_pxd(
 # =====================================================================
 
 
-def _condition_to_cython(cond: Any, _domain_matrix: dict[str, set[Any]] | None = None) -> str:
-    """Translate a PlatformCondition or MatrixCondition into Cython compile-time IF condition."""
-    if isinstance(cond, PlatformCondition):
-        for tag in cond.tags:
-            t_low = tag.lower()
-            if "darwin" in t_low or "mac" in t_low or "apple" in t_low:
-                return 'UNAME_SYSNAME == "Darwin"'
-            if "linux" in t_low:
-                return 'UNAME_SYSNAME == "Linux"'
-            if "windows" in t_low or "msvc" in t_low or "win32" in t_low:
-                return 'UNAME_SYSNAME == "Windows"'
-        return "1"
-
-    if isinstance(cond, MatrixCondition):
-        platforms = {c["target"] for c in cond.raw_conditions if "target" in c} if cond.raw_conditions else set()
-        if platforms:
-            cy_plats: list[str] = []
-            for p in sorted(platforms):
-                p_low = p.lower()
-                if "darwin" in p_low or "mac" in p_low or "apple" in p_low:
-                    cy_plats.append('"Darwin"')
-                elif "linux" in p_low:
-                    cy_plats.append('"Linux"')
-                elif "windows" in p_low or "msvc" in p_low or "win32" in p_low:
-                    cy_plats.append('"Windows"')
-            if len(cy_plats) > 1:
-                return f"UNAME_SYSNAME in ({', '.join(cy_plats)})"
-            elif cy_plats:
-                return f"UNAME_SYSNAME == {cy_plats[0]}"
-
-        # Fallback to predicate string mapping
-        pred = getattr(cond, "predicate", "")
-        if pred:
-            if "UNAME_SYSNAME" in pred:
-                return pred
-            pred_mapped = pred
-            pred_mapped = pred_mapped.replace("defined(macosx)", 'UNAME_SYSNAME == "Darwin"')
-            pred_mapped = pred_mapped.replace("defined(darwin)", 'UNAME_SYSNAME == "Darwin"')
-            pred_mapped = pred_mapped.replace("defined(linux)", 'UNAME_SYSNAME == "Linux"')
-            pred_mapped = pred_mapped.replace("defined(windows)", 'UNAME_SYSNAME == "Windows"')
-            pred_mapped = pred_mapped.replace("defined(_WIN32)", 'UNAME_SYSNAME == "Windows"')
-            pred_mapped = pred_mapped.replace(" && ", " and ")
-            pred_mapped = pred_mapped.replace(" || ", " or ")
-            return pred_mapped
-
-    return "1"
-
-
 class CythonWriter(BaseWriter):
     """Writer that converts Header IR into Cython .pxd declarations.
 
@@ -2455,8 +2407,70 @@ class CythonWriter(BaseWriter):
     format_description: str = "Cython .pxd declarations for C/C++ interop"
     default_output_pattern: str = "{dir}/{stem}.pxd"
     default_extension: str = ".pxd"
+    file_extensions: ClassVar[tuple[str, ...] | None] = (".pxd", ".pyx")
+    comment_prefix: ClassVar[str] = "//"
     min_access_floor: ClassVar[str | None] = "public"
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+
+    @staticmethod
+    def _platform_to_cython(tag: str) -> str | None:
+        """Map a target triple or OS tag to its Cython ``UNAME_SYSNAME`` literal."""
+        t_low = tag.lower()
+        if "darwin" in t_low or "mac" in t_low or "apple" in t_low:
+            return '"Darwin"'
+        if "linux" in t_low:
+            return '"Linux"'
+        if "windows" in t_low or "msvc" in t_low or "win32" in t_low:
+            return '"Windows"'
+        return None
+
+    def format_platform_condition(self, cond: PlatformCondition) -> str:
+        """Format a :class:`PlatformCondition` into a Cython compile-time ``IF`` expression."""
+        raw_tags = [tag for term in cond.terms for tag in term] if cond.terms else sorted(cond.tags)
+        cy_plats = sorted({p for t in raw_tags if (p := self._platform_to_cython(t)) is not None})
+        if len(cy_plats) > 1:
+            return f"UNAME_SYSNAME in ({', '.join(cy_plats)})"
+        if cy_plats:
+            return f"UNAME_SYSNAME == {cy_plats[0]}"
+        return "1"
+
+    def format_matrix_condition(
+        self,
+        cond: MatrixCondition,
+        domain_matrix: dict[str, set[Any]] | None = None,
+    ) -> str:
+        """Format a :class:`MatrixCondition` into a Cython compile-time ``IF`` expression."""
+        from headerkit.reconcile import minimize_conditions
+
+        effective = cond
+        if domain_matrix and cond.raw_conditions and cond.is_tautology:
+            effective = minimize_conditions(cond.raw_conditions, domain_matrix)
+
+        platforms = effective.platforms
+        if not platforms and cond.raw_conditions:
+            platforms = tuple(sorted({str(c["target"]) for c in cond.raw_conditions if "target" in c}))
+
+        clauses: list[str] = []
+        if platforms:
+            cy_plats = sorted({p for t in platforms if (p := self._platform_to_cython(t)) is not None})
+            if len(cy_plats) > 1:
+                clauses.append(f"UNAME_SYSNAME in ({', '.join(cy_plats)})")
+            elif cy_plats:
+                clauses.append(f"UNAME_SYSNAME == {cy_plats[0]}")
+
+        if effective.feature_implicants:
+            imp_clauses: list[str] = []
+            for imp in effective.feature_implicants:
+                term_parts = [f"defined({feat})" if val else f"not defined({feat})" for feat, val in imp]
+                if term_parts:
+                    imp_clauses.append(" and ".join(term_parts))
+            if len(imp_clauses) > 1:
+                clauses.append(f"({' or '.join(f'({c})' if ' ' in c else c for c in imp_clauses)})")
+            elif imp_clauses:
+                clauses.append(imp_clauses[0])
+
+        return " and ".join(clauses) if clauses else "1"
+
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="test_type",
@@ -2605,7 +2619,7 @@ class CythonWriter(BaseWriter):
                 block_lines: list[str] = []
                 branches: Sequence[tuple[Any, list[Declaration]]] = item.branches
                 for idx, (b_cond, b_decls) in enumerate(branches):
-                    cy_cond = _condition_to_cython(b_cond, domain_matrix)
+                    cy_cond = self.format_guard_condition(b_cond, domain_matrix)
                     kw = "IF" if idx == 0 else "ELIF"
                     block_lines.append(f"{kw} {cy_cond}:")
                     rendered_b = _render_chunk(b_decls)

@@ -42,18 +42,14 @@ import contextlib
 import fnmatch
 import functools
 import glob
-import json
 import os
 import posixpath
 import re
-import shutil
-import struct
 import subprocess
 import sys
-import tempfile
 import weakref
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -758,7 +754,11 @@ def _is_compiler_resource_dir(path_str: str) -> bool:
     return False
 
 
-def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None = None) -> bool:
+def _is_system_header(
+    header_path: str,
+    project_prefixes: tuple[str, ...] | None = None,
+    system_headers: Collection[str] = (),
+) -> bool:
     """Check if a header path is a system header.
 
     System headers are identified by:
@@ -778,6 +778,7 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
 
     :param header_path: Path to the header file
     :param project_prefixes: Optional tuple of path prefixes to treat as project (not system)
+    :param system_headers: Optional collection of header basenames to treat as system headers
     :returns: True if this is a system header
     """
     path_str = normalize_path(str(header_path))
@@ -786,7 +787,7 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
     if _matches_project_prefix(header_path, project_prefixes):
         return False
 
-    if os.path.basename(path_str) == "nimbase.h":
+    if system_headers and os.path.basename(path_str) in system_headers:
         return True
 
     # System header locations that are absolute path prefixes
@@ -4439,64 +4440,6 @@ class ClangASTConverter:
         return None
 
 
-@functools.lru_cache(maxsize=1)
-def _find_nim_libpath() -> str | None:
-    """Locate Nim's standard library directory containing ``nimbase.h`` via ``nim dump``."""
-    try:
-        proc = subprocess.run(
-            ["nim", "dump", "--dump.format:json", "."],
-            cwd=tempfile.gettempdir(),
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        if proc.returncode == 0 and proc.stdout:
-            start = proc.stdout.find("{")
-            end = proc.stdout.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                data = json.loads(proc.stdout[start : end + 1])
-                if isinstance(data, dict):
-                    libpath = data.get("libpath")
-                    if isinstance(libpath, str) and libpath:
-                        return libpath
-    except (OSError, subprocess.SubprocessError, ValueError):
-        pass
-
-    nim_bin = shutil.which("nim")
-    if nim_bin is not None:
-        real_nim = os.path.realpath(nim_bin)
-        candidate = os.path.normpath(os.path.join(os.path.dirname(real_nim), "..", "lib"))
-        if os.path.isfile(os.path.join(candidate, "nimbase.h")):
-            return candidate
-    return None
-
-
-def _has_nimbase_in_dirs(
-    include_dirs: Sequence[str] | None,
-    extra_args: Sequence[str] | None,
-    filename: str,
-) -> bool:
-    """Check whether ``nimbase.h`` is already present in configured include directories."""
-    search: list[str] = []
-    if include_dirs:
-        search.extend(include_dirs)
-    if extra_args:
-        args_iter = iter(extra_args)
-        for arg in args_iter:
-            if arg in ("-I", "-isystem"):
-                with contextlib.suppress(StopIteration):
-                    search.append(next(args_iter))
-            elif arg.startswith("-I") and len(arg) > 2:
-                search.append(arg[2:])
-            elif arg.startswith("-isystem") and len(arg) > 8:
-                search.append(arg[8:])
-    file_dir = os.path.dirname(os.path.abspath(filename))
-    if file_dir:
-        search.append(file_dir)
-    return any(os.path.isfile(os.path.join(d, "nimbase.h")) for d in search)
-
-
 class LibclangBackend:
     """Parser backend using libclang.
 
@@ -4528,10 +4471,17 @@ class LibclangBackend:
         )
     """
 
+    description: str = "Full C/C++ support via LLVM"
+    supports_auto_install: bool = True
     supported_languages: frozenset[str] = frozenset({"c", "cpp"})
     supported_classifications: frozenset[str] = frozenset({"header", "source"})
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        system_headers: Sequence[str] = (),
+        skip_function_bodies: bool = False,
+    ) -> None:
         self._index: Any = None
         # Cache for parsed headers (path -> Header) to avoid re-parsing
         self._parse_cache: dict[str, Header] = {}
@@ -4540,9 +4490,16 @@ class LibclangBackend:
         # Normalized paths clang itself classified as system headers, accumulated
         # across every translation unit this backend has parsed.
         self._clang_system_headers: set[str] = set()
+        self._system_headers: frozenset[str] = frozenset(system_headers)
+        self._skip_function_bodies: bool = skip_function_bodies
         _LIVE_BACKENDS.add(self)
 
-    def _is_system_include(self, header_path: str, project_prefixes: tuple[str, ...] | None) -> bool:
+    def _is_system_include(
+        self,
+        header_path: str,
+        project_prefixes: tuple[str, ...] | None,
+        system_headers: Collection[str] = (),
+    ) -> bool:
         """Decide whether an included header is a system header.
 
         clang's answer is authoritative: it knows which search paths it treated
@@ -4553,13 +4510,15 @@ class LibclangBackend:
 
         :param header_path: Path to the included header.
         :param project_prefixes: Path prefixes that override every system classification.
+        :param system_headers: Optional collection of header basenames to treat as system headers.
         :returns: True if the header must not be descended into.
         """
         if _matches_project_prefix(header_path, project_prefixes):
             return False
         if normalize_path(str(header_path)) in self._clang_system_headers:
             return True
-        return _is_system_header(header_path, project_prefixes)
+        combined_sys = self._system_headers | frozenset(system_headers)
+        return _is_system_header(header_path, project_prefixes, combined_sys)
 
     @property
     def name(self) -> str:
@@ -4584,7 +4543,13 @@ class LibclangBackend:
         return True
 
     def is_available(self) -> bool:
-        return _configure_libclang()
+        return is_system_libclang_available()
+
+    @classmethod
+    def auto_install(cls) -> bool:
+        from headerkit.install_libclang import auto_install
+
+        return auto_install()
 
     def _get_index(self) -> Any:
         """Get or create the clang index."""
@@ -4675,6 +4640,7 @@ class LibclangBackend:
         project_prefixes: tuple[str, ...] | None = None,
         allowlist_paths: _PathSet | None = None,
         denylist_paths: _PathSet | None = None,
+        system_headers: Collection[str] = (),
     ) -> Header:
         """Recursively parse included headers and combine declarations.
 
@@ -4701,7 +4667,7 @@ class LibclangBackend:
 
         for include_path in sorted(main_header.included_headers):
             # Skip system headers (unless allowlisted via project_prefixes)
-            if self._is_system_include(include_path, project_prefixes):
+            if self._is_system_include(include_path, project_prefixes, system_headers):
                 continue
 
             # Get absolute path
@@ -4754,6 +4720,7 @@ class LibclangBackend:
                     project_prefixes,
                     allowlist_paths,
                     denylist_paths,
+                    system_headers=system_headers,
                 )
 
                 # Add declarations and transitive included headers from sub-header
@@ -4789,6 +4756,9 @@ class LibclangBackend:
         project_prefixes: tuple[str, ...] | None = None,
         allowlist: list[str] | None = None,
         denylist: list[str] | None = None,
+        system_headers: Sequence[str] = (),
+        skip_function_bodies: bool = False,
+        **_kwargs: Any,
     ) -> Header:
         """Parse C/C++ code using libclang.
 
@@ -4935,18 +4905,6 @@ class LibclangBackend:
         if extra_args:
             args.extend(extra_args)
 
-        # Auto-resolve Nim's standard library directory when parsing a header that includes "nimbase.h"
-        uses_nimbase = "nimbase.h" in code
-        nim_libpath_added = False
-        if uses_nimbase:
-            if "NIM_INTBITS" not in code and not any("NIM_INTBITS" in a for a in args):
-                args.append(f"-DNIM_INTBITS={struct.calcsize('P') * 8}")
-            if not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
-                nim_libpath = _find_nim_libpath()
-                if nim_libpath is not None:
-                    args.append(f"-isystem{nim_libpath}")
-                    nim_libpath_added = True
-
         # Parse the code with detailed preprocessing record for macro extraction
         index = self._get_index()
         tu = index.parse(
@@ -4956,28 +4914,10 @@ class LibclangBackend:
             options=_cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
         )
 
-        # If an included header (e.g. via umbrella #include) needed nimbase.h, retry with Nim libpath
-        if not nim_libpath_added and any(
-            diag.severity >= _cindex.Diagnostic.Error and "nimbase.h" in str(diag.spelling) for diag in tu.diagnostics
+        # Retry skipping function bodies when requested and inline body checks fail
+        if (self._skip_function_bodies or skip_function_bodies) and any(
+            diag.severity >= _cindex.Diagnostic.Error for diag in tu.diagnostics
         ):
-            uses_nimbase = True
-            if "NIM_INTBITS" not in code and not any("NIM_INTBITS" in a for a in args):
-                args.append(f"-DNIM_INTBITS={struct.calcsize('P') * 8}")
-            if not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
-                nim_libpath = _find_nim_libpath()
-                if nim_libpath is not None:
-                    args.append(f"-isystem{nim_libpath}")
-                    nim_libpath_added = True
-                    tu = index.parse(
-                        filename,
-                        args=args,
-                        unsaved_files=[(filename, code)],
-                        options=_cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
-                    )
-
-        # Debug Nim --header output emits inline nimFrame() bodies referencing undeclared
-        # framePtr__system_u*; retry skipping function bodies if a Nim header fails body check
-        if uses_nimbase and any(diag.severity >= _cindex.Diagnostic.Error for diag in tu.diagnostics):
             tu = index.parse(
                 filename,
                 args=args,
@@ -5028,7 +4968,9 @@ class LibclangBackend:
         # ``recursive_includes`` is the caller's answer, so nothing here second-guesses
         # it from the header's shape. Scope is bounded by _is_system_header /
         # project_prefixes, allowlist, max_depth, and self._visited.
-        has_project_include = any(not self._is_system_include(h, project_prefixes) for h in header.included_headers)
+        has_project_include = any(
+            not self._is_system_include(h, project_prefixes, system_headers) for h in header.included_headers
+        )
         if recursive_includes and has_project_include:
             # Reset visited set for each top-level parse
             self._visited = set()
@@ -5051,6 +4993,7 @@ class LibclangBackend:
                 project_prefixes=project_prefixes,
                 allowlist_paths=allowlist_paths,
                 denylist_paths=denylist_paths,
+                system_headers=system_headers,
             )
 
         # Included headers are parsed in isolation, so a macro that a *later*

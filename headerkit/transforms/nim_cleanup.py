@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import functools
+import json
+import os
 import re
+import shutil
+import struct
+import subprocess
+import tempfile
 from collections.abc import Sequence
 from dataclasses import replace
+from typing import Any, ClassVar
 
 from headerkit.hooks import PipelineContext
 from headerkit.ir import (
@@ -25,7 +33,111 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.transforms.filter import PipelineFilter
+from headerkit.transforms.filter import PipelineFilter, TransformOption, register_transform
+
+_NIM_STORAGE_MACROS: frozenset[str] = frozenset(
+    {
+        "N_LIB_PRIVATE",
+        "N_LIB_EXPORT",
+        "N_LIB_IMPORT",
+        "N_LIB_EXPORT_VAR",
+        "NIM_EXTERNC",
+        "N_NIM_DEPRECATED",
+    }
+)
+
+_NIM_CALLCONV_MACROS: frozenset[str] = frozenset(
+    {
+        "N_CDECL",
+        "N_NOCONV",
+        "N_STDCALL",
+        "N_FASTCALL",
+        "N_INLINE",
+        "N_NOINLINE",
+        "N_NIMCALL",
+        "N_SYSCALL",
+        "N_THISCALL",
+        "N_SAFECALL",
+        "N_CLOSURE",
+    }
+)
+
+_NIM_CALLCONV_PTR_MACROS: frozenset[str] = frozenset(
+    {
+        "N_CDECL_PTR",
+        "N_NOCONV_PTR",
+        "N_STDCALL_PTR",
+        "N_FASTCALL_PTR",
+        "N_INLINE_PTR",
+        "N_NOINLINE_PTR",
+        "N_NIMCALL_PTR",
+        "N_SYSCALL_PTR",
+        "N_THISCALL_PTR",
+        "N_SAFECALL_PTR",
+        "N_CLOSURE_PTR",
+    }
+)
+
+
+@functools.lru_cache(maxsize=1)
+def _find_nim_libpath() -> str | None:
+    """Locate the Nim standard library directory containing ``nimbase.h``."""
+    nim_bin = shutil.which("nim")
+    if not nim_bin:
+        return None
+    try:
+        res = subprocess.run(
+            ["nim", "dump", "--dump.format:json", "."],
+            cwd=tempfile.gettempdir(),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout:
+            start = res.stdout.find("{")
+            end = res.stdout.rfind("}")
+            if start != -1 and end > start:
+                data = json.loads(res.stdout[start : end + 1])
+                libpath = data.get("libpath")
+                if isinstance(libpath, str) and os.path.isfile(os.path.join(libpath, "nimbase.h")):
+                    return libpath
+    except (subprocess.SubprocessError, OSError, ValueError):
+        pass
+
+    candidate = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(nim_bin)), "..", "lib"))
+    if os.path.isfile(os.path.join(candidate, "nimbase.h")):
+        return candidate
+    return None
+
+
+def _has_nimbase_in_dirs(
+    include_dirs: list[str] | None,
+    extra_args: list[str] | None,
+    filename: str,
+) -> bool:
+    """Return True if ``nimbase.h`` already exists in user-supplied include directories."""
+    search_dirs: list[str] = []
+    file_dir = os.path.dirname(os.path.abspath(filename))
+    if file_dir:
+        search_dirs.append(file_dir)
+    if include_dirs:
+        search_dirs.extend(include_dirs)
+    if extra_args:
+        i = 0
+        while i < len(extra_args):
+            arg = extra_args[i]
+            if arg in ("-I", "-isystem") and i + 1 < len(extra_args):
+                search_dirs.append(extra_args[i + 1])
+                i += 2
+                continue
+            for prefix in ("-I", "-isystem"):
+                if arg.startswith(prefix) and len(arg) > len(prefix):
+                    search_dirs.append(arg[len(prefix) :])
+                    break
+            i += 1
+    return any(os.path.isfile(os.path.join(d, "nimbase.h")) for d in search_dirs)
+
 
 _NIM_INTERNAL_EXACT_NAMES: frozenset[str] = frozenset(
     {
@@ -258,6 +370,50 @@ class NimCleanupTransform(PipelineFilter):
        compiler-synthesized ``tyProc__<hash>`` typedefs into their underlying ``FunctionPointer``.
     """
 
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption(
+            "filtered_functions",
+            "Additional function or symbol names to filter out",
+            default=[],
+            type=list,
+        ),
+        TransformOption(
+            "keep_nim_main",
+            "Retain NimMain in the cleaned output",
+            default=False,
+            type=bool,
+        ),
+    )
+
+    @classmethod
+    def backend_options(cls) -> dict[str, Any]:
+        """Return backend parse options required for Nim ``--header`` C files."""
+        return {
+            "storage_macros": sorted(_NIM_STORAGE_MACROS),
+            "callconv_macros": sorted(_NIM_CALLCONV_MACROS),
+            "callconv_ptr_macros": sorted(_NIM_CALLCONV_PTR_MACROS),
+            "system_headers": ["nimbase.h"],
+            "skip_function_bodies": True,
+        }
+
+    def prepare_parse(
+        self,
+        code: str,
+        filename: str,
+        include_dirs: list[str],
+        extra_args: list[str],
+    ) -> tuple[list[str], list[str], dict[str, Any]]:
+        """Resolve ``nimbase.h`` include path, ``NIM_INTBITS``, and CST macro sets before parsing."""
+        inc = list(include_dirs)
+        args = list(extra_args)
+        if "NIM_INTBITS" not in code and not any("NIM_INTBITS" in a for a in args):
+            args.append(f"-DNIM_INTBITS={struct.calcsize('P') * 8}")
+        if not _has_nimbase_in_dirs(inc, args, filename):
+            nim_libpath = _find_nim_libpath()
+            if nim_libpath is not None:
+                args.append(f"-isystem{nim_libpath}")
+        return inc, args, self.backend_options()
+
     def __init__(
         self,
         filtered_functions: Sequence[str] | None = None,
@@ -327,7 +483,7 @@ class NimCleanupTransform(PipelineFilter):
                     continue
                 seen_typedefs.add(key)
             deduped_decls.append(decl)
-        return replace(transformed, declarations=deduped_decls, source_origin="nim_c_header")
+        return replace(transformed, declarations=deduped_decls)
 
     def visit_Function(self, node: Function, context: PipelineContext | None = None) -> Function | None:
         if self._is_internal_symbol(node.name):
@@ -429,3 +585,10 @@ class NimCleanupTransform(PipelineFilter):
         if self._is_internal_symbol(node.name):
             return None
         return node
+
+
+register_transform(
+    "nim_cleanup",
+    NimCleanupTransform,
+    description="Clean up Nim --header C declarations and nimbase.h types",
+)

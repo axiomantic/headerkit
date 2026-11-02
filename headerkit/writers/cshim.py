@@ -250,7 +250,71 @@ class CShimWriter(BaseWriter):
     format_description: str = "C-ABI shim wrapper generator (extern C)"
     default_output_pattern: str = "{dir}/{stem}_cshim.cpp"
     default_extension: str = ".cpp"
+    comment_prefix: ClassVar[str] = "//"
+    language_aliases: ClassVar[tuple[str, ...]] = ("c", "cpp")
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+
+    @staticmethod
+    def _platform_to_c(tag: str) -> str:
+        """Map a target triple or OS tag to its C/C++ preprocessor platform macro."""
+        lower = tag.lower()
+        if "darwin" in lower or "apple" in lower or "mac" in lower:
+            return "__APPLE__"
+        if "linux" in lower:
+            return "__linux__"
+        if "windows" in lower or "msvc" in lower or "win32" in lower:
+            return "_WIN32"
+        return "__unix__"
+
+    def format_platform_condition(self, cond: object) -> str:
+        """Format a PlatformCondition into a C/C++ preprocessor guard expression."""
+        from headerkit.reconcile import PlatformCondition
+
+        if not isinstance(cond, PlatformCondition):
+            return "1"
+        raw_tags = [tag for term in cond.terms for tag in term] if cond.terms else sorted(cond.tags)
+        plat_strs = sorted({self._platform_to_c(t) for t in raw_tags if t})
+        if len(plat_strs) > 1:
+            return f"({' || '.join(f'defined({p})' for p in plat_strs)})"
+        if plat_strs:
+            return f"defined({plat_strs[0]})"
+        return "1"
+
+    def format_matrix_condition(
+        self,
+        cond: object,
+        domain_matrix: dict[str, set[object]] | None = None,
+    ) -> str:
+        """Format a MatrixCondition into a C/C++ preprocessor guard expression."""
+        from headerkit.reconcile import MatrixCondition, minimize_conditions
+
+        if not isinstance(cond, MatrixCondition):
+            return "1"
+        effective = cond
+        if domain_matrix and cond.raw_conditions and cond.is_tautology:
+            effective = minimize_conditions(cond.raw_conditions, domain_matrix)
+
+        clauses: list[str] = []
+        if effective.platforms:
+            plat_strs = sorted({self._platform_to_c(p) for p in effective.platforms})
+            if len(plat_strs) > 1:
+                clauses.append(f"({' || '.join(f'defined({p})' for p in plat_strs)})")
+            elif plat_strs:
+                clauses.append(f"defined({plat_strs[0]})")
+
+        if effective.feature_implicants:
+            imp_clauses: list[str] = []
+            for imp in effective.feature_implicants:
+                term_parts = [f"defined({feat})" if val else f"!defined({feat})" for feat, val in imp]
+                if term_parts:
+                    imp_clauses.append(" && ".join(term_parts))
+            if len(imp_clauses) > 1:
+                clauses.append(f"({' || '.join(f'({c})' if ' ' in c else c for c in imp_clauses)})")
+            elif imp_clauses:
+                clauses.append(imp_clauses[0])
+
+        return " && ".join(clauses) if clauses else "1"
+
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="catch_exceptions",

@@ -259,7 +259,7 @@ class TestIrSchemaVersion:
     #: dataclass in ``headerkit.ir``. Recorded, not computed at import, so that
     #: a change to the IR has to be acknowledged here rather than silently
     #: absorbed.
-    IR_SHAPE_FINGERPRINT = "5c7ea0413ec9dc87"
+    IR_SHAPE_FINGERPRINT = "79901107902801bf"
 
     @staticmethod
     def _ir_shape_fingerprint() -> str:

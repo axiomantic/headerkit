@@ -77,7 +77,8 @@ class TestCrossPlatformIntegration:
         block = reconciled.items[5]
         assert isinstance(block, PlatformGuardedBlock)
         assert len(block.branches) == 3
-        predicates = [cond.nim_predicate for cond, _ in block.branches]
+        writer = NimWriter(header_path="cross_platform.h")
+        predicates = [writer.format_platform_condition(cond) for cond, _ in block.branches]
         assert predicates == ["defined(macosx)", "defined(linux)", "defined(windows)"]
 
         # Trailing common struct and functions

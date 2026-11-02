@@ -11,7 +11,7 @@ import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from headerkit.hooks import PipelineContext
 from headerkit.ir import (
@@ -24,7 +24,12 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
-from headerkit.transforms.filter import PipelineFilter, _normalize_fingerprint_value
+from headerkit.transforms.filter import (
+    PipelineFilter,
+    TransformOption,
+    _normalize_fingerprint_value,
+    register_transform,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -446,6 +451,13 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
 class NimJsonDocEnricher(PipelineFilter):
     """Enrich a ``SourceUnit`` with docstrings, parameter names, deprecation flags, and exportc mappings."""
 
+    supported_options: ClassVar[tuple[TransformOption, ...]] = (
+        TransformOption("jsondoc_path", "Path to Nim jsondoc JSON file", default=None, type=str),
+        TransformOption("nim_source_path", "Path to Nim source file", default=None, type=str),
+        TransformOption("nim_source", "Alias for nim_source_path", default=None, type=str),
+        TransformOption("project_root", "Path to Nim project root", default=None, type=str),
+    )
+
     def __init__(
         self,
         jsondoc_path: Path | str | None = None,
@@ -762,3 +774,10 @@ class NimJsonDocEnricher(PipelineFilter):
                 "entries": _normalize_fingerprint_value(self._explicit_entries),
             },
         }
+
+
+register_transform(
+    "nim_jsondoc",
+    NimJsonDocEnricher,
+    description="Enrich IR with Nim jsondoc docstrings, parameter names, and exportc mappings",
+)

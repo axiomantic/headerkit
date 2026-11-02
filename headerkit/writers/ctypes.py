@@ -44,7 +44,6 @@ from headerkit.reconcile import (
     MultiDimensionalReconciledUnit,
     PlatformGuardedBlock,
     ReconciledUnit,
-    condition_to_python,
 )
 from headerkit.writers.base import (
     BaseWriter,
@@ -2376,9 +2375,6 @@ def header_to_ctypes(header: Header, lib_name: str = "_lib", *, library: str | N
     return "\n".join(output_lines)
 
 
-_condition_to_python = condition_to_python
-
-
 class CtypesWriter(BaseWriter):
     """Writer that generates Python ctypes binding modules from headerkit IR.
 
@@ -2415,6 +2411,7 @@ class CtypesWriter(BaseWriter):
     format_description: str = "Python ctypes bindings"
     default_output_pattern: str = "{dir}/{stem}_ctypes.py"
     default_extension: str = ".py"
+    file_extensions: ClassVar[tuple[str, ...] | None] = ()
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     #: This writer reconstructs record layout rather than deferring to a C
     #: compiler, so it is the one consumer that needs the padding entries.
@@ -2547,7 +2544,7 @@ class CtypesWriter(BaseWriter):
                 block_lines: list[str] = []
                 branches: Sequence[tuple[Any, list[Declaration]]] = item.branches
                 for idx, (b_cond, b_decls) in enumerate(branches):
-                    py_cond = _condition_to_python(b_cond, domain_matrix)
+                    py_cond = self.format_guard_condition(b_cond, domain_matrix)
                     kw = "if" if idx == 0 else "elif"
                     block_lines.append(f"{kw} {py_cond}:")
                     rendered_b = _render_decls(b_decls)

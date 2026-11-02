@@ -23,8 +23,8 @@ class TestNimWriterReconciled:
 
     def test_renders_common_and_platform_guarded_branches(self) -> None:
         td = Typedef(name="CustomId", underlying_type=CType("int"))
-        mac_cond = PlatformCondition(frozenset({"darwin"}), "defined(macosx)")
-        linux_cond = PlatformCondition(frozenset({"linux"}), "defined(linux)")
+        mac_cond = PlatformCondition(frozenset({"darwin"}))
+        linux_cond = PlatformCondition(frozenset({"linux"}))
 
         mac_struct = Struct(name="PlatformContext", fields=[Field(name="audio_unit", type=CType("pointer"))])
         linux_struct = Struct(name="PlatformContext", fields=[Field(name="alsa_handle", type=CType("pointer"))])
@@ -67,9 +67,9 @@ class TestNimWriterReconciled:
                 "void audio_init(AudioEngine *eng);\n"
             )
 
-            mac_cond = PlatformCondition(frozenset({"darwin"}), "defined(macosx)")
-            linux_cond = PlatformCondition(frozenset({"linux"}), "defined(linux)")
-            win_cond = PlatformCondition(frozenset({"windows"}), "defined(windows)")
+            mac_cond = PlatformCondition(frozenset({"darwin"}))
+            linux_cond = PlatformCondition(frozenset({"linux"}))
+            win_cond = PlatformCondition(frozenset({"windows"}))
 
             mac_struct = Struct(name="AudioEngine", fields=[Field(name="queue", type=CType("pointer"))])
             linux_struct = Struct(name="AudioEngine", fields=[Field(name="pcm_fd", type=CType("int"))])

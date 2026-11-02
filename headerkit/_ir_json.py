@@ -381,5 +381,4 @@ def json_to_header(data: str | dict[str, Any]) -> Header:
         included_headers=set(d.get("included_headers", [])),
         language=d.get("language", "c"),
         classification=d.get("classification", "header"),
-        source_origin=d.get("source_origin"),
     )

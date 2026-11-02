@@ -306,13 +306,13 @@ def test_reconcile_symbols_in_all():
         PlatformCondition,
         PlatformGuardedBlock,
         ReconciledUnit,
-        condition_to_python,
+        canonical_platform_tag,
         declarations_equal,
         reconcile_units,
     )
 
-    assert "condition_to_python" in headerkit.__all__
-    assert headerkit.condition_to_python is condition_to_python
+    assert "canonical_platform_tag" in headerkit.__all__
+    assert headerkit.canonical_platform_tag is canonical_platform_tag
 
     for name in (
         "PlatformCondition",

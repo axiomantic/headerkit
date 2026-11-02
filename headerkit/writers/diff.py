@@ -8,7 +8,6 @@ the result as JSON or Markdown.
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar
 
@@ -30,13 +29,6 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
     Variable,
-)
-from headerkit.transforms.nim_cleanup import (
-    _NIM_BUILTIN_TYPEDEFS,
-    _NIM_INTERNAL_EXACT_NAMES,
-    _NIM_INTERNAL_PREFIXES,
-    _clean_nim_identifier,
-    _unmangle_nim_type_name,
 )
 from headerkit.writers.base import BaseWriter, OutputFile, ProjectLayout, ScaffoldOptions, WriterOption
 
@@ -133,44 +125,34 @@ def _decl_key(decl: Declaration) -> tuple[str, str | None]:
 
 _CANONICAL_SCALAR_MAP: dict[str, str] = {
     "_Bool": "bool",
-    "NIM_BOOL": "bool",
     "bool": "bool",
-    "NIM_CHAR": "char",
     "signed char": "int8_t",
     "int8_t": "int8_t",
-    "NI8": "int8_t",
     "unsigned char": "uint8_t",
     "uint8_t": "uint8_t",
-    "NU8": "uint8_t",
     "short": "int16_t",
     "short int": "int16_t",
     "signed short": "int16_t",
     "signed short int": "int16_t",
     "int16_t": "int16_t",
-    "NI16": "int16_t",
     "unsigned short": "uint16_t",
     "unsigned short int": "uint16_t",
     "uint16_t": "uint16_t",
-    "NU16": "uint16_t",
     "int": "int32_t",
     "signed": "int32_t",
     "signed int": "int32_t",
     "int32_t": "int32_t",
-    "NI32": "int32_t",
     "unsigned": "uint32_t",
     "unsigned int": "uint32_t",
     "uint32_t": "uint32_t",
-    "NU32": "uint32_t",
     "long long": "int64_t",
     "long long int": "int64_t",
     "signed long long": "int64_t",
     "signed long long int": "int64_t",
     "int64_t": "int64_t",
-    "NI64": "int64_t",
     "unsigned long long": "uint64_t",
     "unsigned long long int": "uint64_t",
     "uint64_t": "uint64_t",
-    "NU64": "uint64_t",
     "long": "long",
     "long int": "long",
     "signed long": "long",
@@ -179,17 +161,10 @@ _CANONICAL_SCALAR_MAP: dict[str, str] = {
     "unsigned long int": "unsigned long",
     "size_t": "uintptr_t",
     "uintptr_t": "uintptr_t",
-    "NU": "uintptr_t",
     "ssize_t": "intptr_t",
     "ptrdiff_t": "intptr_t",
     "intptr_t": "intptr_t",
-    "NI": "intptr_t",
-    "NF": "double",
-    "NF64": "double",
-    "NF32": "float",
 }
-
-_NIM_PARAM_P_RE = re.compile(r"_p\d+$")
 
 
 def _strip_tag_prefix(name: str) -> str:
@@ -213,68 +188,13 @@ def _abi_stem_variants(name: str) -> set[str]:
     return {name, stem, f"{stem}_t", f"{stem}_s"}
 
 
-def _is_nim_c_header(unit: Header) -> bool:
-    """Detect whether ``unit`` represents a ``nim c --header`` C header IR."""
-    if getattr(unit, "source_origin", None) == "nim_c_header" or getattr(unit, "language", None) == "nim":
-        return True
-    if getattr(unit, "source_origin", None) == "nim_c_header":
-        return True
-    if "nimbase.h" in getattr(unit, "included_headers", set()):
-        return True
-    for decl in unit.declarations:
-        name = _decl_name(decl) or ""
-        if (
-            name in _NIM_INTERNAL_EXACT_NAMES
-            or name in _NIM_BUILTIN_TYPEDEFS
-            or name.startswith(_NIM_INTERNAL_PREFIXES)
-        ):
-            return True
-        if name.startswith(("tyObject_", "tyEnum_", "tyProc__")):
-            return True
-        if isinstance(decl, Function):
-            for p in decl.parameters:
-                if p.name and _NIM_PARAM_P_RE.search(p.name):
-                    return True
-                if isinstance(p.type, CType) and p.type.name in _NIM_BUILTIN_TYPEDEFS:
-                    return True
-            if isinstance(decl.return_type, CType) and decl.return_type.name in _NIM_BUILTIN_TYPEDEFS:
-                return True
-    return False
-
-
-def _is_cleaned_nim_comparison(baseline: Header, target: Header) -> bool:
-    """Detect whether baseline vs target is a C header vs Nim ``--header`` (raw or after NimCleanupTransform)."""
-    if _is_nim_c_header(baseline) or _is_nim_c_header(target):
-        return True
-    for a, b in ((baseline, target), (target, baseline)):
-        a_enums: set[str] = set()
-        b_enums: set[str] = {_strip_tag_prefix(d.name) for d in b.declarations if isinstance(d, Enum) and d.name}
-        for d in a.declarations:
-            if isinstance(d, Enum) and d.name:
-                a_enums.update(_abi_stem_variants(_strip_tag_prefix(d.name)))
-            elif isinstance(d, Typedef) and d.name and isinstance(d.underlying_type, CType):
-                u_raw = d.underlying_type.name.strip()
-                if u_raw.startswith("enum "):
-                    a_enums.add(d.name)
-        for d in b.declarations:
-            if (
-                isinstance(d, Typedef)
-                and d.name in a_enums
-                and d.name not in b_enums
-                and isinstance(d.underlying_type, CType)
-                and d.underlying_type.name in ("int32_t", "int", "NI32")
-            ):
-                return True
-    return False
-
-
 def _build_typedef_map(unit: Header) -> dict[str, TypeExpr]:
     """Build a mapping from typedef name (and enum names) to underlying TypeExpr for a header."""
     td_map: dict[str, TypeExpr] = {}
     enum_widths: dict[str, str] = {}
     for decl in unit.declarations:
         if isinstance(decl, Enum) and decl.name:
-            norm_enum = _unmangle_nim_type_name(_strip_tag_prefix(decl.name))
+            norm_enum = _strip_tag_prefix(decl.name)
             raw_u = decl.underlying_type.strip() if decl.underlying_type else "int32_t"
             canon_u = _CANONICAL_SCALAR_MAP.get(raw_u, raw_u)
             enum_widths[norm_enum] = canon_u
@@ -285,10 +205,10 @@ def _build_typedef_map(unit: Header) -> dict[str, TypeExpr]:
                 raw_under = decl.underlying_type.name.strip()
                 stripped_under = _strip_tag_prefix(raw_under)
                 if raw_under.startswith("enum "):
-                    norm_tag = _unmangle_nim_type_name(stripped_under)
+                    norm_tag = stripped_under
                     width = enum_widths.get(norm_tag, "int32_t")
                     td_map[norm_tag] = CType(width)
-                    td_map[_unmangle_nim_type_name(decl.name)] = CType(width)
+                    td_map[decl.name] = CType(width)
                     continue
                 if stripped_under == decl.name:
                     continue
@@ -316,12 +236,7 @@ def _canonicalize_type(
         if _under_pointer and ignore_pointer_const:
             cv_quals = [q for q in cv_quals if q != "const"]
 
-        raw_name = _unmangle_nim_type_name(_strip_tag_prefix(type_expr.name))
-        if raw_name == "NCSTRING":
-            char_quals = sorted(set(cv_quals))
-            if ignore_pointer_const:
-                char_quals = [q for q in char_quals if q != "const"]
-            return Pointer(pointee=CType(name="char", qualifiers=char_quals, is_elaborated=None))
+        raw_name = _strip_tag_prefix(type_expr.name)
 
         if raw_name in typedef_map and raw_name not in _seen_typedefs:
             resolved = _canonicalize_type(
@@ -413,7 +328,7 @@ def _canonicalize_type(
         )
 
     if isinstance(type_expr, FunctionPointer):
-        cc = None if type_expr.calling_convention in (None, "cdecl", "N_CDECL") else type_expr.calling_convention
+        cc = None if type_expr.calling_convention in (None, "cdecl") else type_expr.calling_convention
         return FunctionPointer(
             return_type=_canonicalize_type(
                 type_expr.return_type,
@@ -523,7 +438,7 @@ def _types_equal(
 def _normalize_calling_convention(cc: str | None, *, abi_mode: bool = True) -> str | None:
     if not abi_mode:
         return cc
-    if cc in (None, "cdecl", "N_CDECL"):
+    if cc in (None, "cdecl"):
         return None
     return cc
 
@@ -542,7 +457,6 @@ def _diff_function(
     target_typedefs: dict[str, TypeExpr] | None = None,
     abi_mode: bool = True,
     ignore_pointer_const: bool = False,
-    is_nim_comparison: bool = False,
 ) -> list[DiffEntry]:
     """Compare two Function declarations."""
     entries: list[DiffEntry] = []
@@ -603,9 +517,7 @@ def _diff_function(
                         target=str(tp.type),
                     )
                 )
-            b_pname = _clean_nim_identifier(bp.name) if (abi_mode and is_nim_comparison) else bp.name
-            t_pname = _clean_nim_identifier(tp.name) if (abi_mode and is_nim_comparison) else tp.name
-            if b_pname != t_pname and not (abi_mode and is_nim_comparison):
+            if bp.name != tp.name:
                 entries.append(
                     DiffEntry(
                         kind="function_parameter_renamed",
@@ -985,8 +897,7 @@ def diff_headers(
     target: Header,
     *,
     abi_mode: bool = True,
-    ignore_pointer_const: bool | None = None,
-    relax_nim_pointer_const: bool = False,
+    ignore_pointer_const: bool = False,
 ) -> DiffReport:
     """Compare two Header objects and produce a DiffReport.
 
@@ -1000,16 +911,10 @@ def diff_headers(
         compares Struct layouts structurally.
     :param ignore_pointer_const: When True, relaxes ``const T*`` vs ``T*``
         pointee const qualifiers while still catching pointer indirection drift.
-    :param relax_nim_pointer_const: Alias for relaxing pointer const qualifiers
-        when comparing against ``nim c --header`` targets.
     :returns: A DiffReport with all detected changes.
     """
     entries: list[DiffEntry] = []
-    is_nim_comparison = _is_cleaned_nim_comparison(baseline, target)
-    if ignore_pointer_const is not None:
-        effective_ignore_const = bool(ignore_pointer_const or relax_nim_pointer_const)
-    else:
-        effective_ignore_const = bool(relax_nim_pointer_const or (abi_mode and is_nim_comparison))
+    effective_ignore_const = bool(ignore_pointer_const)
 
     baseline_typedefs = _build_typedef_map(baseline) if abi_mode else {}
     target_typedefs = _build_typedef_map(target) if abi_mode else {}
@@ -1017,20 +922,17 @@ def diff_headers(
         b_tag_stems: set[str] = set()
         for d in baseline.declarations:
             if isinstance(d, (Struct, Enum)) and d.name:
-                b_tag_stems.update(_abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(d.name))))
+                b_tag_stems.update(_abi_stem_variants(_strip_tag_prefix(d.name)))
         t_tag_stems: set[str] = set()
         for d in target.declarations:
             if isinstance(d, (Struct, Enum)) and d.name:
-                t_tag_stems.update(_abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(d.name))))
+                t_tag_stems.update(_abi_stem_variants(_strip_tag_prefix(d.name)))
 
         for td_name, td_val in list(baseline_typedefs.items()):
             if td_name in t_tag_stems:
                 if not (
                     isinstance(td_val, CType)
-                    and any(
-                        v in t_tag_stems
-                        for v in _abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(td_val.name)))
-                    )
+                    and any(v in t_tag_stems for v in _abi_stem_variants(_strip_tag_prefix(td_val.name)))
                 ):
                     continue
             target_typedefs.setdefault(td_name, td_val)
@@ -1038,30 +940,13 @@ def diff_headers(
             if td_name in b_tag_stems:
                 if not (
                     isinstance(td_val, CType)
-                    and any(
-                        v in b_tag_stems
-                        for v in _abi_stem_variants(_unmangle_nim_type_name(_strip_tag_prefix(td_val.name)))
-                    )
+                    and any(v in b_tag_stems for v in _abi_stem_variants(_strip_tag_prefix(td_val.name)))
                 ):
                     continue
             baseline_typedefs.setdefault(td_name, td_val)
 
     def _should_skip_decl(decl: Declaration) -> bool:
-        if isinstance(decl, MacroFunction):
-            return True
-        if abi_mode and is_nim_comparison:
-            if isinstance(decl, Constant) and decl.is_macro:
-                return True
-            decl_n = _decl_name(decl) or ""
-            if (
-                decl_n in _NIM_INTERNAL_EXACT_NAMES
-                or decl_n in _NIM_BUILTIN_TYPEDEFS
-                or decl_n.startswith(_NIM_INTERNAL_PREFIXES)
-            ):
-                return True
-            if decl_n.startswith("tyProc__"):
-                return True
-        return False
+        return isinstance(decl, MacroFunction)
 
     # Build maps: (kind, name) -> declaration
     baseline_map: dict[tuple[str, str], Declaration] = {}
@@ -1070,8 +955,7 @@ def diff_headers(
             continue
         key = _decl_key(decl)
         if key[1] is not None:
-            norm_name = _unmangle_nim_type_name(key[1]) if abi_mode else key[1]
-            baseline_map[(key[0], norm_name)] = decl
+            baseline_map[(key[0], key[1])] = decl
 
     target_map: dict[tuple[str, str], Declaration] = {}
     for decl in target.declarations:
@@ -1079,8 +963,7 @@ def diff_headers(
             continue
         key = _decl_key(decl)
         if key[1] is not None:
-            norm_name = _unmangle_nim_type_name(key[1]) if abi_mode else key[1]
-            target_map[(key[0], norm_name)] = decl
+            target_map[(key[0], key[1])] = decl
 
     if abi_mode:
         unmatched_b_structs = [
@@ -1102,7 +985,7 @@ def diff_headers(
 
     def _collect_ctypes_in_type(te: TypeExpr, out: set[str]) -> None:
         if isinstance(te, CType):
-            out.add(_unmangle_nim_type_name(_strip_tag_prefix(te.name.strip())))
+            out.add(_strip_tag_prefix(te.name.strip()))
         elif isinstance(te, Pointer):
             _collect_ctypes_in_type(te.pointee, out)
         elif isinstance(te, Reference):
@@ -1132,25 +1015,20 @@ def diff_headers(
                 _collect_ctypes_in_type(d.type, refs)
         return refs
 
-    b_referenced_in_shared = (
-        _collect_referenced_types(baseline_map, target_map) if (abi_mode and is_nim_comparison) else set()
-    )
-    t_referenced_in_shared = (
-        _collect_referenced_types(target_map, baseline_map) if (abi_mode and is_nim_comparison) else set()
-    )
+    b_referenced_in_shared = _collect_referenced_types(baseline_map, target_map) if abi_mode else set()
+    t_referenced_in_shared = _collect_referenced_types(target_map, baseline_map) if abi_mode else set()
 
     def _typedef_matches_tag_in_map(td_decl: Declaration, other_map: dict[tuple[str, str], Declaration]) -> bool:
         if not isinstance(td_decl, Typedef) or not isinstance(td_decl.underlying_type, CType):
             return False
         raw_u = td_decl.underlying_type.name.strip()
-        under_stem = _unmangle_nim_type_name(_strip_tag_prefix(raw_u))
+        under_stem = _strip_tag_prefix(raw_u)
         for v in _abi_stem_variants(under_stem):
             if ("struct", v) in other_map or ("enum", v) in other_map:
                 return True
-        if is_nim_comparison and raw_u in (
+        if raw_u in (
             "int32_t",
             "int",
-            "NI32",
             "int8_t",
             "uint8_t",
             "int16_t",
@@ -1158,7 +1036,7 @@ def diff_headers(
             "int64_t",
             "uint64_t",
         ):
-            for v in _abi_stem_variants(_unmangle_nim_type_name(td_decl.name)):
+            for v in _abi_stem_variants(td_decl.name):
                 if ("enum", v) in other_map:
                     return True
         return False
@@ -1168,12 +1046,17 @@ def diff_headers(
         if key not in target_map:
             kind_label, decl_name_str = key
             if abi_mode:
-                if kind_label == "typedef" and is_nim_comparison and decl_name_str in b_referenced_in_shared:
-                    continue
                 if (
-                    kind_label == "enum"
-                    and is_nim_comparison
-                    and any(("typedef", v) in target_map for v in _abi_stem_variants(decl_name_str))
+                    kind_label == "typedef"
+                    and decl_name_str in b_referenced_in_shared
+                    and ("struct", decl_name_str) not in target_map
+                    and ("enum", decl_name_str) not in target_map
+                ):
+                    continue
+                if kind_label == "enum" and any(
+                    ("typedef", v) in target_map
+                    and _typedef_matches_tag_in_map(target_map[("typedef", v)], baseline_map)
+                    for v in _abi_stem_variants(decl_name_str)
                 ):
                     continue
                 if (
@@ -1204,12 +1087,17 @@ def diff_headers(
         if key not in baseline_map:
             kind_label, decl_name_str = key
             if abi_mode:
-                if kind_label == "typedef" and is_nim_comparison and decl_name_str in t_referenced_in_shared:
-                    continue
                 if (
-                    kind_label == "enum"
-                    and is_nim_comparison
-                    and any(("typedef", v) in baseline_map for v in _abi_stem_variants(decl_name_str))
+                    kind_label == "typedef"
+                    and decl_name_str in t_referenced_in_shared
+                    and ("struct", decl_name_str) not in baseline_map
+                    and ("enum", decl_name_str) not in baseline_map
+                ):
+                    continue
+                if kind_label == "enum" and any(
+                    ("typedef", v) in baseline_map
+                    and _typedef_matches_tag_in_map(baseline_map[("typedef", v)], target_map)
+                    for v in _abi_stem_variants(decl_name_str)
                 ):
                     continue
                 if (
@@ -1252,7 +1140,6 @@ def diff_headers(
                         target_typedefs=target_typedefs,
                         abi_mode=abi_mode,
                         ignore_pointer_const=effective_ignore_const,
-                        is_nim_comparison=is_nim_comparison,
                     )
                 )
             elif isinstance(b_decl, Struct) and isinstance(t_decl, Struct):
@@ -1430,10 +1317,8 @@ class DiffWriter(BaseWriter):
     abi_mode : bool
         When True (default), resolves Typedef chains, normalizes ``_Bool``/``bool``
         and integer width typedefs, and compares Struct layouts structurally.
-    ignore_pointer_const : bool | None
+    ignore_pointer_const : bool
         When True, relaxes ``const T*`` vs ``T*`` pointee const qualifiers.
-    relax_nim_pointer_const : bool
-        Alias for relaxing pointer const qualifiers on ``nim c --header`` targets.
 
     Example
     -------
@@ -1448,16 +1333,18 @@ class DiffWriter(BaseWriter):
     name: str = "diff"
     format_description: str = "API compatibility diff reports (JSON or Markdown)"
     default_output_pattern: str = "{dir}/{stem}_diff.json"
+    default_extension: str = ".json"
+    file_extensions: ClassVar[tuple[str, ...] | None] = ()
     cache_output: bool = False
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption("format", "Report output format", default="json", choices=("json", "markdown")),
-        WriterOption("abi_mode", "Resolve typedefs and compare canonical C ABI types", default=True),
-        WriterOption("ignore_pointer_const", "Relax const T* vs T* pointer pointee const qualifiers", default=False),
+        WriterOption("abi_mode", "Resolve typedefs and compare canonical C ABI types", default=True, type=bool),
         WriterOption(
-            "relax_nim_pointer_const",
-            "Relax const T* vs T* pointer const qualifiers on Nim C headers",
+            "ignore_pointer_const",
+            "Relax const T* vs T* pointer pointee const qualifiers",
             default=False,
+            type=bool,
         ),
     )
 
@@ -1467,14 +1354,12 @@ class DiffWriter(BaseWriter):
         format: str = "json",
         *,
         abi_mode: bool = True,
-        ignore_pointer_const: bool | None = None,
-        relax_nim_pointer_const: bool = False,
+        ignore_pointer_const: bool = False,
     ) -> None:
         self._baseline = baseline
         self._format = format
         self.abi_mode = abi_mode
         self.ignore_pointer_const = ignore_pointer_const
-        self.relax_nim_pointer_const = relax_nim_pointer_const
         self.default_extension = ".md" if format == "markdown" else ".json"
 
     def _write_single_file_layout(
@@ -1483,6 +1368,8 @@ class DiffWriter(BaseWriter):
         options: ScaffoldOptions,
     ) -> ProjectLayout:
         fmt = options.get_option("format", self._format)
+        abi = bool(options.get_option("abi_mode", self.abi_mode))
+        ignore_const = bool(options.get_option("ignore_pointer_const", self.ignore_pointer_const))
         if self._baseline is None:
             baseline = Header(path="(empty)", declarations=[])
         else:
@@ -1491,9 +1378,8 @@ class DiffWriter(BaseWriter):
         report = diff_headers(
             baseline,
             target,
-            abi_mode=self.abi_mode,
-            ignore_pointer_const=self.ignore_pointer_const,
-            relax_nim_pointer_const=self.relax_nim_pointer_const,
+            abi_mode=abi,
+            ignore_pointer_const=ignore_const,
         )
         content = diff_to_markdown(report) if fmt == "markdown" else diff_to_json(report)
         ext = ".md" if fmt == "markdown" else ".json"
@@ -1511,7 +1397,6 @@ class DiffWriter(BaseWriter):
             target,
             abi_mode=self.abi_mode,
             ignore_pointer_const=self.ignore_pointer_const,
-            relax_nim_pointer_const=self.relax_nim_pointer_const,
         )
         if self._format == "markdown":
             return diff_to_markdown(report)

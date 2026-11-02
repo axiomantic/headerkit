@@ -1005,7 +1005,7 @@ class InputSpec:
     """Specification of an input source unit, its language, and classification.
 
     :param path: Path to the source file or virtual file.
-    :param language: Language identifier (e.g. 'c', 'cpp', 'nim', 'rust', 'zig').
+    :param language: Language identifier (e.g. 'c', 'cpp', 'rust', 'zig').
     :param classification: Classification ('header', 'source', 'interface', 'idl').
     :param content: Optional raw string content.
     :param headers: Additional header paths participating in this parse unit.
@@ -1058,9 +1058,6 @@ class InputSpec:
             elif lower.endswith((".cpp", ".cxx", ".cc", ".c++")):
                 deduced_lang = deduced_lang or "cpp"
                 deduced_class = deduced_class or "source"
-            elif lower.endswith((".nim",)):
-                deduced_lang = deduced_lang or "nim"
-                deduced_class = deduced_class or "source"
             elif lower.endswith((".rs",)):
                 deduced_lang = deduced_lang or "rust"
                 deduced_class = deduced_class or "interface"
@@ -1071,8 +1068,15 @@ class InputSpec:
                 deduced_lang = deduced_lang or "idl"
                 deduced_class = deduced_class or "interface"
             else:
-                deduced_lang = deduced_lang or "c"
-                deduced_class = deduced_class or "header"
+                from headerkit.writers import infer_writer_from_extension
+
+                inferred = infer_writer_from_extension(path_str)
+                if inferred and inferred not in ("prompt", "json", "diff"):
+                    deduced_lang = deduced_lang or inferred
+                    deduced_class = deduced_class or "source"
+                else:
+                    deduced_lang = deduced_lang or "c"
+                    deduced_class = deduced_class or "header"
 
         return cls(
             path=path_str,
@@ -1098,7 +1102,7 @@ class SourceUnit:
     :param declarations: List of extracted declarations (structs, functions, etc.).
     :param included_headers: Set of header file basenames included by this unit
                              (populated by libclang backend only).
-    :param language: Language identifier (e.g. 'c', 'cpp', 'nim', 'rust').
+    :param language: Language identifier (e.g. 'c', 'cpp', 'rust').
     :param classification: Source classification (e.g. 'header', 'source', 'interface').
 
     Example
@@ -1123,7 +1127,6 @@ class SourceUnit:
     included_headers: set[str] = field(default_factory=set)
     language: str = "c"
     classification: str = "header"
-    source_origin: str | None = None
 
     def __str__(self) -> str:
         return f"SourceUnit({self.path}, {len(self.declarations)} declarations)"
@@ -1499,7 +1502,7 @@ def is_cpp_value_type(
 
     A C++ method returning an aggregate or class by value creates a temporary
     object whose lifetime ends at the enclosing full-expression semicolon.
-    Foreign writers (Nim, Cython, C-shim, ctypes, Rust) must bind the result
+    Foreign language writers must bind the result
     to a local stack frame or pass an out-parameter rather than coercing
     pointer accessors inline.
     """

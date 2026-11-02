@@ -177,12 +177,13 @@ def test_c_enum_vs_nim_int32_t_matches_in_abi_mode() -> None:
 
 def test_lockfree_header_vs_nim_cleanup_pipeline_zero_false_positives() -> None:
     """End-to-end parse + NimCleanupTransform + diff_headers(abi_mode=True) on lockfree C ABI."""
+    cleanup = NimCleanupTransform()
     backend = get_backend("tree-sitter")
     baseline_ir = backend.parse(_BASELINE_LOCKFREE_C, "lockfree.h")
-    raw_target_ir = backend.parse(_TARGET_NIM_HEADER_C, "cabi.h")
-    target_ir = NimCleanupTransform().apply(raw_target_ir)
+    raw_target_ir = backend.parse(_TARGET_NIM_HEADER_C, "cabi.h", **cleanup.backend_options())
+    target_ir = cleanup.apply(raw_target_ir)
 
-    report = diff_headers(baseline_ir, target_ir, abi_mode=True)
+    report = diff_headers(baseline_ir, target_ir, abi_mode=True, ignore_pointer_const=True)
     sig_changes = [e for e in report.entries if e.kind == "function_signature_changed"]
     assert sig_changes == []
     assert report.breaking_count == 0
@@ -253,7 +254,7 @@ def test_function_parameter_array_decay_c99_matches_pointer_in_abi_mode() -> Non
             ),
         ],
     )
-    target = Header(
+    raw_target = Header(
         path="cabi.h",
         declarations=[
             Function(
@@ -263,12 +264,13 @@ def test_function_parameter_array_decay_c99_matches_pointer_in_abi_mode() -> Non
             ),
         ],
     )
+    target = raw_target >> NimCleanupTransform()
 
     report = diff_headers(baseline, target, abi_mode=True)
     assert report.entries == []
     assert report.breaking_count == 0
 
-    strict_report = diff_headers(baseline, target, abi_mode=False)
+    strict_report = diff_headers(baseline, raw_target, abi_mode=False)
     sig_changes = [e for e in strict_report.entries if e.kind == "function_signature_changed"]
     assert sig_changes == [
         DiffEntry(
@@ -309,7 +311,7 @@ def test_struct_tag_s_suffix_vs_typedef_stem_matches_in_abi_mode() -> None:
             ),
         ],
     )
-    target = Header(
+    raw_target = Header(
         path="cabi.h",
         declarations=[
             Struct("nng_socket", fields=[Field("id", CType("NU32"))]),
@@ -326,6 +328,7 @@ def test_struct_tag_s_suffix_vs_typedef_stem_matches_in_abi_mode() -> None:
             ),
         ],
     )
+    target = raw_target >> NimCleanupTransform()
 
     report = diff_headers(baseline, target, abi_mode=True)
     assert report.entries == []

@@ -16,7 +16,6 @@ import pytest
 
 from headerkit import NimCleanupTransform, NimJsonDocEnricher
 from headerkit.backends import is_backend_available
-from headerkit.backends.libclang import _find_nim_libpath, _has_nimbase_in_dirs
 from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.ir import (
     Constant,
@@ -34,6 +33,7 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
+from headerkit.transforms.nim_cleanup import _find_nim_libpath, _has_nimbase_in_dirs
 from headerkit.writers.pyi import PyiWriter
 
 
@@ -59,7 +59,7 @@ class TestTreeSitterNimHeaderSupport:
             N_LIB_EXPORT_VAR int globalCounter;
         """)
         backend = TreeSitterBackend()
-        unit = backend.parse(code, "nim_mod.h")
+        unit = backend.parse(code, "nim_mod.h", **NimCleanupTransform.backend_options())
 
         # Negative control: N_CDECL / N_NIMCALL / N_LIB_PRIVATE must NEVER appear as Variable or Function names
         decl_names = [getattr(d, "name", None) for d in unit.declarations]
@@ -71,13 +71,13 @@ class TestTreeSitterNimHeaderSupport:
         loc = lambda line, col: SourceLocation(file="nim_mod.h", line=line, column=col)  # noqa: E731
         c_int = CType("int", is_elaborated=False)
         c_void = CType("void", is_elaborated=False)
-        c_char_ptr = Pointer(CType("char", is_elaborated=False))
+        c_ncstring = CType("NCSTRING", is_elaborated=False)
         expected_declarations = [
             Struct(
                 name="MyItem",
                 fields=[
                     Field(name="id", type=c_int, access="public"),
-                    Field(name="label", type=c_char_ptr, access="public"),
+                    Field(name="label", type=c_ncstring, access="public"),
                 ],
                 is_typedef=False,
                 location=loc(2, 1),
@@ -109,9 +109,9 @@ class TestTreeSitterNimHeaderSupport:
             ),
             Function(
                 name="formatName",
-                return_type=c_char_ptr,
+                return_type=c_ncstring,
                 parameters=[
-                    Parameter(name="input_p0", type=c_char_ptr),
+                    Parameter(name="input_p0", type=c_ncstring),
                 ],
                 location=loc(8, 35),
             ),
@@ -273,7 +273,6 @@ class TestNimCleanupTransform:
                     ],
                 ),
             ],
-            source_origin="nim_c_header",
         )
         assert cleaned == expected
 
@@ -340,7 +339,6 @@ class TestNimCleanupTransform:
                     type_overrides={"pyi": "bool"},
                 ),
             ],
-            source_origin="nim_c_header",
         )
 
 
@@ -626,7 +624,6 @@ class TestNimJsonDocEnricher:
                     is_deprecated=True,
                 ),
             ],
-            source_origin="nim_c_header",
         )
 
         # Negative control: passing the fragment file directly detects it is an included fragment and NEVER runs nim jsondoc on it
@@ -651,8 +648,8 @@ class TestRealNimHeaderBackends:
             returncode=0,
             stdout=f"Hint: used config\n{dump_payload}\n",
         )
-        lc_mod = sys.modules["headerkit.backends.libclang"]
-        with patch.object(lc_mod.subprocess, "run", return_value=mock_proc) as mock_run:
+        nc_mod = sys.modules["headerkit.transforms.nim_cleanup"]
+        with patch.object(nc_mod.subprocess, "run", return_value=mock_proc) as mock_run:
             result = _find_nim_libpath()
             assert result == str(fake_lib)
             mock_run.assert_called_once_with(
@@ -675,7 +672,7 @@ class TestRealNimHeaderBackends:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Verify LibclangBackend.parse() exercises nimbase.h diagnostic retry and PARSE_SKIP_FUNCTION_BODIES retry."""
+        """Verify NimCleanupTransform.prepare_parse() and LibclangBackend.parse() handle nimbase.h and skip_function_bodies."""
         from headerkit.backends.libclang import LibclangBackend
 
         nim_lib = tmp_path / "nimlib"
@@ -692,11 +689,12 @@ class TestRealNimHeaderBackends:
             """),
             encoding="utf-8",
         )
-        lc_mod = sys.modules["headerkit.backends.libclang"]
-        monkeypatch.setattr(lc_mod, "_find_nim_libpath", lambda: str(nim_lib))
-        monkeypatch.setattr("headerkit.backends.libclang._find_nim_libpath", lambda: str(nim_lib))
+        nc_mod = sys.modules["headerkit.transforms.nim_cleanup"]
+        monkeypatch.setattr(nc_mod, "_find_nim_libpath", lambda: str(nim_lib))
 
-        # (a) Diagnostic retry path when an included header requires nimbase.h
+        cleanup = NimCleanupTransform()
+
+        # (a) Included header requires nimbase.h resolved via prepare_parse
         inc_dir = tmp_path / "inc"
         inc_dir.mkdir()
         (inc_dir / "inner_nim.h").write_text(
@@ -704,19 +702,23 @@ class TestRealNimHeaderBackends:
             encoding="utf-8",
         )
         backend = LibclangBackend()
+        umbrella_code = '#include "inner_nim.h"\n'
+        inc, args, b_opts = cleanup.prepare_parse(umbrella_code, str(inc_dir / "main.h"), [str(inc_dir)], [])
         umbrella_unit = backend.parse(
-            '#include "inner_nim.h"\n',
+            umbrella_code,
             str(inc_dir / "main.h"),
-            include_dirs=[str(inc_dir)],
+            include_dirs=inc,
+            extra_args=args,
+            **b_opts,
         )
-        umbrella_pyi = PyiWriter().write(umbrella_unit >> NimCleanupTransform())
+        umbrella_pyi = PyiWriter().write(umbrella_unit >> cleanup)
         assert umbrella_pyi == textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
 
             def umbrella_calc(x: int) -> int: ...
         """)
 
-        # (b) PARSE_SKIP_FUNCTION_BODIES retry path when inline body references undeclared runtime symbol
+        # (b) skip_function_bodies when inline body references undeclared runtime symbol
         debug_code = textwrap.dedent("""\
             #include "nimbase.h"
             static N_INLINE(void, nimFrame)(void* s_p0) {
@@ -724,8 +726,15 @@ class TestRealNimHeaderBackends:
             }
             N_LIB_EXPORT N_NIMCALL(NI, debug_add)(NI a_p0, NI b_p1);
         """)
-        debug_unit = backend.parse(debug_code, str(tmp_path / "debug_nim.h"))
-        debug_pyi = PyiWriter().write(debug_unit >> NimCleanupTransform())
+        d_inc, d_args, d_opts = cleanup.prepare_parse(debug_code, str(tmp_path / "debug_nim.h"), [], [])
+        debug_unit = backend.parse(
+            debug_code,
+            str(tmp_path / "debug_nim.h"),
+            include_dirs=d_inc,
+            extra_args=d_args,
+            **d_opts,
+        )
+        debug_pyi = PyiWriter().write(debug_unit >> cleanup)
         assert debug_pyi == textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
 
@@ -769,9 +778,11 @@ class TestRealNimHeaderBackends:
         assert header_path.is_file()
 
         code = header_path.read_text(encoding="utf-8")
+        cleanup = NimCleanupTransform()
+        inc, args, b_opts = cleanup.prepare_parse(code, str(header_path), [], [])
 
         ts_backend = TreeSitterBackend()
-        ts_cleaned = ts_backend.parse(code, str(header_path)) >> NimCleanupTransform()
+        ts_cleaned = ts_backend.parse(code, str(header_path), include_dirs=inc, extra_args=args, **b_opts) >> cleanup
         ts_pyi = PyiWriter().write(ts_cleaned)
 
         expected_pyi = textwrap.dedent("""\
@@ -794,8 +805,11 @@ class TestRealNimHeaderBackends:
             lc_unit = lc_backend.parse(
                 code,
                 str(header_path),
+                include_dirs=inc,
+                extra_args=args,
+                **b_opts,
             )
-            lc_cleaned = lc_unit >> NimCleanupTransform()
+            lc_cleaned = lc_unit >> cleanup
             lc_pyi = PyiWriter().write(lc_cleaned)
             assert lc_pyi == expected_pyi
 

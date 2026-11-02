@@ -17,15 +17,31 @@ TARGET_TO_PREDICATE: dict[str, PlatformCondition] = {}
 
 @dataclass(frozen=True, slots=True)
 class PlatformCondition:
-    """Platform condition predicate for code generation."""
+    """Language-agnostic platform condition represented as a DNF boolean AST of platform/architecture tags."""
 
     tags: frozenset[str]
-    nim_predicate: str
+    terms: tuple[tuple[str, ...], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.terms and self.tags:
+            object.__setattr__(self, "terms", tuple((t,) for t in sorted(self.tags)))
 
 
-TARGET_TO_PREDICATE["darwin"] = PlatformCondition(frozenset({"darwin", "macosx", "apple"}), "defined(macosx)")
-TARGET_TO_PREDICATE["linux"] = PlatformCondition(frozenset({"linux"}), "defined(linux)")
-TARGET_TO_PREDICATE["windows"] = PlatformCondition(frozenset({"windows", "msvc"}), "defined(windows)")
+TARGET_TO_PREDICATE["darwin"] = PlatformCondition(frozenset({"darwin", "macosx", "apple"}), (("darwin",),))
+TARGET_TO_PREDICATE["linux"] = PlatformCondition(frozenset({"linux"}), (("linux",),))
+TARGET_TO_PREDICATE["windows"] = PlatformCondition(frozenset({"windows", "msvc"}), (("windows",),))
+
+
+def canonical_platform_tag(triple: str) -> str:
+    """Normalize a target triple or OS string to a canonical OS family tag."""
+    lower = triple.lower()
+    if "darwin" in lower or "apple" in lower or "mac" in lower:
+        return "darwin"
+    if "linux" in lower:
+        return "linux"
+    if "windows" in lower or "msvc" in lower or "win32" in lower:
+        return "windows"
+    return "posix"
 
 
 def get_platform_condition(target_or_os: str) -> PlatformCondition:
@@ -39,7 +55,7 @@ def get_platform_condition(target_or_os: str) -> PlatformCondition:
         return TARGET_TO_PREDICATE["linux"]
     if "windows" in lower or "win32" in lower or "msvc" in lower:
         return TARGET_TO_PREDICATE["windows"]
-    return PlatformCondition(frozenset({lower}), f"defined({lower})")
+    return PlatformCondition(frozenset({lower}), ((lower,),))
 
 
 @dataclass(slots=True)
@@ -51,10 +67,19 @@ class PlatformGuardedBlock:
 
 @dataclass(frozen=True, slots=True)
 class MatrixCondition:
-    """General multi-dimensional boolean condition for guarded blocks."""
+    """Language-agnostic multi-dimensional boolean condition AST for guarded blocks."""
 
-    predicate: str
-    raw_conditions: tuple[ConfigCondition, ...]
+    raw_conditions: tuple[ConfigCondition, ...] = ()
+    platforms: tuple[str, ...] = ()
+    version_op: str | None = None
+    version_min: Any = None
+    version_max: Any = None
+    feature_implicants: tuple[tuple[tuple[str, bool], ...], ...] = ()
+
+    @property
+    def is_tautology(self) -> bool:
+        """Return True if all dimensions reduce to an unconditional tautology."""
+        return not self.platforms and self.version_op is None and not self.feature_implicants
 
 
 @dataclass(slots=True)
@@ -118,42 +143,6 @@ def declarations_equal(a: Declaration, b: Declaration) -> bool:
         return False
 
 
-def get_nim_platform(triple: str) -> str:
-    """Map target triple or OS string to Nim platform identifier."""
-    lower = triple.lower()
-    if "darwin" in lower or "apple" in lower or "mac" in lower:
-        return "macosx"
-    elif "linux" in lower:
-        return "linux"
-    elif "windows" in lower or "msvc" in lower or "win32" in lower:
-        return "windows"
-    return "posix"
-
-
-def get_c_platform(triple: str) -> str:
-    """Map target triple or OS string to C/C++ preprocessor platform macro."""
-    lower = triple.lower()
-    if "darwin" in lower or "apple" in lower or "mac" in lower:
-        return "__APPLE__"
-    elif "linux" in lower:
-        return "__linux__"
-    elif "windows" in lower or "msvc" in lower or "win32" in lower:
-        return "_WIN32"
-    return "__unix__"
-
-
-def get_py_platform(triple: str) -> str:
-    """Map target triple or OS string to sys.platform identifier."""
-    lower = triple.lower()
-    if "darwin" in lower or "apple" in lower or "mac" in lower:
-        return "darwin"
-    elif "linux" in lower:
-        return "linux"
-    elif "windows" in lower or "msvc" in lower or "win32" in lower:
-        return "win32"
-    return "posix"
-
-
 def quine_mccluskey_minimize(
     configs: Sequence[ConfigCondition],
     bool_features: Sequence[str],
@@ -206,13 +195,11 @@ def quine_mccluskey_minimize(
 def minimize_conditions(
     configs: Sequence[ConfigCondition],
     domain_matrix: dict[str, set[Any]],
-    target_lang: str = "nim",
-) -> str:
-    """Algebraically reduces configuration conditions into a minimal polyglot guard string."""
+) -> MatrixCondition:
+    """Algebraically reduce configuration conditions into a language-agnostic MatrixCondition AST."""
     if not configs:
-        return "true"
+        return MatrixCondition()
 
-    # Identify dimensions where observed values are a strict subset of domain values
     active_dimensions: set[str] = set()
     for dim, all_values in domain_matrix.items():
         observed_values = {c[dim] for c in configs if dim in c}
@@ -220,33 +207,16 @@ def minimize_conditions(
             active_dimensions.add(dim)
 
     if not active_dimensions:
-        return "true" if target_lang != "cython" else "1"
+        return MatrixCondition(raw_conditions=tuple(configs))
 
-    clauses: list[str] = []
+    platforms: tuple[str, ...] = ()
+    raw_platforms = {str(c["target"]) for c in configs if "target" in c}
+    if "target" in active_dimensions and raw_platforms:
+        platforms = tuple(sorted({canonical_platform_tag(p) for p in raw_platforms}))
 
-    # 1. Platform set reduction (with deduplication and parentheses)
-    platforms = {c["target"] for c in configs if "target" in c}
-    if "target" in active_dimensions and platforms:
-        if target_lang == "nim":
-            plat_strs = sorted({get_nim_platform(p) for p in platforms})
-            if len(plat_strs) > 1:
-                clauses.append(f"({' or '.join(f'defined({p})' for p in plat_strs)})")
-            elif plat_strs:
-                clauses.append(f"defined({plat_strs[0]})")
-        elif target_lang == "cython":
-            plat_strs = sorted({get_c_platform(p) for p in platforms})
-            if len(plat_strs) > 1:
-                clauses.append(f"({' || '.join(f'defined({p})' for p in plat_strs)})")
-            elif plat_strs:
-                clauses.append(f"defined({plat_strs[0]})")
-        elif target_lang == "python":
-            py_plats = tuple(sorted({get_py_platform(p) for p in platforms}))
-            if len(py_plats) > 1:
-                clauses.append(f"sys.platform in {py_plats!r}")
-            elif py_plats:
-                clauses.append(f"sys.platform == {py_plats[0]!r}")
-
-    # 2. Ordered version interval analysis
+    version_op: str | None = None
+    version_min: Any = None
+    version_max: Any = None
     if "version" in active_dimensions:
         obs_versions = sorted({c["version"] for c in configs if "version" in c})
         all_versions = sorted(domain_matrix.get("version", set()))
@@ -254,96 +224,45 @@ def minimize_conditions(
             min_v = obs_versions[0]
             max_v = obs_versions[-1]
             if len(obs_versions) == 1:
-                if target_lang in ("nim", "python"):
-                    clauses.append(f"version == {min_v!r}")
-            elif obs_versions == all_versions[all_versions.index(min_v) :]:
-                # Suffix interval covering up to latest version
-                if target_lang in ("nim", "python"):
-                    clauses.append(f"version >= {min_v!r}")
+                version_op = "=="
+                version_min = min_v
+                version_max = min_v
+            elif min_v in all_versions and obs_versions == all_versions[all_versions.index(min_v) :]:
+                version_op = ">="
+                version_min = min_v
             else:
-                if target_lang == "nim":
-                    clauses.append(f"({min_v!r} <= version and version <= {max_v!r})")
-                elif target_lang == "python":
-                    clauses.append(f"({min_v!r} <= version <= {max_v!r})")
+                version_op = "range"
+                version_min = min_v
+                version_max = max_v
 
-    # 3. Quine-McCluskey minimization for boolean feature flags
     bool_features = sorted(
         dim
         for dim in active_dimensions
         if dim not in ("target", "version") and all(isinstance(v, bool) for v in domain_matrix[dim])
     )
+    feature_implicants: tuple[tuple[tuple[str, bool], ...], ...] = ()
     if bool_features:
         implicants = quine_mccluskey_minimize(configs, bool_features)
-        imp_clauses: list[str] = []
+        imp_list: list[tuple[tuple[str, bool], ...]] = []
         for imp in implicants:
-            term_clauses: list[str] = []
-            for feat, val in zip(bool_features, imp, strict=True):
-                if val is True:
-                    term_clauses.append(f"defined({feat})" if target_lang != "python" else feat)
-                elif val is False:
-                    term_clauses.append(f"not defined({feat})" if target_lang != "python" else f"not {feat}")
-            if term_clauses:
-                joiner = " and " if target_lang != "cython" else " && "
-                imp_clauses.append(joiner.join(term_clauses))
+            term = tuple((feat, val) for feat, val in zip(bool_features, imp, strict=True) if val is not None)
+            if term:
+                imp_list.append(term)
+        feature_implicants = tuple(imp_list)
 
-        if imp_clauses:
-            or_joiner = " or " if target_lang != "cython" else " || "
-            if len(imp_clauses) > 1:
-                clauses.append(f"({or_joiner.join(f'({c})' if ' ' in c else c for c in imp_clauses)})")
-            else:
-                clauses.append(imp_clauses[0])
-
-    and_joiner = " and " if target_lang != "cython" else " && "
-    if clauses:
-        return and_joiner.join(clauses)
-    return "true" if target_lang != "cython" else "1"
-
-
-def condition_to_python(cond: Any, domain_matrix: dict[str, set[Any]] | None = None) -> str:
-    """Translate a PlatformCondition or MatrixCondition into a valid Python expression."""
-    if isinstance(cond, PlatformCondition):
-        for tag in cond.tags:
-            py_p = get_py_platform(tag)
-            if py_p:
-                return f"sys.platform == {py_p!r}"
-        return "True"
-
-    if isinstance(cond, MatrixCondition):
-        if cond.raw_conditions:
-            if domain_matrix:
-                minimized = minimize_conditions(cond.raw_conditions, domain_matrix, target_lang="python")
-                if minimized and minimized != "true":
-                    return minimized
-            platforms = {c["target"] for c in cond.raw_conditions if "target" in c}
-            if platforms:
-                py_plats = tuple(sorted({get_py_platform(p) for p in platforms}))
-                if len(py_plats) > 1:
-                    return f"sys.platform in {py_plats!r}"
-                elif py_plats:
-                    return f"sys.platform == {py_plats[0]!r}"
-
-        # Fallback to predicate string mapping
-        pred = getattr(cond, "predicate", "")
-        if pred:
-            if pred.startswith("sys.platform"):
-                return pred
-            pred_mapped = pred
-            pred_mapped = pred_mapped.replace("defined(macosx)", "sys.platform == 'darwin'")
-            pred_mapped = pred_mapped.replace("defined(darwin)", "sys.platform == 'darwin'")
-            pred_mapped = pred_mapped.replace("defined(linux)", "sys.platform == 'linux'")
-            pred_mapped = pred_mapped.replace("defined(windows)", "sys.platform == 'win32'")
-            pred_mapped = pred_mapped.replace("defined(_WIN32)", "sys.platform == 'win32'")
-            pred_mapped = pred_mapped.replace(" && ", " and ")
-            pred_mapped = pred_mapped.replace(" || ", " or ")
-            return pred_mapped
-
-    return "True"
+    return MatrixCondition(
+        raw_conditions=tuple(configs),
+        platforms=platforms,
+        version_op=version_op,
+        version_min=version_min,
+        version_max=version_max,
+        feature_implicants=feature_implicants,
+    )
 
 
 def reconcile_matrix(
     matrix_units: Sequence[tuple[ConfigCondition, SourceUnit]],
     matrix: ConfigMatrix | None = None,
-    target_lang: str = "nim",
 ) -> MultiDimensionalReconciledUnit:
     """Reconciles N compilation units across a configuration matrix."""
     if not matrix_units:
@@ -425,8 +344,7 @@ def reconcile_matrix(
 
         branches: list[tuple[MatrixCondition, list[Declaration]]] = []
         for class_configs, class_decls in equiv_classes:
-            predicate = minimize_conditions(class_configs, domain_matrix, target_lang=target_lang)
-            mat_cond = MatrixCondition(predicate=predicate, raw_conditions=tuple(class_configs))
+            mat_cond = minimize_conditions(class_configs, domain_matrix)
             branches.append((mat_cond, class_decls))
 
         reconciled_items.append(MatrixGuardedBlock(branches=branches))
@@ -462,7 +380,7 @@ def reconcile_units(units: Sequence[tuple[str, Header | SourceUnit]]) -> Reconci
             su = u
         matrix_units.append((ConfigCondition({"target": tag}), su))
 
-    md_unit = reconcile_matrix(matrix_units, matrix=matrix, target_lang="nim")
+    md_unit = reconcile_matrix(matrix_units, matrix=matrix)
 
     items: list[Declaration | PlatformGuardedBlock] = []
     for item in md_unit.items:
@@ -474,10 +392,10 @@ def reconcile_units(units: Sequence[tuple[str, Header | SourceUnit]]) -> Reconci
                     plat_tag = str(raw_c.get("target", "posix"))
                     plat_cond = get_platform_condition(plat_tag)
                 else:
-                    tags = frozenset.union(
-                        *(get_platform_condition(str(c.get("target", "posix"))).tags for c in cond.raw_conditions)
-                    )
-                    plat_cond = PlatformCondition(tags=tags, nim_predicate=cond.predicate)
+                    sub_conds = [get_platform_condition(str(c.get("target", "posix"))) for c in cond.raw_conditions]
+                    tags = frozenset.union(*(sc.tags for sc in sub_conds))
+                    terms = tuple(sorted({term for sc in sub_conds for term in sc.terms}))
+                    plat_cond = PlatformCondition(tags=tags, terms=terms)
                 branches.append((plat_cond, list(decls)))
             items.append(PlatformGuardedBlock(branches=branches))
         else:

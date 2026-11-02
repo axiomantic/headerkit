@@ -62,6 +62,7 @@ __all__ = [
     "list_backends",
     "register_backend",
     "resolve_backend",
+    "supports_backend_auto_install",
 ]
 
 
@@ -104,7 +105,7 @@ def register_backend(
         context: PipelineContext | None = None,
         **kwargs: Any,
     ) -> SourceUnit | None:
-        _ = (context, kwargs)
+        _ = context
         inst = backend_class()
         if hasattr(inst, "is_available") and not inst.is_available():
             return None
@@ -117,6 +118,7 @@ def register_backend(
             recursive_includes=recursive_includes,
             max_depth=max_depth,
             project_prefixes=project_prefixes,
+            **kwargs,
         )
 
     HookRegistry.register_global("get_backend", _get_hook, priority=priority, backend=name)
@@ -164,11 +166,6 @@ def is_backend_available(name: str) -> bool:
     if name not in _BACKEND_REGISTRY:
         return False
 
-    if name == "libclang":
-        from headerkit.backends.libclang import is_system_libclang_available
-
-        return is_system_libclang_available()
-
     backend_cls = _BACKEND_REGISTRY[name]
     try:
         inst = backend_cls()
@@ -180,6 +177,16 @@ def is_backend_available(name: str) -> bool:
     return True
 
 
+def supports_backend_auto_install(name: str | None = None) -> bool:
+    """Check whether a registered backend supports automatic dependency installation."""
+    _ensure_backends_loaded()
+    resolved = _DEFAULT_BACKEND if name is None else _normalize_backend_name(name)
+    if resolved is None or resolved not in _BACKEND_REGISTRY:
+        return False
+    backend_cls = _BACKEND_REGISTRY[resolved]
+    return bool(getattr(backend_cls, "supports_auto_install", False))
+
+
 def get_backend_info() -> list[dict[str, str | bool]]:
     """Get information about all known backends.
 
@@ -187,19 +194,15 @@ def get_backend_info() -> list[dict[str, str | bool]]:
     """
     _ensure_backends_loaded()
 
-    descriptions = {
-        "libclang": "Full C/C++ support via LLVM",
-        "tree-sitter": "Fast C/C++ parsing without system LLVM dependencies",
-    }
-
     result: list[dict[str, str | bool]] = []
-    for name in _BACKEND_REGISTRY:
+    for name, backend_cls in _BACKEND_REGISTRY.items():
+        desc = getattr(backend_cls, "description", "")
         result.append(
             {
                 "name": name,
                 "available": is_backend_available(name),
                 "default": name == _DEFAULT_BACKEND,
-                "description": descriptions.get(name, ""),
+                "description": str(desc) if isinstance(desc, str) else "",
             }
         )
     return result

@@ -41,6 +41,7 @@ Example
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from headerkit.hooks import HookDispatcher, HookRegistry, PipelineContext, Priority
@@ -66,7 +67,11 @@ __all__ = [
     "coerce_writer_options",
     "get_default_writer",
     "get_writer",
+    "get_writer_comment_prefix",
+    "get_writer_extension",
     "get_writer_info",
+    "get_writer_output_pattern",
+    "infer_writer_from_extension",
     "is_writer_available",
     "list_writer_layouts",
     "list_writer_options",
@@ -372,6 +377,71 @@ def get_default_writer() -> str:
     if _DEFAULT_WRITER is None:
         raise ValueError("No writers available")
     return _DEFAULT_WRITER
+
+
+def get_writer_extension(name: str) -> str:
+    """Return the default file extension for the named writer (e.g. ``".pxd"``)."""
+    _ensure_writers_loaded()
+    writer_class = _WRITER_REGISTRY.get(name)
+    if writer_class is None:
+        return ".txt"
+    return str(getattr(writer_class, "default_extension", ".txt"))
+
+
+def get_writer_output_pattern(name: str) -> str:
+    """Return the default output path pattern for the named writer."""
+    _ensure_writers_loaded()
+    writer_class = _WRITER_REGISTRY.get(name)
+    if writer_class is None:
+        ext = get_writer_extension(name)
+        return f"{{dir}}/{{stem}}{ext}"
+    return str(getattr(writer_class, "default_output_pattern", "{dir}/{stem}.txt"))
+
+
+def get_writer_comment_prefix(name: str | None = None) -> str:
+    """Return the single-line comment prefix for a registered writer or language alias."""
+    _ensure_writers_loaded()
+    if not name:
+        return "#"
+    lower = name.lower()
+    writer_class = _WRITER_REGISTRY.get(lower)
+    if writer_class is not None:
+        return str(getattr(writer_class, "comment_prefix", "#"))
+    for cls in _WRITER_REGISTRY.values():
+        aliases = getattr(cls, "language_aliases", ())
+        if lower in aliases:
+            return str(getattr(cls, "comment_prefix", "#"))
+    return "#"
+
+
+def infer_writer_from_extension(path: str | Path) -> str | None:
+    """Infer a registered writer name from an output file's extension."""
+    _ensure_writers_loaded()
+    lower_name = Path(path).name.lower()
+    suffix = Path(path).suffix.lower()
+    if not suffix and lower_name.startswith("."):
+        suffix = lower_name
+    if not suffix:
+        return None
+
+    # Check compound extensions (e.g. .d.ts) first, then single extensions
+    ext_map: list[tuple[str, str]] = []
+    for writer_name, writer_class in _WRITER_REGISTRY.items():
+        declared_exts = getattr(writer_class, "file_extensions", None)
+        if declared_exts is None:
+            default_ext = getattr(writer_class, "default_extension", "")
+            declared_exts = (default_ext,) if default_ext else ()
+        for ext in declared_exts:
+            ext_lower = str(ext).lower()
+            if ext_lower:
+                ext_map.append((ext_lower, writer_name))
+
+    # Longest extension match wins so compound extensions like .d.ts take precedence
+    ext_map.sort(key=lambda item: len(item[0]), reverse=True)
+    for ext_lower, writer_name in ext_map:
+        if lower_name.endswith(ext_lower):
+            return writer_name
+    return None
 
 
 def _ensure_writers_loaded() -> None:

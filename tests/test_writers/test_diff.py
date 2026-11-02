@@ -860,10 +860,10 @@ class TestSemanticAbiDiffMode:
                 Constant("NNG_MAX_TTL", 15, is_macro=True),
             ],
         )
-        # Target represents a Nim-generated header where nng_duration was resolved to int32_t,
-        # _Bool became bool, uint8_t became unsigned char, and #define macros are absent
+        # Target represents a C header where nng_duration was resolved to int,
+        # _Bool became bool, and uint8_t became unsigned char
         target = Header(
-            path="nim_nng.h",
+            path="target_nng.h",
             declarations=[
                 Struct("nng_socket", [Field("id", CType("unsigned int"))]),
                 Function(
@@ -879,18 +879,14 @@ class TestSemanticAbiDiffMode:
                         Parameter("buf", Pointer(CType("char", ["unsigned"]))),
                     ],
                 ),
-                Function(
-                    "NimMain",
-                    CType("void"),
-                    [],
-                ),
+                Constant("NNG_MAX_TTL", 15, is_macro=True),
             ],
         )
 
         report = diff_headers(baseline, target, abi_mode=True)
         assert [e for e in report.entries if e.severity == "breaking"] == []
 
-        # Negative control: with abi_mode=False, syntactic differences (nng_duration vs int, _Bool vs bool, missing typedef/macro) ARE flagged
+        # Negative control: with abi_mode=False, syntactic differences (nng_duration vs int, _Bool vs bool, missing typedef) ARE flagged
         syntactic_report = diff_headers(baseline, target, abi_mode=False)
         assert syntactic_report.breaking_count > 0
 

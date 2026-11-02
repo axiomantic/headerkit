@@ -83,8 +83,6 @@ _BIGINT_CTYPES: frozenset[str] = frozenset(
         "uint64",
         "i64",
         "u64",
-        "NI64",
-        "NU64",
         "long long",
         "signed long long",
         "unsigned long long",
@@ -97,24 +95,6 @@ _BIGINT_CTYPES: frozenset[str] = frozenset(
         "uint_fast64_t",
         "intmax_t",
         "uintmax_t",
-    }
-)
-
-_NUMERIC_CTYPES: frozenset[str] = frozenset(
-    {
-        "NI",
-        "NU",
-        "NI8",
-        "NU8",
-        "NI16",
-        "NU16",
-        "NI32",
-        "NU32",
-        "NF",
-        "NF32",
-        "NF64",
-        "NIM_BOOL",
-        "NIM_CHAR",
     }
 )
 
@@ -161,6 +141,7 @@ class TsWasmWriter(BaseWriter):
     format_description: str = "TypeScript WebAssembly (.d.ts) declarations"
     default_output_pattern: str = "{dir}/{stem}.d.ts"
     default_extension: str = ".d.ts"
+    comment_prefix: ClassVar[str] = "//"
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
@@ -225,8 +206,6 @@ class TsWasmWriter(BaseWriter):
                 return "void" if is_return else "number"
             if clean in _BIGINT_CTYPES:
                 return "bigint"
-            if clean in _NUMERIC_CTYPES:
-                return "number"
             if clean in self._typedefs:
                 seen = _seen or set()
                 if clean not in seen:

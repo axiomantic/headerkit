@@ -14,20 +14,23 @@ class MalformedOverrideError(Exception):
     """Raised when an override block tag is unclosed or malformed."""
 
 
-COMMENT_PREFIXES = {
-    "nim": "#",
-    "python": "#",
-    "cython": "//",
-    "c": "//",
-    "cpp": "//",
-    "lua": "--",
-    "mojo": "#",
-}
+def _resolve_comment_prefix(language: str | None = None, comment_prefix: str | None = None) -> str:
+    """Resolve the single-line comment delimiter for a writer or explicit comment_prefix."""
+    if comment_prefix is not None:
+        return comment_prefix
+    from headerkit.writers import get_writer_comment_prefix
+
+    return get_writer_comment_prefix(language)
 
 
-def extract_overrides(source_code: str, language: str = "nim") -> dict[str, str]:
+def extract_overrides(
+    source_code: str,
+    language: str | None = None,
+    *,
+    comment_prefix: str | None = None,
+) -> dict[str, str]:
     """Scan existing source code for override blocks, preserving developer modifications."""
-    prefix = COMMENT_PREFIXES.get(language.lower(), "#")
+    prefix = _resolve_comment_prefix(language, comment_prefix)
     start_pattern = re.compile(rf"^{re.escape(prefix)}\s*@headerkit:override\s+([\w\.-]+)\s*$")
     end_pattern = re.compile(rf"^{re.escape(prefix)}\s*@headerkit:end-override\s+([\w\.-]+)\s*$")
 
@@ -69,12 +72,18 @@ def extract_overrides(source_code: str, language: str = "nim") -> dict[str, str]
     return overrides
 
 
-def inject_overrides(generated_code: str, overrides: dict[str, str], language: str = "nim") -> str:
+def inject_overrides(
+    generated_code: str,
+    overrides: dict[str, str],
+    language: str | None = None,
+    *,
+    comment_prefix: str | None = None,
+) -> str:
     """Re-injects preserved manual override content into matching override slots in generated code."""
     if not overrides:
         return generated_code
 
-    prefix = COMMENT_PREFIXES.get(language.lower(), "#")
+    prefix = _resolve_comment_prefix(language, comment_prefix)
     start_pattern = re.compile(rf"^{re.escape(prefix)}\s*@headerkit:override\s+([\w\.-]+)\s*$")
     end_pattern = re.compile(rf"^{re.escape(prefix)}\s*@headerkit:end-override\s+([\w\.-]+)\s*$")
 
@@ -181,18 +190,28 @@ class MatrixManifest:
         return cls.from_dict(json.loads(json_str))
 
 
-def emit_manifest_comment(manifest: MatrixManifest, language: str = "nim") -> str:
+def emit_manifest_comment(
+    manifest: MatrixManifest,
+    language: str | None = None,
+    *,
+    comment_prefix: str | None = None,
+) -> str:
     """Emits formatted header comment containing serialized JSON manifest."""
-    prefix = COMMENT_PREFIXES.get(language.lower(), "#")
+    prefix = _resolve_comment_prefix(language, comment_prefix)
     sep = "=" * 77
     json_lines = manifest.to_json().splitlines()
     body = "\n".join(f"{prefix} {line}" if line else prefix for line in json_lines)
     return f"{prefix} {sep}\n{prefix} @headerkit-matrix-manifest\n{body}\n{prefix} {sep}\n"
 
 
-def extract_manifest(source_code: str, language: str = "nim") -> MatrixManifest:
+def extract_manifest(
+    source_code: str,
+    language: str | None = None,
+    *,
+    comment_prefix: str | None = None,
+) -> MatrixManifest:
     """Extracts and parses embedded @headerkit-matrix-manifest from source comments."""
-    prefix = COMMENT_PREFIXES.get(language.lower(), "#")
+    prefix = _resolve_comment_prefix(language, comment_prefix)
     tag = "@headerkit-matrix-manifest"
     lines = source_code.splitlines()
     found = False
