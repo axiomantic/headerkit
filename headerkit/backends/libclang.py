@@ -1388,6 +1388,17 @@ class ClangASTConverter:
         parse_args: tuple[str, ...] = (),
     ) -> None:
         self.filename = filename
+        self._normalized_filename: str = normalize_path(filename)
+        self._filename_basename: str = os.path.basename(self._normalized_filename)
+        self._resolved_filename: str | None = _resolve_path(filename) if os.path.isabs(filename) else None
+        self._filename_basenames: frozenset[str] = (
+            frozenset({self._filename_basename, os.path.basename(self._resolved_filename)})
+            if self._resolved_filename is not None
+            else frozenset({self._filename_basename})
+        )
+        self._filename_dir: list[str] = [os.path.dirname(filename)] if os.path.isabs(filename) else []
+        self._resolved_path_cache: dict[str, str] = {}
+        self._resolved_rel_path_cache: dict[str, str] = {}
         self.project_prefixes = project_prefixes
         self.is_cplus = is_cplus
         self.allowlist_paths = allowlist_paths
@@ -1845,17 +1856,24 @@ class ClangASTConverter:
 
         # Check main file.  Deliberately ahead of the denylist: the main file
         # cannot be denied out of existence.
-        if normalize_path(file_path) == normalize_path(self.filename):
+        norm_file = normalize_path(file_path)
+        if norm_file == self._normalized_filename:
             return True
-        if os.path.isabs(self.filename) and (
-            _resolve_path(file_path, [os.path.dirname(self.filename)]) == _resolve_path(self.filename)
-        ):
-            return True
+        if self._resolved_filename is not None and os.path.basename(norm_file) in self._filename_basenames:
+            resolved_fp = self._resolved_rel_path_cache.get(file_path)
+            if resolved_fp is None:
+                resolved_fp = _resolve_path(file_path, self._filename_dir)
+                self._resolved_rel_path_cache[file_path] = resolved_fp
+            if resolved_fp == self._resolved_filename:
+                return True
 
         if not self.project_prefixes and not self.allowlist_paths and not self.denylist_paths:
             return False
 
-        resolved = _resolve_path(file_path)
+        resolved = self._resolved_path_cache.get(file_path)
+        if resolved is None:
+            resolved = _resolve_path(file_path)
+            self._resolved_path_cache[file_path] = resolved
 
         # Deny wins over allow.
         if self.denylist_paths is not None and self.denylist_paths.matches(resolved):
@@ -1867,7 +1885,10 @@ class ClangASTConverter:
 
         # Check project prefixes (for umbrella headers)
         for prefix in self.project_prefixes or ():
-            resolved_prefix = _resolve_path(prefix).rstrip("/")
+            resolved_prefix = self._resolved_path_cache.get(prefix)
+            if resolved_prefix is None:
+                resolved_prefix = _resolve_path(prefix).rstrip("/")
+                self._resolved_path_cache[prefix] = resolved_prefix
             if resolved == resolved_prefix or resolved.startswith(resolved_prefix + "/"):
                 return True
 

@@ -2270,4 +2270,33 @@ class TestLibclangDiscoveryAndIncludes:
             lambda: [str(fake_lib)],
         )
         dirs_fallback = mod._find_libclang_builtin_include_dirs()
-        assert str(resource_inc) in dirs_fallback
+        assert dirs_fallback == [str(resource_inc)]
+
+    def test_is_from_target_file_avoids_realpath_for_nonmatching_basenames_and_memoizes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_is_from_target_file skips os.path.realpath for non-matching basenames and memoizes matching ones."""
+        from types import SimpleNamespace
+
+        target_hdr = tmp_path / "curl.h"
+        target_hdr.write_text("int curl_easy_init(void);\n")
+        converter = mod.ClangASTConverter(str(target_hdr))
+
+        realpath_calls: list[str] = []
+        orig_realpath = mod.os.path.realpath
+
+        def counting_realpath(p: str) -> str:
+            realpath_calls.append(p)
+            return orig_realpath(p)
+
+        monkeypatch.setattr(mod.os.path, "realpath", counting_realpath)
+
+        sys_cursor = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name="/usr/include/stdio.h")))
+        for _ in range(1000):
+            assert converter._is_from_target_file(sys_cursor) is False
+        assert realpath_calls == []
+
+        rel_target_cursor = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name="./curl.h")))
+        for _ in range(100):
+            assert converter._is_from_target_file(rel_target_cursor) is True
+        assert len(realpath_calls) == 1
