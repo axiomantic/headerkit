@@ -3203,21 +3203,21 @@ class ClangASTConverter:
         if not name:
             return None
 
-        # Skip if already processed
+        # Skip if already processed. As in _process_struct, a definition replaces
+        # an earlier forward declaration rather than being dropped by it.
         if emit:
             key = f"template:{name}"
             definition_key = f"{key}:definition"
-            if cursor.is_definition():
-                if definition_key in self._seen:
+            if definition_key in self._seen:
+                return None
+            if not cursor.is_definition():
+                if key in self._seen:
                     return None
+            else:
+                self._seen.add(definition_key)
                 if key in self._seen:
                     self._remove_forward_declaration(name, "class")
-                self._seen.add(key)
-                self._seen.add(definition_key)
-            else:
-                if key in self._seen:
-                    return None
-                self._seen.add(key)
+            self._seen.add(key)
 
         # Extract template type parameters and track non-type parameters
         template_params: list[str] = []

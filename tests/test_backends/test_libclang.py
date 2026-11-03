@@ -1802,6 +1802,43 @@ class TestRecursiveIncludeExpansion:
 
 
 @libclang
+class TestClassTemplateForwardDeclaration:
+    """A class template declared before it is defined keeps its definition."""
+
+    def test_class_template_definition_replaces_its_forward_declaration(self) -> None:
+        """A template's definition must not be dropped by an earlier forward declaration of it.
+
+        ``_process_class_template`` keyed its dedup on the name alone, so the
+        forward declaration claimed the key and the definition after it was
+        discarded, leaving an empty ``cppclass``.
+        """
+        header = LibclangBackend().parse(
+            "template <typename T> class Box;\ntemplate <typename T> class Box { public: typedef T value_type; };\n",
+            "test.hpp",
+        )
+
+        boxes = [d for d in header.declarations if isinstance(d, Struct) and d.name == "Box"]
+        assert [(b.template_params, b.inner_typedefs, b.has_body) for b in boxes] == [
+            (["T"], {"value_type": "T"}, True)
+        ]
+
+    def test_forward_declaration_after_definition_is_ignored(self) -> None:
+        source = textwrap.dedent("""\
+            template <typename T> class Box {
+            public:
+                T value;
+            };
+            template <typename T> class Box;
+        """)
+        unit = LibclangBackend().parse(source, "box.hpp")
+        structs = [d for d in unit.declarations if isinstance(d, Struct)]
+        assert len(structs) == 1
+        assert structs[0].name == "Box"
+        assert structs[0].has_body is True
+        assert [f.name for f in structs[0].fields] == ["value"]
+
+
+@libclang
 class TestBitfieldWidths:
     """``Field.bit_width`` must carry a bitfield's declared width.
 
@@ -2234,46 +2271,3 @@ class TestLibclangDiscoveryAndIncludes:
         )
         dirs_fallback = mod._find_libclang_builtin_include_dirs()
         assert str(resource_inc) in dirs_fallback
-
-
-@libclang
-class TestClassTemplateForwardDeclaration:
-    """A class template forward declaration must be replaced by its subsequent definition.
-
-    ``_process_class_template`` previously deduplicated on ``template:{name}``
-    alone, so a forward declaration ``template <typename T> class Box;`` claimed
-    that key and caused the later ``template <typename T> class Box { ... };``
-    in the same translation unit to be skipped.
-    """
-
-    def test_definition_after_forward_declaration_is_kept(self) -> None:
-        source = textwrap.dedent("""\
-            template <typename T> class Box;
-            template <typename T> class Box {
-            public:
-                typedef T value_type;
-                T value;
-            };
-        """)
-        unit = LibclangBackend().parse(source, "box.hpp")
-        structs = [d for d in unit.declarations if isinstance(d, Struct)]
-        assert len(structs) == 1
-        assert structs[0].name == "Box"
-        assert structs[0].has_body is True
-        assert structs[0].inner_typedefs == {"value_type": "T"}
-        assert [f.name for f in structs[0].fields] == ["value"]
-
-    def test_forward_declaration_after_definition_is_ignored(self) -> None:
-        source = textwrap.dedent("""\
-            template <typename T> class Box {
-            public:
-                T value;
-            };
-            template <typename T> class Box;
-        """)
-        unit = LibclangBackend().parse(source, "box.hpp")
-        structs = [d for d in unit.declarations if isinstance(d, Struct)]
-        assert len(structs) == 1
-        assert structs[0].name == "Box"
-        assert structs[0].has_body is True
-        assert [f.name for f in structs[0].fields] == ["value"]
