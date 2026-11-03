@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -943,62 +943,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../configuration_matrix/" class="md-nav__link">
         
   
@@ -1793,62 +1737,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../reference/generate/" class="md-nav__link">
         
   
@@ -2133,10 +2021,10 @@
 <p>HeaderKit writers convert Intermediate Representation (IR) into target code, documentation, or configuration files. HeaderKit ships with built-in writers for Python (<code>ctypes</code>, <code>cffi</code>, <code>cython</code>), systems languages (<code>mojo</code>, <code>nim</code>), C shims (<code>cshim</code>), <code>lua</code> (LuaJIT FFI), <code>diff</code>, <code>json</code>, and <code>prompt</code> (LLM context). You can easily create custom writers for any additional target language, documentation generator, or code-generation pipeline.</p>
 <h2 id="the-basewriter-class">The BaseWriter Class<a class="headerlink" href="#the-basewriter-class" title="Permanent link">&para;</a></h2>
 <p>The standard and recommended way to create a writer is by inheriting from <a class="autorefs autorefs-internal" title="            BaseWriter" href="../../reference/writers/#headerkit.writers.BaseWriter"><code>BaseWriter</code></a>.</p>
-<p><code>BaseWriter</code> handles single-string rendering (<code>writer.write(unit)</code>), layout scaffolding (<code>writer.write_layout(unit, options)</code>), layout validation, and option declarations out of the box:</p>
+<p><code>BaseWriter</code> handles single-string rendering (<code>writer.write(unit)</code>), layout emission (<code>writer.write_layout(unit, options)</code>), layout validation, and option declarations out of the box:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">SourceUnit</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputFile</span><span class="p">,</span> <span class="n">ProjectLayout</span><span class="p">,</span> <span class="n">ScaffoldOptions</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseWriter</span><span class="p">,</span> <span class="n">WriterOption</span><span class="p">,</span> <span class="n">register_writer</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseWriter</span><span class="p">,</span> <span class="n">WriterOption</span><span class="p">,</span> <span class="n">register_writer</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputFile</span><span class="p">,</span> <span class="n">ProjectLayout</span><span class="p">,</span> <span class="n">ScaffoldOptions</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">MarkdownWriter</span><span class="p">(</span><span class="n">BaseWriter</span><span class="p">):</span>
@@ -2186,12 +2074,9 @@
 <ol>
 <li><strong><code>write(unit)</code></strong>: Returns the rendered string output.</li>
 <li><strong><code>write_layout(unit, options)</code></strong>: Produces single-file or multi-file package layouts according to <code>options.layout</code>.</li>
-<li><strong>CLI Integration</strong>: Works immediately with the CLI for single files or scaffolded packages:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Single-file output (default)</span>
+<li><strong>CLI Integration</strong>: Works immediately with the CLI for single files:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Single-file output</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>headerkit<span class="w"> </span>mylib.h<span class="w"> </span>-w<span class="w"> </span>markdown<span class="w"> </span>-o<span class="w"> </span>docs.md
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Package scaffolding</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>headerkit<span class="w"> </span>mylib.h<span class="w"> </span>-w<span class="w"> </span>markdown<span class="w"> </span>--layout<span class="w"> </span>package<span class="w"> </span>--package-name<span class="w"> </span>mydocs<span class="w"> </span>-o<span class="w"> </span>./docs_site
 </code></pre></div></li>
 <li><strong>Introspection</strong>: Supported options and layouts are automatically queryable via <code>list_writer_options("markdown")</code> and <code>list_writer_layouts("markdown")</code>.</li>
 </ol>

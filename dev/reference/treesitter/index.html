@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -782,62 +782,6 @@
     
   
     Nim to Python Packaging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
   
 
     
@@ -1782,62 +1726,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../generate/" class="md-nav__link">
         
   
@@ -2156,7 +2044,7 @@
 
 
 <a href="#headerkit.backends.treesitter.TreeSitterBackend" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">TreeSitterBackend</span><span class="p">()</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">TreeSitterBackend</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">storage_macros</span><span class="o">=</span><span class="p">(),</span> <span class="n">callconv_macros</span><span class="o">=</span><span class="p">(),</span> <span class="n">callconv_ptr_macros</span><span class="o">=</span><span class="p">())</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2194,7 +2082,7 @@
 
 
 <a href="#headerkit.backends.treesitter.TreeSitterBackend.parse" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">parse</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">use_default_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">recursive_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">allowlist</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">denylist</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">parse</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">use_default_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">recursive_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">allowlist</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">denylist</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">storage_macros</span><span class="o">=</span><span class="p">(),</span> <span class="n">callconv_macros</span><span class="o">=</span><span class="p">(),</span> <span class="n">callconv_ptr_macros</span><span class="o">=</span><span class="p">(),</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">

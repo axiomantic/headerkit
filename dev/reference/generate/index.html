@@ -6,14 +6,14 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
         <link rel="canonical" href="https://axiomantic.github.io/headerkit/dev/reference/generate/">
       
       
-        <link rel="prev" href="../workorder/">
+        <link rel="prev" href="../prompt/">
       
       
         <link rel="next" href="../install-libclang/">
@@ -782,62 +782,6 @@
     
   
     Nim to Python Packaging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
   
 
     
@@ -1649,62 +1593,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -2494,7 +2382,7 @@ On cache hit, no libclang installation is required.</p>
 
 
 <a href="#headerkit._generate.generate" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate</span><span class="p">(</span><span class="n">header_path</span><span class="p">,</span> <span class="n">writer_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">store_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">_result_meta</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate</span><span class="p">(</span><span class="n">header_path</span><span class="p">,</span> <span class="n">writer_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">code</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transforms</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">store_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">_result_meta</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">_pre_resolved_ir</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2675,6 +2563,23 @@ instead of reading <em>header_path</em> from disk.</p>
             <td>
               <div class="doc-md-description">
                 <p>Additional backend args.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>transforms</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="headerkit.transforms.PipelineFilter">PipelineFilter</span> | <span title="str">str</span> | <span title="collections.abc.Mapping">Mapping</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Sequence of Layer-2 transforms (PipelineFilter instances,
+shorthand strings, or config dicts) applied sequentially before the writer.</p>
               </div>
             </td>
             <td>
@@ -2922,377 +2827,14 @@ triple.</p>
 
 
 <a href="#headerkit._generate.generate_all" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate_all</span><span class="p">(</span><span class="n">header_path</span><span class="p">,</span> <span class="n">writers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">store_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generate_all</span><span class="p">(</span><span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">targets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transforms</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">store_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">project_root</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
-        <p>Parse a C/C++ header and generate output for multiple writers.</p>
-<p>Parses the header once (or loads from IR cache), then runs each
-writer (or loads from output cache).</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>header_path</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | <a class="autorefs autorefs-internal" title="            InputSpec
-
-
-  
-      dataclass
-   (headerkit.ir.InputSpec)" href="../ir/#headerkit.ir.InputSpec">InputSpec</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Path to the header file or an InputSpec.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>writers</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of writer names. Default: ["json"].</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>backend_name</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Backend to use (default: "libclang").</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>runtime</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Target runtime environment (e.g. "nim", "mojo").</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>language</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input source language (e.g. "c", "cpp").</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>classification</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input classification (e.g. "header", "source").</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>include_dirs</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Include directories for parsing.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>defines</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Preprocessor defines (without -D prefix).</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>extra_args</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Additional backend args.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>writer_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="object">object</span>]] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Per-writer kwargs, keyed by writer name.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_dir</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Base directory for output files (auto-named).</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_paths</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span> | <span title="pathlib.Path">Path</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Explicit output paths per writer name.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>store_dir</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Store directory. When <code>None</code>, falls back to the
-<code>HEADERKIT_STORE_DIR</code> environment variable, then auto-detects
-<code>.headerkit/</code> in the project root.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>no_cache</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Disable all caching.</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>no_ir_cache</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Disable IR cache only.</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>no_output_cache</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Disable output cache only.</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>auto_install_libclang</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Explicitly enable (True) or disable (False)
-automatic libclang installation. Passed through to <code>generate()</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>target</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Target triple for cross-compilation. Passed through
-to <code>generate()</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            GenerateResult
-
-
-  
-      dataclass
-   (headerkit._generate.GenerateResult)" href="#headerkit._generate.GenerateResult">GenerateResult</a>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of GenerateResult, one per writer.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code>FileNotFoundError</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If header_path does not exist.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Parse a C/C++ header and generate output for multiple writers or <code>[[targets]]</code>.</p>
+<p>Parses the header once (or loads from IR cache) per unique parse-input group,
+then runs each target's transforms and writer (or loads from output cache).</p>
 
 
     </div>
@@ -3320,7 +2862,7 @@ to <code>generate()</code>.</p>
 
 
 <a href="#headerkit._generate.batch_generate" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">batch_generate</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">patterns</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_templates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">store_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">project_root</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">header_overrides</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">batch_generate</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">patterns</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">backend_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">runtime</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_dirs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">defines</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_args</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">transforms</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">writer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_templates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">store_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">no_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_ir_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">no_output_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">auto_install_libclang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">project_root</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">header_overrides</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">

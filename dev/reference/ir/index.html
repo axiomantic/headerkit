@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -782,62 +782,6 @@
     
   
     Nim to Python Packaging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
   
 
     
@@ -1945,6 +1889,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#headerkit.ir.ParserBackend.follows_includes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;follows_includes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.ir.ParserBackend.supports_compiler_args" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;supports_compiler_args
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#headerkit.ir.ParserBackend.supported_languages" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2387,62 +2353,6 @@
     
   
     Prompt Writer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
   
 
     
@@ -3283,6 +3193,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#headerkit.ir.ParserBackend.follows_includes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;follows_includes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.ir.ParserBackend.supports_compiler_args" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;supports_compiler_args
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#headerkit.ir.ParserBackend.supported_languages" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3472,7 +3404,7 @@ for decl in unit.declarations:
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Language identifier (e.g. 'c', 'cpp', 'nim', 'rust').</p>
+                <p>Language identifier (e.g. 'c', 'cpp', 'rust').</p>
               </div>
             </td>
             <td>
@@ -3541,7 +3473,7 @@ for decl in unit.declarations:
   </span>
 
 <a href="#headerkit.ir.InputSpec" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">InputSpec</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s1">'c'</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="s1">'header'</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">InputSpec</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s1">'c'</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="s1">'header'</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="p">(),</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="p">(),</span> <span class="n">recursive_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_default_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -3587,7 +3519,7 @@ for decl in unit.declarations:
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Language identifier (e.g. 'c', 'cpp', 'nim', 'rust', 'zig').</p>
+                <p>Language identifier (e.g. 'c', 'cpp', 'rust', 'zig').</p>
               </div>
             </td>
             <td>
@@ -3626,6 +3558,86 @@ for decl in unit.declarations:
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>headers</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="pathlib.Path">Path</span>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Additional header paths participating in this parse unit.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>project_prefixes</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="str">str</span>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path prefixes to treat as project headers rather than system headers.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>recursive_includes</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to recursively descend into included project headers.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_depth</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional maximum recursion depth for include processing.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>use_default_includes</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether default system include directories are enabled.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -3662,7 +3674,7 @@ for decl in unit.declarations:
   </span>
 
 <a href="#headerkit.ir.InputSpec.from_path" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_path</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_path</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">classification</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="p">(),</span> <span class="n">project_prefixes</span><span class="o">=</span><span class="p">(),</span> <span class="n">recursive_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_default_includes</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -4101,16 +4113,17 @@ a symbolic size (macro or constant), or be flexible (incomplete).</p>
   </span>
 
 <a href="#headerkit.ir.FunctionPointer" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">FunctionPointer</span><span class="p">(</span><span class="n">return_type</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_variadic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">calling_convention</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">FunctionPointer</span><span class="p">(</span><span class="n">return_type</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_variadic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">calling_convention</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">qualifiers</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_pointer</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
 
 
-        <p>Function pointer type.</p>
-<p>Represents a pointer to a function with a specific signature.
-Used for callbacks, vtables, and function tables.</p>
+        <p>Function pointer or function prototype type.</p>
+<p>Represents a pointer to a function (<code>is_pointer=True</code>) or an ISO C
+0-star function prototype type (<code>is_pointer=False</code>) with a specific
+signature. Used for callbacks, vtables, and function tables.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4188,8 +4201,41 @@ Used for callbacks, vtables, and function tables.</p>
             <td>
               <div class="doc-md-description">
                 <p>The calling convention if non-default
-    (e.g., <code>"stdcall"</code>, <code>"cdecl"</code>, <code>"fastcall"</code>). None for
-    the platform default calling convention.</p>
+(e.g., <code>"stdcall"</code>, <code>"cdecl"</code>, <code>"fastcall"</code>). None for
+the platform default calling convention.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>qualifiers</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pointer qualifiers (e.g., <code>["const"]</code> for <code>void (*const fn)(int)</code>).</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="list">list</span>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>is_pointer</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True for a 1-star function pointer (<code>void (*)(int)</code>),
+    False for a 0-star ISO C function typedef (<code>typedef void fn_t(int);</code>).</p>
 <h4 id="headerkit.ir.FunctionPointer--examples">Examples<a class="headerlink" href="#headerkit.ir.FunctionPointer--examples" title="Permanent link">&para;</a></h4>
 <p>Simple function pointer::</p>
 <div class="highlight"><pre><span></span><code>void_fn = FunctionPointer(CType("int"), [])  # int (*)(void)
@@ -4210,7 +4256,7 @@ Used for callbacks, vtables, and function tables.</p>
               </div>
             </td>
             <td>
-                  <code>None</code>
+                  <code>True</code>
             </td>
           </tr>
       </tbody>
@@ -5065,7 +5111,7 @@ scope.</p>
   </span>
 
 <a href="#headerkit.ir.Field" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Field</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">bit_width</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">anonymous_struct</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_anonymous_transparent</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">access</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_static</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_padding</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Field</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">bit_width</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">anonymous_struct</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_anonymous_transparent</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">access</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_static</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_padding</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">type_overrides</span><span class="o">=</span><span class="n"><span title="dict">dict</span></span><span class="p">())</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -5280,7 +5326,7 @@ field = Field("pos", CType("void"), anonymous_struct=inner)
   </span>
 
 <a href="#headerkit.ir.Function" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Function</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">return_type</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_variadic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">calling_convention</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">template_params</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">template_parameters</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_static</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_const</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_virtual</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pure_virtual</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_explicit</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">access</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_deleted</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_defaulted</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_noexcept</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_inline</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_deprecated</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Function</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">return_type</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_variadic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">calling_convention</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">template_params</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">template_parameters</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_static</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_const</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_virtual</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pure_virtual</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_explicit</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">access</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_deleted</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_defaulted</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_noexcept</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_inline</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_deprecated</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">mangled_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">type_overrides</span><span class="o">=</span><span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -5491,7 +5537,7 @@ the platform default calling convention.</p>
   </span>
 
 <a href="#headerkit.ir.Parameter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Parameter</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">default_value</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Parameter</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">default_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">type_overrides</span><span class="o">=</span><span class="n"><span title="dict">dict</span></span><span class="p">())</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -5620,7 +5666,7 @@ may be named or anonymous (common in prototypes).</p>
   </span>
 
 <a href="#headerkit.ir.Typedef" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Typedef</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">underlying_type</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_deprecated</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Typedef</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">underlying_type</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_deprecated</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">type_overrides</span><span class="o">=</span><span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -5755,7 +5801,7 @@ function pointer types.</p>
   </span>
 
 <a href="#headerkit.ir.Variable" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_deprecated</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">alignment</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">is_deprecated</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">alignment</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mangled_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">type_overrides</span><span class="o">=</span><span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -5886,7 +5932,7 @@ variables and file-scope data definitions.</p>
   </span>
 
 <a href="#headerkit.ir.Constant" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Constant</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">evaluated_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">raw_expression</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_macro</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Constant</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">evaluated_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">raw_expression</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_macro</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_macro_expr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">doc</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -6348,6 +6394,54 @@ header = backend.parse("int foo(void);", "test.h")
     <div class="doc doc-contents ">
 
         <p>Whether this backend can parse C++ code.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="headerkit.ir.ParserBackend.follows_includes" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">follows_includes</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#headerkit.ir.ParserBackend.follows_includes" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">follows_includes</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether this backend follows <code>#include</code> directives.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="headerkit.ir.ParserBackend.supports_compiler_args" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">supports_compiler_args</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#headerkit.ir.ParserBackend.supports_compiler_args" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">supports_compiler_args</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether this backend honors preprocessor/compiler flags (<code>-I</code>, <code>-D</code>, etc.).</p>
 
     </div>
 

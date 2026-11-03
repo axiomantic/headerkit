@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -802,62 +802,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../guides/configuration_matrix/" class="md-nav__link">
         
   
@@ -1501,6 +1445,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" CShimWriter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.cshim.CShimWriter.format_platform_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_platform_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.cshim.CShimWriter.format_matrix_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_matrix_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1754,62 +1726,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../generate/" class="md-nav__link">
         
   
@@ -2018,6 +1934,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" CShimWriter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.cshim.CShimWriter.format_platform_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_platform_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.cshim.CShimWriter.format_matrix_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_matrix_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2127,6 +2071,46 @@
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.cshim.CShimWriter.format_platform_condition" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">format_platform_condition</span>
+
+
+<a href="#headerkit.writers.cshim.CShimWriter.format_platform_condition" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">format_platform_condition</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Format a PlatformCondition into a C/C++ preprocessor guard expression.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.cshim.CShimWriter.format_matrix_condition" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">format_matrix_condition</span>
+
+
+<a href="#headerkit.writers.cshim.CShimWriter.format_matrix_condition" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">format_matrix_condition</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">domain_matrix</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Format a MatrixCondition into a C/C++ preprocessor guard expression.</p>
+
+
+    </div>
+
+</div>
 
 
 

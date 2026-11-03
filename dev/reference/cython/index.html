@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -802,62 +802,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../guides/configuration_matrix/" class="md-nav__link">
         
   
@@ -1539,6 +1483,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#headerkit.writers.cython.CythonWriter.format_platform_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_platform_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.cython.CythonWriter.format_matrix_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_matrix_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#headerkit.writers.cython.CythonWriter.write" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1832,62 +1798,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../generate/" class="md-nav__link">
         
   
@@ -2078,6 +1988,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#headerkit.writers.cython.CythonWriter.format_platform_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_platform_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headerkit.writers.cython.CythonWriter.format_matrix_condition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;format_matrix_condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#headerkit.writers.cython.CythonWriter.write" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2224,7 +2156,7 @@ Cython keywords are automatically escaped with a <code>_</code> suffix and a C n
 
 
 <a href="#headerkit.writers.cython.CythonWriter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CythonWriter</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CythonWriter</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">stub_mode</span><span class="o">=</span><span class="s1">'cimport'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nogil</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">exception_spec</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2261,6 +2193,46 @@ pxd_string = writer.write(header)
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.cython.CythonWriter.format_platform_condition" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">format_platform_condition</span>
+
+
+<a href="#headerkit.writers.cython.CythonWriter.format_platform_condition" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">format_platform_condition</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Format a :class:<code>PlatformCondition</code> into a Cython compile-time <code>IF</code> expression.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="headerkit.writers.cython.CythonWriter.format_matrix_condition" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">format_matrix_condition</span>
+
+
+<a href="#headerkit.writers.cython.CythonWriter.format_matrix_condition" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">format_matrix_condition</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">domain_matrix</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Format a :class:<code>MatrixCondition</code> into a Cython compile-time <code>IF</code> expression.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -2339,7 +2311,7 @@ pxd_string = writer.write(header)
 
 
 <a href="#headerkit.writers.cython.write_pxd" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_pxd</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_pxd</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">stub_mode</span><span class="o">=</span><span class="s1">'cimport'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nogil</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">exception_spec</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2399,6 +2371,23 @@ Defaults to "headerkit.stubs". Pass None to suppress stub cimports.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>stub_mode</code>
+            </td>
+            <td>
+                  <code><span title="typing.Literal">Literal</span>[&#39;cimport&#39;, &#39;standalone&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Either <code>"cimport"</code> (default) or <code>"standalone"</code> (emits
+scoped <code>cdef extern from "&lt;header.h&gt;":</code> declarations for referenced stub types).</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;cimport&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>header_path</code>
             </td>
             <td>
@@ -2407,6 +2396,38 @@ Defaults to "headerkit.stubs". Pass None to suppress stub cimports.</p>
             <td>
               <div class="doc-md-description">
                 <p>Override the header path used in generated cdef extern from block.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>nogil</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span> | <span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True (or a custom modifier string), append <code>nogil</code> to function declarations.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>exception_spec</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional Cython exception specification (e.g., <code>"+"</code> -&gt; <code>except +</code>).</p>
               </div>
             </td>
             <td>
@@ -2457,7 +2478,7 @@ internally by <a class="autorefs autorefs-internal" title="            CythonWri
 
 
 <a href="#headerkit.writers.cython.PxdWriter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">PxdWriter</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">PxdWriter</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stub_cimport_prefix</span><span class="o">=</span><span class="s1">'headerkit.stubs'</span><span class="p">,</span> <span class="n">stub_mode</span><span class="o">=</span><span class="s1">'cimport'</span><span class="p">,</span> <span class="n">header_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nogil</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">exception_spec</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">

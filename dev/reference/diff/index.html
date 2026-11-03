@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -782,62 +782,6 @@
     
   
     Nim to Python Packaging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
   
 
     
@@ -1887,62 +1831,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../generate/" class="md-nav__link">
         
   
@@ -2333,7 +2221,7 @@ Output is available in JSON or Markdown format.</p>
 
 
 <a href="#headerkit.writers.diff.DiffWriter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">DiffWriter</span><span class="p">(</span><span class="n">baseline</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">'json'</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">DiffWriter</span><span class="p">(</span><span class="n">baseline</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">'json'</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">abi_mode</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ignore_pointer_const</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2350,7 +2238,12 @@ diff report in either JSON or Markdown format.</p>
     The baseline header to compare against. If None, an empty header
     is used (all declarations appear as additions).
 format : str
-    Output format: <code>"json"</code> (default) or <code>"markdown"</code>.</p>
+    Output format: <code>"json"</code> (default) or <code>"markdown"</code>.
+abi_mode : bool
+    When True (default), resolves Typedef chains, normalizes <code>_Bool</code>/<code>bool</code>
+    and integer width typedefs, and compares Struct layouts structurally.
+ignore_pointer_const : bool
+    When True, relaxes <code>const T*</code> vs <code>T*</code> pointee const qualifiers.</p>
 <h4 id="headerkit.writers.diff.DiffWriter--example">Example<a class="headerlink" href="#headerkit.writers.diff.DiffWriter--example" title="Permanent link">&para;</a></h4>
 <p>::</p>
 <div class="highlight"><pre><span></span><code>from headerkit.writers import get_writer
@@ -2417,7 +2310,7 @@ report = writer.write(new_header)
 
 
 <a href="#headerkit.writers.diff.diff_headers" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">diff_headers</span><span class="p">(</span><span class="n">baseline</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">diff_headers</span><span class="p">(</span><span class="n">baseline</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">abi_mode</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ignore_pointer_const</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2478,6 +2371,41 @@ report = writer.write(new_header)
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>abi_mode</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When True (default), resolves Typedef chains to canonical
+C types, normalizes <code>_Bool</code>/<code>bool</code> and integer width aliases, and
+compares Struct layouts structurally.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ignore_pointer_const</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When True, relaxes <code>const T*</code> vs <code>T*</code>
+pointee const qualifiers while still catching pointer indirection drift.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
             </td>
           </tr>
       </tbody>

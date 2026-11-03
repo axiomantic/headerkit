@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -802,62 +802,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../guides/configuration_matrix/" class="md-nav__link">
         
   
@@ -1488,17 +1432,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#scaffolding-lifecycle-hooks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scaffolding Lifecycle Hooks
-      
-    </span>
-  </a>
   
 </li>
       
@@ -2158,62 +2091,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../generate/" class="md-nav__link">
         
   
@@ -2493,17 +2370,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#scaffolding-lifecycle-hooks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scaffolding Lifecycle Hooks
-      
-    </span>
-  </a>
   
 </li>
       
@@ -2955,7 +2821,7 @@ A project renamer registers at <code>Priority.PROJECT</code>; a writer registers
 language's grammar rules at <code>Priority.FALLBACK</code> and therefore runs <strong>last</strong>.
 Whatever a project renames a symbol to must still survive the target language's
 lexer, and no configuration can bypass that floor. The Nim writer registers
-[<code>nim_legality_renamer</code>][headerkit.writers.nim.nim_legality_renamer] exactly the
+<code>_nim_legality_renamer</code> (<code>headerkit.writers.nim</code>) exactly the
 way it registers <code>write_output</code>.</p>
 <p><strong><code>resolve_collision</code></strong> (<code>first_result</code>) decides what to do when two source
 symbols collapse onto one identifier:</p>
@@ -2979,7 +2845,7 @@ fails loudly.</p>
 <p>Renaming is not injective, and neither is the C-to-Nim spelling: <code>__sig</code> and
 <code>_sig</code> collapse under underscore repair, and to Nim <code>fooBar</code> and <code>foo_bar</code> are
 one identifier whatever the header called them
-([<code>nim_ident_identity</code>][headerkit.writers.nim.nim_ident_identity] is the
+(<code>_nim_ident_identity</code> in <code>headerkit.writers.nim</code> is the
 function that says so). Equality on the emitted string is the wrong test.</p>
 <h3 id="known-limitation-collision-checking-is-module-scope">Known limitation: collision checking is module-scope<a class="headerlink" href="#known-limitation-collision-checking-is-module-scope" title="Permanent link">&para;</a></h3>
 <p>Collision checking covers the flat module-level namespace -- functions,
@@ -3042,15 +2908,6 @@ A hook built from declarative config carries its config's digest, so two
 different rename configs cannot share a key. A hook written in Python is
 identified by module and qualified name: editing that function's body does not
 move the key, the same limitation writer plugins have with <code>cache_version</code>.</p>
-<h2 id="scaffolding-lifecycle-hooks">Scaffolding Lifecycle Hooks<a class="headerlink" href="#scaffolding-lifecycle-hooks" title="Permanent link">&para;</a></h2>
-<p>When project scaffolding is invoked (<code>--layout package</code>), HeaderKit executes specialized lifecycle hook points:</p>
-<ol>
-<li><strong><code>resolve_version</code></strong> (<code>first_result</code>): Queries plugins to extract library version from custom metadata or AST declarations.</li>
-<li><strong><code>scaffold_project</code></strong> (<code>first_result</code>): Allows Bring-Your-Own-Scaffolder plugins to replace the default <code>StdlibScaffolder</code> layout engine.</li>
-<li><strong><code>scaffold_tests</code></strong> (<code>waterfall</code>): Post-processes and enriches test suites (e.g. generating 1:1 unit tests, tripwires, or test work orders).</li>
-<li><strong><code>transform_layout</code></strong> (<code>waterfall</code>): Passes the complete <code>ProjectLayout</code> through sequential transformations (e.g. injecting platform frameworks, precompiled objects, or custom compiler flags into <code>nim.cfg</code> or <code>CMakeLists.txt</code>).</li>
-<li><strong><code>merge_file</code></strong> (<code>first_result</code>): Allows plugins to handle custom file merging (e.g. AST-aware merge engines). Falls back to <code>merge_incremental_tests</code> when <code>OutputFile.merge_strategy</code> is set.</li>
-</ol>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 

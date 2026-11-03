@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims.">
+        <meta name="description" content="The universal C/C++ interop toolkit. Generates production-ready bindings for Python, Nim, Mojo, LuaJIT, TypeScript/Wasm, and C shims.">
       
       
       
@@ -802,62 +802,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/scaffolding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project Scaffolding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/work-orders/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Test Work Orders
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../guides/configuration_matrix/" class="md-nav__link">
         
   
@@ -1466,17 +1410,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#headerkit.writers.cffi.CffiWriter--example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#headerkit.writers.cffi.CffiWriter.write" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1837,62 +1770,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../scaffold/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scaffolding API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../workorder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Work Order API
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../generate/" class="md-nav__link">
         
   
@@ -2094,17 +1971,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#headerkit.writers.cffi.CffiWriter--example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#headerkit.writers.cffi.CffiWriter.write" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2234,7 +2100,7 @@ integer constants.</p>
 
 
 <a href="#headerkit.writers.cffi.CffiWriter" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CffiWriter</span><span class="p">(</span><span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">define_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_cdef</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">CffiWriter</span><span class="p">(</span><span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">define_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_cdef</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">module_var</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extern_python</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2248,26 +2114,18 @@ integer constants.</p>
 <p>exclude_patterns : list[str] | None
     Regex patterns. Declarations with names matching any pattern
     are excluded from output.
-define_patterns : list[str] | None
-    Regex patterns matched against <code>#define</code> names in the raw header
-    source.  Matching names are appended as <code>#define NAME ...</code> lines
-    (CFFI's "resolve at verify-time" syntax).  The actual matching is
-    performed by the <code>generate()</code> pipeline, which sets
-    <code>_matched_defines</code> before calling <code>write()</code>.
+define_patterns : Sequence[str] | None
+    Regex patterns matched against <code>Constant</code> declaration names in the IR.
+    Matching macro constants not already emitted as integer literals are
+    appended as <code>#define NAME ...</code> lines (CFFI's verify-time syntax).
 extra_cdef : list[str] | None
-    Arbitrary cdef lines appended verbatim after all generated output.</p>
-<h4 id="headerkit.writers.cffi.CffiWriter--example">Example<a class="headerlink" href="#headerkit.writers.cffi.CffiWriter--example" title="Permanent link">&para;</a></h4>
-<p>::</p>
-<div class="highlight"><pre><span></span><code>from headerkit.writers import get_writer
-
-writer = get_writer("cffi", exclude_patterns=["__.*"])
-cdef_string = writer.write(header)
-
-# Or directly:
-from headerkit.writers.cffi import CffiWriter
-writer = CffiWriter(exclude_patterns=["__.*"])
-cdef_string = writer.write(header)
-</code></pre></div>
+    Arbitrary cdef lines appended verbatim after all generated output.
+module_var : str | None
+    When set (e.g. <code>"CDEF"</code>), wraps the output as a valid Python module
+    exporting <code>&lt;module_var&gt;: str = ...</code> and <code>__all__ = [&lt;module_var&gt;]</code>.
+extern_python : Sequence[str] | None
+    C function prototypes, <code>extern "Python"</code> lines, or declaration names
+    to append as <code>extern "Python"</code> callback declarations.</p>
 
 
 
@@ -2303,7 +2161,7 @@ cdef_string = writer.write(header)
 
     <div class="doc doc-contents ">
 
-        <p>Convert header IR to CFFI cdef string or reconciled Python script.</p>
+        <p>Convert header IR to CFFI cdef string, Python module, or reconciled script.</p>
 
 
     </div>
@@ -2343,7 +2201,7 @@ cdef_string = writer.write(header)
 
     <div class="doc doc-contents ">
 
-        <p>Return format string for wrapping cache metadata in C-style comments.</p>
+        <p>Return format string for wrapping cache metadata in comments.</p>
 
 
     </div>
