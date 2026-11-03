@@ -8,6 +8,7 @@ from headerkit.reconcile import (
     MatrixCondition,
     MatrixGuardedBlock,
     MultiDimensionalReconciledUnit,
+    PlatformGuardedBlock,
     reconcile_matrix,
     reconcile_units,
 )
@@ -25,7 +26,7 @@ def test_reconcile_matrix_monotonic_alignment() -> None:
     c1 = ConfigCondition({"target": "windows"})
     c2 = ConfigCondition({"target": "linux"})
 
-    reconciled = reconcile_matrix([(c1, u1), (c2, u2)], target_lang="nim")
+    reconciled = reconcile_matrix([(c1, u1), (c2, u2)])
 
     assert isinstance(reconciled, MultiDimensionalReconciledUnit)
     assert len(reconciled.items) == 3
@@ -34,8 +35,10 @@ def test_reconcile_matrix_monotonic_alignment() -> None:
     assert isinstance(mid, MatrixGuardedBlock)
     assert len(mid.branches) == 2
     assert isinstance(mid.branches[0][0], MatrixCondition)
+    assert mid.branches[0][0].platforms == ("windows",)
     assert mid.branches[0][1] == [divergent_a]
     assert isinstance(mid.branches[1][0], MatrixCondition)
+    assert mid.branches[1][0].platforms == ("linux",)
     assert mid.branches[1][1] == [divergent_b]
     assert reconciled.items[2] == common_end
 
@@ -49,4 +52,6 @@ def test_reconcile_units_zero_dual_system_delegation() -> None:
 
     rec = reconcile_units([("darwin", u_mac), ("linux", u_linux)])
     assert len(rec.items) == 1
-    assert rec.items[0].branches[0][0].nim_predicate == "defined(macosx)"
+    assert isinstance(rec.items[0], PlatformGuardedBlock)
+    assert rec.items[0].branches[0][0].tags == frozenset({"darwin", "macosx", "apple"})
+    assert rec.items[0].branches[0][0].terms == (("darwin",),)

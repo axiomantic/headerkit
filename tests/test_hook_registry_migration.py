@@ -190,22 +190,3 @@ class TestHookRegistryMigration:
             no_cache=True,
         )
         assert f"# CUSTOM HOOK GENERATED {header_file}" in out
-
-    def test_scaffold_runs_transform_unit_hook(self):
-        from headerkit.scaffold import ScaffoldOptions, scaffold
-
-        @hook("transform_unit", priority=Priority.PROJECT)
-        def add_custom_decl(unit: SourceUnit, context: PipelineContext) -> SourceUnit:
-            _ = context
-            return SourceUnit(
-                path=unit.path,
-                declarations=list(unit.declarations)
-                + [Function(name="scaffold_injected_func", return_type=CType("void"), parameters=[])],
-            )
-
-        unit = SourceUnit(path="test.h", declarations=[])
-        opts = ScaffoldOptions(package_name="testpkg", target_language="ctypes", layout="package")
-        layout = scaffold(unit, opts)
-        tripwire = layout.get_file("tests/test_tripwire.py")
-        assert tripwire is not None
-        assert "scaffold_injected_func" in tripwire.content

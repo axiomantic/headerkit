@@ -572,9 +572,9 @@ class TestTreeSitterBackend:
         vars_by_name = {d.name: d for d in header.declarations if isinstance(d, Variable)}
         assert "handler" in vars_by_name
         handler = vars_by_name["handler"]
-        assert isinstance(handler.type, Pointer)
-        assert isinstance(handler.type.pointee, FunctionPointer)
-        fp = handler.type.pointee
+        assert isinstance(handler.type, FunctionPointer)
+        assert handler.type.is_pointer is True
+        fp = handler.type
         assert str(fp.return_type) == "int"
         assert len(fp.parameters) == 2
         assert fp.parameters[0].name == "code"
@@ -585,9 +585,9 @@ class TestTreeSitterBackend:
         typedefs = {d.name: d for d in header.declarations if isinstance(d, Typedef)}
         assert "callback_t" in typedefs
         cb = typedefs["callback_t"]
-        assert isinstance(cb.underlying_type, Pointer)
-        assert isinstance(cb.underlying_type.pointee, FunctionPointer)
-        cb_fp = cb.underlying_type.pointee
+        assert isinstance(cb.underlying_type, FunctionPointer)
+        assert cb.underlying_type.is_pointer is True
+        cb_fp = cb.underlying_type
         assert str(cb_fp.return_type) == "void"
         assert len(cb_fp.parameters) == 1
         assert cb_fp.parameters[0].name == "msg"
@@ -615,8 +615,8 @@ class TestTreeSitterBackend:
 
         assert "read" in fields_by_name
         read_field = fields_by_name["read"]
-        assert isinstance(read_field.type, Pointer)
-        assert isinstance(read_field.type.pointee, FunctionPointer)
+        assert isinstance(read_field.type, FunctionPointer)
+        assert read_field.type.is_pointer is True
 
         assert "flags" in fields_by_name
         assert fields_by_name["flags"].bit_width == 4

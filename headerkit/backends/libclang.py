@@ -42,17 +42,14 @@ import contextlib
 import fnmatch
 import functools
 import glob
-import json
 import os
+import posixpath
 import re
-import shutil
-import struct
 import subprocess
 import sys
-import tempfile
 import weakref
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -182,14 +179,21 @@ def _unnamed_bitfields_impose_alignment(args: tuple[str, ...], is_cplus: bool) -
 def normalize_path(path: str) -> str:
     """Normalize a file path for consistent comparison.
 
-    Converts backslashes to forward slashes and lowercases the entire
-    path. This enables platform-agnostic path comparison, particularly
-    for Windows paths where separators and case are inconsistent.
+    Converts backslashes to forward slashes, collapses ``.`` and ``..``
+    segments, and lowercases the entire path. This enables platform-agnostic
+    path comparison, particularly for Windows paths where separators and case
+    are inconsistent.
 
     :param path: File path to normalize.
     :returns: Normalized path string.
     """
-    return path.replace("\\", "/").lower()
+    if not path:
+        return ""
+    slash_path = path.replace("\\", "/")
+    normed = posixpath.normpath(slash_path)
+    if slash_path.startswith("//") and not slash_path.startswith("///") and not normed.startswith("//"):
+        normed = "/" + normed
+    return normed.lower()
 
 
 def _resolve_path(path: str, search_dirs: Sequence[str] = ()) -> str:
@@ -750,7 +754,11 @@ def _is_compiler_resource_dir(path_str: str) -> bool:
     return False
 
 
-def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None = None) -> bool:
+def _is_system_header(
+    header_path: str,
+    project_prefixes: tuple[str, ...] | None = None,
+    system_headers: Collection[str] = (),
+) -> bool:
     """Check if a header path is a system header.
 
     System headers are identified by:
@@ -770,6 +778,7 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
 
     :param header_path: Path to the header file
     :param project_prefixes: Optional tuple of path prefixes to treat as project (not system)
+    :param system_headers: Optional collection of header basenames to treat as system headers
     :returns: True if this is a system header
     """
     path_str = normalize_path(str(header_path))
@@ -778,7 +787,7 @@ def _is_system_header(header_path: str, project_prefixes: tuple[str, ...] | None
     if _matches_project_prefix(header_path, project_prefixes):
         return False
 
-    if os.path.basename(path_str) == "nimbase.h":
+    if system_headers and os.path.basename(path_str) in system_headers:
         return True
 
     # System header locations that are absolute path prefixes
@@ -1312,11 +1321,12 @@ def _is_function_like_macro(tokens: list[Any]) -> bool:
 
 def _same_macro_value(a: Constant, b: Constant) -> bool:
     """Report whether two macro Constants carry the same value and type."""
-    return (a.value, a.evaluated_value, a.raw_expression, a.type) == (
+    return (a.value, a.evaluated_value, a.raw_expression, a.type, a.is_macro_expr) == (
         b.value,
         b.evaluated_value,
         b.raw_expression,
         b.type,
+        b.is_macro_expr,
     )
 
 
@@ -1401,6 +1411,8 @@ class ClangASTConverter:
         self._tu: Any = None
         # Anonymous record/enum declaration key -> stable generated tag name
         self._anon_names: dict[str, str] = {}
+        # Anonymous record/enum declaration keys named directly by a typedef
+        self._typedef_anon_keys: set[str] = set()
         # Counter backing the fallback slug for anonymous tags no declarator names
         self._anon_counter: int = 0
 
@@ -1679,8 +1691,8 @@ class ClangASTConverter:
             cursor = typedef_map[type_name]
             underlying = cursor.underlying_typedef_type
             deps = self._extract_typedef_names_from_type(underlying, include_pointers=include_pointers)
-            decl = underlying.get_declaration()
-            if decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.ENUM_DECL):
+            decl = self._resolve_tag_declaration(underlying) or underlying.get_declaration()
+            if decl is not None and decl.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.ENUM_DECL):
                 deps.update(self._collect_used_types(decl, include_pointers=include_pointers))
 
             # Discard self-references and return only deps that are in typedef_map
@@ -1835,6 +1847,10 @@ class ClangASTConverter:
         # cannot be denied out of existence.
         if normalize_path(file_path) == normalize_path(self.filename):
             return True
+        if os.path.isabs(self.filename) and (
+            _resolve_path(file_path, [os.path.dirname(self.filename)]) == _resolve_path(self.filename)
+        ):
+            return True
 
         if not self.project_prefixes and not self.allowlist_paths and not self.denylist_paths:
             return False
@@ -1974,13 +1990,15 @@ class ClangASTConverter:
             column=loc.column,
         )
 
+        resolved_val = value if value is not None else evaluated_value
         return Constant(
             name=name,
-            value=value if value is not None else evaluated_value,
+            value=resolved_val,
             evaluated_value=evaluated_value,
             raw_expression=raw_expr,
             type=macro_type,
             is_macro=True,
+            is_macro_expr=resolved_val is None,
             location=location,
         )
 
@@ -2646,9 +2664,35 @@ class ClangASTConverter:
         *sibling* of the VAR_DECL, so the binding cannot be discovered while
         processing the record itself. This pre-pass walks the declarators first
         so both the definition and every reference agree on one generated tag.
+
+        Direct ``typedef struct { ... } Name;`` declarations are scanned first
+        because on LLVM 14/15 the anonymous ``STRUCT_DECL`` cursor has an empty
+        spelling and precedes the ``TYPEDEF_DECL`` sibling in the translation
+        unit; binding typedef names first ensures both the top-level record and
+        any nested anonymous field qualifiers resolve to ``Name``.
         """
         for cursor in cursors:
+            self._prescan_typedef_anon_names(cursor)
+        for cursor in cursors:
             self._prescan_cursor_for_anon_names(cursor)
+
+    def _prescan_typedef_anon_names(self, cursor: Any) -> None:
+        if cursor.kind in (CursorKind.TYPEDEF_DECL, CursorKind.TYPE_ALIAS_DECL):
+            with contextlib.suppress(Exception):
+                underlying = cursor.underlying_typedef_type
+                unwrapped = underlying
+                while unwrapped.kind == TypeKind.ELABORATED:
+                    unwrapped = unwrapped.get_named_type()
+                if unwrapped.kind in (TypeKind.RECORD, TypeKind.ENUM):
+                    decl = unwrapped.get_declaration()
+                    if decl is not None and self._is_anonymous_decl(decl) and cursor.spelling:
+                        anon_key = self._anon_key(decl)
+                        self._anon_names.setdefault(anon_key, cursor.spelling)
+                        self._typedef_anon_keys.add(anon_key)
+
+        with contextlib.suppress(Exception):
+            for child in cursor.get_children():
+                self._prescan_typedef_anon_names(child)
 
     def _prescan_cursor_for_anon_names(self, cursor: Any) -> None:
         kind = cursor.kind
@@ -2657,10 +2701,25 @@ class ClangASTConverter:
         elif kind in (
             CursorKind.VAR_DECL,
             CursorKind.PARM_DECL,
+        ):
+            self._bind_anon_name(cursor.spelling, cursor.type)
+        elif kind in (
             CursorKind.TYPEDEF_DECL,
             CursorKind.TYPE_ALIAS_DECL,
         ):
-            self._bind_anon_name(cursor.spelling, cursor.type)
+            with contextlib.suppress(Exception):
+                underlying = cursor.underlying_typedef_type
+                unwrapped = underlying
+                while unwrapped.kind == TypeKind.ELABORATED:
+                    unwrapped = unwrapped.get_named_type()
+                if unwrapped.kind in (TypeKind.RECORD, TypeKind.ENUM):
+                    decl = unwrapped.get_declaration()
+                    if decl is not None and self._is_anonymous_decl(decl) and cursor.spelling:
+                        anon_key = self._anon_key(decl)
+                        self._anon_names.setdefault(anon_key, cursor.spelling)
+                        self._typedef_anon_keys.add(anon_key)
+                else:
+                    self._bind_anon_name(cursor.spelling, underlying)
         elif kind == CursorKind.FUNCTION_DECL:
             with contextlib.suppress(Exception):
                 self._bind_anon_name(cursor.spelling, cursor.result_type)
@@ -2669,8 +2728,7 @@ class ClangASTConverter:
             for child in cursor.get_children():
                 self._prescan_cursor_for_anon_names(child)
 
-    @staticmethod
-    def _record_qualifier(cursor: Any) -> str:
+    def _record_qualifier(self, cursor: Any) -> str:
         """Return the enclosing record's name, used to qualify a field's tag.
 
         Two records in one translation unit may each hold a member named
@@ -2688,7 +2746,7 @@ class ClangASTConverter:
             CursorKind.CLASS_DECL,
         ):
             return ""
-        spelling = parent.spelling
+        spelling = self._normalize_anon_name(parent) or parent.spelling
         if not spelling or "(" in spelling:
             return ""
         return str(spelling)
@@ -2999,6 +3057,7 @@ class ClangASTConverter:
             methods=methods,
             is_union=is_union,
             is_cppclass=is_cppclass,
+            is_typedef=(self._anon_key(cursor) in self._typedef_anon_keys),
             is_packed=is_packed,
             namespace=self._current_namespace,
             cpp_name=cpp_name,
@@ -3291,6 +3350,7 @@ class ClangASTConverter:
                 )
 
         vtable_entries = [m for m in methods if m.is_virtual or m.is_pure_virtual]
+        attrs, is_deprecated = self._get_attributes(cursor)
 
         struct = Struct(
             name=name,
@@ -3310,6 +3370,8 @@ class ClangASTConverter:
             destructor=destructor,
             conversions=conversions,
             vtable_entries=vtable_entries,
+            attributes=attrs,
+            is_deprecated=is_deprecated,
             location=self._get_location(cursor),
         )
         if emit:
@@ -3371,6 +3433,8 @@ class ClangASTConverter:
         """
         if self.is_cplus:
             return False
+        if self._anon_key(cursor) in self._typedef_anon_keys:
+            return True
         return not str(cursor.type.spelling).startswith("enum ")
 
     def _enum_cpp_name(self, cursor: Any, name: str | None) -> str | None:
@@ -3528,6 +3592,8 @@ class ClangASTConverter:
 
         is_noexcept = self._is_noexcept(cursor)
         is_inline, body = self._is_inline_function(cursor)
+        is_static = self._is_static_function(cursor)
+        calling_convention = self._extract_calling_convention(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
         parsed_tpl_params = self._extract_template_parameters(cursor)
@@ -3537,19 +3603,27 @@ class ClangASTConverter:
         else:
             template_parameters = [TemplateParameter(name=p) for p in template_params]
 
+        raw_mangled = getattr(cursor, "mangled_name", None)
+        mangled_name: str | None = None
+        if isinstance(raw_mangled, str) and raw_mangled.startswith(("_Z", "__Z", "?")):
+            mangled_name = raw_mangled[1:] if raw_mangled.startswith("__Z") else raw_mangled
+
         func = Function(
             name=name,
             return_type=return_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            calling_convention=calling_convention,
             namespace=self._current_namespace,
             template_params=template_params,
             template_parameters=template_parameters,
+            is_static=is_static,
             is_noexcept=is_noexcept,
             is_inline=is_inline,
             body=body,
             attributes=attrs,
             is_deprecated=is_deprecated,
+            mangled_name=mangled_name,
             location=self._get_location(cursor),
         )
         self.declarations.append(func)
@@ -3632,6 +3706,7 @@ class ClangASTConverter:
 
         is_noexcept = self._is_noexcept(cursor)
         is_inline, body = self._is_inline_function(cursor)
+        calling_convention = self._extract_calling_convention(cursor)
         access = self._get_access_specifier(cursor)
         attrs, is_deprecated = self._get_attributes(cursor)
 
@@ -3647,6 +3722,7 @@ class ClangASTConverter:
             return_type=return_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            calling_convention=calling_convention,
             template_params=template_params,
             template_parameters=template_parameters,
             is_static=is_static,
@@ -3696,7 +3772,12 @@ class ClangASTConverter:
 
             if record_type.kind == TypeKind.RECORD:
                 decl = record_type.get_declaration()
-                struct_name = decl.spelling
+                if self._is_anonymous_decl(decl) and name:
+                    anon_key = self._anon_key(decl)
+                    self._anon_names.setdefault(anon_key, name)
+                    self._typedef_anon_keys.add(anon_key)
+                    self._prescan_cursor_for_anon_names(decl)
+                struct_name = self._normalize_anon_name(decl) or decl.spelling
                 is_typedef_pattern = struct_name == name
                 key_prefix = "union" if decl.kind == CursorKind.UNION_DECL else "struct"
                 struct_key = self._record_key(key_prefix, struct_name)
@@ -3733,6 +3814,17 @@ class ClangASTConverter:
                                 field = self._convert_field(child)
                                 if field:
                                     fields.append(field)
+                            elif child.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL) and (
+                                self._is_anonymous_decl(child)
+                            ):
+                                if self._normalize_anon_name(child) is None:
+                                    nested = self._build_anonymous_record(child)
+                                    if nested is not None:
+                                        fields.append(self._make_anonymous_field(nested))
+                                else:
+                                    self._process_struct(child, is_union=child.kind == CursorKind.UNION_DECL)
+                            elif child.kind == CursorKind.ENUM_DECL:
+                                self._process_enum(child)
 
                         struct = Struct(
                             name=struct_name or None,
@@ -3803,7 +3895,11 @@ class ClangASTConverter:
 
             elif record_type.kind == TypeKind.ENUM:
                 decl = record_type.get_declaration()
-                enum_name = decl.spelling
+                if self._is_anonymous_decl(decl) and name:
+                    anon_key = self._anon_key(decl)
+                    self._anon_names.setdefault(anon_key, name)
+                    self._typedef_anon_keys.add(anon_key)
+                enum_name = self._normalize_anon_name(decl) or decl.spelling
                 self._process_enum(decl)
                 if enum_name and enum_name != name:
                     underlying_type = CType(name=enum_name, is_elaborated=True)
@@ -3882,6 +3978,10 @@ class ClangASTConverter:
 
         attrs, is_deprecated = self._get_attributes(cursor)
         alignment = self._get_alignment(cursor)
+        raw_mangled = getattr(cursor, "mangled_name", None)
+        mangled_name: str | None = None
+        if isinstance(raw_mangled, str) and raw_mangled.startswith(("_Z", "__Z", "?")):
+            mangled_name = raw_mangled[1:] if raw_mangled.startswith("__Z") else raw_mangled
 
         var = Variable(
             name=name,
@@ -3890,6 +3990,7 @@ class ClangASTConverter:
             attributes=attrs,
             is_deprecated=is_deprecated,
             alignment=alignment,
+            mangled_name=mangled_name,
             location=self._get_location(cursor),
         )
         self.declarations.append(var)
@@ -3974,7 +4075,7 @@ class ClangASTConverter:
         declaring cursor does carry them, as PARM_DECL children.
         """
         func_ptr = type_expr
-        if isinstance(func_ptr, Pointer):
+        while isinstance(func_ptr, Pointer):
             func_ptr = func_ptr.pointee
         if not isinstance(func_ptr, FunctionPointer):
             return
@@ -4118,10 +4219,7 @@ class ClangASTConverter:
             # ``()`` functions, which are legal C and must not fall through to
             # the opaque basic-type tail.
             if pointee.kind in (TypeKind.FUNCTIONPROTO, TypeKind.FUNCTIONNOPROTO):
-                func_ptr = self._convert_function_type(pointee)
-                if func_ptr:
-                    return Pointer(pointee=func_ptr, qualifiers=ptr_quals)
-                return None
+                return self._convert_function_type(pointee, qualifiers=ptr_quals, is_pointer=True)
 
             pointee_type = self._convert_type(pointee)
             if pointee_type:
@@ -4152,9 +4250,9 @@ class ClangASTConverter:
             # Return as pointer since Cython can't represent dependent array sizes
             return Pointer(pointee=element_type)
 
-        # Handle function types (for function pointer types)
-        if kind == TypeKind.FUNCTIONPROTO:
-            return self._convert_function_type(clang_type)
+        # Handle function types (for non-pointer function typedefs and function pointer types)
+        if kind in (TypeKind.FUNCTIONPROTO, TypeKind.FUNCTIONNOPROTO):
+            return self._convert_function_type(clang_type, is_pointer=False)
 
         # Handle elaborated types (struct X, enum Y, etc.)
         if kind == TypeKind.ELABORATED:
@@ -4261,7 +4359,58 @@ class ClangASTConverter:
 
         return CType(name=base_type, qualifiers=qualifiers)
 
-    def _convert_function_type(self, clang_type: Any) -> FunctionPointer | None:
+    @staticmethod
+    def _extract_calling_convention_from_spelling(spelling: str) -> str | None:
+        """Extract calling convention from a type or token spelling."""
+        if not spelling:
+            return None
+        conv_patterns = (
+            ("stdcall", r"(?:\b__stdcall\b|__attribute__\s*\(\(\s*(?:__)?stdcall(?:__)?\s*\)\))"),
+            ("fastcall", r"(?:\b__fastcall\b|__attribute__\s*\(\(\s*(?:__)?fastcall(?:__)?\s*\)\))"),
+            ("cdecl", r"(?:\b__cdecl\b|__attribute__\s*\(\(\s*(?:__)?cdecl(?:__)?\s*\)\))"),
+            ("thiscall", r"(?:\b__thiscall\b|__attribute__\s*\(\(\s*(?:__)?thiscall(?:__)?\s*\)\))"),
+            ("vectorcall", r"(?:\b__vectorcall\b|__attribute__\s*\(\(\s*(?:__)?vectorcall(?:__)?\s*\)\))"),
+        )
+        for conv_name, pattern in conv_patterns:
+            if re.search(pattern, spelling):
+                return conv_name
+        return None
+
+    def _extract_calling_convention(self, cursor: Any) -> str | None:
+        """Extract calling convention from a function cursor or its type."""
+        with contextlib.suppress(Exception):
+            conv = self._extract_calling_convention_from_spelling(cursor.type.spelling)
+            if conv:
+                return conv
+        with contextlib.suppress(Exception):
+            toks = " ".join(t.spelling for t in cursor.get_tokens())
+            conv = self._extract_calling_convention_from_spelling(toks)
+            if conv:
+                return conv
+        return None
+
+    @staticmethod
+    def _is_static_function(cursor: Any) -> bool:
+        """Check whether a free function cursor has ``static`` storage class."""
+        with contextlib.suppress(Exception):
+            sc = getattr(cursor, "storage_class", None)
+            if sc is not None and str(sc).endswith("STATIC"):
+                return True
+        with contextlib.suppress(Exception):
+            for tok in cursor.get_tokens():
+                if tok.spelling == "(":
+                    break
+                if tok.spelling == "static":
+                    return True
+        return False
+
+    def _convert_function_type(
+        self,
+        clang_type: Any,
+        *,
+        qualifiers: list[str] | None = None,
+        is_pointer: bool = True,
+    ) -> FunctionPointer | None:
         """Convert a function type to FunctionPointer."""
         result_type = self._convert_type(clang_type.get_result())
         if not result_type:
@@ -4285,10 +4434,15 @@ class ClangASTConverter:
                 # recovered from the declaring cursor by _apply_param_names().
                 parameters.append(Parameter(name=None, type=param_type))
 
+        calling_convention = self._extract_calling_convention_from_spelling(getattr(clang_type, "spelling", "") or "")
+
         return FunctionPointer(
             return_type=result_type,
             parameters=parameters,
             is_variadic=is_variadic,
+            calling_convention=calling_convention,
+            qualifiers=list(qualifiers) if qualifiers else [],
+            is_pointer=is_pointer,
         )
 
     def _get_location(self, cursor: Any) -> SourceLocation | None:
@@ -4297,64 +4451,6 @@ class ClangASTConverter:
         if loc.file:
             return SourceLocation(file=loc.file.name, line=loc.line, column=loc.column)
         return None
-
-
-@functools.lru_cache(maxsize=1)
-def _find_nim_libpath() -> str | None:
-    """Locate Nim's standard library directory containing ``nimbase.h`` via ``nim dump``."""
-    try:
-        proc = subprocess.run(
-            ["nim", "dump", "--dump.format:json", "."],
-            cwd=tempfile.gettempdir(),
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        if proc.returncode == 0 and proc.stdout:
-            start = proc.stdout.find("{")
-            end = proc.stdout.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                data = json.loads(proc.stdout[start : end + 1])
-                if isinstance(data, dict):
-                    libpath = data.get("libpath")
-                    if isinstance(libpath, str) and libpath:
-                        return libpath
-    except (OSError, subprocess.SubprocessError, ValueError):
-        pass
-
-    nim_bin = shutil.which("nim")
-    if nim_bin is not None:
-        real_nim = os.path.realpath(nim_bin)
-        candidate = os.path.normpath(os.path.join(os.path.dirname(real_nim), "..", "lib"))
-        if os.path.isfile(os.path.join(candidate, "nimbase.h")):
-            return candidate
-    return None
-
-
-def _has_nimbase_in_dirs(
-    include_dirs: Sequence[str] | None,
-    extra_args: Sequence[str] | None,
-    filename: str,
-) -> bool:
-    """Check whether ``nimbase.h`` is already present in configured include directories."""
-    search: list[str] = []
-    if include_dirs:
-        search.extend(include_dirs)
-    if extra_args:
-        args_iter = iter(extra_args)
-        for arg in args_iter:
-            if arg in ("-I", "-isystem"):
-                with contextlib.suppress(StopIteration):
-                    search.append(next(args_iter))
-            elif arg.startswith("-I") and len(arg) > 2:
-                search.append(arg[2:])
-            elif arg.startswith("-isystem") and len(arg) > 8:
-                search.append(arg[8:])
-    file_dir = os.path.dirname(os.path.abspath(filename))
-    if file_dir:
-        search.append(file_dir)
-    return any(os.path.isfile(os.path.join(d, "nimbase.h")) for d in search)
 
 
 class LibclangBackend:
@@ -4388,10 +4484,17 @@ class LibclangBackend:
         )
     """
 
+    description: str = "Full C/C++ support via LLVM"
+    supports_auto_install: bool = True
     supported_languages: frozenset[str] = frozenset({"c", "cpp"})
     supported_classifications: frozenset[str] = frozenset({"header", "source"})
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        system_headers: Sequence[str] = (),
+        skip_function_bodies: bool = False,
+    ) -> None:
         self._index: Any = None
         # Cache for parsed headers (path -> Header) to avoid re-parsing
         self._parse_cache: dict[str, Header] = {}
@@ -4400,9 +4503,16 @@ class LibclangBackend:
         # Normalized paths clang itself classified as system headers, accumulated
         # across every translation unit this backend has parsed.
         self._clang_system_headers: set[str] = set()
+        self._system_headers: frozenset[str] = frozenset(system_headers)
+        self._skip_function_bodies: bool = skip_function_bodies
         _LIVE_BACKENDS.add(self)
 
-    def _is_system_include(self, header_path: str, project_prefixes: tuple[str, ...] | None) -> bool:
+    def _is_system_include(
+        self,
+        header_path: str,
+        project_prefixes: tuple[str, ...] | None,
+        system_headers: Collection[str] = (),
+    ) -> bool:
         """Decide whether an included header is a system header.
 
         clang's answer is authoritative: it knows which search paths it treated
@@ -4413,13 +4523,15 @@ class LibclangBackend:
 
         :param header_path: Path to the included header.
         :param project_prefixes: Path prefixes that override every system classification.
+        :param system_headers: Optional collection of header basenames to treat as system headers.
         :returns: True if the header must not be descended into.
         """
         if _matches_project_prefix(header_path, project_prefixes):
             return False
         if normalize_path(str(header_path)) in self._clang_system_headers:
             return True
-        return _is_system_header(header_path, project_prefixes)
+        combined_sys = self._system_headers | frozenset(system_headers)
+        return _is_system_header(header_path, project_prefixes, combined_sys)
 
     @property
     def name(self) -> str:
@@ -4435,8 +4547,22 @@ class LibclangBackend:
     def supports_cpp(self) -> bool:
         return True
 
+    @property
+    def follows_includes(self) -> bool:
+        return True
+
+    @property
+    def supports_compiler_args(self) -> bool:
+        return True
+
     def is_available(self) -> bool:
-        return _configure_libclang()
+        return is_system_libclang_available()
+
+    @classmethod
+    def auto_install(cls) -> bool:
+        from headerkit.install_libclang import auto_install
+
+        return auto_install()
 
     def _get_index(self) -> Any:
         """Get or create the clang index."""
@@ -4527,6 +4653,10 @@ class LibclangBackend:
         project_prefixes: tuple[str, ...] | None = None,
         allowlist_paths: _PathSet | None = None,
         denylist_paths: _PathSet | None = None,
+        system_headers: Collection[str] = (),
+        root_tu: Any = None,
+        is_cplus: bool = False,
+        parse_args: tuple[str, ...] = (),
     ) -> Header:
         """Recursively parse included headers and combine declarations.
 
@@ -4548,11 +4678,12 @@ class LibclangBackend:
             return main_header
 
         all_declarations: list[Declaration] = list(main_header.declarations)
+        merged_included_headers: set[str] = set(main_header.included_headers)
         main_dir = os.path.dirname(os.path.abspath(main_path))
 
         for include_path in sorted(main_header.included_headers):
             # Skip system headers (unless allowlisted via project_prefixes)
-            if self._is_system_include(include_path, project_prefixes):
+            if self._is_system_include(include_path, project_prefixes, system_headers):
                 continue
 
             # Get absolute path
@@ -4565,6 +4696,8 @@ class LibclangBackend:
             if abs_path is None:
                 # Could not resolve - skip
                 continue
+
+            merged_included_headers.add(abs_path)
 
             # Check if already visited (circular include)
             if abs_path in self._visited:
@@ -4603,12 +4736,32 @@ class LibclangBackend:
                     project_prefixes,
                     allowlist_paths,
                     denylist_paths,
+                    system_headers=system_headers,
+                    root_tu=root_tu,
+                    is_cplus=is_cplus,
+                    parse_args=parse_args,
                 )
 
-                # Add declarations from sub-header
+                # Add declarations and transitive included headers from sub-header
                 all_declarations.extend(sub_header.declarations)
+                merged_included_headers.update(sub_header.included_headers)
 
             except (OSError, RuntimeError, ValueError):
+                if root_tu is not None:
+                    try:
+                        fallback_converter = ClangASTConverter(
+                            abs_path,
+                            project_prefixes=project_prefixes,
+                            is_cplus=is_cplus,
+                            allowlist_paths=allowlist_paths,
+                            denylist_paths=denylist_paths,
+                            parse_args=parse_args,
+                        )
+                        fallback_header = fallback_converter.convert(root_tu)
+                        all_declarations.extend(fallback_header.declarations)
+                        continue
+                    except Exception:
+                        pass
                 import logging
 
                 logging.getLogger(__name__).debug("Failed to parse included header: %s", abs_path, exc_info=True)
@@ -4621,7 +4774,7 @@ class LibclangBackend:
         return Header(
             path=main_header.path,
             declarations=unique_declarations,
-            included_headers=main_header.included_headers,
+            included_headers=merged_included_headers,
         )
 
     def parse(
@@ -4637,6 +4790,9 @@ class LibclangBackend:
         project_prefixes: tuple[str, ...] | None = None,
         allowlist: list[str] | None = None,
         denylist: list[str] | None = None,
+        system_headers: Sequence[str] = (),
+        skip_function_bodies: bool = False,
+        **_kwargs: Any,
     ) -> Header:
         """Parse C/C++ code using libclang.
 
@@ -4783,18 +4939,6 @@ class LibclangBackend:
         if extra_args:
             args.extend(extra_args)
 
-        # Auto-resolve Nim's standard library directory when parsing a header that includes "nimbase.h"
-        uses_nimbase = "nimbase.h" in code
-        nim_libpath_added = False
-        if uses_nimbase:
-            if "NIM_INTBITS" not in code and not any("NIM_INTBITS" in a for a in args):
-                args.append(f"-DNIM_INTBITS={struct.calcsize('P') * 8}")
-            if not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
-                nim_libpath = _find_nim_libpath()
-                if nim_libpath is not None:
-                    args.append(f"-isystem{nim_libpath}")
-                    nim_libpath_added = True
-
         # Parse the code with detailed preprocessing record for macro extraction
         index = self._get_index()
         tu = index.parse(
@@ -4804,28 +4948,10 @@ class LibclangBackend:
             options=_cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
         )
 
-        # If an included header (e.g. via umbrella #include) needed nimbase.h, retry with Nim libpath
-        if not nim_libpath_added and any(
-            diag.severity >= _cindex.Diagnostic.Error and "nimbase.h" in str(diag.spelling) for diag in tu.diagnostics
+        # Retry skipping function bodies when requested and inline body checks fail
+        if (self._skip_function_bodies or skip_function_bodies) and any(
+            diag.severity >= _cindex.Diagnostic.Error for diag in tu.diagnostics
         ):
-            uses_nimbase = True
-            if "NIM_INTBITS" not in code and not any("NIM_INTBITS" in a for a in args):
-                args.append(f"-DNIM_INTBITS={struct.calcsize('P') * 8}")
-            if not _has_nimbase_in_dirs(include_dirs, extra_args, filename):
-                nim_libpath = _find_nim_libpath()
-                if nim_libpath is not None:
-                    args.append(f"-isystem{nim_libpath}")
-                    nim_libpath_added = True
-                    tu = index.parse(
-                        filename,
-                        args=args,
-                        unsaved_files=[(filename, code)],
-                        options=_cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
-                    )
-
-        # Debug Nim --header output emits inline nimFrame() bodies referencing undeclared
-        # framePtr__system_u*; retry skipping function bodies if a Nim header fails body check
-        if uses_nimbase and any(diag.severity >= _cindex.Diagnostic.Error for diag in tu.diagnostics):
             tu = index.parse(
                 filename,
                 args=args,
@@ -4876,7 +5002,9 @@ class LibclangBackend:
         # ``recursive_includes`` is the caller's answer, so nothing here second-guesses
         # it from the header's shape. Scope is bounded by _is_system_header /
         # project_prefixes, allowlist, max_depth, and self._visited.
-        has_project_include = any(not self._is_system_include(h, project_prefixes) for h in header.included_headers)
+        has_project_include = any(
+            not self._is_system_include(h, project_prefixes, system_headers) for h in header.included_headers
+        )
         if recursive_includes and has_project_include:
             # Reset visited set for each top-level parse
             self._visited = set()
@@ -4899,6 +5027,10 @@ class LibclangBackend:
                 project_prefixes=project_prefixes,
                 allowlist_paths=allowlist_paths,
                 denylist_paths=denylist_paths,
+                system_headers=system_headers,
+                root_tu=tu,
+                is_cplus=is_cplus,
+                parse_args=tuple(args),
             )
 
         # Included headers are parsed in isolation, so a macro that a *later*
@@ -5033,7 +5165,7 @@ def _libclang_parse_hook(
     context: PipelineContext | None = None,
     **kwargs: Any,
 ) -> SourceUnit | None:
-    _ = (context, kwargs)
+    _ = context
     backend = LibclangBackend()
     return backend.parse(
         code,
@@ -5046,6 +5178,7 @@ def _libclang_parse_hook(
         project_prefixes=project_prefixes,
         allowlist=allowlist,
         denylist=denylist,
+        **kwargs,
     )
 
 

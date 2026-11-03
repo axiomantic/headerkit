@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import re
+import subprocess
 import sys
 from collections.abc import Generator
 from pathlib import Path
@@ -790,7 +792,7 @@ class TestBatchCLIIntegration:
         args_long = parser.parse_args(["test.h", "--backend", "libclang"])
         assert args_long.backend == "libclang"
         args_default = parser.parse_args(["test.h"])
-        assert args_default.backend == "libclang"
+        assert args_default.backend is None
 
     def test_cli_pyi_output_spec_routing(self) -> None:
         """Verify -o pyi:mylib.pyi and bare -o mylib.pyi route to pyi writer."""
@@ -798,3 +800,77 @@ class TestBatchCLIIntegration:
         assert explicit == {"pyi": "mylib.pyi"}
         inferred = _parse_output_specs(["mylib.pyi"])
         assert inferred == {"pyi": "mylib.pyi"}
+
+    def test_cli_transform_flags_parsed_and_forwarded(self, tmp_path: Path) -> None:
+        """Verify -t and --transform are repeatable and forwarded to generate()."""
+        hdr = tmp_path / "api.h"
+        hdr.write_text("int foo(void);\n", encoding="utf-8")
+        mock_generate = MagicMock(return_value="{}")
+        with (
+            patch("headerkit._cli.generate", mock_generate),
+            patch("headerkit._cli._load_backend_plugins"),
+            patch("headerkit._cli._load_writer_plugins"),
+            patch("headerkit._cli._load_hook_plugins"),
+        ):
+            rc = main(
+                [
+                    str(hdr),
+                    "--no-config",
+                    "-t",
+                    "nim_cleanup",
+                    "--transform",
+                    "filter_by_symbol:exclude=_*",
+                ]
+            )
+        assert rc == 0
+        assert mock_generate.call_args.kwargs["transforms"] == [
+            "nim_cleanup",
+            "filter_by_symbol:exclude=_*",
+        ]
+
+    def test_cli_purged_scaffolding_flags_rejected(self) -> None:
+        """Purged scaffolding flags (--layout, --package-name, --pkg, --test-type, --no-input) raise SystemExit."""
+        parser = _build_parser()
+        for flag in (
+            ["test.h", "--layout", "package"],
+            ["test.h", "--package-name", "mypkg"],
+            ["test.h", "--pkg", "mypkg"],
+            ["test.h", "--test-type", "unit"],
+            ["test.h", "--no-input"],
+        ):
+            with pytest.raises(SystemExit):
+                parser.parse_args(flag)
+
+    def test_python_m_headerkit_version_and_help(self) -> None:
+        """Verify ``python -m headerkit --version`` and ``--help`` exit with status 0."""
+        expected_version = importlib.metadata.version("headerkit")
+        ver_proc = subprocess.run(
+            [sys.executable, "-m", "headerkit", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ver_proc.returncode == 0
+        assert ver_proc.stdout.strip().endswith(expected_version)
+
+        help_proc = subprocess.run(
+            [sys.executable, "-m", "headerkit", "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_proc.returncode == 0
+        assert "--writer" in help_proc.stdout
+
+    def test_cli_version_fallback_on_package_not_found(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """_build_parser() falls back cleanly when PackageNotFoundError is raised."""
+        with patch(
+            "headerkit._cli.importlib.metadata.version",
+            side_effect=importlib.metadata.PackageNotFoundError("headerkit"),
+        ):
+            parser = _build_parser()
+            with pytest.raises(SystemExit) as exc_info:
+                parser.parse_args(["--version"])
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip().endswith("0.0.0+dev")

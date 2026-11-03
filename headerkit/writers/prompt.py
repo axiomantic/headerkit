@@ -29,8 +29,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import BaseWriter, WriterOption
+from headerkit.writers.base import BaseWriter, OutputFile, ProjectLayout, ScaffoldOptions, WriterOption
 
 # =============================================================================
 # Type formatting helpers

@@ -259,7 +259,7 @@ class TestIrSchemaVersion:
     #: dataclass in ``headerkit.ir``. Recorded, not computed at import, so that
     #: a change to the IR has to be acknowledged here rather than silently
     #: absorbed.
-    IR_SHAPE_FINGERPRINT = "ccea33f729f8da17"
+    IR_SHAPE_FINGERPRINT = "79901107902801bf"
 
     @staticmethod
     def _ir_shape_fingerprint() -> str:
@@ -328,7 +328,7 @@ class TestIrSchemaVersion:
             "silently wrong value rather than a refusal whenever that default resolves to something. "
             "Bump _IR_SCHEMA_VERSION so warm caches miss, then update IR_SHAPE_FINGERPRINT here."
         )
-        assert _IR_SCHEMA_VERSION == "7"
+        assert _IR_SCHEMA_VERSION == "8"
 
     def test_old_schema_version_2_cache_miss(self, tmp_path: Path, caplog: logging.LogCaptureFixture) -> None:
         """A metadata.json with ir_schema_version '2' results in a cache miss and warning."""
@@ -362,3 +362,87 @@ class TestIrSchemaVersion:
 
         assert result is None
         assert any("schema version mismatch" in record.message for record in caplog.records)
+
+
+class TestIrCacheKeyInputSpecFields:
+    """Verify compute_ir_cache_key hashes InputSpec traversal and multi-header options."""
+
+    def test_input_spec_fields_affect_ir_cache_key(self, tmp_path: Path) -> None:
+        from headerkit.ir import InputSpec
+
+        h1 = tmp_path / "a.h"
+        h2 = tmp_path / "b.h"
+        code = "int a(void);\n"
+        h1.write_text(code, encoding="utf-8")
+        h2.write_text("int b(void);\n", encoding="utf-8")
+
+        pa = ParsedArgs(defines=[], includes=[], other_args=[])
+        base_spec = InputSpec.from_path(h1, content=code)
+        base_key = compute_ir_cache_key(
+            backend_name="libclang",
+            header_path=h1,
+            target="x86_64-pc-linux-gnu",
+            project_root=tmp_path,
+            parsed_args=pa,
+            input_spec=base_spec,
+        )
+
+        # Changing headers list must change key
+        spec_headers = InputSpec.from_path(h1, content=code, headers=(h1, h2))
+        key_headers = compute_ir_cache_key(
+            backend_name="libclang",
+            header_path=h1,
+            target="x86_64-pc-linux-gnu",
+            project_root=tmp_path,
+            parsed_args=pa,
+            input_spec=spec_headers,
+        )
+        assert key_headers != base_key
+
+        # Changing project_prefixes must change key
+        spec_prefixes = InputSpec.from_path(h1, content=code, project_prefixes=("/opt/custom",))
+        key_prefixes = compute_ir_cache_key(
+            backend_name="libclang",
+            header_path=h1,
+            target="x86_64-pc-linux-gnu",
+            project_root=tmp_path,
+            parsed_args=pa,
+            input_spec=spec_prefixes,
+        )
+        assert key_prefixes != base_key
+
+        # Changing recursive_includes must change key
+        spec_no_rec = InputSpec.from_path(h1, content=code, recursive_includes=False)
+        key_no_rec = compute_ir_cache_key(
+            backend_name="libclang",
+            header_path=h1,
+            target="x86_64-pc-linux-gnu",
+            project_root=tmp_path,
+            parsed_args=pa,
+            input_spec=spec_no_rec,
+        )
+        assert key_no_rec != base_key
+
+        # Changing max_depth must change key
+        spec_depth = InputSpec.from_path(h1, content=code, max_depth=2)
+        key_depth = compute_ir_cache_key(
+            backend_name="libclang",
+            header_path=h1,
+            target="x86_64-pc-linux-gnu",
+            project_root=tmp_path,
+            parsed_args=pa,
+            input_spec=spec_depth,
+        )
+        assert key_depth != base_key
+
+        # Changing use_default_includes must change key
+        spec_no_default_inc = InputSpec.from_path(h1, content=code, use_default_includes=False)
+        key_no_default_inc = compute_ir_cache_key(
+            backend_name="libclang",
+            header_path=h1,
+            target="x86_64-pc-linux-gnu",
+            project_root=tmp_path,
+            parsed_args=pa,
+            input_spec=spec_no_default_inc,
+        )
+        assert key_no_default_inc != base_key

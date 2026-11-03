@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from headerkit.matrix.models import ConfigCondition
 from headerkit.reconcile import (
-    get_c_platform,
-    get_nim_platform,
-    get_py_platform,
+    canonical_platform_tag,
     minimize_conditions,
     quine_mccluskey_minimize,
 )
+from headerkit.writers.cffi import CffiWriter
+from headerkit.writers.cshim import CShimWriter
+from headerkit.writers.cython import CythonWriter
+from headerkit.writers.nim import NimWriter
 
 
 def test_quine_mccluskey_adjacent_minterm_merging() -> None:
@@ -29,9 +31,15 @@ def test_minimize_conditions_parenthesized_disjunction() -> None:
         "A": {True, False},
     }
 
-    pred_nim = minimize_conditions([c1, c2], domain, target_lang="nim")
-    assert "(defined(linux) or defined(macosx))" in pred_nim
-    assert "defined(A)" in pred_nim
+    cond = minimize_conditions([c1, c2], domain)
+    assert cond.platforms == ("darwin", "linux")
+    assert cond.feature_implicants == ((("A", True),),)
+
+    pred_nim = NimWriter().format_matrix_condition(cond)
+    assert pred_nim == "(defined(linux) or defined(macosx)) and defined(A)"
+    assert CythonWriter().format_matrix_condition(cond) == 'UNAME_SYSNAME in ("Darwin", "Linux") and defined(A)'
+    assert CShimWriter().format_matrix_condition(cond) == "(defined(__APPLE__) || defined(__linux__)) && defined(A)"
+    assert CffiWriter().format_matrix_condition(cond) == "sys.platform in ('darwin', 'linux') and A"
 
 
 def test_minimize_conditions_monotonic_version_suffix() -> None:
@@ -40,17 +48,15 @@ def test_minimize_conditions_monotonic_version_suffix() -> None:
     c3 = ConfigCondition({"version": (2, 2)})
     domain = {"version": {(1, 0), (2, 0), (2, 1), (2, 2)}}
 
-    pred = minimize_conditions([c1, c2, c3], domain, target_lang="nim")
-    assert pred == "version >= (2, 0)"
+    cond = minimize_conditions([c1, c2, c3], domain)
+    assert cond.version_op == ">="
+    assert cond.version_min == (2, 0)
+    assert NimWriter().format_matrix_condition(cond) == "version >= (2, 0)"
 
 
 def test_platform_target_mapping() -> None:
-    assert get_nim_platform("x86_64-apple-darwin") == "macosx"
-    assert get_nim_platform("x86_64-unknown-linux-gnu") == "linux"
-    assert get_nim_platform("x86_64-pc-windows-msvc") == "windows"
-    assert get_c_platform("x86_64-apple-darwin") == "__APPLE__"
-    assert get_c_platform("x86_64-unknown-linux-gnu") == "__linux__"
-    assert get_c_platform("x86_64-pc-windows-msvc") == "_WIN32"
-    assert get_py_platform("x86_64-apple-darwin") == "darwin"
-    assert get_py_platform("x86_64-unknown-linux-gnu") == "linux"
-    assert get_py_platform("x86_64-pc-windows-msvc") == "win32"
+    assert canonical_platform_tag("x86_64-apple-darwin") == "darwin"
+    assert canonical_platform_tag("x86_64-unknown-linux-gnu") == "linux"
+    assert canonical_platform_tag("x86_64-pc-windows-msvc") == "windows"
+    assert canonical_platform_tag("macosx") == "darwin"
+    assert canonical_platform_tag("win32") == "windows"

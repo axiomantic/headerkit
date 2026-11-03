@@ -245,21 +245,21 @@ def test_target_symbols_in_all():
     assert headerkit.resolve_target is resolve_target
 
 
-def test_packaging_symbols_in_all():
-    """Wheel packaging scaffolding generators should be exported in headerkit.__all__."""
+def test_scaffolding_and_packaging_purged_from_public_api():
+    """Scaffolding, packaging, and workorder symbols must NOT be exported from headerkit."""
     import headerkit
-    from headerkit.packaging import (
-        generate_cffi_wheel_layout,
-        generate_ctypes_wheel_layout,
-        generate_cython_wheel_layout,
-        generate_nim_cmake,
-        generate_nim_pyproject,
-        generate_nim_python_wrapper,
-        generate_nim_source,
-        generate_nim_wheel_layout,
-    )
 
-    for name in (
+    purged_names = (
+        "OutputFile",
+        "ProjectLayout",
+        "ScaffoldOptions",
+        "BYOScaffolder",
+        "StdlibScaffolder",
+        "scaffold",
+        "scaffold_plugin",
+        "WorkOrder",
+        "analyze_work_order",
+        "build_work_order_files",
         "generate_cffi_wheel_layout",
         "generate_ctypes_wheel_layout",
         "generate_cython_wheel_layout",
@@ -268,17 +268,10 @@ def test_packaging_symbols_in_all():
         "generate_nim_python_wrapper",
         "generate_nim_source",
         "generate_nim_wheel_layout",
-    ):
-        assert name in headerkit.__all__, f"{name} missing from headerkit.__all__"
-
-    assert headerkit.generate_cffi_wheel_layout is generate_cffi_wheel_layout
-    assert headerkit.generate_ctypes_wheel_layout is generate_ctypes_wheel_layout
-    assert headerkit.generate_cython_wheel_layout is generate_cython_wheel_layout
-    assert headerkit.generate_nim_cmake is generate_nim_cmake
-    assert headerkit.generate_nim_pyproject is generate_nim_pyproject
-    assert headerkit.generate_nim_python_wrapper is generate_nim_python_wrapper
-    assert headerkit.generate_nim_source is generate_nim_source
-    assert headerkit.generate_nim_wheel_layout is generate_nim_wheel_layout
+    )
+    for name in purged_names:
+        assert name not in headerkit.__all__, f"{name} should be purged from headerkit.__all__"
+        assert not callable(getattr(headerkit, name, None)), f"{name} should not be a callable on headerkit"
 
 
 def test_renaming_api_is_public():
@@ -313,13 +306,13 @@ def test_reconcile_symbols_in_all():
         PlatformCondition,
         PlatformGuardedBlock,
         ReconciledUnit,
-        condition_to_python,
+        canonical_platform_tag,
         declarations_equal,
         reconcile_units,
     )
 
-    assert "condition_to_python" in headerkit.__all__
-    assert headerkit.condition_to_python is condition_to_python
+    assert "canonical_platform_tag" in headerkit.__all__
+    assert headerkit.canonical_platform_tag is canonical_platform_tag
 
     for name in (
         "PlatformCondition",
@@ -347,9 +340,18 @@ def test_transforms_and_matrix_public_exports() -> None:
         "ChainedFilter",
         "StripPrefix",
         "MakeOpaque",
+        "NimCleanupTransform",
+        "NimJsonDocEnricher",
         "RenameTypes",
         "StripPaddingFields",
         "FilterByHeader",
+        "FilterBySymbol",
+        "FilterDeprecated",
+        "FilterUnexportedSymbols",
+        "FilterUnexportedSymbolsTransform",
+        "TargetConfig",
+        "generate_targets",
+        "resolve_transforms",
         "rewrite_type_references",
         "ConfigCondition",
         "MatrixDimension",

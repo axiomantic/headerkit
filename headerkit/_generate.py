@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import logging
 import os
-import re
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -39,16 +39,33 @@ from headerkit._cache_store import (
     write_ir_entry,
     write_output_entry,
 )
-from headerkit._config import _TOML_DECODE_ERROR, _find_project_root, _parse_toml
+from headerkit._config import _TOML_DECODE_ERROR, TargetConfig, _find_project_root, _parse_toml
 from headerkit._rename import rename_cache_fingerprint
 from headerkit._resolve import check_output_collisions, resolve_headers, resolve_output_path
 from headerkit._slug import build_slug, load_index, lookup_slug
 from headerkit._target import resolve_target
-from headerkit.backends import LibclangUnavailableError, get_backend, is_backend_available
+from headerkit.backends import (
+    LibclangUnavailableError,
+    get_backend,
+    get_default_backend,
+    is_backend_available,
+    resolve_backend,
+    supports_backend_auto_install,
+)
 from headerkit.hooks import HookDispatcher, PipelineContext, Priority
 from headerkit.install_libclang import auto_install
 from headerkit.ir import Header, InputSpec, SourceUnit
-from headerkit.writers import get_writer
+from headerkit.transforms import (
+    ChainedFilter,
+    PipelineFilter,
+    get_transform,
+    list_transform_options,
+)
+from headerkit.writers import (
+    get_writer,
+    get_writer_extension,
+    list_writer_options,
+)
 
 _HK_GET_BACKEND = get_backend
 logger = logging.getLogger("headerkit.cache")
@@ -124,18 +141,6 @@ def _is_auto_install_allowed(
     return False
 
 
-_WRITER_EXTENSIONS: dict[str, str] = {
-    "cffi": ".py",
-    "ctypes": ".py",
-    "cython": ".pxd",
-    "json": ".json",
-    "lua": ".lua",
-    "prompt": ".txt",
-    "pyi": ".pyi",
-    "diff": ".json",
-}
-
-
 @dataclass
 class GenerateResult:
     """Result of a single writer's generation."""
@@ -169,12 +174,12 @@ def _writer_output_ext(writer: Any, writer_name: str) -> str:
     """Get file extension for a writer's output.
 
     Checks writer for output_extension attribute first (plugin support),
-    then falls back to built-in mapping, then defaults to .txt.
+    then queries the writer registry, then defaults to .txt.
     """
     ext: str | None = getattr(writer, "output_extension", None)
     if ext is not None:
         return ext
-    return _WRITER_EXTENSIONS.get(writer_name, ".txt")
+    return get_writer_extension(writer_name)
 
 
 def _writer_default_output_pattern(writer: Any, writer_name: str) -> str:
@@ -182,9 +187,55 @@ def _writer_default_output_pattern(writer: Any, writer_name: str) -> str:
     pattern: str | None = getattr(writer, "default_output_pattern", None)
     if pattern is not None:
         return pattern
-    # Fallback for plugin writers that don't declare the attribute
-    ext = _WRITER_EXTENSIONS.get(writer_name, ".txt")
-    return "{dir}/{stem}" + ext
+    ext = get_writer_extension(writer_name)
+    return f"{{dir}}/{{stem}}{ext}"
+
+
+def _try_ir_cache_lookup(
+    *,
+    backend_name: str,
+    header_path: Path,
+    project_root: Path,
+    parsed_args: ParsedArgs,
+    code: str | None,
+    resolved_cache_dir: Path | None,
+    use_ir_cache: bool,
+    project_prefixes: tuple[str, ...] | None,
+    target: str,
+    input_spec: InputSpec | None = None,
+) -> tuple[SourceUnit | None, str, str]:
+    """Compute the IR cache key/slug and attempt a Layer-1 IR cache read before touching any backend."""
+    ir_cache_key = compute_ir_cache_key(
+        backend_name=backend_name,
+        header_path=header_path,
+        project_root=project_root,
+        parsed_args=parsed_args,
+        code=code,
+        target=target,
+        input_spec=input_spec,
+        project_prefixes=project_prefixes or (),
+    )
+
+    ir_slug = build_slug(
+        backend_name=backend_name,
+        header_path=str(header_path),
+        defines=parsed_args.defines,
+        includes=parsed_args.includes,
+        other_args=parsed_args.other_args,
+        target=target,
+    )
+
+    header: SourceUnit | None = None
+    if use_ir_cache:
+        assert resolved_cache_dir is not None
+        ir_index_path = resolved_cache_dir / "ir" / "index.json"
+        if ir_index_path.exists():
+            ir_index = load_index(ir_index_path)
+            existing_slug = lookup_slug(ir_index, ir_cache_key)
+            if existing_slug is not None:
+                header = read_ir_entry(cache_dir=resolved_cache_dir, slug=existing_slug)
+
+    return header, ir_cache_key, ir_slug
 
 
 def _get_ir(
@@ -199,51 +250,63 @@ def _get_ir(
     project_prefixes: tuple[str, ...] | None,
     target: str,
     context: PipelineContext | None = None,
+    input_spec: InputSpec | None = None,
+    prechecked_ir: tuple[SourceUnit | None, str, str] | None = None,
+    transforms: Sequence[PipelineFilter] | None = None,
 ) -> tuple[SourceUnit, str, str, bool]:
     """Resolve IR from cache or by parsing with the backend.
 
     :returns: (header, ir_cache_key, ir_slug, ir_from_cache)
     """
-    ir_cache_key = compute_ir_cache_key(
-        backend_name=backend_name,
-        header_path=header_path,
-        project_root=project_root,
-        parsed_args=parsed_args,
-        code=code,
-        target=target,
-    )
-
-    ir_slug = build_slug(
-        backend_name=backend_name,
-        header_path=str(header_path),
-        defines=parsed_args.defines,
-        includes=parsed_args.includes,
-        other_args=parsed_args.other_args,
-        target=target,
-    )
-
-    header: SourceUnit | None = None
-    ir_from_cache = False
-
-    if use_ir_cache:
-        assert resolved_cache_dir is not None
-        ir_index_path = resolved_cache_dir / "ir" / "index.json"
-        if ir_index_path.exists():
-            ir_index = load_index(ir_index_path)
-            existing_slug = lookup_slug(ir_index, ir_cache_key)
-            if existing_slug is not None:
-                header = read_ir_entry(cache_dir=resolved_cache_dir, slug=existing_slug)
-                if header is not None:
-                    ir_from_cache = True
+    if prechecked_ir is not None:
+        header, ir_cache_key, ir_slug = prechecked_ir
+    else:
+        header, ir_cache_key, ir_slug = _try_ir_cache_lookup(
+            backend_name=backend_name,
+            header_path=header_path,
+            project_root=project_root,
+            parsed_args=parsed_args,
+            code=code,
+            resolved_cache_dir=resolved_cache_dir,
+            use_ir_cache=use_ir_cache,
+            project_prefixes=project_prefixes,
+            target=target,
+            input_spec=input_spec,
+        )
+    ir_from_cache = header is not None
 
     if header is None:
         parse_code = code if code is not None else header_path.read_text(encoding="utf-8")
+        inc_dirs: list[str] = list(parsed_args.includes)
+        extra_parse_args: list[str] = [f"-D{d}" for d in parsed_args.defines] + list(parsed_args.other_args)
+        transform_backend_kwargs: dict[str, Any] = {}
+        if transforms:
+            for t in transforms:
+                if hasattr(t, "prepare_parse"):
+                    inc_dirs, extra_parse_args, t_kwargs = t.prepare_parse(
+                        parse_code,
+                        str(header_path),
+                        inc_dirs,
+                        extra_parse_args,
+                    )
+                    transform_backend_kwargs.update(t_kwargs)
+
         all_args: list[str] = ["-target", target]
-        for d in parsed_args.defines:
-            all_args.append(f"-D{d}")
-        for inc in parsed_args.includes:
+        for inc in inc_dirs:
             all_args.append(f"-I{inc}")
-        all_args.extend(parsed_args.other_args)
+        all_args.extend(extra_parse_args)
+
+        parse_kwargs: dict[str, Any] = {
+            "project_prefixes": project_prefixes,
+            **transform_backend_kwargs,
+        }
+        if input_spec is not None:
+            if not input_spec.recursive_includes:
+                parse_kwargs["recursive_includes"] = False
+            if input_spec.max_depth is not None:
+                parse_kwargs["max_depth"] = input_spec.max_depth
+            if not input_spec.use_default_includes:
+                parse_kwargs["use_default_includes"] = False
 
         disp = HookDispatcher()
         if get_backend is _HK_GET_BACKEND and context is not None:
@@ -252,8 +315,8 @@ def _get_ir(
                 parse_code,
                 str(header_path),
                 extra_args=all_args,
-                project_prefixes=project_prefixes,
                 context=context,
+                **parse_kwargs,
             )
 
         if header is None:
@@ -263,7 +326,7 @@ def _get_ir(
                 str(header_path),
                 [],
                 all_args,
-                project_prefixes=project_prefixes,
+                **parse_kwargs,
             )
 
         if use_ir_cache:
@@ -287,64 +350,81 @@ def _get_ir(
     return header, ir_cache_key, ir_slug, ir_from_cache
 
 
-def _match_defines(source: str, patterns: list[str]) -> list[str]:
-    """Scan *source* for ``#define`` names matching any of *patterns*.
+def _instantiate_transform(name: str, kwargs: dict[str, Any]) -> PipelineFilter:
+    """Instantiate a registered Layer-2 transform from its name and kwargs."""
+    return get_transform(name, **kwargs)
 
-    Each pattern is compiled as a regex and tested against every
-    ``#define NAME`` token found in the source.  Returns a
-    deduplicated, stable-order list of matching names.
-    """
-    compiled = [re.compile(p) for p in patterns]
-    define_re = re.compile(r"^\s*#\s*define\s+(\w+)", re.MULTILINE)
-    seen: set[str] = set()
-    result: list[str] = []
-    for m in define_re.finditer(source):
-        name = m.group(1)
-        if name in seen:
+
+def _parse_transform_str(spec: str) -> PipelineFilter:
+    """Parse a transform string shorthand (e.g. ``'filter_by_symbol:exclude=_*'``)."""
+    name, sep, rest = spec.partition(":")
+    if not sep or not rest:
+        return _instantiate_transform(name, {})
+
+    raw_lists: dict[str, list[str]] = {}
+    for pair in rest.split(","):
+        if not pair:
             continue
-        for pat in compiled:
-            if pat.search(name):
-                seen.add(name)
-                result.append(name)
-                break
-    return result
+        k, eq, v = pair.partition("=")
+        if not eq:
+            raise ValueError(f"Malformed transform argument {pair!r} in {spec!r}; expected KEY=VALUE")
+        raw_lists.setdefault(k.strip(), []).append(v.strip())
+
+    try:
+        opt_specs = {opt.name: opt for opt in list_transform_options(name)}
+    except ValueError:
+        opt_specs = {}
+
+    kwargs: dict[str, Any] = {}
+    for k, vals in raw_lists.items():
+        opt = opt_specs.get(k)
+        if opt is not None:
+            kwargs[k] = opt.coerce(vals[-1] if opt.type is not list else vals)
+        else:
+            kwargs[k] = vals[0] if len(vals) == 1 else vals
+    return _instantiate_transform(name, kwargs)
 
 
-def _populate_matched_defines(
-    writer_inst: Any,
-    header_path: Path,
-    code: str | None,
-    include_dirs: list[str] | None = None,
-) -> None:
-    """If *writer_inst* has ``define_patterns``, scan source and populate ``_matched_defines``.
+def resolve_transforms(
+    transforms: Sequence[PipelineFilter | str | Mapping[str, Any]] | None,
+) -> list[PipelineFilter]:
+    """Resolve a sequence of transform specs into concrete ``PipelineFilter`` instances."""
+    if not transforms:
+        return []
+    resolved: list[PipelineFilter] = []
+    for item in transforms:
+        if isinstance(item, ChainedFilter):
+            resolved.extend(resolve_transforms(item.filters))
+        elif isinstance(item, str):
+            resolved.append(_parse_transform_str(item))
+        elif isinstance(item, Mapping):
+            d = dict(item)
+            t_name = d.pop("name", d.pop("type", None))
+            if not isinstance(t_name, str) or not t_name:
+                raise ValueError(f"Transform mapping must specify a string 'name' key: {item!r}")
+            resolved.append(_instantiate_transform(t_name, d))
+        elif isinstance(item, PipelineFilter) or callable(getattr(item, "transform", None)):
+            resolved.append(item)
+        else:
+            raise TypeError(f"Invalid transform specification: {item!r}")
+    return resolved
 
-    When *code* is provided and contains ``#include`` directives, the
-    referenced files are resolved against *include_dirs* and scanned as
-    well so that ``define_patterns`` can match macros defined in included
-    headers (e.g. the umbrella-header pattern).
-    """
-    define_patterns: list[str] | None = getattr(writer_inst, "define_patterns", None)
-    if not define_patterns:
-        return
 
-    sources: list[str] = []
-    if code is not None:
-        sources.append(code)
-        # Resolve #include directives so define_patterns can match macros
-        # defined in the included headers (umbrella-header pattern).
-        if include_dirs:
-            for m in re.finditer(r'#include\s*[<"]([^>"]+)[>"]', code):
-                include_name = m.group(1)
-                for inc_dir in include_dirs:
-                    full_path = Path(inc_dir) / include_name
-                    if full_path.is_file():
-                        sources.append(full_path.read_text(encoding="utf-8"))
-                        break
-    else:
-        sources.append(header_path.read_text(encoding="utf-8"))
-
-    combined = "\n".join(sources)
-    writer_inst._matched_defines = _match_defines(combined, define_patterns)
+def _apply_transforms(header: SourceUnit, transforms: Sequence[PipelineFilter]) -> Header:
+    """Apply *transforms* sequentially to a shallow copy of *header* without mutating the original."""
+    base = (
+        replace(header, declarations=list(header.declarations))
+        if isinstance(header, Header)
+        else Header(
+            path=header.path,
+            declarations=list(header.declarations),
+            included_headers=set(getattr(header, "included_headers", set())),
+        )
+    )
+    current: Header = base
+    for t in transforms:
+        current = t.transform(current)
+    return current
 
 
 def _get_output(
@@ -356,10 +436,9 @@ def _get_output(
     ir_slug: str,
     resolved_cache_dir: Path | None,
     use_output_cache: bool,
-    header_path: Path,
-    code: str | None,
-    include_dirs: list[str] | None = None,
+    ir_from_cache: bool = True,
     context: PipelineContext | None = None,
+    transforms: Sequence[PipelineFilter] | None = None,
 ) -> tuple[str, bool]:
     """Resolve output from cache or by running the writer.
 
@@ -370,6 +449,7 @@ def _get_output(
     output_from_cache = False
     output_cache_key = ""
     output_ext = ""
+    resolved_transforms = list(transforms) if transforms else []
 
     if use_output_cache:
         assert resolved_cache_dir is not None
@@ -377,15 +457,17 @@ def _get_output(
             ir_cache_key=ir_cache_key,
             writer_name=writer_name,
             writer_options=writer_options,
+            transforms=resolved_transforms,
         )
-        output = _read_cached_output(
-            cache_dir=resolved_cache_dir,
-            writer_name=writer_name,
-            output_cache_key=output_cache_key,
-            output_ext=output_ext,
-        )
-        if output is not None:
-            output_from_cache = True
+        if ir_from_cache:
+            output = _read_cached_output(
+                cache_dir=resolved_cache_dir,
+                writer_name=writer_name,
+                output_cache_key=output_cache_key,
+                output_ext=output_ext,
+            )
+            if output is not None:
+                output_from_cache = True
 
     if writer_inst is None:
         writer_inst = get_writer(writer_name, **writer_options)
@@ -393,17 +475,21 @@ def _get_output(
     effective_output_cache = use_output_cache and _should_cache_output(writer_inst)
 
     if output is None:
-        _populate_matched_defines(writer_inst, header_path, code, include_dirs=include_dirs)
+        filtered_header: SourceUnit = (
+            _apply_transforms(header, resolved_transforms)
+            if resolved_transforms
+            else (replace(header, declarations=list(header.declarations)) if isinstance(header, Header) else header)
+        )
         if context is not None:
             disp = HookDispatcher()
             override_hooks = [h for h in disp._get_hooks("write_output", context) if h.priority > Priority.STANDARD]
             for h in override_hooks:
-                res = h.func(header, context=context, **writer_options)
+                res = h.func(filtered_header, context=context, **writer_options)
                 if res is not None:
                     output = res
                     break
         if output is None:
-            output = writer_inst.write(header)
+            output = writer_inst.write(filtered_header)
 
         if effective_output_cache:
             assert resolved_cache_dir is not None
@@ -430,6 +516,7 @@ def _compute_output_cache_info(
     ir_cache_key: str,
     writer_name: str,
     writer_options: dict[str, object],
+    transforms: Sequence[PipelineFilter] | None = None,
 ) -> tuple[Any, str, str]:
     """Instantiate the writer and derive its output cache key and extension.
 
@@ -440,12 +527,14 @@ def _compute_output_cache_info(
     :returns: (writer_inst, output_cache_key, output_ext)
     """
     writer_inst = get_writer(writer_name, **writer_options)
+    transforms_fp = [t.cache_fingerprint() for t in transforms] if transforms else None
     output_cache_key = compute_output_cache_key(
         ir_cache_key=ir_cache_key,
         writer_name=writer_name,
         writer_options=writer_options,
         writer_cache_version=_writer_cache_version(writer_inst),
         rename_fingerprint=rename_cache_fingerprint(),
+        transforms_fingerprint=transforms_fp,
     )
     output_ext = _writer_output_ext(writer_inst, writer_name)
     return writer_inst, output_cache_key, output_ext
@@ -494,6 +583,9 @@ def _try_output_cache_fallback(
     writer_options: dict[str, object],
     code: str | None,
     target: str,
+    input_spec: InputSpec | None = None,
+    project_prefixes: tuple[str, ...] | None = None,
+    transforms: Sequence[PipelineFilter] | None = None,
 ) -> str | None:
     """Try to serve from the output cache without needing a backend.
 
@@ -507,12 +599,23 @@ def _try_output_cache_fallback(
         parsed_args=parsed_args,
         code=code,
         target=target,
+        input_spec=input_spec,
+        project_prefixes=project_prefixes or (),
     )
+
+    ir_index_path = cache_dir / "ir" / "index.json"
+    if ir_index_path.exists():
+        ir_index = load_index(ir_index_path)
+        existing_ir_slug = lookup_slug(ir_index, ir_cache_key)
+        if existing_ir_slug is not None:
+            if read_ir_entry(cache_dir=cache_dir, slug=existing_ir_slug) is None:
+                return None
 
     _writer_inst, output_cache_key, output_ext = _compute_output_cache_info(
         ir_cache_key=ir_cache_key,
         writer_name=writer_name,
         writer_options=writer_options,
+        transforms=transforms,
     )
     return _read_cached_output(
         cache_dir=cache_dir,
@@ -534,6 +637,7 @@ def generate(
     include_dirs: list[str] | None = None,
     defines: list[str] | None = None,
     extra_args: list[str] | None = None,
+    transforms: Sequence[PipelineFilter | str | Mapping[str, Any]] | None = None,
     writer_options: dict[str, object] | None = None,
     output_path: str | Path | None = None,
     store_dir: str | Path | None = None,
@@ -544,6 +648,7 @@ def generate(
     auto_install_libclang: bool | None = None,
     target: str | None = None,
     _result_meta: dict[str, object] | None = None,
+    _pre_resolved_ir: tuple[SourceUnit, str, str, bool] | None = None,
 ) -> str:
     """Parse a C/C++ header and generate output using a single writer.
 
@@ -561,6 +666,8 @@ def generate(
     :param include_dirs: Include directories for parsing.
     :param defines: Preprocessor defines (without -D prefix).
     :param extra_args: Additional backend args.
+    :param transforms: Sequence of Layer-2 transforms (PipelineFilter instances,
+        shorthand strings, or config dicts) applied sequentially before the writer.
     :param writer_options: Writer constructor kwargs.
     :param output_path: If provided, write output to this file.
     :param store_dir: Store directory. When ``None``, falls back to the
@@ -580,12 +687,19 @@ def generate(
     :returns: Generated output string.
     :raises FileNotFoundError: If header_path does not exist and code is not provided.
     """
+    resolved_transforms = resolve_transforms(transforms)
+
     if isinstance(header_path, InputSpec):
         spec = InputSpec(
             path=header_path.path,
             language=language if language is not None else header_path.language,
             classification=classification if classification is not None else header_path.classification,
             content=code if code is not None else header_path.content,
+            headers=header_path.headers,
+            project_prefixes=project_prefixes if project_prefixes is not None else header_path.project_prefixes,
+            recursive_includes=header_path.recursive_includes,
+            max_depth=header_path.max_depth,
+            use_default_includes=header_path.use_default_includes,
         )
     else:
         spec = InputSpec.from_path(
@@ -593,14 +707,19 @@ def generate(
             language=language,
             classification=classification,
             content=code,
+            project_prefixes=project_prefixes or (),
         )
 
+    effective_project_prefixes = project_prefixes if project_prefixes is not None else (spec.project_prefixes or None)
     resolved_path = Path(spec.path)
     code = code if code is not None else spec.content
     if code is None and not resolved_path.exists():
         raise FileNotFoundError(f"Header file not found: {resolved_path}")
 
-    backend_name = backend_name or "libclang"
+    if backend_name is not None and backend_name.strip().lower() == "auto":
+        backend_name = resolve_backend("auto")
+    else:
+        backend_name = backend_name or get_default_backend()
     writer_name = writer_name or "json"
     writer_options = writer_options or {}
 
@@ -620,7 +739,16 @@ def generate(
     parsed_args = parse_extra_args(extra_args, include_dirs, defines)
     project_root = _find_project_root(resolved_path.parent)
 
-    resolved_target = resolve_target(target=target, project_root=project_root)
+    effective_target_arg = target
+    if target is not None and target.strip().lower() == "embedded":
+        effective_target_arg = None
+        try:
+            if any(opt.name == "embedded" for opt in list_writer_options(writer_name)):
+                writer_options = {"embedded": True, **writer_options}
+        except ValueError:
+            pass
+
+    resolved_target = resolve_target(target=effective_target_arg, project_root=project_root)
 
     use_ir_cache = not no_cache and not no_ir_cache and resolved_cache_dir is not None
     use_output_cache = not no_cache and not no_output_cache and resolved_cache_dir is not None
@@ -635,8 +763,13 @@ def generate(
         options=writer_options,
     )
 
-    def _resolve_ir() -> tuple[SourceUnit, str, str, bool]:
-        return _get_ir(
+    if _pre_resolved_ir is not None:
+        header, ir_cache_key, ir_slug, ir_from_cache = _pre_resolved_ir
+    else:
+        # Check Layer-1 IR cache BEFORE checking is_backend_available(backend_name)
+        # so offline builds (32-bit targets, sdist with pre-warmed .headerkit/ir/)
+        # can load cached IR and run transforms/writers without native libraries installed.
+        prechecked_ir = _try_ir_cache_lookup(
             backend_name=backend_name,
             header_path=resolved_path,
             project_root=project_root,
@@ -644,68 +777,91 @@ def generate(
             code=code,
             resolved_cache_dir=resolved_cache_dir,
             use_ir_cache=use_ir_cache,
-            project_prefixes=project_prefixes,
+            project_prefixes=effective_project_prefixes,
             target=resolved_target,
-            context=ctx,
+            input_spec=spec,
         )
 
-    # For libclang, check availability before parsing to enable the
-    # output-cache fallback and auto-install flow.  Other backends skip
-    # this check and let parse errors propagate naturally.
-    if backend_name == "libclang" and not is_backend_available(backend_name):
-        # Library not loadable -- try output cache first (cheaper than install)
-        if use_output_cache:
-            assert resolved_cache_dir is not None  # guaranteed by use_output_cache
-            cached_output = _try_output_cache_fallback(
-                cache_dir=resolved_cache_dir,
+        def _resolve_ir() -> tuple[SourceUnit, str, str, bool]:
+            return _get_ir(
                 backend_name=backend_name,
                 header_path=resolved_path,
-                parsed_args=parsed_args,
                 project_root=project_root,
-                writer_name=writer_name,
-                writer_options=writer_options,
+                parsed_args=parsed_args,
                 code=code,
+                resolved_cache_dir=resolved_cache_dir,
+                use_ir_cache=use_ir_cache,
+                project_prefixes=effective_project_prefixes,
                 target=resolved_target,
-            )
-            if cached_output is not None:
-                if output_path is not None:
-                    _write_output_file(output_path, cached_output)
-                if _result_meta is not None:
-                    _result_meta["from_cache"] = True
-                return cached_output
-
-        # Output cache miss -- auto-install if allowed.
-        # After auto_install() puts libclang on disk, _resolve_ir() will
-        # call get_backend() which returns LibclangBackend (always registered),
-        # and its parse() calls _configure_libclang() which re-searches
-        # for the library without caching failure.  No reload needed.
-        if _is_auto_install_allowed(project_root, auto_install_libclang):
-            auto_install()
-
-        # Still not available? Raise clear error.
-        if not is_backend_available(backend_name):
-            raise LibclangUnavailableError(
-                "libclang shared library not found after auto-install attempt. "
-                "Install libclang manually or use a pre-populated cache."
+                context=ctx,
+                input_spec=spec,
+                prechecked_ir=prechecked_ir,
+                transforms=resolved_transforms,
             )
 
-    header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
+        # Only check backend availability and output-cache fallback when Layer-1 IR
+        # cache missed (or was disabled) and we actually need to parse the header.
+        if (
+            prechecked_ir[0] is None
+            and supports_backend_auto_install(backend_name)
+            and not is_backend_available(backend_name)
+        ):
+            # Library not loadable -- try output cache first (cheaper than install)
+            if use_output_cache:
+                assert resolved_cache_dir is not None  # guaranteed by use_output_cache
+                cached_output = _try_output_cache_fallback(
+                    cache_dir=resolved_cache_dir,
+                    backend_name=backend_name,
+                    header_path=resolved_path,
+                    parsed_args=parsed_args,
+                    project_root=project_root,
+                    writer_name=writer_name,
+                    writer_options=writer_options,
+                    code=code,
+                    target=resolved_target,
+                    input_spec=spec,
+                    project_prefixes=effective_project_prefixes,
+                    transforms=resolved_transforms,
+                )
+                if cached_output is not None:
+                    if output_path is not None:
+                        _write_output_file(output_path, cached_output)
+                    if _result_meta is not None:
+                        _result_meta["from_cache"] = True
+                    return cached_output
+
+            # Output cache miss -- auto-install if allowed.
+            if _is_auto_install_allowed(project_root, auto_install_libclang):
+                auto_install()
+
+            # Still not available? Raise clear error.
+            if not is_backend_available(backend_name):
+                raise LibclangUnavailableError(
+                    "libclang shared library not found after auto-install attempt. "
+                    "Install libclang manually or use a pre-populated cache."
+                )
+
+        header, ir_cache_key, ir_slug, ir_from_cache = _resolve_ir()
+
+    if _result_meta is not None:
+        _result_meta["resolved_ir"] = (header, ir_cache_key, ir_slug, ir_from_cache)
 
     disp = HookDispatcher()
-    header = disp.waterfall("transform_unit", header, context=ctx)
+    # Shallow copy before waterfall so Layer-1 IR is never mutated in place across targets
+    unit_copy = replace(header, declarations=list(header.declarations)) if isinstance(header, Header) else header
+    transformed_unit = disp.waterfall("transform_unit", unit_copy, context=ctx)
 
     output, output_from_cache = _get_output(
-        header=header,
+        header=transformed_unit,
         writer_name=writer_name,
         writer_options=writer_options,
         ir_cache_key=ir_cache_key,
         ir_slug=ir_slug,
         resolved_cache_dir=resolved_cache_dir,
         use_output_cache=use_output_cache,
-        header_path=resolved_path,
-        code=code,
-        include_dirs=include_dirs,
+        ir_from_cache=ir_from_cache or not use_ir_cache,
         context=ctx,
+        transforms=resolved_transforms,
     )
 
     if output_path is not None:
@@ -718,9 +874,10 @@ def generate(
 
 
 def generate_all(
-    header_path: str | Path | InputSpec,
+    header_path: str | Path | InputSpec | None = None,
     writers: list[str] | None = None,
     *,
+    targets: Sequence[TargetConfig] | None = None,
     backend_name: str | None = None,
     runtime: str | None = None,
     language: str | None = None,
@@ -728,6 +885,7 @@ def generate_all(
     include_dirs: list[str] | None = None,
     defines: list[str] | None = None,
     extra_args: list[str] | None = None,
+    transforms: Sequence[PipelineFilter | str | Mapping[str, Any]] | None = None,
     writer_options: dict[str, dict[str, object]] | None = None,
     output_dir: str | Path | None = None,
     output_paths: dict[str, str | Path] | None = None,
@@ -737,48 +895,52 @@ def generate_all(
     no_output_cache: bool = False,
     auto_install_libclang: bool | None = None,
     target: str | None = None,
+    project_root: Path | None = None,
 ) -> list[GenerateResult]:
-    """Parse a C/C++ header and generate output for multiple writers.
+    """Parse a C/C++ header and generate output for multiple writers or ``[[targets]]``.
 
-    Parses the header once (or loads from IR cache), then runs each
-    writer (or loads from output cache).
-
-    :param header_path: Path to the header file or an InputSpec.
-    :param writers: List of writer names. Default: ["json"].
-    :param backend_name: Backend to use (default: "libclang").
-    :param runtime: Target runtime environment (e.g. "nim", "mojo").
-    :param language: Input source language (e.g. "c", "cpp").
-    :param classification: Input classification (e.g. "header", "source").
-    :param include_dirs: Include directories for parsing.
-    :param defines: Preprocessor defines (without -D prefix).
-    :param extra_args: Additional backend args.
-    :param writer_options: Per-writer kwargs, keyed by writer name.
-    :param output_dir: Base directory for output files (auto-named).
-    :param output_paths: Explicit output paths per writer name.
-    :param store_dir: Store directory. When ``None``, falls back to the
-        ``HEADERKIT_STORE_DIR`` environment variable, then auto-detects
-        ``.headerkit/`` in the project root.
-    :param no_cache: Disable all caching.
-    :param no_ir_cache: Disable IR cache only.
-    :param no_output_cache: Disable output cache only.
-    :param auto_install_libclang: Explicitly enable (True) or disable (False)
-        automatic libclang installation. Passed through to ``generate()``.
-    :param target: Target triple for cross-compilation. Passed through
-        to ``generate()``.
-    :returns: List of GenerateResult, one per writer.
-    :raises FileNotFoundError: If header_path does not exist.
+    Parses the header once (or loads from IR cache) per unique parse-input group,
+    then runs each target's transforms and writer (or loads from output cache).
     """
+    if targets is not None:
+        return generate_targets(
+            targets,
+            default_header_path=header_path,
+            default_backend_name=backend_name,
+            default_include_dirs=include_dirs,
+            default_defines=defines,
+            default_extra_args=extra_args,
+            default_transforms=transforms,
+            default_writer_options=writer_options,
+            default_target=target,
+            runtime=runtime,
+            language=language,
+            classification=classification,
+            output_dir=output_dir,
+            store_dir=store_dir,
+            no_cache=no_cache,
+            no_ir_cache=no_ir_cache,
+            no_output_cache=no_output_cache,
+            auto_install_libclang=auto_install_libclang,
+            project_root=project_root,
+        )
+
+    if header_path is None:
+        raise ValueError("generate_all() requires either header_path or targets")
+
     writers = writers or ["json"]
     writer_options = writer_options or {}
     output_paths = output_paths or {}
 
     path_str = header_path.path if isinstance(header_path, InputSpec) else str(header_path)
     results: list[GenerateResult] = []
+    cached_ir_tuple: tuple[SourceUnit, str, str, bool] | None = None
+
     for wname in writers:
         wopts = writer_options.get(wname, {})
         opath: str | Path | None = output_paths.get(wname)
         if opath is None and output_dir is not None:
-            ext = _WRITER_EXTENSIONS.get(wname, ".txt")
+            ext = _writer_output_ext(get_writer(wname), wname)
             stem = Path(path_str).stem
             opath = Path(output_dir) / f"{stem}{ext}"
 
@@ -793,6 +955,7 @@ def generate_all(
             include_dirs=include_dirs,
             defines=defines,
             extra_args=extra_args,
+            transforms=transforms,
             writer_options=wopts,
             output_path=opath,
             store_dir=store_dir,
@@ -802,7 +965,10 @@ def generate_all(
             auto_install_libclang=auto_install_libclang,
             target=target,
             _result_meta=meta,
+            _pre_resolved_ir=cached_ir_tuple,
         )
+        if cached_ir_tuple is None and "resolved_ir" in meta:
+            cached_ir_tuple = meta["resolved_ir"]  # type: ignore[assignment]
 
         results.append(
             GenerateResult(
@@ -812,6 +978,229 @@ def generate_all(
                 from_cache=bool(meta.get("from_cache", False)),
             )
         )
+
+    return results
+
+
+def _build_target_input_spec(
+    target_cfg: TargetConfig,
+    *,
+    default_header_path: str | Path | InputSpec | None,
+    project_root: Path,
+    language: str | None,
+    classification: str | None,
+) -> tuple[InputSpec, str | None, tuple[str, ...]]:
+    """Build an ``InputSpec`` and optional umbrella code for a ``TargetConfig``."""
+    if not target_cfg.headers and default_header_path is not None:
+        if isinstance(default_header_path, InputSpec):
+            prefixes = (
+                tuple(str(Path(p).resolve()) for p in target_cfg.project_prefixes)
+                if target_cfg.project_prefixes
+                else default_header_path.project_prefixes
+            )
+            spec = InputSpec(
+                path=default_header_path.path,
+                language=language or default_header_path.language,
+                classification=classification or default_header_path.classification,
+                content=default_header_path.content,
+                headers=default_header_path.headers,
+                project_prefixes=prefixes,
+                recursive_includes=target_cfg.recursive_includes and default_header_path.recursive_includes,
+                max_depth=target_cfg.max_depth if target_cfg.max_depth is not None else default_header_path.max_depth,
+                use_default_includes=target_cfg.use_default_includes and default_header_path.use_default_includes,
+            )
+            return spec, spec.content, prefixes
+        hdr_paths = [Path(default_header_path)]
+    else:
+        if not target_cfg.headers:
+            raise ValueError(f"Target {target_cfg.name!r} specifies no headers")
+        has_globs = any(any(ch in h for ch in ("*", "?", "[")) for h in target_cfg.headers)
+        if has_globs:
+            sorted_paths, _ = resolve_headers(
+                patterns=target_cfg.headers,
+                exclude_patterns=[],
+                project_root=project_root,
+            )
+            hdr_paths = sorted_paths
+        else:
+            hdr_paths = [
+                (Path(h) if Path(h).is_absolute() else (project_root / h)).resolve() for h in target_cfg.headers
+            ]
+
+    resolved_hdrs = [p.resolve() for p in hdr_paths]
+    for p in resolved_hdrs:
+        if not p.exists():
+            raise FileNotFoundError(f"Header file not found for target {target_cfg.name!r}: {p}")
+
+    if target_cfg.project_prefixes:
+        prefixes = tuple(
+            str((Path(pr) if Path(pr).is_absolute() else (project_root / pr)).resolve())
+            for pr in target_cfg.project_prefixes
+        )
+    else:
+        prefixes = tuple(dict.fromkeys(str(p.parent) for p in resolved_hdrs))
+
+    if len(resolved_hdrs) == 1:
+        primary = resolved_hdrs[0]
+        code: str | None = None
+        extra_headers: tuple[Path, ...] = ()
+    else:
+        primary = project_root / "_umbrella.h"
+        code = "".join(f'#include "{p}"\n' for p in resolved_hdrs)
+        extra_headers = tuple(resolved_hdrs)
+
+    spec = InputSpec.from_path(
+        str(primary),
+        language=language,
+        classification=classification,
+        content=code,
+        headers=extra_headers,
+        project_prefixes=prefixes,
+        recursive_includes=target_cfg.recursive_includes,
+        max_depth=target_cfg.max_depth,
+        use_default_includes=target_cfg.use_default_includes,
+    )
+    return spec, code, prefixes
+
+
+def generate_targets(
+    targets: Sequence[TargetConfig],
+    *,
+    default_header_path: str | Path | InputSpec | None = None,
+    default_backend_name: str | None = None,
+    default_include_dirs: list[str] | None = None,
+    default_defines: list[str] | None = None,
+    default_extra_args: list[str] | None = None,
+    default_transforms: Sequence[PipelineFilter | str | Mapping[str, Any]] | None = None,
+    default_writer_options: dict[str, dict[str, object]] | None = None,
+    default_target: str | None = None,
+    runtime: str | None = None,
+    language: str | None = None,
+    classification: str | None = None,
+    output_dir: str | Path | None = None,
+    store_dir: str | Path | None = None,
+    no_cache: bool = False,
+    no_ir_cache: bool = False,
+    no_output_cache: bool = False,
+    auto_install_libclang: bool | None = None,
+    project_root: Path | None = None,
+) -> list[GenerateResult]:
+    """Execute declarative ``[[targets]]`` entries, parsing Layer-1 IR once per unique input spec group."""
+    if project_root is None:
+        project_root = Path.cwd()
+
+    results: list[GenerateResult] = []
+    # Map parse_group_key -> resolved (header, ir_cache_key, ir_slug, ir_from_cache)
+    ir_group_cache: dict[tuple[Any, ...], tuple[SourceUnit, str, str, bool]] = {}
+
+    for t_cfg in targets:
+        eff_backend = t_cfg.backend or default_backend_name or get_default_backend()
+        if eff_backend.strip().lower() == "auto":
+            eff_backend = resolve_backend("auto")
+        eff_includes = list(t_cfg.include_dirs) if t_cfg.include_dirs else list(default_include_dirs or [])
+        eff_defines = list(t_cfg.defines) if t_cfg.defines else list(default_defines or [])
+        eff_extra_args = list(t_cfg.extra_args) if t_cfg.extra_args else list(default_extra_args or [])
+        eff_target = t_cfg.target or default_target
+        eff_transforms = t_cfg.transforms if t_cfg.transforms else default_transforms
+
+        spec, code, prefixes = _build_target_input_spec(
+            t_cfg,
+            default_header_path=default_header_path,
+            project_root=project_root,
+            language=language,
+            classification=classification,
+        )
+        parsed_args = parse_extra_args(eff_extra_args, eff_includes, eff_defines)
+        target_for_resolve = (
+            None if (eff_target is not None and eff_target.strip().lower() == "embedded") else eff_target
+        )
+        resolved_triple = resolve_target(target=target_for_resolve, project_root=project_root)
+
+        group_key = (
+            spec.path,
+            spec.content,
+            tuple(str(h) for h in spec.headers),
+            spec.project_prefixes,
+            spec.recursive_includes,
+            spec.max_depth,
+            spec.use_default_includes,
+            eff_backend,
+            resolved_triple,
+            tuple(parsed_args.defines),
+            tuple(parsed_args.includes),
+            tuple(parsed_args.other_args),
+        )
+
+        active_writers = list(t_cfg.writers) if t_cfg.writers else [t_cfg.writer or "json"]
+        for wname in active_writers:
+            opath: str | Path | None = None
+            if isinstance(t_cfg.output, str):
+                resolved_out = Path(t_cfg.output)
+                opath = resolved_out if resolved_out.is_absolute() else (project_root / resolved_out)
+            elif isinstance(t_cfg.output, dict) and wname in t_cfg.output:
+                resolved_out = Path(t_cfg.output[wname])
+                opath = resolved_out if resolved_out.is_absolute() else (project_root / resolved_out)
+            elif output_dir is not None:
+                ext = _writer_output_ext(get_writer(wname), wname)
+                stem = Path(spec.path).stem
+                opath = Path(output_dir) / f"{stem}{ext}"
+
+            wopts: dict[str, object] = {}
+            if default_writer_options and wname in default_writer_options:
+                wopts.update(default_writer_options[wname])
+            if t_cfg.options:
+                for k, v in t_cfg.options.items():
+                    if k not in active_writers or not isinstance(v, dict):
+                        wopts[k] = v
+                tgt_writer_opts = t_cfg.options.get(wname)
+                if isinstance(tgt_writer_opts, dict):
+                    for wk, wv in tgt_writer_opts.items():
+                        wopts[str(wk)] = wv
+            try:
+                supported = list_writer_options(wname)
+                if supported:
+                    allowed_keys = {opt.name for opt in supported}
+                    wopts = {k: v for k, v in wopts.items() if k in allowed_keys}
+            except ValueError:
+                pass
+
+            meta: dict[str, object] = {}
+            pre_ir = ir_group_cache.get(group_key)
+            output = generate(
+                header_path=spec,
+                writer_name=wname,
+                code=code,
+                backend_name=eff_backend,
+                runtime=runtime,
+                language=language,
+                classification=classification,
+                include_dirs=eff_includes or None,
+                defines=eff_defines or None,
+                extra_args=eff_extra_args or None,
+                transforms=eff_transforms,
+                writer_options=wopts or None,
+                output_path=opath,
+                store_dir=store_dir,
+                no_cache=no_cache,
+                no_ir_cache=no_ir_cache,
+                no_output_cache=no_output_cache,
+                project_prefixes=prefixes,
+                auto_install_libclang=auto_install_libclang,
+                target=eff_target,
+                _result_meta=meta,
+                _pre_resolved_ir=pre_ir,
+            )
+            if group_key not in ir_group_cache and "resolved_ir" in meta:
+                ir_group_cache[group_key] = meta["resolved_ir"]  # type: ignore[assignment]
+
+            results.append(
+                GenerateResult(
+                    writer_name=wname,
+                    output=output,
+                    output_path=Path(opath) if opath is not None else None,
+                    from_cache=bool(meta.get("from_cache", False)),
+                )
+            )
 
     return results
 
@@ -904,6 +1293,7 @@ def batch_generate(
     include_dirs: list[str] | None = None,
     defines: list[str] | None = None,
     extra_args: list[str] | None = None,
+    transforms: Sequence[PipelineFilter | str | Mapping[str, Any]] | None = None,
     writer_options: dict[str, dict[str, object]] | None = None,
     output_templates: dict[str, str] | None = None,
     store_dir: str | Path | None = None,
@@ -1013,6 +1403,7 @@ def batch_generate(
 
     for header_path in sorted_paths:
         overrides = header_overrides_cache[header_path]
+        cached_ir_tuple: tuple[SourceUnit, str, str, bool] | None = None
 
         for writer_name in writers:
             # Merge writer options: global < per-pattern override
@@ -1035,6 +1426,7 @@ def batch_generate(
                 include_dirs=([str(d) for d in overrides.include_dirs] if overrides.include_dirs is not None else None),
                 defines=([str(d) for d in overrides.defines] if overrides.defines is not None else None),
                 extra_args=([str(a) for a in overrides.extra_args] if overrides.extra_args is not None else None),
+                transforms=transforms,
                 writer_options=effective_wopts or None,
                 output_path=output_path,
                 store_dir=store_dir,
@@ -1045,7 +1437,10 @@ def batch_generate(
                 auto_install_libclang=auto_install_libclang,
                 target=overrides.target,
                 _result_meta=meta,
+                _pre_resolved_ir=cached_ir_tuple,
             )
+            if cached_ir_tuple is None and "resolved_ir" in meta:
+                cached_ir_tuple = meta["resolved_ir"]  # type: ignore[assignment]
 
             results.append(
                 GenerateResult(

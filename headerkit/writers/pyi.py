@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from keyword import iskeyword
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
@@ -18,6 +18,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    Parameter,
     Pointer,
     Reference,
     SourceUnit,
@@ -26,7 +27,6 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers import WriterBackend, register_writer
 from headerkit.writers.base import BaseWriter, WriterOption
 
@@ -142,22 +142,77 @@ class PyiWriter(BaseWriter):
     default_extension: str = ".pyi"
     output_extension: str = ".pyi"
     cache_output: bool = True
-    cache_version: str = "1"
-    writer_options: ClassVar[list[WriterOption]] = [
+    cache_version: str = "2"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+    supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
             name="exclude_patterns",
             description="Regex patterns for declaration names to exclude",
             default=None,
             type=list,
         ),
-    ]
+        WriterOption(
+            name="mode",
+            description="Stub mode: 'pep484' (top-level declarations) or 'cffi' (ffi: cffi.FFI + lib: _Lib)",
+            default="pep484",
+            choices=("pep484", "cffi"),
+            type=str,
+        ),
+        WriterOption(
+            name="module_var",
+            description="Optional module-level string variable name to declare (e.g. 'CDEF')",
+            default=None,
+            type=str,
+        ),
+        WriterOption(
+            name="pointer_style",
+            description="Pointer annotation style: 'any' (default) or 'ctypes' (ctypes._Pointer[T])",
+            default="any",
+            choices=("any", "ctypes"),
+            type=str,
+        ),
+        WriterOption(
+            name="define_patterns",
+            description="Regex patterns of preprocessor macros to include on _Lib in cffi mode",
+            default=None,
+            type=list,
+        ),
+        WriterOption(
+            name="extern_python",
+            description='Function prototypes or names to emit on _Lib in cffi mode as extern "Python" callbacks',
+            default=None,
+            type=list,
+        ),
+    )
+    writer_options: ClassVar[list[WriterOption]] = list(supported_options)
 
-    def __init__(self, exclude_patterns: Sequence[str] | None = None) -> None:
+    def __init__(
+        self,
+        exclude_patterns: Sequence[str] | None = None,
+        mode: Literal["pep484", "cffi"] = "pep484",
+        module_var: str | None = None,
+        pointer_style: Literal["any", "ctypes"] = "any",
+        define_patterns: Sequence[str] | None = None,
+        extern_python: Sequence[str] | None = None,
+    ) -> None:
+        if mode not in ("pep484", "cffi"):
+            raise ValueError(f"Unsupported PyiWriter mode: {mode!r}; expected 'pep484' or 'cffi'")
+        if pointer_style not in ("any", "ctypes"):
+            raise ValueError(f"Unsupported pointer_style: {pointer_style!r}; expected 'any' or 'ctypes'")
         self.exclude_patterns: list[str] = list(exclude_patterns) if exclude_patterns else []
+        self.mode: Literal["pep484", "cffi"] = mode
+        self.module_var: str | None = module_var
+        self.pointer_style: Literal["any", "ctypes"] = pointer_style
+        self.define_patterns: list[str] = list(define_patterns) if define_patterns else []
+        self.extern_python: list[str] = list(extern_python) if extern_python else []
         self._compiled_excludes = [re.compile(p) for p in self.exclude_patterns]
+        self._compiled_defines = [re.compile(p) for p in self.define_patterns]
+        self._needs_cffi = False
+        self._needs_ctypes = False
         self._needs_enum = False
         self._needs_callable = False
         self._needs_any = False
+        self._needs_final = False
         self._record_tags: dict[str, str] = {}
         self._enum_tags: dict[str, str] = {}
         self._typedef_map: dict[str, TypeExpr] = {}
@@ -178,7 +233,30 @@ class PyiWriter(BaseWriter):
         except SyntaxError:
             return False
 
-    def _format_type(self, type_expr: TypeExpr, *, is_param: bool = False) -> str:
+    def _resolve_override(self, overrides: Mapping[str, str] | None) -> str | None:
+        if not overrides:
+            return None
+        raw = overrides.get("pyi")
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        cleaned = raw.strip().replace("ctypes.pointer[", "ctypes._Pointer[")
+        if not self._is_valid_python_expr(cleaned):
+            return None
+        if "ctypes." in cleaned:
+            self._needs_ctypes = True
+        if re.search(r"\bAny\b", cleaned):
+            self._needs_any = True
+        if re.search(r"\bCallable\b", cleaned):
+            self._needs_callable = True
+        return cleaned
+
+    def _format_type(
+        self,
+        type_expr: TypeExpr,
+        *,
+        is_param: bool = False,
+        _seen_typedefs: frozenset[str] = frozenset(),
+    ) -> str:
         if isinstance(type_expr, CType):
             key = _normalize_ctype_key(type_expr)
             if type_expr.is_elaborated is True:
@@ -197,8 +275,12 @@ class PyiWriter(BaseWriter):
                 return "int"
             if key in _FLOAT_TYPES:
                 return "float"
-            if key in self._contested_tags and type_expr.is_elaborated is False:
-                return self._format_type(self._typedef_map[key], is_param=is_param)
+            if key in self._contested_tags and type_expr.is_elaborated is False and key not in _seen_typedefs:
+                return self._format_type(
+                    self._typedef_map[key],
+                    is_param=is_param,
+                    _seen_typedefs=_seen_typedefs | {key},
+                )
             resolved = self._record_tags.get(key) or self._enum_tags.get(key)
             if resolved is not None:
                 return resolved
@@ -209,8 +291,19 @@ class PyiWriter(BaseWriter):
 
         if isinstance(type_expr, Pointer):
             pointee = type_expr.pointee
-            if isinstance(pointee, FunctionPointer):
+            if isinstance(pointee, FunctionPointer) and (not pointee.is_pointer or self.pointer_style != "ctypes"):
                 return self._format_function_pointer(pointee)
+            if self.pointer_style == "ctypes":
+                if isinstance(pointee, CType):
+                    p_key = _normalize_ctype_key(pointee)
+                    if pointee.is_elaborated is not True and p_key == "char":
+                        return "bytes | str" if is_param else "bytes"
+                    if pointee.is_elaborated is not True and p_key == "void":
+                        self._needs_ctypes = True
+                        return "ctypes.c_void_p"
+                inner = self._format_type(pointee, is_param=False, _seen_typedefs=_seen_typedefs)
+                self._needs_ctypes = True
+                return f"ctypes._Pointer[{inner}]"
             if isinstance(pointee, CType):
                 p_key = _normalize_ctype_key(pointee)
                 if pointee.is_elaborated is True:
@@ -229,8 +322,12 @@ class PyiWriter(BaseWriter):
                 if p_key in _BOOL_TYPES or p_key in _INT_TYPES or p_key in _FLOAT_TYPES:
                     self._needs_any = True
                     return "Any"
-                if p_key in self._contested_tags and pointee.is_elaborated is False:
-                    return self._format_type(Pointer(self._typedef_map[p_key]), is_param=is_param)
+                if p_key in self._contested_tags and pointee.is_elaborated is False and p_key not in _seen_typedefs:
+                    return self._format_type(
+                        Pointer(self._typedef_map[p_key]),
+                        is_param=is_param,
+                        _seen_typedefs=_seen_typedefs | {p_key},
+                    )
                 resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
                 if resolved is not None:
                     return resolved
@@ -266,7 +363,7 @@ class PyiWriter(BaseWriter):
         if fp.is_variadic:
             return f"Callable[..., {ret}]"
         arg_types = [
-            self._format_type(p.type, is_param=False)
+            self._resolve_override(getattr(p, "type_overrides", None)) or self._format_type(p.type, is_param=False)
             for p in fp.parameters
             if not (
                 isinstance(p.type, CType)
@@ -277,35 +374,58 @@ class PyiWriter(BaseWriter):
         ]
         return f"Callable[[{', '.join(arg_types)}], {ret}]"
 
-    def _format_constant(self, const: Constant) -> list[str]:
+    def _format_constant(self, const: Constant, *, indent: str = "") -> list[str]:
         name = _sanitize_identifier(const.name)
-        if const.value is not None:
+        override = self._resolve_override(getattr(const, "type_overrides", None))
+        if override is not None:
+            line = f"{indent}{name}: {override}"
+        elif const.value is not None:
             if isinstance(const.value, bool):
-                line = f"{name}: bool = {const.value}"
+                line = f"{indent}{name}: bool = {const.value}"
             elif isinstance(const.value, int):
-                line = f"{name}: int = {const.value}"
+                line = f"{indent}{name}: int = {const.value}"
             elif isinstance(const.value, float):
-                line = f"{name}: float = {const.value}"
+                line = f"{indent}{name}: float = {const.value}"
             else:
                 val_str = str(const.value).strip()
                 if (val_str.startswith('"') and val_str.endswith('"')) or (
                     val_str.startswith("'") and val_str.endswith("'")
                 ):
                     val_out = val_str if self._is_valid_python_expr(val_str) else "..."
-                    line = f"{name}: str = {val_out}"
+                    line = f"{indent}{name}: str = {val_out}"
                 else:
                     val_out = val_str if self._is_valid_python_expr(val_str) else "..."
-                    line = f"{name}: int = {val_out}"
+                    line = f"{indent}{name}: int = {val_out}"
         elif const.type is not None:
             t_str = self._format_type(const.type, is_param=False)
-            line = f"{name}: {t_str}"
+            line = f"{indent}{name}: {t_str}"
         else:
             self._needs_any = True
-            line = f"{name}: Any"
+            line = f"{indent}{name}: Any"
         lines = [line]
         doc = getattr(const, "doc", None)
         if isinstance(doc, str) and doc.strip():
-            lines.extend(self._format_docstring(doc, indent=""))
+            lines.extend(self._format_docstring(doc, indent=indent))
+        return lines
+
+    def _format_enum_values_as_attrs(self, enum: Enum, *, indent: str = "") -> list[str]:
+        lines: list[str] = []
+        next_val = 0
+        for ev in enum.values:
+            v_name = _sanitize_identifier(ev.name)
+            if isinstance(ev.value, bool):
+                val_repr = str(int(ev.value))
+                next_val = int(ev.value) + 1
+            elif isinstance(ev.value, int):
+                val_repr = str(ev.value)
+                next_val = ev.value + 1
+            elif isinstance(ev.value, str) and ev.value.strip():
+                raw_ev = ev.value.strip()
+                val_repr = raw_ev if self._is_valid_python_expr(raw_ev) else "..."
+            else:
+                val_repr = str(next_val)
+                next_val += 1
+            lines.append(f"{indent}{v_name}: int = {val_repr}")
         return lines
 
     def _format_enum(self, enum: Enum) -> list[str]:
@@ -336,24 +456,9 @@ class PyiWriter(BaseWriter):
                     else:
                         val_repr = str(next_val)
                         next_val += 1
-                    lines.append(f"    {v_name}: int = {val_repr}")
+                    lines.append(f"    {v_name} = {val_repr}")
         else:
-            next_val = 0
-            for ev in enum.values:
-                v_name = _sanitize_identifier(ev.name)
-                if isinstance(ev.value, bool):
-                    val_repr = str(int(ev.value))
-                    next_val = int(ev.value) + 1
-                elif isinstance(ev.value, int):
-                    val_repr = str(ev.value)
-                    next_val = ev.value + 1
-                elif isinstance(ev.value, str) and ev.value.strip():
-                    raw_ev = ev.value.strip()
-                    val_repr = raw_ev if self._is_valid_python_expr(raw_ev) else "..."
-                else:
-                    val_repr = str(next_val)
-                    next_val += 1
-                lines.append(f"{v_name}: int = {val_repr}")
+            lines.extend(self._format_enum_values_as_attrs(enum, indent=""))
         return lines
 
     def _format_struct_fields(self, fields: Sequence[Field]) -> list[str]:
@@ -367,7 +472,9 @@ class PyiWriter(BaseWriter):
             if not fld.name:
                 continue
             f_name = _sanitize_identifier(fld.name)
-            f_type = self._format_type(fld.type, is_param=False)
+            f_type = self._resolve_override(getattr(fld, "type_overrides", None)) or self._format_type(
+                fld.type, is_param=False
+            )
             out.append(f"    {f_name}: {f_type}")
         return out
 
@@ -412,7 +519,9 @@ class PyiWriter(BaseWriter):
             if p_name in used_names:
                 p_name = f"{p_name}_{idx}"
             used_names.add(p_name)
-            p_type = self._format_type(param.type, is_param=True)
+            p_type = self._resolve_override(getattr(param, "type_overrides", None)) or self._format_type(
+                param.type, is_param=True
+            )
             if param.default_value is not None:
                 param_parts.append(f"{p_name}: {p_type} = ...")
             else:
@@ -422,7 +531,10 @@ class PyiWriter(BaseWriter):
             self._needs_any = True
             param_parts.append("*args: Any")
 
-        ret_str = self._format_type(func.return_type, is_param=False)
+        ret_override = self._resolve_override(getattr(func, "return_type_overrides", None)) or self._resolve_override(
+            getattr(func, "type_overrides", None)
+        )
+        ret_str = ret_override or self._format_type(func.return_type, is_param=False)
         return f"({', '.join(param_parts)}) -> {ret_str}"
 
     @staticmethod
@@ -439,22 +551,25 @@ class PyiWriter(BaseWriter):
         out.append(f'{indent}"""')
         return out
 
-    def _format_function(self, func: Function) -> list[str]:
+    def _format_function(self, func: Function, *, indent: str = "", include_self: bool = False) -> list[str]:
         fn_name = _sanitize_identifier(func.name)
-        sig = self._format_function_params_and_return(func, include_self=False)
+        sig = self._format_function_params_and_return(func, include_self=include_self)
         doc = getattr(func, "doc", None)
         if isinstance(doc, str) and doc.strip():
-            lines = [f"def {fn_name}{sig}:"]
-            lines.extend(self._format_docstring(doc, indent="    "))
-            lines.append("    ...")
+            lines = [f"{indent}def {fn_name}{sig}:"]
+            lines.extend(self._format_docstring(doc, indent=f"{indent}    "))
+            lines.append(f"{indent}    ...")
             return lines
-        return [f"def {fn_name}{sig}: ..."]
+        return [f"{indent}def {fn_name}{sig}: ..."]
 
     def _render(self, unit: SourceUnit | Header) -> str:
         """Convert Header IR into PEP 484 ``.pyi`` stub declarations."""
+        self._needs_cffi = self.mode == "cffi"
+        self._needs_ctypes = False
         self._needs_enum = False
         self._needs_callable = False
         self._needs_any = False
+        self._needs_final = self.mode == "cffi"
         self._record_tags = {}
         self._enum_tags = {}
         self._typedef_map = {}
@@ -484,32 +599,59 @@ class PyiWriter(BaseWriter):
 
         for td_name, underlying in self._typedef_map.items():
             if td_name in raw_record_tags:
+                u_name = underlying.name.strip() if isinstance(underlying, CType) else ""
                 if not (
                     isinstance(underlying, CType)
-                    and self._record_tags.get(underlying.name.strip()) == _sanitize_identifier(td_name)
+                    and (self._record_tags.get(u_name) or self._enum_tags.get(u_name)) == _sanitize_identifier(td_name)
                 ):
                     self._contested_tags.add(td_name)
 
         body_blocks: list[str] = []
+        lib_member_lines: list[str] = []
+        emitted_lib_funcs: set[str] = set()
+
         for decl in unit.declarations:
             decl_name = getattr(decl, "name", None)
             if self._is_excluded(decl_name):
                 continue
 
             if isinstance(decl, Constant):
-                const_lines = self._format_constant(decl)
-                body_blocks.append("\n".join(const_lines))
+                if self.mode == "cffi":
+                    is_cffi_int = (
+                        decl.value is not None
+                        and isinstance(decl.value, int)
+                        and not isinstance(decl.value, bool)
+                        and not getattr(decl, "is_unsized_macro", False)
+                    )
+                    matches_define = bool(
+                        self._compiled_defines and any(p.search(decl.name) for p in self._compiled_defines)
+                    )
+                    if is_cffi_int:
+                        lib_member_lines.extend(self._format_constant(decl, indent="    "))
+                    elif matches_define:
+                        c_name = _sanitize_identifier(decl.name)
+                        lib_member_lines.append(f"    {c_name}: int = ...")
+                        doc = getattr(decl, "doc", None)
+                        if isinstance(doc, str) and doc.strip():
+                            lib_member_lines.extend(self._format_docstring(doc, indent="    "))
+                else:
+                    const_lines = self._format_constant(decl)
+                    body_blocks.append("\n".join(const_lines))
             elif isinstance(decl, Enum):
                 enum_lines = self._format_enum(decl)
-                if enum_lines:
+                if enum_lines and (self.mode != "cffi" or decl.name):
                     body_blocks.append("\n".join(enum_lines))
+                if self.mode == "cffi":
+                    lib_member_lines.extend(self._format_enum_values_as_attrs(decl, indent="    "))
             elif isinstance(decl, Struct):
                 struct_lines = self._format_struct(decl)
                 if struct_lines:
                     body_blocks.append("\n".join(struct_lines))
             elif isinstance(decl, Typedef):
                 alias_name = _sanitize_identifier(decl.name)
-                target_str = self._format_type(decl.underlying_type, is_param=False)
+                target_str = self._resolve_override(getattr(decl, "type_overrides", None)) or self._format_type(
+                    decl.underlying_type, is_param=False
+                )
                 if alias_name in defined_record_names:
                     continue
                 if alias_name != target_str:
@@ -520,24 +662,134 @@ class PyiWriter(BaseWriter):
                     body_blocks.append("\n".join(td_lines))
             elif isinstance(decl, Variable):
                 v_name = _sanitize_identifier(decl.name)
-                v_type = self._format_type(decl.type, is_param=False)
-                var_lines = [f"{v_name}: {v_type}"]
-                doc = getattr(decl, "doc", None)
-                if isinstance(doc, str) and doc.strip():
-                    var_lines.extend(self._format_docstring(doc, indent=""))
-                body_blocks.append("\n".join(var_lines))
+                v_type = self._resolve_override(getattr(decl, "type_overrides", None)) or self._format_type(
+                    decl.type, is_param=False
+                )
+                if self.mode == "cffi":
+                    var_lines = [f"    {v_name}: {v_type}"]
+                    doc = getattr(decl, "doc", None)
+                    if isinstance(doc, str) and doc.strip():
+                        var_lines.extend(self._format_docstring(doc, indent="    "))
+                    lib_member_lines.extend(var_lines)
+                else:
+                    var_lines = [f"{v_name}: {v_type}"]
+                    doc = getattr(decl, "doc", None)
+                    if isinstance(doc, str) and doc.strip():
+                        var_lines.extend(self._format_docstring(doc, indent=""))
+                    body_blocks.append("\n".join(var_lines))
             elif isinstance(decl, Function):
-                fn_lines = self._format_function(decl)
-                body_blocks.append("\n".join(fn_lines))
+                if self.mode == "cffi":
+                    emitted_lib_funcs.add(_sanitize_identifier(decl.name))
+                    lib_member_lines.extend(self._format_function(decl, indent="    ", include_self=True))
+                else:
+                    fn_lines = self._format_function(decl)
+                    body_blocks.append("\n".join(fn_lines))
+
+        if self.mode == "cffi":
+            for ext_entry in self.extern_python:
+                stripped = ext_entry.strip()
+                if stripped.startswith('extern "Python"'):
+                    stripped = stripped[len('extern "Python"') :].strip()
+                if stripped.endswith(";"):
+                    stripped = stripped[:-1].strip()
+                if not stripped:
+                    continue
+                if "(" in stripped:
+                    m_proto = re.match(r"^(.*?)\b([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$", stripped)
+                    if m_proto:
+                        ret_raw, cb_name, params_raw = (
+                            m_proto.group(1).strip(),
+                            m_proto.group(2),
+                            m_proto.group(3).strip(),
+                        )
+                        py_cb_name = _sanitize_identifier(cb_name)
+                        if py_cb_name in emitted_lib_funcs:
+                            continue
+                        emitted_lib_funcs.add(py_cb_name)
+                        ret_t: TypeExpr = (
+                            Pointer(CType(ret_raw.rstrip("*").strip()))
+                            if ret_raw.endswith("*")
+                            else CType(ret_raw or "void")
+                        )
+                        cb_params: list[Parameter] = []
+                        if params_raw and params_raw != "void":
+                            for p_idx, p_str in enumerate(params_raw.split(",")):
+                                p_clean = p_str.strip()
+                                if not p_clean or p_clean == "void":
+                                    continue
+                                if "*" in p_clean:
+                                    lhs, rhs = p_clean.rsplit("*", 1)
+                                    p_n = rhs.strip() or f"arg{p_idx}"
+                                    p_t: TypeExpr = Pointer(CType(lhs.rstrip("*").strip() or "void"))
+                                else:
+                                    parts = p_clean.rsplit(None, 1)
+                                    if (
+                                        len(parts) == 2
+                                        and parts[1].isidentifier()
+                                        and parts[0] not in ("unsigned", "signed", "const", "struct", "enum", "union")
+                                    ):
+                                        p_t = CType(parts[0].strip())
+                                        p_n = parts[1].strip()
+                                    else:
+                                        p_t = CType(p_clean)
+                                        p_n = f"arg{p_idx}"
+                                cb_params.append(Parameter(p_n, p_t))
+                        synth_fn = Function(cb_name, ret_t, cb_params)
+                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+                else:
+                    py_cb_name = _sanitize_identifier(stripped)
+                    if py_cb_name in emitted_lib_funcs:
+                        continue
+                    matched_td = self._typedef_map.get(stripped)
+                    while isinstance(matched_td, Pointer):
+                        matched_td = matched_td.pointee
+                    if isinstance(matched_td, FunctionPointer):
+                        emitted_lib_funcs.add(py_cb_name)
+                        synth_fn = Function(
+                            stripped,
+                            matched_td.return_type,
+                            list(matched_td.parameters),
+                            is_variadic=matched_td.is_variadic,
+                        )
+                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+                    else:
+                        emitted_lib_funcs.add(py_cb_name)
+                        synth_fn = Function(stripped, CType("void"), [])
+                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+
+            body_blocks.append("ffi: cffi.FFI")
+            lib_cls_lines = ["@final", "class _Lib:"]
+            if lib_member_lines:
+                lib_cls_lines.extend(lib_member_lines)
+            else:
+                lib_cls_lines.append("    ...")
+            body_blocks.append("\n".join(lib_cls_lines))
+            body_blocks.append("lib: _Lib")
+
+        if self.module_var:
+            body_blocks.append(f"{_sanitize_identifier(self.module_var)}: str")
 
         header_lines: list[str] = ["# Auto-generated by headerkit - do not edit"]
-        import_lines: list[str] = []
-        if self._needs_callable:
-            import_lines.append("from collections.abc import Callable")
+        std_imports: list[str] = []
+        if self._needs_cffi:
+            std_imports.append("import cffi")
+        if self._needs_ctypes:
+            std_imports.append("import ctypes")
         if self._needs_enum:
-            import_lines.append("import enum")
+            std_imports.append("import enum")
+
+        from_imports: list[str] = []
+        if self._needs_callable:
+            from_imports.append("from collections.abc import Callable")
+        typing_names: list[str] = []
         if self._needs_any:
-            import_lines.append("from typing import Any")
+            typing_names.append("Any")
+        if self._needs_final:
+            typing_names.append("final")
+        if typing_names:
+            from_imports.append(f"from typing import {', '.join(typing_names)}")
+
+        import_lines = std_imports + from_imports
 
         sections: list[str] = ["\n".join(header_lines)]
         if import_lines:
@@ -546,22 +798,6 @@ class PyiWriter(BaseWriter):
             sections.append("\n\n".join(body_blocks))
 
         return "\n\n".join(sections) + "\n"
-
-    def _write_custom_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        """Generate a PEP 484 type stub file layout."""
-        stub_code = self._render(unit)
-        pkg = options.package_name.replace("-", "_")
-        files = [
-            OutputFile(
-                path=f"src/{pkg}/{pkg}.pyi",
-                content=stub_code,
-            ),
-        ]
-        return ProjectLayout(files=files)
 
 
 @hook("write_code", writer="pyi", priority=Priority.STANDARD)

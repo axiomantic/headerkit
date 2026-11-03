@@ -344,50 +344,6 @@ def _recovered_bitfield_clause(field_decl: Node) -> Node | None:
     return None
 
 
-_NIM_STORAGE_MACROS: frozenset[bytes] = frozenset(
-    {
-        b"N_LIB_PRIVATE",
-        b"N_LIB_EXPORT",
-        b"N_LIB_IMPORT",
-        b"N_LIB_EXPORT_VAR",
-        b"NIM_EXTERNC",
-        b"N_NIM_DEPRECATED",
-    }
-)
-
-_NIM_CALLCONV_MACROS: frozenset[bytes] = frozenset(
-    {
-        b"N_CDECL",
-        b"N_NOCONV",
-        b"N_STDCALL",
-        b"N_FASTCALL",
-        b"N_INLINE",
-        b"N_NOINLINE",
-        b"N_NIMCALL",
-        b"N_SYSCALL",
-        b"N_THISCALL",
-        b"N_SAFECALL",
-        b"N_CLOSURE",
-    }
-)
-
-_NIM_CALLCONV_PTR_MACROS: frozenset[bytes] = frozenset(
-    {
-        b"N_CDECL_PTR",
-        b"N_NOCONV_PTR",
-        b"N_STDCALL_PTR",
-        b"N_FASTCALL_PTR",
-        b"N_INLINE_PTR",
-        b"N_NOINLINE_PTR",
-        b"N_NIMCALL_PTR",
-        b"N_SYSCALL_PTR",
-        b"N_THISCALL_PTR",
-        b"N_SAFECALL_PTR",
-        b"N_CLOSURE_PTR",
-    }
-)
-
-
 def _collect_cst_leaves(node: Node, out: list[Node]) -> None:
     """Collect non-missing CST leaf tokens outside preprocessor definitions, strings, and comments."""
     if node.type in ("preproc_def", "preproc_function_def", "comment", "string_literal", "char_literal"):
@@ -400,8 +356,17 @@ def _collect_cst_leaves(node: Node, out: list[Node]) -> None:
         _collect_cst_leaves(child, out)
 
 
-def _expand_nim_macros_from_cst(raw: bytes, root: Node) -> bytes | None:
-    """Expand Nim ``nimbase.h`` calling-convention and linkage macros via CST leaf traversal."""
+def _expand_macros_from_cst(
+    raw: bytes,
+    root: Node,
+    *,
+    storage_macros: frozenset[bytes] = frozenset(),
+    callconv_macros: frozenset[bytes] = frozenset(),
+    callconv_ptr_macros: frozenset[bytes] = frozenset(),
+) -> bytes | None:
+    """Expand caller-configured calling-convention and linkage macros via CST leaf traversal."""
+    if not storage_macros and not callconv_macros and not callconv_ptr_macros:
+        return None
     leaves: list[Node] = []
     _collect_cst_leaves(root, leaves)
     edits: list[tuple[int, int, bytes]] = []
@@ -411,15 +376,11 @@ def _expand_nim_macros_from_cst(raw: bytes, root: Node) -> bytes | None:
         leaf = leaves[i]
         tok = leaf.text
         if leaf.type in ("identifier", "type_identifier") and tok:
-            if tok in _NIM_STORAGE_MACROS:
+            if tok in storage_macros:
                 edits.append((leaf.start_byte, leaf.end_byte, b" " * (leaf.end_byte - leaf.start_byte)))
                 i += 1
                 continue
-            if (
-                (tok in _NIM_CALLCONV_MACROS or tok in _NIM_CALLCONV_PTR_MACROS)
-                and i + 1 < n
-                and leaves[i + 1].type == "("
-            ):
+            if (tok in callconv_macros or tok in callconv_ptr_macros) and i + 1 < n and leaves[i + 1].type == "(":
                 open_leaf = leaves[i + 1]
                 depth = 1
                 j = i + 2
@@ -440,9 +401,9 @@ def _expand_nim_macros_from_cst(raw: bytes, root: Node) -> bytes | None:
                 if comma_leaf is not None and close_leaf is not None:
                     ret_bytes = raw[open_leaf.end_byte : comma_leaf.start_byte].strip()
                     name_bytes = raw[comma_leaf.end_byte : close_leaf.start_byte].strip()
-                    if tok in _NIM_CALLCONV_PTR_MACROS:
+                    if tok in callconv_ptr_macros:
                         repl = ret_bytes + b" (*" + name_bytes + b")"
-                    elif tok == b"N_INLINE":
+                    elif b"INLINE" in tok.upper() and b"NOINLINE" not in tok.upper():
                         repl = b"inline " + ret_bytes + b" " + name_bytes
                     else:
                         repl = ret_bytes + b" " + name_bytes
@@ -469,7 +430,13 @@ def _expand_nim_macros_from_cst(raw: bytes, root: Node) -> bytes | None:
 class TreeSitterBackend:
     """Parser backend using tree-sitter-c and tree-sitter-cpp."""
 
+    description: str = "Fast C/C++ parsing without system LLVM dependencies"
+    supports_auto_install: bool = False
     supported_classifications: frozenset[str] = frozenset({"header", "source"})
+
+    @classmethod
+    def auto_install(cls) -> bool:
+        return False
 
     @property
     def supported_languages(self) -> frozenset[str]:
@@ -492,7 +459,21 @@ class TreeSitterBackend:
     def supports_cpp(self) -> bool:
         return _HAS_TREESITTER_CPP
 
-    def __init__(self) -> None:
+    @property
+    def follows_includes(self) -> bool:
+        return False
+
+    @property
+    def supports_compiler_args(self) -> bool:
+        return False
+
+    def __init__(
+        self,
+        *,
+        storage_macros: Sequence[str] = (),
+        callconv_macros: Sequence[str] = (),
+        callconv_ptr_macros: Sequence[str] = (),
+    ) -> None:
         self._defined_records: set[str] = set()
         self._forward_records: dict[str, Struct] = {}
         self._defined_enums: set[str] = set()
@@ -506,6 +487,9 @@ class TreeSitterBackend:
         #: next pragma that states the pack state outright, so the doubt covers
         #: the records it can actually affect rather than the rest of the file.
         self._unknown_pack_ranges: list[tuple[int, int | None]] = []
+        self._storage_macros: frozenset[bytes] = frozenset(m.encode("utf-8") for m in storage_macros)
+        self._callconv_macros: frozenset[bytes] = frozenset(m.encode("utf-8") for m in callconv_macros)
+        self._callconv_ptr_macros: frozenset[bytes] = frozenset(m.encode("utf-8") for m in callconv_ptr_macros)
 
     def is_available(self) -> bool:
         return _HAS_TREESITTER and (_HAS_TREESITTER_C or _HAS_TREESITTER_CPP)
@@ -576,6 +560,10 @@ class TreeSitterBackend:
         project_prefixes: tuple[str, ...] | None = None,
         allowlist: list[str] | None = None,
         denylist: list[str] | None = None,
+        storage_macros: Sequence[str] = (),
+        callconv_macros: Sequence[str] = (),
+        callconv_ptr_macros: Sequence[str] = (),
+        **_kwargs: Any,
     ) -> Header:
         """Parse C/C++ code with tree-sitter and return the IR representation.
 
@@ -633,8 +621,17 @@ class TreeSitterBackend:
         parser = Parser(language)
         raw_bytes = code.encode("utf-8")
         tree = parser.parse(raw_bytes)
-        if b"N_" in raw_bytes or b"NIM_EXTERNC" in raw_bytes:
-            expanded_bytes = _expand_nim_macros_from_cst(raw_bytes, tree.root_node)
+        active_storage = self._storage_macros | frozenset(m.encode("utf-8") for m in storage_macros)
+        active_callconv = self._callconv_macros | frozenset(m.encode("utf-8") for m in callconv_macros)
+        active_callconv_ptr = self._callconv_ptr_macros | frozenset(m.encode("utf-8") for m in callconv_ptr_macros)
+        if active_storage or active_callconv or active_callconv_ptr:
+            expanded_bytes = _expand_macros_from_cst(
+                raw_bytes,
+                tree.root_node,
+                storage_macros=active_storage,
+                callconv_macros=active_callconv,
+                callconv_ptr_macros=active_callconv_ptr,
+            )
             if expanded_bytes is not None:
                 tree = parser.parse(expanded_bytes)
 
@@ -1338,14 +1335,25 @@ class TreeSitterBackend:
                 return self._unwrap_declarator(decl, curr_type)
             return None, curr_type, node
 
-        if node.type == "parenthesized_declarator":
+        if node.type in ("parenthesized_declarator", "abstract_parenthesized_declarator"):
             for c in node.children:
                 if c.type not in ("(", ")"):
                     return self._unwrap_declarator(c, curr_type)
             return None, curr_type, node
 
         if node.type in ("pointer_declarator", "abstract_pointer_declarator"):
-            ptr_type: TypeExpr = Pointer(curr_type, qualifiers=_pointer_qualifiers(node))
+            quals = _pointer_qualifiers(node)
+            if isinstance(curr_type, FunctionPointer) and not curr_type.is_pointer:
+                ptr_type: TypeExpr = FunctionPointer(
+                    return_type=curr_type.return_type,
+                    parameters=curr_type.parameters,
+                    is_variadic=curr_type.is_variadic,
+                    calling_convention=curr_type.calling_convention,
+                    qualifiers=quals,
+                    is_pointer=True,
+                )
+            else:
+                ptr_type = Pointer(curr_type, qualifiers=quals)
             inner_decl = node.child_by_field_name("declarator")
             if not inner_decl:
                 for c in node.children:
@@ -1384,7 +1392,7 @@ class TreeSitterBackend:
                 return self._unwrap_declarator(inner_decl, arr_type)
             return None, arr_type, node
 
-        if node.type == "function_declarator":
+        if node.type in ("function_declarator", "abstract_function_declarator"):
             params_node = node.child_by_field_name("parameters")
             params: list[Parameter] = []
             is_variadic = False
@@ -1396,8 +1404,18 @@ class TreeSitterBackend:
                             params.append(param)
                     elif child.type in ("...", "variadic_parameter"):
                         is_variadic = True
-            fn_type: TypeExpr = FunctionPointer(return_type=curr_type, parameters=params, is_variadic=is_variadic)
+            fn_type: TypeExpr = FunctionPointer(
+                return_type=curr_type,
+                parameters=params,
+                is_variadic=is_variadic,
+                is_pointer=False,
+            )
             inner_decl = node.child_by_field_name("declarator")
+            if not inner_decl:
+                for c in node.children:
+                    if c.type not in ("parameter_list", "type_qualifier", "const", "volatile"):
+                        inner_decl = c
+                        break
             if inner_decl:
                 return self._unwrap_declarator(inner_decl, fn_type)
             return None, fn_type, node
@@ -2235,8 +2253,6 @@ class TreeSitterBackend:
             type_name = "int"
         else:
             type_name = text
-        if type_name == "NCSTRING":
-            return Pointer(pointee=CType(name="char", qualifiers=quals, is_elaborated=is_elaborated))
         return CType(name=type_name, qualifiers=quals, is_elaborated=is_elaborated)
 
 

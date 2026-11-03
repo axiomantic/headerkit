@@ -190,7 +190,7 @@ class TestBaseWriterSharedFeatures:
         assert res_st.fields[0].name == "pub"
 
     def test_min_access_floor_override_via_options(self):
-        from headerkit.scaffold import ScaffoldOptions
+        from headerkit.writers.base import ScaffoldOptions
 
         class PublicOnlyWriter(BaseWriter):
             min_access_floor = "public"

@@ -827,3 +827,120 @@ class TestStructFieldMiddleInsertion:
         assert len(added) == 1
         assert added[0].severity == "breaking"
         assert added[0].detail == "field 'y' added"
+
+
+# =============================================================================
+# Semantic ABI Mode, Typedef Resolution & Nim C Header Relaxation (Part 7.3)
+# =============================================================================
+
+
+class TestSemanticAbiDiffMode:
+    """Tests for abi_mode=True typedef resolution, integer/bool normalization, and pointer const relaxation."""
+
+    def test_abi_mode_resolves_typedef_chains_and_normalizes_scalar_types(self) -> None:
+        """Verify nng_duration -> int32_t -> int, uint8_t -> unsigned char, and _Bool -> bool produce 0 breaking changes."""
+        baseline = Header(
+            path="nng.h",
+            declarations=[
+                Typedef("nng_duration", CType("int32_t")),
+                Struct("nng_socket", [Field("id", CType("uint32_t"))]),
+                Function(
+                    "nng_sleep",
+                    CType("void"),
+                    [Parameter("ms", CType("nng_duration"))],
+                ),
+                Function(
+                    "nng_send_bytes",
+                    CType("_Bool"),
+                    [
+                        Parameter("s", CType("nng_socket")),
+                        Parameter("buf", Pointer(CType("uint8_t"))),
+                    ],
+                ),
+                Constant("NNG_MAX_TTL", 15, is_macro=True),
+            ],
+        )
+        # Target represents a C header where nng_duration was resolved to int,
+        # _Bool became bool, and uint8_t became unsigned char
+        target = Header(
+            path="target_nng.h",
+            declarations=[
+                Struct("nng_socket", [Field("id", CType("unsigned int"))]),
+                Function(
+                    "nng_sleep",
+                    CType("void"),
+                    [Parameter("ms", CType("int"))],
+                ),
+                Function(
+                    "nng_send_bytes",
+                    CType("bool"),
+                    [
+                        Parameter("s", CType("nng_socket")),
+                        Parameter("buf", Pointer(CType("char", ["unsigned"]))),
+                    ],
+                ),
+                Constant("NNG_MAX_TTL", 15, is_macro=True),
+            ],
+        )
+
+        report = diff_headers(baseline, target, abi_mode=True)
+        assert [e for e in report.entries if e.severity == "breaking"] == []
+
+        # Negative control: with abi_mode=False, syntactic differences (nng_duration vs int, _Bool vs bool, missing typedef) ARE flagged
+        syntactic_report = diff_headers(baseline, target, abi_mode=False)
+        assert syntactic_report.breaking_count > 0
+
+    def test_pointer_const_relaxation_and_indirection_drift_negative_control(self) -> None:
+        """Verify const char* -> char* is relaxed when ignore_pointer_const=True, while const uint8_t** -> uint8_t* is still breaking."""
+        baseline = Header(
+            path="orig.h",
+            declarations=[
+                Function(
+                    "set_label",
+                    CType("int"),
+                    [Parameter("name", Pointer(CType("char", ["const"])))],
+                ),
+                Function(
+                    "alloc_buf",
+                    CType("int"),
+                    [Parameter("out_buf", Pointer(Pointer(CType("uint8_t", ["const"]))))],
+                ),
+            ],
+        )
+        target = Header(
+            path="nim_orig.h",
+            declarations=[
+                Function(
+                    "set_label",
+                    CType("int"),
+                    [Parameter("name", Pointer(CType("char")))],
+                ),
+                # Indirection drift: double pointer became single pointer!
+                Function(
+                    "alloc_buf",
+                    CType("int"),
+                    [Parameter("out_buf", Pointer(CType("uint8_t")))],
+                ),
+            ],
+        )
+
+        writer = DiffWriter(
+            baseline=baseline,
+            format="json",
+            abi_mode=True,
+            ignore_pointer_const=True,
+        )
+        parsed = json.loads(writer.write(target))
+        breaking_entries = [e for e in parsed["entries"] if e["severity"] == "breaking"]
+
+        # set_label (const char* -> char*) must NOT be flagged, while alloc_buf (const uint8_t** -> uint8_t*) MUST be flagged
+        assert breaking_entries == [
+            {
+                "kind": "function_signature_changed",
+                "severity": "breaking",
+                "name": "alloc_buf",
+                "detail": "parameter 0 type changed from 'const uint8_t**' to 'uint8_t*'",
+                "baseline": "const uint8_t**",
+                "target": "uint8_t*",
+            }
+        ]

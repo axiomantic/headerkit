@@ -5,8 +5,9 @@ from __future__ import annotations
 import ast
 import textwrap
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any, ClassVar
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from headerkit.ir import (
     Declaration,
@@ -18,8 +19,90 @@ from headerkit.ir import (
     Struct,
     filter_access_floor,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.transforms.builtin import StripPaddingFields
+
+if TYPE_CHECKING:
+    from headerkit.reconcile import MatrixCondition, PlatformCondition
+
+
+@dataclass(frozen=True, slots=True)
+class OutputFile:
+    """A single file to be written in a project layout."""
+
+    path: str
+    content: str
+    is_executable: bool = False
+    preserve_existing: bool = False
+    merge_strategy: str | None = None
+
+
+@dataclass(slots=True)
+class ProjectLayout:
+    """A collection of output files comprising a single-file or project layout."""
+
+    files: list[OutputFile] = field(default_factory=list)
+
+    def get_file(self, path: str) -> OutputFile | None:
+        """Find an output file by its relative project path."""
+        for f in self.files:
+            if f.path == path:
+                return f
+        return None
+
+    def write_to_disk(self, target_dir: Path | str, *, overwrite: bool = True) -> list[Path]:
+        """Write all files in this layout to the destination directory."""
+        written: list[Path] = []
+        base = Path(target_dir).resolve()
+        for f in self.files:
+            p = (base / f.path).resolve()
+            if not p.is_relative_to(base):
+                raise ValueError(f"Path traversal detected: {f.path}")
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if p.exists() and (f.preserve_existing or not overwrite):
+                continue
+            p.write_text(f.content, encoding="utf-8")
+            if f.is_executable:
+                p.chmod(p.stat().st_mode | 0o111)
+            written.append(p)
+        return written
+
+
+@dataclass(slots=True)
+class ScaffoldOptions:
+    """Configuration options for writer layout generation."""
+
+    package_name: str = "bindings"
+    target_language: str = ""
+    layout: str = "file"
+    options: dict[str, Any] = field(default_factory=dict)
+    interactive: bool = False
+    extra_context: dict[str, Any] = field(default_factory=dict)
+    test_type: str = "both"
+    test_runner: str = "tripwire"
+    test_strategy: str = "incremental"
+    version_guard: str = "declared"
+    version_constant: str | None = None
+    macro_types: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if "test_type" not in self.options and self.test_type != "both":
+            self.options["test_type"] = self.test_type
+        elif "test_type" in self.options:
+            self.test_type = str(self.options["test_type"])
+
+        if "macro_types" not in self.options and self.macro_types:
+            self.options["macro_types"] = self.macro_types
+        elif "macro_types" in self.options and not self.macro_types:
+            self.macro_types = dict(self.options["macro_types"])
+
+    def get_option(self, name: str, default: Any = None) -> Any:
+        """Get a writer-specific option value."""
+        if name in self.options:
+            return self.options[name]
+        if hasattr(self, name):
+            return getattr(self, name)
+        return default
+
 
 #: One-line stand-in for a generated multi-line block inside a dedented
 #: template. See :func:`render_block_template` for why the substitution cannot
@@ -219,8 +302,90 @@ class BaseWriter:
     format_description: str = ""
     default_output_pattern: str = "{dir}/{stem}.txt"
     default_extension: str = ".txt"
+    file_extensions: ClassVar[tuple[str, ...] | None] = None
+    comment_prefix: ClassVar[str] = "#"
+    language_aliases: ClassVar[tuple[str, ...]] = ()
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = ()
+
+    @staticmethod
+    def _platform_to_python(tag: str) -> str:
+        """Map a target triple or OS tag to its Python ``sys.platform`` identifier."""
+        lower = tag.lower()
+        if "darwin" in lower or "apple" in lower or "mac" in lower:
+            return "darwin"
+        if "linux" in lower:
+            return "linux"
+        if "windows" in lower or "msvc" in lower or "win32" in lower:
+            return "win32"
+        return "posix"
+
+    def format_platform_condition(self, cond: PlatformCondition) -> str:
+        """Format a language-agnostic :class:`PlatformCondition` for this writer's target language."""
+        raw_tags = [tag for term in cond.terms for tag in term] if cond.terms else sorted(cond.tags)
+        py_plats = tuple(sorted({self._platform_to_python(t) for t in raw_tags if t}))
+        if len(py_plats) > 1:
+            return f"sys.platform in {py_plats!r}"
+        if py_plats:
+            return f"sys.platform == {py_plats[0]!r}"
+        return "True"
+
+    def format_matrix_condition(
+        self,
+        cond: MatrixCondition,
+        domain_matrix: dict[str, set[Any]] | None = None,
+    ) -> str:
+        """Format a language-agnostic :class:`MatrixCondition` for this writer's target language."""
+        from headerkit.reconcile import minimize_conditions
+
+        effective = cond
+        if domain_matrix and cond.raw_conditions and cond.is_tautology:
+            effective = minimize_conditions(cond.raw_conditions, domain_matrix)
+
+        clauses: list[str] = []
+        platforms = effective.platforms
+        if not platforms and cond.raw_conditions and not domain_matrix:
+            platforms = tuple(sorted({str(c["target"]) for c in cond.raw_conditions if "target" in c}))
+        if platforms:
+            py_plats = tuple(sorted({self._platform_to_python(p) for p in platforms}))
+            if len(py_plats) > 1:
+                clauses.append(f"sys.platform in {py_plats!r}")
+            elif py_plats:
+                clauses.append(f"sys.platform == {py_plats[0]!r}")
+
+        if effective.version_op == "==":
+            clauses.append(f"version == {effective.version_min!r}")
+        elif effective.version_op == ">=":
+            clauses.append(f"version >= {effective.version_min!r}")
+        elif effective.version_op == "range":
+            clauses.append(f"({effective.version_min!r} <= version <= {effective.version_max!r})")
+
+        if effective.feature_implicants:
+            imp_clauses: list[str] = []
+            for imp in effective.feature_implicants:
+                term_parts = [feat if val else f"not {feat}" for feat, val in imp]
+                if term_parts:
+                    imp_clauses.append(" and ".join(term_parts))
+            if len(imp_clauses) > 1:
+                clauses.append(f"({' or '.join(f'({c})' if ' ' in c else c for c in imp_clauses)})")
+            elif imp_clauses:
+                clauses.append(imp_clauses[0])
+
+        return " and ".join(clauses) if clauses else "True"
+
+    def format_guard_condition(
+        self,
+        cond: PlatformCondition | MatrixCondition,
+        domain_matrix: dict[str, set[Any]] | None = None,
+    ) -> str:
+        """Format either a :class:`PlatformCondition` or :class:`MatrixCondition`."""
+        from headerkit.reconcile import MatrixCondition, PlatformCondition
+
+        if isinstance(cond, PlatformCondition):
+            return self.format_platform_condition(cond)
+        if isinstance(cond, MatrixCondition):
+            return self.format_matrix_condition(cond, domain_matrix=domain_matrix)
+        return "True"
 
     #: Whether this writer reconstructs record layout itself and therefore needs
     #: unnamed-bitfield padding. Only the ctypes writer does; a writer that emits
@@ -235,6 +400,8 @@ class BaseWriter:
     ) -> ProjectLayout:
         """Convert parsed unit IR into a complete ProjectLayout."""
         opts = options or ScaffoldOptions(target_language=self.name, layout="file")
+        if not opts.target_language:
+            opts.target_language = self.name
         if opts.layout not in self.supported_layouts:
             raise ValueError(
                 f"Writer '{self.name}' does not support layout '{opts.layout}'. "
@@ -249,21 +416,7 @@ class BaseWriter:
         except TypeError:
             unit = self._prepare(unit)
 
-        if opts.layout == "file":
-            layout = self._write_single_file_layout(unit, opts)
-        elif opts.layout in ("package", "project"):
-            layout = self._write_package_layout(unit, opts)
-        else:
-            layout = self._write_custom_layout(unit, opts)
-
-        if opts.layout in ("package", "project", "wheel", "scikit-build"):
-            if layout.get_file("AGENTS.md") is None:
-                from headerkit.workorder import render_agents_md
-
-                agents_content = render_agents_md(opts.package_name, self.name)
-                layout.files.append(OutputFile(path="AGENTS.md", content=agents_content, preserve_existing=True))
-
-        return layout
+        return self._write_single_file_layout(unit, opts)
 
     def _write_single_file_layout(
         self,
@@ -274,22 +427,6 @@ class BaseWriter:
         content = self._render(unit)
         filename = f"{options.package_name}{self.default_extension}"
         return ProjectLayout(files=[OutputFile(path=filename, content=content)])
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        """Generate full package layout. Subclasses should override this."""
-        return self._write_single_file_layout(unit, options)
-
-    def _write_custom_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        """Generate custom layout defined by subclass."""
-        return self._write_package_layout(unit, options)
 
     min_access_floor: ClassVar[str | None] = None
     filter_bases_by_access_floor: ClassVar[bool] = True

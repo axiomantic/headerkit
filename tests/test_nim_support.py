@@ -16,7 +16,6 @@ import pytest
 
 from headerkit import NimCleanupTransform, NimJsonDocEnricher
 from headerkit.backends import is_backend_available
-from headerkit.backends.libclang import _find_nim_libpath, _has_nimbase_in_dirs
 from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.ir import (
     Constant,
@@ -34,6 +33,7 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
+from headerkit.transforms.nim_cleanup import _find_nim_libpath, _has_nimbase_in_dirs
 from headerkit.writers.pyi import PyiWriter
 
 
@@ -59,7 +59,7 @@ class TestTreeSitterNimHeaderSupport:
             N_LIB_EXPORT_VAR int globalCounter;
         """)
         backend = TreeSitterBackend()
-        unit = backend.parse(code, "nim_mod.h")
+        unit = backend.parse(code, "nim_mod.h", **NimCleanupTransform.backend_options())
 
         # Negative control: N_CDECL / N_NIMCALL / N_LIB_PRIVATE must NEVER appear as Variable or Function names
         decl_names = [getattr(d, "name", None) for d in unit.declarations]
@@ -71,13 +71,13 @@ class TestTreeSitterNimHeaderSupport:
         loc = lambda line, col: SourceLocation(file="nim_mod.h", line=line, column=col)  # noqa: E731
         c_int = CType("int", is_elaborated=False)
         c_void = CType("void", is_elaborated=False)
-        c_char_ptr = Pointer(CType("char", is_elaborated=False))
+        c_ncstring = CType("NCSTRING", is_elaborated=False)
         expected_declarations = [
             Struct(
                 name="MyItem",
                 fields=[
                     Field(name="id", type=c_int, access="public"),
-                    Field(name="label", type=c_char_ptr, access="public"),
+                    Field(name="label", type=c_ncstring, access="public"),
                 ],
                 is_typedef=False,
                 location=loc(2, 1),
@@ -89,14 +89,12 @@ class TestTreeSitterNimHeaderSupport:
             ),
             Typedef(
                 name="CompareCb",
-                underlying_type=Pointer(
-                    FunctionPointer(
-                        return_type=c_int,
-                        parameters=[
-                            Parameter(name="a_p0", type=c_int),
-                            Parameter(name="b_p1", type=c_int),
-                        ],
-                    )
+                underlying_type=FunctionPointer(
+                    return_type=c_int,
+                    parameters=[
+                        Parameter(name="a_p0", type=c_int),
+                        Parameter(name="b_p1", type=c_int),
+                    ],
                 ),
                 location=loc(6, 15),
             ),
@@ -111,9 +109,9 @@ class TestTreeSitterNimHeaderSupport:
             ),
             Function(
                 name="formatName",
-                return_type=c_char_ptr,
+                return_type=c_ncstring,
                 parameters=[
-                    Parameter(name="input_p0", type=c_char_ptr),
+                    Parameter(name="input_p0", type=c_ncstring),
                 ],
                 location=loc(8, 35),
             ),
@@ -215,6 +213,7 @@ class TestNimCleanupTransform:
                         Parameter(name="p0", type=CType("int")),
                         Parameter(name="_p0", type=CType("int")),
                         Parameter(name="step_p", type=CType("int")),
+                        Parameter(name="step_p0_p0", type=CType("int")),
                     ],
                 ),
                 Function(
@@ -265,16 +264,82 @@ class TestNimCleanupTransform:
                         Parameter(name="alpha", type=CType("int32_t")),
                         Parameter(name="beta", type=CType("float")),
                         Parameter(name="tag", type=Pointer(CType("char", is_elaborated=False))),
-                        Parameter(name="flag", type=CType("bool")),
+                        Parameter(name="flag", type=CType("bool"), type_overrides={"pyi": "bool"}),
                         Parameter(name="normal_param", type=CType("int")),
                         Parameter(name="p0", type=CType("int")),
                         Parameter(name="_p0", type=CType("int")),
                         Parameter(name="step_p", type=CType("int")),
+                        Parameter(name="step_p0", type=CType("int")),
                     ],
                 ),
             ],
         )
         assert cleaned == expected
+
+    def test_unmangles_tyobject_tyenum_and_inlines_typroc(self) -> None:
+        """Verify NimCleanupTransform unmangles tyObject_<Name>__<hash>, tyEnum_<Name>__<hash>, and inlines tyProc__<hash>."""
+        fp_sig = FunctionPointer(
+            return_type=CType("NI"),
+            parameters=[Parameter(name="code_p0", type=CType("NI32"))],
+        )
+        unit = SourceUnit(
+            path="nim_mangled.h",
+            declarations=[
+                Typedef(name="tyProc__a1b2c3d4", underlying_type=fp_sig),
+                Struct(
+                    name="tyObject_Packet__9f8e7d",
+                    fields=[
+                        Field(name="kind", type=CType("tyEnum_PacketKind__112233")),
+                        Field(name="on_done", type=CType("tyProc__a1b2c3d4")),
+                    ],
+                ),
+                Enum(
+                    name="tyEnum_PacketKind__112233",
+                    values=[EnumValue("PK_DATA", 0), EnumValue("PK_ACK", 1)],
+                    underlying_type="NI32",
+                ),
+                Function(
+                    name="sendPacket",
+                    return_type=CType("NIM_BOOL"),
+                    parameters=[
+                        Parameter(name="pkt_p0", type=Pointer(CType("tyObject_Packet__9f8e7d"))),
+                        Parameter(name="cb_p1", type=CType("tyProc__a1b2c3d4")),
+                    ],
+                ),
+            ],
+        )
+
+        cleaned = unit >> NimCleanupTransform()
+        expected_fp = FunctionPointer(
+            return_type=CType("intptr_t"),
+            parameters=[Parameter(name="code", type=CType("int32_t"))],
+        )
+        assert cleaned == SourceUnit(
+            path="nim_mangled.h",
+            declarations=[
+                Struct(
+                    name="Packet",
+                    fields=[
+                        Field(name="kind", type=CType("PacketKind")),
+                        Field(name="on_done", type=expected_fp),
+                    ],
+                ),
+                Enum(
+                    name="PacketKind",
+                    values=[EnumValue("PK_DATA", 0), EnumValue("PK_ACK", 1)],
+                    underlying_type="int32_t",
+                ),
+                Function(
+                    name="sendPacket",
+                    return_type=CType("bool"),
+                    parameters=[
+                        Parameter(name="pkt", type=Pointer(CType("Packet"))),
+                        Parameter(name="cb", type=expected_fp),
+                    ],
+                    type_overrides={"pyi": "bool"},
+                ),
+            ],
+        )
 
 
 class TestNimJsonDocEnricher:
@@ -342,7 +407,7 @@ class TestNimJsonDocEnricher:
 
             class Mode(enum.IntEnum):
                 \"\"\"Execution mode.\"\"\"
-                FAST: int = 0
+                FAST = 0
 
             class Point:
                 \"\"\"2D Cartesian point.\"\"\"
@@ -444,6 +509,129 @@ class TestNimJsonDocEnricher:
         )
         assert enriched == expected
 
+    def test_follows_include_fragments_exportc_arity_and_cache_fingerprint(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Verify NimJsonDocEnricher follows include directives, handles exportc+arity, and skips nim jsondoc on fragments."""
+        proj = tmp_path / "mylib"
+        src_dir = proj / "src"
+        frag_dir = src_dir / "fragments"
+        frag_dir.mkdir(parents=True)
+        (proj / "mylib.nimble").write_text('version = "0.1.0"\nsrcDir = "src"\n', encoding="utf-8")
+
+        root_nim = src_dir / "mylib.nim"
+        frag_nim = frag_dir / "ops.nim"
+
+        root_nim.write_text(
+            textwrap.dedent("""\
+                ## Root library module.
+                include fragments/ops
+
+                proc initEngine*(threads: cint): bool {.exportc: "mylib_init_engine", cdecl, dynlib.} =
+                  ## Initialize the engine with a thread count.
+                  true
+            """),
+            encoding="utf-8",
+        )
+        frag_nim.write_text(
+            textwrap.dedent("""\
+                proc computeFast*(lhs: cint, rhs: cint): cint {.exportc: "mylib_compute", cdecl, dynlib.} =
+                  ## Fast two-operand computation from fragment.
+                  lhs + rhs
+
+                proc computeFast*(lhs: cint, rhs: cint, scale: cint): cint {.exportc: "mylib_compute_scaled", deprecated: "Use mylib_compute instead", cdecl, dynlib.} =
+                  ## Scaled three-operand computation from fragment.
+                  (lhs + rhs) * scale
+            """),
+            encoding="utf-8",
+        )
+
+        # Even if subprocess.run fails or is never invoked on fragment files, source-level parsing enriches everything
+        import headerkit.transforms.nim_jsondoc as nj_mod
+
+        called_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            called_cmds.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(nj_mod.subprocess, "run", fake_run)
+
+        enricher_root = NimJsonDocEnricher(nim_source_path=root_nim)
+        # Verify cache_fingerprint hashes both root_nim and included frag_nim
+        fp1 = enricher_root.cache_fingerprint()
+        assert len(fp1["config"]["nim_file_sha256s"]) == 2
+
+        unit = SourceUnit(
+            path="mylib.h",
+            declarations=[
+                Function(
+                    name="mylib_init_engine",
+                    return_type=CType("bool"),
+                    parameters=[Parameter("threads_p0", CType("int"))],
+                ),
+                Function(
+                    name="mylib_compute",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("a_p0", CType("int")),
+                        Parameter("b_p1", CType("int")),
+                    ],
+                ),
+                Function(
+                    name="mylib_compute_scaled",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("a_p0", CType("int")),
+                        Parameter("b_p1", CType("int")),
+                        Parameter("c_p2", CType("int")),
+                    ],
+                ),
+            ],
+        )
+
+        enriched = unit >> NimCleanupTransform() >> enricher_root
+        assert enriched == SourceUnit(
+            path="mylib.h",
+            declarations=[
+                Function(
+                    name="mylib_init_engine",
+                    return_type=CType("bool"),
+                    parameters=[Parameter("threads", CType("int"))],
+                    doc="Initialize the engine with a thread count.",
+                    type_overrides={"pyi": "bool"},
+                ),
+                Function(
+                    name="mylib_compute",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("lhs", CType("int")),
+                        Parameter("rhs", CType("int")),
+                    ],
+                    doc="Fast two-operand computation from fragment.",
+                ),
+                Function(
+                    name="mylib_compute_scaled",
+                    return_type=CType("int"),
+                    parameters=[
+                        Parameter("lhs", CType("int")),
+                        Parameter("rhs", CType("int")),
+                        Parameter("scale", CType("int")),
+                    ],
+                    doc="Scaled three-operand computation from fragment.",
+                    is_deprecated=True,
+                ),
+            ],
+        )
+
+        # Negative control: passing the fragment file directly detects it is an included fragment and NEVER runs nim jsondoc on it
+        called_cmds.clear()
+        enricher_frag = NimJsonDocEnricher(nim_source_path=frag_nim)
+        _ = unit >> enricher_frag
+        assert called_cmds == []
+
 
 class TestRealNimHeaderBackends:
     """Verify both tree-sitter and libclang parse real Nim --header output."""
@@ -460,8 +648,8 @@ class TestRealNimHeaderBackends:
             returncode=0,
             stdout=f"Hint: used config\n{dump_payload}\n",
         )
-        lc_mod = sys.modules["headerkit.backends.libclang"]
-        with patch.object(lc_mod.subprocess, "run", return_value=mock_proc) as mock_run:
+        nc_mod = sys.modules["headerkit.transforms.nim_cleanup"]
+        with patch.object(nc_mod.subprocess, "run", return_value=mock_proc) as mock_run:
             result = _find_nim_libpath()
             assert result == str(fake_lib)
             mock_run.assert_called_once_with(
@@ -484,7 +672,7 @@ class TestRealNimHeaderBackends:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Verify LibclangBackend.parse() exercises nimbase.h diagnostic retry and PARSE_SKIP_FUNCTION_BODIES retry."""
+        """Verify NimCleanupTransform.prepare_parse() and LibclangBackend.parse() handle nimbase.h and skip_function_bodies."""
         from headerkit.backends.libclang import LibclangBackend
 
         nim_lib = tmp_path / "nimlib"
@@ -501,11 +689,12 @@ class TestRealNimHeaderBackends:
             """),
             encoding="utf-8",
         )
-        lc_mod = sys.modules["headerkit.backends.libclang"]
-        monkeypatch.setattr(lc_mod, "_find_nim_libpath", lambda: str(nim_lib))
-        monkeypatch.setattr("headerkit.backends.libclang._find_nim_libpath", lambda: str(nim_lib))
+        nc_mod = sys.modules["headerkit.transforms.nim_cleanup"]
+        monkeypatch.setattr(nc_mod, "_find_nim_libpath", lambda: str(nim_lib))
 
-        # (a) Diagnostic retry path when an included header requires nimbase.h
+        cleanup = NimCleanupTransform()
+
+        # (a) Included header requires nimbase.h resolved via prepare_parse
         inc_dir = tmp_path / "inc"
         inc_dir.mkdir()
         (inc_dir / "inner_nim.h").write_text(
@@ -513,19 +702,23 @@ class TestRealNimHeaderBackends:
             encoding="utf-8",
         )
         backend = LibclangBackend()
+        umbrella_code = '#include "inner_nim.h"\n'
+        inc, args, b_opts = cleanup.prepare_parse(umbrella_code, str(inc_dir / "main.h"), [str(inc_dir)], [])
         umbrella_unit = backend.parse(
-            '#include "inner_nim.h"\n',
+            umbrella_code,
             str(inc_dir / "main.h"),
-            include_dirs=[str(inc_dir)],
+            include_dirs=inc,
+            extra_args=args,
+            **b_opts,
         )
-        umbrella_pyi = PyiWriter().write(umbrella_unit >> NimCleanupTransform())
+        umbrella_pyi = PyiWriter().write(umbrella_unit >> cleanup)
         assert umbrella_pyi == textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
 
             def umbrella_calc(x: int) -> int: ...
         """)
 
-        # (b) PARSE_SKIP_FUNCTION_BODIES retry path when inline body references undeclared runtime symbol
+        # (b) skip_function_bodies when inline body references undeclared runtime symbol
         debug_code = textwrap.dedent("""\
             #include "nimbase.h"
             static N_INLINE(void, nimFrame)(void* s_p0) {
@@ -533,8 +726,15 @@ class TestRealNimHeaderBackends:
             }
             N_LIB_EXPORT N_NIMCALL(NI, debug_add)(NI a_p0, NI b_p1);
         """)
-        debug_unit = backend.parse(debug_code, str(tmp_path / "debug_nim.h"))
-        debug_pyi = PyiWriter().write(debug_unit >> NimCleanupTransform())
+        d_inc, d_args, d_opts = cleanup.prepare_parse(debug_code, str(tmp_path / "debug_nim.h"), [], [])
+        debug_unit = backend.parse(
+            debug_code,
+            str(tmp_path / "debug_nim.h"),
+            include_dirs=d_inc,
+            extra_args=d_args,
+            **d_opts,
+        )
+        debug_pyi = PyiWriter().write(debug_unit >> cleanup)
         assert debug_pyi == textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
 
@@ -578,9 +778,11 @@ class TestRealNimHeaderBackends:
         assert header_path.is_file()
 
         code = header_path.read_text(encoding="utf-8")
+        cleanup = NimCleanupTransform()
+        inc, args, b_opts = cleanup.prepare_parse(code, str(header_path), [], [])
 
         ts_backend = TreeSitterBackend()
-        ts_cleaned = ts_backend.parse(code, str(header_path)) >> NimCleanupTransform()
+        ts_cleaned = ts_backend.parse(code, str(header_path), include_dirs=inc, extra_args=args, **b_opts) >> cleanup
         ts_pyi = PyiWriter().write(ts_cleaned)
 
         expected_pyi = textwrap.dedent("""\
@@ -603,8 +805,11 @@ class TestRealNimHeaderBackends:
             lc_unit = lc_backend.parse(
                 code,
                 str(header_path),
+                include_dirs=inc,
+                extra_args=args,
+                **b_opts,
             )
-            lc_cleaned = lc_unit >> NimCleanupTransform()
+            lc_cleaned = lc_unit >> cleanup
             lc_pyi = PyiWriter().write(lc_cleaned)
             assert lc_pyi == expected_pyi
 
@@ -777,3 +982,29 @@ class TestCindexShutdownSafety:
         )
         assert res.returncode == 0
         assert res.stderr == ""
+
+    @pytest.mark.skipif(not is_backend_available("libclang"), reason="libclang not available")
+    def test_generate_pipeline_with_nim_cleanup_forwards_skip_function_bodies_to_libclang_hook(
+        self, tmp_path: Path
+    ) -> None:
+        """headerkit.generate() with NimCleanupTransform forwards skip_function_bodies=True to _libclang_parse_hook."""
+        from headerkit import generate
+
+        header_path = tmp_path / "nim_inline.h"
+        header_path.write_text(
+            textwrap.dedent("""\
+                static inline void nimFrame(void) {
+                    undeclared_nim_internal_helper(42);
+                }
+                int exported_add(int a_p0, int b_p1);
+            """),
+            encoding="utf-8",
+        )
+        cdef_out = generate(
+            header_path,
+            "cffi",
+            backend_name="libclang",
+            transforms=[NimCleanupTransform()],
+            no_cache=True,
+        )
+        assert cdef_out.strip() == "int exported_add(int a, int b);"

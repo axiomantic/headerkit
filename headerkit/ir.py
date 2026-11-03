@@ -53,6 +53,7 @@ from dataclasses import (
     field,
     replace,
 )
+from pathlib import Path
 from typing import (
     Protocol,
     Union,
@@ -285,6 +286,7 @@ class Parameter:
     name: str | None
     type: TypeExpr
     default_value: str | None = None
+    type_overrides: dict[str, str] = field(default_factory=dict)
 
     def __str__(self) -> str:
         default_str = f" = {self.default_value}" if self.default_value is not None else ""
@@ -295,10 +297,11 @@ class Parameter:
 
 @dataclass(slots=True)
 class FunctionPointer:
-    """Function pointer type.
+    """Function pointer or function prototype type.
 
-    Represents a pointer to a function with a specific signature.
-    Used for callbacks, vtables, and function tables.
+    Represents a pointer to a function (``is_pointer=True``) or an ISO C
+    0-star function prototype type (``is_pointer=False``) with a specific
+    signature. Used for callbacks, vtables, and function tables.
 
     :param return_type: The function's return type.
     :param parameters: List of function parameters.
@@ -307,6 +310,9 @@ class FunctionPointer:
     :param calling_convention: The calling convention if non-default
         (e.g., ``"stdcall"``, ``"cdecl"``, ``"fastcall"``). None for
         the platform default calling convention.
+    :param qualifiers: Pointer qualifiers (e.g., ``["const"]`` for ``void (*const fn)(int)``).
+    :param is_pointer: True for a 1-star function pointer (``void (*)(int)``),
+        False for a 0-star ISO C function typedef (``typedef void fn_t(int);``).
 
     Examples
     --------
@@ -334,13 +340,18 @@ class FunctionPointer:
     parameters: list[Parameter] = field(default_factory=list)
     is_variadic: bool = False
     calling_convention: str | None = None
+    qualifiers: list[str] = field(default_factory=list)
+    is_pointer: bool = True
 
     def __str__(self) -> str:
         params = ", ".join(str(p) for p in self.parameters)
         if self.is_variadic:
             params = f"{params}, ..." if params else "..."
         cc = f" __{self.calling_convention}__" if self.calling_convention else ""
-        return f"{self.return_type} ({cc}*)({params})"
+        if not self.is_pointer:
+            return f"{self.return_type}{cc}({params})"
+        quals = f" {' '.join(self.qualifiers)}" if self.qualifiers else ""
+        return f"{self.return_type} ({cc}*{quals})({params})"
 
 
 # Type alias for any type expression
@@ -431,6 +442,7 @@ class Field:
     access: str | None = None
     is_static: bool = False
     is_padding: bool = False
+    type_overrides: dict[str, str] = field(default_factory=dict)
 
     def __str__(self) -> str:
         if self.is_padding:
@@ -770,6 +782,8 @@ class Function:
     body: str | None = None
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
+    mangled_name: str | None = None
+    type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None
 
@@ -823,6 +837,7 @@ class Typedef:
     namespace: str | None = None
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
+    type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None
 
@@ -862,6 +877,8 @@ class Variable:
     attributes: list[str] = field(default_factory=list)
     is_deprecated: bool = False
     alignment: int | None = None
+    mangled_name: str | None = None
+    type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None
 
@@ -913,6 +930,7 @@ class Constant:
     raw_expression: str | None = None
     type: CType | None = None
     is_macro: bool = False
+    is_macro_expr: bool = False
     location: SourceLocation | None = None
     doc: str | None = None
 
@@ -987,30 +1005,47 @@ class InputSpec:
     """Specification of an input source unit, its language, and classification.
 
     :param path: Path to the source file or virtual file.
-    :param language: Language identifier (e.g. 'c', 'cpp', 'nim', 'rust', 'zig').
+    :param language: Language identifier (e.g. 'c', 'cpp', 'rust', 'zig').
     :param classification: Classification ('header', 'source', 'interface', 'idl').
     :param content: Optional raw string content.
+    :param headers: Additional header paths participating in this parse unit.
+    :param project_prefixes: Path prefixes to treat as project headers rather than system headers.
+    :param recursive_includes: Whether to recursively descend into included project headers.
+    :param max_depth: Optional maximum recursion depth for include processing.
+    :param use_default_includes: Whether default system include directories are enabled.
     """
 
     path: str
     language: str = "c"
     classification: str = "header"
     content: str | None = None
+    headers: tuple[Path, ...] = ()
+    project_prefixes: tuple[str, ...] = ()
+    recursive_includes: bool = True
+    max_depth: int | None = None
+    use_default_includes: bool = True
 
     @classmethod
     def from_path(
         cls,
-        path: str,
+        path: str | Path,
         language: str | None = None,
         classification: str | None = None,
         content: str | None = None,
+        *,
+        headers: tuple[Path, ...] = (),
+        project_prefixes: tuple[str, ...] = (),
+        recursive_includes: bool = True,
+        max_depth: int | None = None,
+        use_default_includes: bool = True,
     ) -> InputSpec:
         """Infer language and classification from a file path extension."""
+        path_str = str(path)
         deduced_lang = language
         deduced_class = classification
 
         if deduced_lang is None or deduced_class is None:
-            lower = path.lower()
+            lower = path_str.lower()
             if lower.endswith((".h",)):
                 deduced_lang = deduced_lang or "c"
                 deduced_class = deduced_class or "header"
@@ -1023,9 +1058,6 @@ class InputSpec:
             elif lower.endswith((".cpp", ".cxx", ".cc", ".c++")):
                 deduced_lang = deduced_lang or "cpp"
                 deduced_class = deduced_class or "source"
-            elif lower.endswith((".nim",)):
-                deduced_lang = deduced_lang or "nim"
-                deduced_class = deduced_class or "source"
             elif lower.endswith((".rs",)):
                 deduced_lang = deduced_lang or "rust"
                 deduced_class = deduced_class or "interface"
@@ -1036,14 +1068,26 @@ class InputSpec:
                 deduced_lang = deduced_lang or "idl"
                 deduced_class = deduced_class or "interface"
             else:
-                deduced_lang = deduced_lang or "c"
-                deduced_class = deduced_class or "header"
+                from headerkit.writers import infer_writer_from_extension
+
+                inferred = infer_writer_from_extension(path_str)
+                if inferred and inferred not in ("prompt", "json", "diff"):
+                    deduced_lang = deduced_lang or inferred
+                    deduced_class = deduced_class or "source"
+                else:
+                    deduced_lang = deduced_lang or "c"
+                    deduced_class = deduced_class or "header"
 
         return cls(
-            path=path,
+            path=path_str,
             language=deduced_lang,
             classification=deduced_class,
             content=content,
+            headers=headers,
+            project_prefixes=project_prefixes,
+            recursive_includes=recursive_includes,
+            max_depth=max_depth,
+            use_default_includes=use_default_includes,
         )
 
 
@@ -1058,7 +1102,7 @@ class SourceUnit:
     :param declarations: List of extracted declarations (structs, functions, etc.).
     :param included_headers: Set of header file basenames included by this unit
                              (populated by libclang backend only).
-    :param language: Language identifier (e.g. 'c', 'cpp', 'nim', 'rust').
+    :param language: Language identifier (e.g. 'c', 'cpp', 'rust').
     :param classification: Source classification (e.g. 'header', 'source', 'interface').
 
     Example
@@ -1227,6 +1271,16 @@ class ParserBackend(Protocol):  # pylint: disable=too-few-public-methods
     @property
     def supports_cpp(self) -> bool:
         """Whether this backend can parse C++ code."""
+        ...
+
+    @property
+    def follows_includes(self) -> bool:
+        """Whether this backend follows ``#include`` directives."""
+        ...
+
+    @property
+    def supports_compiler_args(self) -> bool:
+        """Whether this backend honors preprocessor/compiler flags (``-I``, ``-D``, etc.)."""
         ...
 
     @property
@@ -1448,7 +1502,7 @@ def is_cpp_value_type(
 
     A C++ method returning an aggregate or class by value creates a temporary
     object whose lifetime ends at the enclosing full-expression semicolon.
-    Foreign writers (Nim, Cython, C-shim, ctypes, Rust) must bind the result
+    Foreign language writers must bind the result
     to a local stack frame or pass an out-parameter rather than coercing
     pointer accessors inline.
     """

@@ -92,7 +92,7 @@ class TestStructRoundtrip:
         """
         cdef = parse_and_convert(backend, code)
         assert cdef == textwrap.dedent("""\
-            typedef struct Color {
+            typedef struct {
                 float r;
                 float g;
                 float b;
@@ -271,10 +271,10 @@ class TestMultipleDeclarations:
         """
         cdef = parse_and_convert(backend, code)
         assert cdef == textwrap.dedent("""\
-            typedef struct Config {
+            typedef struct {
                 int flags;
             } Config;
-            void init(struct Config * cfg);""")
+            void init(Config * cfg);""")
 
 
 class TestExcludePatterns:
@@ -529,9 +529,8 @@ class TestJsonTypedefRoundtrip:
         typedefs = [d for d in decls if d["kind"] == "typedef"]
         assert len(typedefs) >= 1
         td = next(t for t in typedefs if t["name"] == "callback_fn")
-        # Function pointer typedefs are represented as pointer -> function_pointer
-        assert td["underlying_type"]["kind"] == "pointer"
-        fn_ptr = td["underlying_type"]["pointee"]
+        # 1-star function pointer typedefs are represented directly as function_pointer (is_pointer=True)
+        fn_ptr = td["underlying_type"]
         assert fn_ptr["kind"] == "function_pointer"
         assert fn_ptr["return_type"]["name"] == "void"
         assert len(fn_ptr["parameters"]) >= 1
@@ -603,9 +602,8 @@ class TestJsonFunctionPointerTypedefRoundtrip:
         typedefs = [d for d in decls if d["kind"] == "typedef"]
         assert len(typedefs) >= 1
         td = next(t for t in typedefs if t["name"] == "comparator_fn")
-        # Function pointer typedefs are represented as pointer -> function_pointer
-        assert td["underlying_type"]["kind"] == "pointer"
-        fn_ptr = td["underlying_type"]["pointee"]
+        # 1-star function pointer typedefs are represented directly as function_pointer (is_pointer=True)
+        fn_ptr = td["underlying_type"]
         assert fn_ptr["kind"] == "function_pointer"
         assert fn_ptr["return_type"]["name"] == "int"
         assert len(fn_ptr["parameters"]) == 2

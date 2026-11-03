@@ -10,7 +10,6 @@ The IR types come from ``headerkit.ir`` and represent parsed C headers.
 from __future__ import annotations
 
 import re
-import textwrap
 from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any, ClassVar
@@ -39,71 +38,114 @@ from headerkit.reconcile import (
     MultiDimensionalReconciledUnit,
     PlatformGuardedBlock,
     ReconciledUnit,
-    condition_to_python,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
-from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
+from headerkit.writers.base import (
+    BaseWriter,
+    WriterOption,
+)
 
-# Maps bare tag names to their kind ("struct", "union", "enum").
+# Maps bare tag names to their kind ("struct", "union", "enum"), or "" for
+# tag-less typedef declarations (e.g. `typedef struct { ... } name;`).
 # Populated by header_to_cffi before emitting declarations.
 TagKinds = dict[str, str]
 
+_CFFI_ALLOWED_QUALIFIERS: frozenset[str] = frozenset({"const", "volatile"})
 
-def _qualify_ctype_name(name: str, tag_kinds: TagKinds) -> str:
-    """Add struct/union/enum prefix if `name` is a known tag.
+
+def _filter_cffi_qualifiers(qualifiers: Sequence[str]) -> list[str]:
+    """Filter qualifiers to those supported by CFFI's pycparser (`const`, `volatile`)."""
+    return [q for q in qualifiers if q in _CFFI_ALLOWED_QUALIFIERS]
+
+
+def _qualify_ctype_name(name: str, tag_kinds: TagKinds, *, is_elaborated: bool | None = None) -> str:
+    """Add or strip struct/union/enum prefix based on `tag_kinds`.
 
     CFFI's cdef parser (backed by pycparser) requires struct/union/enum
-    tags to be prefixed with their kind. The libclang IR sometimes drops
-    the prefix when a typedef aliases a struct tag.
+    tags to be prefixed with their kind when declared with a tag, and
+    requires bare typedef names (no tag prefix) when declared as a
+    tag-less ``typedef struct { ... } name;`` or ``typedef enum { ... } name;``.
     """
-    # Already has a struct/union/enum prefix
     if name.startswith(("struct ", "union ", "enum ")):
+        bare = name.split(" ", 1)[1]
+        if bare in tag_kinds and tag_kinds[bare] == "":
+            return bare
         return name
-    if name in tag_kinds:
-        return f"{tag_kinds[name]} {name}"
+    kind = tag_kinds.get(name)
+    if kind:
+        return f"{kind} {name}"
+    if is_elaborated is True:
+        elab_kind = tag_kinds.get(f"@{name}")
+        if elab_kind:
+            return f"{elab_kind} {name}"
     return name
+
+
+def _unwrap_array(t: TypeExpr) -> tuple[TypeExpr, str]:
+    """Unwrap one or more nested Array nodes into ``(innermost_element_type, '[d1][d2]...')``."""
+    dims: list[str] = []
+    curr: TypeExpr = t
+    while isinstance(curr, Array):
+        size_str = str(curr.size) if curr.size is not None else ""
+        dims.append(f"[{size_str}]")
+        curr = curr.element_type
+    return curr, "".join(dims)
+
+
+def _unwrap_function_pointer(t: TypeExpr) -> tuple[FunctionPointer, int] | None:
+    """Unwrap a FunctionPointer (and any outer Pointer layers) into (fp, star_count)."""
+    ptr_count = 0
+    curr: TypeExpr = t
+    while isinstance(curr, Pointer):
+        ptr_count += 1
+        curr = curr.pointee
+    if isinstance(curr, FunctionPointer):
+        stars = ptr_count + (1 if curr.is_pointer else 0)
+        return curr, stars
+    return None
 
 
 def type_to_cffi(t: TypeExpr, tag_kinds: TagKinds | None = None) -> str:
     """Convert a type expression to its CFFI string representation."""
     tags = tag_kinds or {}
     if isinstance(t, CType):
-        base = str(t)
-        # Qualify bare struct/union/enum names
-        if t.qualifiers:
-            # Qualifiers are separate: re-qualify the name part
-            qualified_name = _qualify_ctype_name(t.name, tags)
-            return f"{' '.join(t.qualifiers)} {qualified_name}"
-        return _qualify_ctype_name(base, tags)
-    elif isinstance(t, Pointer):
-        # Pointer to function pointer: the (*) already provides indirection
-        if isinstance(t.pointee, FunctionPointer):
-            fp = t.pointee
+        quals = _filter_cffi_qualifiers(t.qualifiers)
+        qualified_name = _qualify_ctype_name(t.name, tags, is_elaborated=t.is_elaborated)
+        if quals:
+            return f"{' '.join(quals)} {qualified_name}"
+        return _qualify_ctype_name(str(t), tags, is_elaborated=t.is_elaborated)
+    elif isinstance(t, (Pointer, FunctionPointer)):
+        unwrapped = _unwrap_function_pointer(t)
+        if unwrapped is not None:
+            fp, stars = unwrapped
             params = _format_params(fp.parameters, fp.is_variadic, tags)
-            return f"{type_to_cffi(fp.return_type, tags)}(*)({params})"
-        # Collect consecutive pointer levels to emit "type **" not "type * *"
-        ptr_count = 0
+            ret = type_to_cffi(fp.return_type, tags)
+            if stars == 0:
+                return f"{ret}({params})"
+            return f"{ret}({'*' * stars})({params})"
+
+        # Collect consecutive pointer levels from outermost to innermost
+        ptr_quals_outer_to_inner: list[list[str]] = []
         inner: TypeExpr = t
         while isinstance(inner, Pointer):
-            # Stop unwinding if we hit a function pointer pointee
-            if isinstance(inner.pointee, FunctionPointer):
-                break
-            ptr_count += 1
+            ptr_quals_outer_to_inner.append(_filter_cffi_qualifiers(inner.qualifiers))
             inner = inner.pointee
-        if isinstance(inner, FunctionPointer):
-            # Pointer(s) wrapping a function pointer
-            fp = inner
-            params = _format_params(fp.parameters, fp.is_variadic, tags)
-            stars = "*" * (ptr_count + 1)  # +1 for the (*) in the fnptr
-            return f"{type_to_cffi(fp.return_type, tags)}({stars})({params})"
         base = type_to_cffi(inner, tags)
-        return f"{base} {'*' * ptr_count}"
+        suffix_parts: list[str] = []
+        for quals in reversed(ptr_quals_outer_to_inner):
+            if quals:
+                if suffix_parts and not suffix_parts[-1].endswith("*"):
+                    suffix_parts.append(f" * {' '.join(quals)}")
+                else:
+                    suffix_parts.append(f"* {' '.join(quals)}")
+            else:
+                if suffix_parts and not suffix_parts[-1].endswith("*"):
+                    suffix_parts.append(" *")
+                else:
+                    suffix_parts.append("*")
+        return f"{base} {''.join(suffix_parts)}"
     elif isinstance(t, Array):
         size_str = str(t.size) if t.size is not None else ""
         return f"{type_to_cffi(t.element_type, tags)}[{size_str}]"
-    elif isinstance(t, FunctionPointer):
-        params = _format_params(t.parameters, t.is_variadic, tags)
-        return f"{type_to_cffi(t.return_type, tags)}(*)({params})"
     else:
         return str(t)
 
@@ -121,16 +163,22 @@ def _format_params(
     for p in parameters:
         type_str = type_to_cffi(p.type, tags)
         if p.name:
-            # Arrays: dimension goes after the name
+            # Arrays: dimensions go after the name
             if isinstance(p.type, Array):
-                size_str = str(p.type.size) if p.type.size is not None else ""
-                parts.append(f"{type_to_cffi(p.type.element_type, tags)} {p.name}[{size_str}]")
-            elif isinstance(p.type, FunctionPointer):
-                fp = p.type
-                fp_params = _format_params(fp.parameters, fp.is_variadic, tags)
-                parts.append(f"{type_to_cffi(fp.return_type, tags)} (*{p.name})({fp_params})")
+                elem_type, dims_str = _unwrap_array(p.type)
+                parts.append(f"{type_to_cffi(elem_type, tags)} {p.name}{dims_str}")
             else:
-                parts.append(f"{type_str} {p.name}")
+                unwrapped = _unwrap_function_pointer(p.type)
+                if unwrapped is not None:
+                    fp, stars = unwrapped
+                    fp_params = _format_params(fp.parameters, fp.is_variadic, tags)
+                    ret = type_to_cffi(fp.return_type, tags)
+                    if stars == 0:
+                        parts.append(f"{ret} {p.name}({fp_params})")
+                    else:
+                        parts.append(f"{ret} ({'*' * stars}{p.name})({fp_params})")
+                else:
+                    parts.append(f"{type_str} {p.name}")
         else:
             parts.append(type_str)
     if is_variadic:
@@ -148,18 +196,19 @@ def _format_field(f: Field, tag_kinds: TagKinds | None = None) -> str:
     bit_suffix = f" : {f.bit_width}" if f.bit_width is not None else ""
 
     if isinstance(f.type, Array):
-        size_str = str(f.type.size) if f.type.size is not None else ""
-        return f"    {type_to_cffi(f.type.element_type, tags)} {f.name}[{size_str}]{bit_suffix};"
-    elif isinstance(f.type, FunctionPointer):
-        fp = f.type
+        elem_type, dims_str = _unwrap_array(f.type)
+        return f"    {type_to_cffi(elem_type, tags)} {f.name}{dims_str}{bit_suffix};"
+
+    unwrapped = _unwrap_function_pointer(f.type)
+    if unwrapped is not None:
+        fp, stars = unwrapped
         fp_params = _format_params(fp.parameters, fp.is_variadic, tags)
-        return f"    {type_to_cffi(fp.return_type, tags)} (*{f.name})({fp_params});"
-    elif isinstance(f.type, Pointer) and isinstance(f.type.pointee, FunctionPointer):
-        fp = f.type.pointee
-        fp_params = _format_params(fp.parameters, fp.is_variadic, tags)
-        return f"    {type_to_cffi(fp.return_type, tags)} (**{f.name})({fp_params});"
-    else:
-        return f"    {type_to_cffi(f.type, tags)} {f.name}{bit_suffix};"
+        ret = type_to_cffi(fp.return_type, tags)
+        if stars == 0:
+            return f"    {ret} {f.name}({fp_params});"
+        return f"    {ret} ({'*' * stars}{f.name})({fp_params});"
+
+    return f"    {type_to_cffi(f.type, tags)} {f.name}{bit_suffix};"
 
 
 def _format_anonymous_struct_field(anon: Struct, tag_kinds: TagKinds | None = None) -> str:
@@ -221,6 +270,40 @@ def _macro_function_to_cffi(decl: MacroFunction) -> str | None:
     return f"/* Macro function '{sig}' skipped (preprocessor macro) */"
 
 
+def _type_references_name(t: TypeExpr, target: str) -> bool:
+    """Return True if *t* references *target* or ``struct/union/enum <target>``."""
+    if isinstance(t, CType):
+        bare = t.name.split(" ", 1)[1] if t.name.startswith(("struct ", "union ", "enum ")) else t.name
+        return bare == target
+    if isinstance(t, Pointer):
+        return _type_references_name(t.pointee, target)
+    if isinstance(t, Array):
+        return _type_references_name(t.element_type, target)
+    if isinstance(t, FunctionPointer):
+        return _type_references_name(t.return_type, target) or any(
+            _type_references_name(p.type, target) for p in t.parameters
+        )
+    return False
+
+
+def _struct_references_name(decl: Struct, target: str) -> bool:
+    """Return True if any field of *decl* references *target*."""
+    for f in decl.fields:
+        if f.anonymous_struct is not None:
+            if any(_type_references_name(inner.type, target) for inner in f.anonymous_struct.fields):
+                return True
+        elif _type_references_name(f.type, target):
+            return True
+    return False
+
+
+def _struct_is_self_referential(decl: Struct) -> bool:
+    """Return True if any field of *decl* references *decl.name*."""
+    if not decl.name:
+        return False
+    return _struct_references_name(decl, decl.name)
+
+
 def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | None:
     """Convert a Struct/Union IR node to CFFI cdef."""
     if decl.name is None or _is_anonymous_name(decl.name):
@@ -248,13 +331,26 @@ def _struct_to_cffi(decl: Struct, tag_kinds: TagKinds | None = None) -> str | No
         lines.append("   declaration, or cffi will lay it out with padding the header does not")
         lines.append("   have. packed=True applies to the whole cdef() call, so a header mixing")
         lines.append("   packed and unpacked records needs them split across separate calls. */")
+    needs_tag = _struct_is_self_referential(decl) or bool(tag_kinds and f"#fwd:{decl.name}" in tag_kinds)
     if decl.is_typedef:
-        lines.append(f"typedef {kind} {decl.name} {{")
+        if needs_tag:
+            lines.append(f"typedef {kind} {decl.name} {{")
+        else:
+            lines.append(f"typedef {kind} {{")
     else:
         lines.append(f"{kind} {decl.name} {{")
 
+    field_tags = dict(tag_kinds) if tag_kinds else {}
+    if needs_tag and decl.name:
+        field_tags[decl.name] = kind
+    if tag_kinds and decl.name:
+        fwd_prefix = f"#fwd_in:{decl.name}:"
+        for k, v in tag_kinds.items():
+            if k.startswith(fwd_prefix):
+                field_tags[k[len(fwd_prefix) :]] = v
+
     for f in decl.fields:
-        lines.append(_format_field(f, tag_kinds))
+        lines.append(_format_field(f, field_tags))
 
     if decl.is_typedef:
         lines.append(f"}} {decl.name};")
@@ -325,24 +421,27 @@ def _typedef_to_cffi(decl: Typedef, tag_kinds: TagKinds | None = None) -> str | 
     """Convert a Typedef IR node to CFFI cdef."""
     underlying = decl.underlying_type
 
-    # Function pointer typedef: typedef void (*name)(int, char *)
-    # In the IR this is Pointer(FunctionPointer(...))
-    if isinstance(underlying, Pointer) and isinstance(underlying.pointee, FunctionPointer):
-        fp = underlying.pointee
+    unwrapped = _unwrap_function_pointer(underlying)
+    if unwrapped is not None:
+        fp, stars = unwrapped
         fp_params = _format_params(fp.parameters, fp.is_variadic, tag_kinds)
-        return f"typedef {type_to_cffi(fp.return_type, tag_kinds)} (*{decl.name})({fp_params});"
-
-    # Direct function pointer typedef (shouldn't normally happen but handle it)
-    if isinstance(underlying, FunctionPointer):
-        fp_params = _format_params(underlying.parameters, underlying.is_variadic, tag_kinds)
-        return f"typedef {type_to_cffi(underlying.return_type, tag_kinds)} (*{decl.name})({fp_params});"
+        ret = type_to_cffi(fp.return_type, tag_kinds)
+        if stars == 0:
+            return f"typedef {ret} {decl.name}({fp_params});"
+        return f"typedef {ret} ({'*' * stars}{decl.name})({fp_params});"
 
     # Array typedef: typedef int name[10]
     if isinstance(underlying, Array):
-        size_str = str(underlying.size) if underlying.size is not None else ""
-        return f"typedef {type_to_cffi(underlying.element_type, tag_kinds)} {decl.name}[{size_str}];"
+        elem_type, dims_str = _unwrap_array(underlying)
+        return f"typedef {type_to_cffi(elem_type, tag_kinds)} {decl.name}{dims_str};"
 
     # Regular typedef
+    if isinstance(underlying, CType) and underlying.name == decl.name and tag_kinds:
+        elab_kind = tag_kinds.get(f"@{decl.name}")
+        if elab_kind:
+            quals = _filter_cffi_qualifiers(underlying.qualifiers)
+            qual_prefix = f"{' '.join(quals)} " if quals else ""
+            return f"typedef {qual_prefix}{elab_kind} {decl.name} {decl.name};"
     return f"typedef {type_to_cffi(underlying, tag_kinds)} {decl.name};"
 
 
@@ -354,19 +453,24 @@ def _constant_to_cffi(decl: Constant) -> str | None:
     macros with unknown values are skipped entirely since CFFI cannot
     handle non-integer constant macros.
     """
-    if decl.value is not None and isinstance(decl.value, int):
+    if decl.value is not None and isinstance(decl.value, int) and not isinstance(decl.value, bool):
         return f"#define {decl.name} {decl.value}"
-    # Skip non-integer constants (strings, expressions, unknown values).
-    # Callers can use _extract_defines() for specific integer #defines
-    # that libclang couldn't resolve.
     return None
 
 
 def _variable_to_cffi(decl: Variable, tag_kinds: TagKinds | None = None) -> str | None:
     """Convert a Variable IR node to CFFI cdef."""
+    unwrapped = _unwrap_function_pointer(decl.type)
+    if unwrapped is not None:
+        fp, stars = unwrapped
+        fp_params = _format_params(fp.parameters, fp.is_variadic, tag_kinds)
+        ret = type_to_cffi(fp.return_type, tag_kinds)
+        if stars == 0:
+            return f"{ret} {decl.name}({fp_params});"
+        return f"{ret}({'*' * stars}{decl.name})({fp_params});"
     if isinstance(decl.type, Array):
-        size_str = str(decl.type.size) if decl.type.size is not None else ""
-        return f"{type_to_cffi(decl.type.element_type, tag_kinds)} {decl.name}[{size_str}];"
+        elem_type, dims_str = _unwrap_array(decl.type)
+        return f"{type_to_cffi(elem_type, tag_kinds)} {decl.name}{dims_str};"
     return f"{type_to_cffi(decl.type, tag_kinds)} {decl.name};"
 
 
@@ -378,34 +482,52 @@ def _build_tag_kinds(declarations: list[Declaration]) -> TagKinds:
     CFFI's pycparser-based cdef parser requires the prefix.
 
     We only add the tag prefix when the tag name differs from any typedef name.
-    When a name is both a tag and a typedef (e.g., ``typedef enum nng_pipe_ev
-    { ... } nng_pipe_ev``), the real C header may have an anonymous tag, so
-    we must NOT prefix it -- the typedef name is what the C compiler knows.
+    When a name is a tag-less typedef (e.g., ``typedef enum { ... } nng_pipe_ev;``
+    or ``typedef struct { ... } nng_init_params;`` where ``is_typedef=True``),
+    the real C header has no tag, so we record ``""`` in ``tag_kinds`` to strip
+    any synthesized ``struct ``/``union ``/``enum `` prefix.
     """
-    # Collect all tag names
     tags: TagKinds = {}
+    tagless_typedefs: set[str] = set()
+    all_struct_kinds: dict[str, str] = {}
     for decl in declarations:
         if isinstance(decl, Struct) and decl.name and not _is_anonymous_name(decl.name):
             kind = "union" if decl.is_union else "struct"
-            tags[decl.name] = kind
+            all_struct_kinds[decl.name] = kind
+            if decl.is_typedef:
+                tagless_typedefs.add(decl.name)
+            else:
+                tags[decl.name] = kind
         elif isinstance(decl, Enum) and decl.name and not _is_anonymous_name(decl.name):
-            if not decl.is_typedef:
+            if decl.is_typedef:
+                tagless_typedefs.add(decl.name)
+            else:
                 tags[decl.name] = "enum"
 
-    # Collect all typedef names
     typedef_names: set[str] = set()
     for decl in declarations:
-        if decl.name and (isinstance(decl, Typedef) or (isinstance(decl, Enum) and decl.is_typedef)):
+        if decl.name and (isinstance(decl, Typedef) or (isinstance(decl, (Enum, Struct)) and decl.is_typedef)):
             typedef_names.add(decl.name)
 
-    # Only keep tags whose names are NOT also typedef'd with the same name.
-    # If "nng_pipe_ev" is both an enum tag AND a typedef name, the original
-    # header likely used "typedef enum { ... } nng_pipe_ev;" (anonymous tag),
-    # so we should use the bare typedef name, not "enum nng_pipe_ev".
     tag_kinds: TagKinds = {}
     for name, kind in tags.items():
         if name not in typedef_names:
             tag_kinds[name] = kind
+        else:
+            tag_kinds[f"@{name}"] = kind
+    for name in tagless_typedefs:
+        if name not in tags:
+            tag_kinds[name] = ""
+
+    seen_structs: set[str] = set()
+    for decl in declarations:
+        if isinstance(decl, Struct) and decl.name and not _is_anonymous_name(decl.name):
+            for target_name, target_kind in all_struct_kinds.items():
+                if target_name != decl.name and target_name not in seen_structs:
+                    if _struct_references_name(decl, target_name):
+                        tag_kinds[f"#fwd:{target_name}"] = target_kind
+                        tag_kinds[f"#fwd_in:{decl.name}:{target_name}"] = target_kind
+            seen_structs.add(decl.name)
     return tag_kinds
 
 
@@ -425,46 +547,44 @@ def _find_opaque_typedef_structs(declarations: list[Declaration]) -> set[str]:
     for decl in declarations:
         if isinstance(decl, Typedef):
             typedef_names.add(decl.name)
+            if isinstance(decl.underlying_type, CType):
+                u_name = decl.underlying_type.name.strip()
+                bare = u_name.split(" ", 1)[1] if u_name.startswith(("struct ", "union ", "enum ")) else u_name
+                typedef_names.add(bare)
 
     return opaque_structs & typedef_names
 
 
 def _find_typedef_enum_pairs(declarations: list[Declaration]) -> set[str]:
-    """Find enum names that also appear as typedefs.
-
-    When the original C header uses ``typedef enum { ... } name;`` (anonymous
-    tag), libclang creates both ``Enum(name='name', is_typedef=True)`` and
-    ``Typedef(name='name', underlying=CType('enum name'))``.  We combine these
-    back into a single ``typedef enum { ... } name;`` to avoid introducing a tag
-    name that doesn't exist in the real header.
-
-    ``is_typedef`` is the discriminator: it is True exactly for the tag-less
-    form.  A TAGGED ``typedef enum Foo { ... } Foo;`` really does declare an
-    ``enum Foo`` tag, so its Enum and Typedef are emitted separately and the tag
-    is preserved.
-
-    This only applies to enums. Structs/unions always have real tags in C
-    (you can't forward-declare an anonymous struct), so struct+typedef pairs
-    should be emitted separately.
-
-    Returns a set of enum names that should be emitted as combined
-    ``typedef enum { ... } name;`` declarations.
-    """
-    # Collect tag-less (typedef-only) enum names
+    """Find tag-less enum names that also appear as typedefs."""
     enum_names: set[str] = set()
     for decl in declarations:
         if isinstance(decl, Enum) and decl.name and not _is_anonymous_name(decl.name):
             if decl.is_typedef:
                 enum_names.add(decl.name)
 
-    # Collect typedef names
     typedef_names: set[str] = set()
     for decl in declarations:
         if isinstance(decl, Typedef):
             typedef_names.add(decl.name)
 
-    # Enum names that also appear as typedefs
     return enum_names & typedef_names
+
+
+def _find_typedef_struct_pairs(declarations: list[Declaration]) -> set[str]:
+    """Find tag-less typedef struct/union names that also have redundant Typedef nodes."""
+    struct_names: set[str] = set()
+    for decl in declarations:
+        if isinstance(decl, Struct) and decl.name and not _is_anonymous_name(decl.name):
+            if decl.is_typedef and decl.fields:
+                struct_names.add(decl.name)
+
+    typedef_names: set[str] = set()
+    for decl in declarations:
+        if isinstance(decl, Typedef):
+            typedef_names.add(decl.name)
+
+    return struct_names & typedef_names
 
 
 def header_to_cffi(
@@ -482,33 +602,22 @@ def header_to_cffi(
     if exclude_patterns:
         compiled_patterns = [re.compile(p) for p in exclude_patterns]
 
-    # Build tag name map for qualifying bare struct/union/enum references
     tag_kinds = _build_tag_kinds(header.declarations)
-
-    # Find enum names that have matching typedefs -- these need to be
-    # emitted as combined "typedef enum { ... } name;" declarations
-    # to avoid introducing tag names that don't exist in the real header.
     combined_enum_pairs = _find_typedef_enum_pairs(header.declarations)
-
-    # Find opaque struct names that have matching typedefs.
-    # For these, we skip the struct declaration and only emit the typedef,
-    # which tells CFFI the type is opaque (always used through pointers).
+    combined_struct_pairs = _find_typedef_struct_pairs(header.declarations)
     opaque_typedef_structs = _find_opaque_typedef_structs(header.declarations)
 
     lines = []
     for decl in header.declarations:
-        # For combined enum+typedef pairs: emit enum as typedef, skip Typedef
         if isinstance(decl, Enum) and decl.name in combined_enum_pairs:
             result = _enum_to_cffi_as_typedef(decl)
             if result is not None:
                 lines.append(result)
             continue
 
-        if isinstance(decl, Typedef) and decl.name in combined_enum_pairs:
-            # Skip -- already emitted with the enum above
+        if isinstance(decl, Typedef) and (decl.name in combined_enum_pairs or decl.name in combined_struct_pairs):
             continue
 
-        # For opaque struct+typedef pairs: skip the struct, keep the typedef
         if isinstance(decl, Struct) and decl.name in opaque_typedef_structs:
             continue
 
@@ -540,6 +649,33 @@ def _enum_to_cffi_as_typedef(decl: Enum) -> str | None:
     return "\n".join(lines)
 
 
+def _format_extern_python_entry(
+    entry: str,
+    declarations: Sequence[Declaration],
+    tag_kinds: TagKinds,
+) -> str:
+    """Format a single `extern_python` entry into an `extern "Python" ...;` line."""
+    stripped = entry.strip()
+    if stripped.startswith('extern "Python"'):
+        return stripped if stripped.endswith(";") else f"{stripped};"
+    if "(" in stripped:
+        proto = stripped if stripped.endswith(";") else f"{stripped};"
+        return f'extern "Python" {proto}'
+    for decl in declarations:
+        if isinstance(decl, Function) and decl.name == stripped:
+            params = _format_params(decl.parameters, decl.is_variadic, tag_kinds)
+            ret = type_to_cffi(decl.return_type, tag_kinds)
+            return f'extern "Python" {ret} {decl.name}({params});'
+        if isinstance(decl, Typedef) and decl.name == stripped:
+            unwrapped = _unwrap_function_pointer(decl.underlying_type)
+            if unwrapped is not None:
+                fp, _ = unwrapped
+                params = _format_params(fp.parameters, fp.is_variadic, tag_kinds)
+                ret = type_to_cffi(fp.return_type, tag_kinds)
+                return f'extern "Python" {ret} {decl.name}({params});'
+    return f'extern "Python" void {stripped}(void);'
+
+
 class CffiWriter(BaseWriter):
     """Writer that generates CFFI cdef strings from headerkit IR.
 
@@ -548,42 +684,27 @@ class CffiWriter(BaseWriter):
     exclude_patterns : list[str] | None
         Regex patterns. Declarations with names matching any pattern
         are excluded from output.
-    define_patterns : list[str] | None
-        Regex patterns matched against ``#define`` names in the raw header
-        source.  Matching names are appended as ``#define NAME ...`` lines
-        (CFFI's "resolve at verify-time" syntax).  The actual matching is
-        performed by the ``generate()`` pipeline, which sets
-        ``_matched_defines`` before calling ``write()``.
+    define_patterns : Sequence[str] | None
+        Regex patterns matched against ``Constant`` declaration names in the IR.
+        Matching macro constants not already emitted as integer literals are
+        appended as ``#define NAME ...`` lines (CFFI's verify-time syntax).
     extra_cdef : list[str] | None
         Arbitrary cdef lines appended verbatim after all generated output.
-
-    Example
-    -------
-    ::
-
-        from headerkit.writers import get_writer
-
-        writer = get_writer("cffi", exclude_patterns=["__.*"])
-        cdef_string = writer.write(header)
-
-        # Or directly:
-        from headerkit.writers.cffi import CffiWriter
-        writer = CffiWriter(exclude_patterns=["__.*"])
-        cdef_string = writer.write(header)
+    module_var : str | None
+        When set (e.g. ``"CDEF"``), wraps the output as a valid Python module
+        exporting ``<module_var>: str = ...`` and ``__all__ = [<module_var>]``.
+    extern_python : Sequence[str] | None
+        C function prototypes, ``extern "Python"`` lines, or declaration names
+        to append as ``extern "Python"`` callback declarations.
     """
 
     name: str = "cffi"
     format_description: str = "CFFI cdef declarations for ffibuilder.cdef()"
     default_output_pattern: str = "{dir}/{stem}.cdef.txt"
     default_extension: str = ".py"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel")
+    language_aliases: ClassVar[tuple[str, ...]] = ("python",)
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
-        WriterOption(
-            name="test_type",
-            description="Type of test stubs to generate",
-            default="both",
-            choices=("both", "tripwire", "unit", "none"),
-        ),
         WriterOption(
             name="exclude_patterns",
             description="Patterns of symbols to exclude from cdef",
@@ -602,40 +723,115 @@ class CffiWriter(BaseWriter):
             default=None,
             type=list,
         ),
+        WriterOption(
+            name="module_var",
+            description="Wrap output as a Python module exporting this variable name",
+            default=None,
+            type=str,
+        ),
+        WriterOption(
+            name="extern_python",
+            description='Function prototypes or names to emit as extern "Python" callbacks',
+            default=None,
+            type=list,
+        ),
     )
 
     def __init__(
         self,
         exclude_patterns: list[str] | None = None,
-        define_patterns: list[str] | None = None,
+        define_patterns: Sequence[str] | None = None,
         extra_cdef: list[str] | None = None,
+        module_var: str | None = None,
+        extern_python: Sequence[str] | None = None,
     ) -> None:
         self._exclude_patterns = exclude_patterns
-        self.define_patterns = define_patterns
+        self.define_patterns = list(define_patterns) if define_patterns is not None else None
         self.extra_cdef = extra_cdef
+        self.module_var = module_var
+        self.extern_python = list(extern_python) if extern_python is not None else None
         self._matched_defines: list[str] | None = None
+
+    def _collect_matched_defines(self, header: Header) -> list[str]:
+        """Collect macro constant names matching `define_patterns`, deduplicated against emitted ints."""
+        exclude_pats = [re.compile(p) for p in self._exclude_patterns] if self._exclude_patterns else []
+        emitted_ints: set[str] = set()
+        for decl in header.declarations:
+            if (
+                isinstance(decl, Constant)
+                and decl.value is not None
+                and isinstance(decl.value, int)
+                and not isinstance(decl.value, bool)
+            ):
+                if not exclude_pats or not any(p.search(decl.name) for p in exclude_pats):
+                    emitted_ints.add(decl.name)
+
+        matched: list[str] = []
+        seen: set[str] = set(emitted_ints)
+
+        if self._matched_defines:
+            for name in self._matched_defines:
+                if name not in seen and (not exclude_pats or not any(p.search(name) for p in exclude_pats)):
+                    seen.add(name)
+                    matched.append(name)
+
+        if self.define_patterns:
+            define_pats = [re.compile(p) for p in self.define_patterns]
+            for decl in header.declarations:
+                if isinstance(decl, Constant) and decl.name not in seen:
+                    if exclude_pats and any(p.search(decl.name) for p in exclude_pats):
+                        continue
+                    if any(p.search(decl.name) for p in define_pats):
+                        seen.add(decl.name)
+                        matched.append(decl.name)
+
+        return matched
 
     def _render(self, unit: SourceUnit | Header) -> str:
         header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
         output = header_to_cffi(header, exclude_patterns=self._exclude_patterns)
 
-        # Append #define lines for names matched by generate()
-        if self._matched_defines:
-            define_lines = "\n".join(f"#define {name} ..." for name in self._matched_defines)
+        matched_defines = self._collect_matched_defines(header)
+        if matched_defines:
+            define_lines = "\n".join(f"#define {name} ..." for name in matched_defines)
             output = output + "\n" + define_lines if output else define_lines
 
-        # Append extra cdef lines verbatim
+        if self.extern_python:
+            tag_kinds = _build_tag_kinds(header.declarations)
+            extern_lines = "\n".join(
+                _format_extern_python_entry(entry, header.declarations, tag_kinds) for entry in self.extern_python
+            )
+            output = output + "\n" + extern_lines if output else extern_lines
+
         if self.extra_cdef:
             extra = "\n".join(self.extra_cdef)
             output = output + "\n" + extra if output else extra
 
         return output
 
+    def _wrap_module_var(self, cdef_str: str, source_path: str | None) -> str:
+        source_name = source_path or "header.h"
+        lines = [
+            f'"""Auto-generated CFFI cdef declarations by headerkit from {source_name}."""',
+            "",
+            "from __future__ import annotations",
+            "",
+            f"{self.module_var}: str = {cdef_str!r}",
+            "",
+            f"__all__ = [{self.module_var!r}]",
+            "",
+        ]
+        return "\n".join(lines)
+
     def write(self, header: Any) -> str:
-        """Convert header IR to CFFI cdef string or reconciled Python script."""
+        """Convert header IR to CFFI cdef string, Python module, or reconciled script."""
         if isinstance(header, (ReconciledUnit, MultiDimensionalReconciledUnit)):
             return self.write_reconciled(header)
-        return self._render(self._prepare(header))
+        prepared = self._prepare(header)
+        rendered = self._render(prepared)
+        if self.module_var:
+            return self._wrap_module_var(rendered, getattr(prepared, "path", None))
+        return rendered
 
     def write_reconciled(
         self,
@@ -671,7 +867,7 @@ class CffiWriter(BaseWriter):
                 block_lines: list[str] = []
                 branches: Sequence[tuple[Any, list[Declaration]]] = item.branches
                 for idx, (b_cond, b_decls) in enumerate(branches):
-                    py_cond = condition_to_python(b_cond, domain_matrix)
+                    py_cond = self.format_guard_condition(b_cond, domain_matrix)
                     kw = "if" if idx == 0 else "elif"
                     block_lines.append(f"{kw} {py_cond}:")
                     rendered_b = self._render(Header(path=header_path, declarations=b_decls)).strip()
@@ -707,130 +903,10 @@ class CffiWriter(BaseWriter):
 
         return "\n".join(output_lines).rstrip() + "\n"
 
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        cdef_code = self._render(unit)
-        fn_names = extract_function_names(unit)
-
-        pyproject = textwrap.dedent(f"""\
-            [build-system]
-            requires = ["setuptools>=61.0", "cffi>=1.15.0"]
-            build-backend = "setuptools.build_meta"
-
-            [project]
-            name = "{pkg}"
-            version = "0.1.0"
-            description = "Python CFFI bindings for {pkg}"
-            requires-python = ">=3.9"
-            dependencies = ["cffi>=1.15.0"]
-
-            [tool.setuptools.packages.find]
-            where = ["src"]
-        """)
-
-        build_ffi = render_block_template(
-            f"""\
-            from cffi import FFI
-
-            ffibuilder = FFI()
-
-            CDEF = \"\"\"{DEDENT_BLOCK}\"\"\"
-            ffibuilder.cdef(CDEF)
-            ffibuilder.set_source("_{pkg}_cffi", None)
-
-            if __name__ == "__main__":
-                ffibuilder.compile(verbose=True)
-        """,
-            cdef_code,
-        )
-
-        init_py = textwrap.dedent(f"""\
-            \"\"\"{pkg} package initialization.\"\"\"
-            from {pkg}._bindings import ffi, lib
-
-            __all__ = ["ffi", "lib"]
-        """)
-
-        bindings_py = render_block_template(
-            f"""\
-            from cffi import FFI
-
-            ffi = FFI()
-            CDEF = \"\"\"{DEDENT_BLOCK}\"\"\"
-            ffi.cdef(CDEF)
-
-            lib = None
-            try:
-                lib = ffi.dlopen("{pkg}")
-            except OSError:
-                pass
-        """,
-            cdef_code,
-        )
-
-        files = [
-            OutputFile(path="pyproject.toml", content=pyproject),
-            OutputFile(path="build_ffi.py", content=build_ffi),
-            OutputFile(path=f"src/{pkg}/__init__.py", content=init_py),
-            OutputFile(path=f"src/{pkg}/_bindings.py", content=bindings_py),
-        ]
-
-        if test_type in ("both", "tripwire"):
-            tw_fn_checks = (
-                "\n".join(
-                    f'    assert hasattr(lib, "{name}"), "Symbol {name} missing from C library"'
-                    for name in fn_names[:10]
-                )
-                or '    assert lib is not None, "Library failed to load"'
-            )
-            tripwire = render_block_template(
-                f"""\
-                import pytest
-
-                @pytest.mark.tripwire
-                def test_cffi_library_tripwire():
-                    \"\"\"Tripwire: verify binary load and C symbols.\"\"\"
-                    from {pkg}._bindings import lib
-                    if lib is None:
-                        pytest.fail("C library '{pkg}' could not be loaded via CFFI")
-                {DEDENT_BLOCK}
-            """,
-                tw_fn_checks,
-            )
-            files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
-
-        if test_type in ("both", "unit"):
-            unit_test = textwrap.dedent(f"""\
-                from cffi import FFI
-                from {pkg} import ffi
-
-                def test_{pkg}_ffi_defined():
-                    \"\"\"Verify FFI instance configuration.\"\"\"
-                    assert isinstance(ffi, FFI)
-                    assert hasattr(ffi, "cdef")
-            """)
-            files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
-
-        return ProjectLayout(files=files)
-
-    def _write_custom_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        if options.layout == "wheel":
-            from headerkit.packaging.cffi import generate_cffi_wheel_layout
-
-            return generate_cffi_wheel_layout(unit, options)
-        return self._write_package_layout(unit, options)
-
     def hash_comment_format(self) -> str:
-        """Return format string for wrapping cache metadata in C-style comments."""
+        """Return format string for wrapping cache metadata in comments."""
+        if self.module_var:
+            return "# {line}"
         return "/* {line} */"
 
 

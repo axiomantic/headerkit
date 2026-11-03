@@ -61,6 +61,8 @@ __all__ = [
     "is_backend_available",
     "list_backends",
     "register_backend",
+    "resolve_backend",
+    "supports_backend_auto_install",
 ]
 
 
@@ -103,7 +105,7 @@ def register_backend(
         context: PipelineContext | None = None,
         **kwargs: Any,
     ) -> SourceUnit | None:
-        _ = (context, kwargs)
+        _ = context
         inst = backend_class()
         if hasattr(inst, "is_available") and not inst.is_available():
             return None
@@ -116,6 +118,7 @@ def register_backend(
             recursive_includes=recursive_includes,
             max_depth=max_depth,
             project_prefixes=project_prefixes,
+            **kwargs,
         )
 
     HookRegistry.register_global("get_backend", _get_hook, priority=priority, backend=name)
@@ -163,11 +166,6 @@ def is_backend_available(name: str) -> bool:
     if name not in _BACKEND_REGISTRY:
         return False
 
-    if name == "libclang":
-        from headerkit.backends.libclang import is_system_libclang_available
-
-        return is_system_libclang_available()
-
     backend_cls = _BACKEND_REGISTRY[name]
     try:
         inst = backend_cls()
@@ -179,6 +177,16 @@ def is_backend_available(name: str) -> bool:
     return True
 
 
+def supports_backend_auto_install(name: str | None = None) -> bool:
+    """Check whether a registered backend supports automatic dependency installation."""
+    _ensure_backends_loaded()
+    resolved = _DEFAULT_BACKEND if name is None else _normalize_backend_name(name)
+    if resolved is None or resolved not in _BACKEND_REGISTRY:
+        return False
+    backend_cls = _BACKEND_REGISTRY[resolved]
+    return bool(getattr(backend_cls, "supports_auto_install", False))
+
+
 def get_backend_info() -> list[dict[str, str | bool]]:
     """Get information about all known backends.
 
@@ -186,22 +194,57 @@ def get_backend_info() -> list[dict[str, str | bool]]:
     """
     _ensure_backends_loaded()
 
-    descriptions = {
-        "libclang": "Full C/C++ support via LLVM",
-        "tree-sitter": "Fast C/C++ parsing without system LLVM dependencies",
-    }
-
     result: list[dict[str, str | bool]] = []
-    for name in _BACKEND_REGISTRY:
+    for name, backend_cls in _BACKEND_REGISTRY.items():
+        desc = getattr(backend_cls, "description", "")
         result.append(
             {
                 "name": name,
                 "available": is_backend_available(name),
                 "default": name == _DEFAULT_BACKEND,
-                "description": descriptions.get(name, ""),
+                "description": str(desc) if isinstance(desc, str) else "",
             }
         )
     return result
+
+
+def resolve_backend(name: str | None = None) -> str:
+    """Resolve a backend name, expanding ``"auto"`` to the best available backend.
+
+    When *name* is ``None``, returns the default backend name (``"libclang"``).
+    When *name* is ``"auto"``, returns ``"libclang"`` if loadable, otherwise
+    ``"tree-sitter"`` if available, otherwise raises :class:`RuntimeError`
+    with an actionable error message.
+
+    :param name: Requested backend name (e.g. ``"auto"``, ``"libclang"``,
+        ``"tree-sitter"``), or ``None`` for the default backend.
+    :returns: Canonical registered backend name.
+    :raises RuntimeError: If ``name == "auto"`` and no backend is available.
+    :raises ValueError: If an explicit backend name is unknown.
+    """
+    _ensure_backends_loaded()
+
+    if name is None:
+        if _DEFAULT_BACKEND is None:
+            raise ValueError("No backends available")
+        return _DEFAULT_BACKEND
+
+    normalized = _normalize_backend_name(name)
+    if normalized == "auto":
+        if is_backend_available("libclang"):
+            return "libclang"
+        if is_backend_available("tree-sitter"):
+            return "tree-sitter"
+        raise RuntimeError(
+            "No C/C++ parser backend is available (tried 'libclang' and 'tree-sitter'). "
+            "Install LLVM/libclang or install tree-sitter support (pip install tree-sitter tree-sitter-c)."
+        )
+
+    if normalized in _BACKEND_REGISTRY:
+        return normalized
+
+    available = ", ".join(list_backends()) or "(none)"
+    raise ValueError(f"Unknown backend: {name!r}. Available: {available}")
 
 
 def get_backend(name: str | None = None) -> ParserBackend:
@@ -210,7 +253,7 @@ def get_backend(name: str | None = None) -> ParserBackend:
     Returns a new instance of the requested backend. If no name is provided,
     returns the default backend (libclang).
 
-    :param name: Backend name (e.g., ``"libclang"``),
+    :param name: Backend name (e.g., ``"libclang"``, ``"auto"``),
         or None for the default backend.
     :returns: New instance of the requested backend.
     :raises ValueError: If the requested backend is not available.
@@ -237,7 +280,8 @@ def get_backend(name: str | None = None) -> ParserBackend:
             raise ValueError("No backends available")
         name = _DEFAULT_BACKEND
     else:
-        name = _normalize_backend_name(name)
+        normalized = _normalize_backend_name(name)
+        name = resolve_backend("auto") if normalized == "auto" else normalized
 
     ctx = PipelineContext(backend=name)
     backend_inst = HookDispatcher().first_result("get_backend", context=ctx)

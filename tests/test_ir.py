@@ -459,6 +459,14 @@ class TestParserBackendProtocol:
             def supported_classifications(self) -> set[str]:
                 return {"header"}
 
+            @property
+            def follows_includes(self) -> bool:
+                return False
+
+            @property
+            def supports_compiler_args(self) -> bool:
+                return False
+
         assert isinstance(MockBackend(), ParserBackend)
 
     def test_protocol_rejects_non_conforming(self):
@@ -591,6 +599,107 @@ class TestIsCppValueType:
         assert is_cpp_value_type(CType("int")) is False
         assert is_cpp_value_type(CType("float")) is False
         assert is_cpp_value_type(CType("size_t")) is False
+
+
+class TestFunctionPointerStarsAndQualifiers:
+    """Verify 0-star, 1-star, and 2-star FunctionPointer representation and formatting."""
+
+    def test_zero_star_non_pointer_function_type(self) -> None:
+        fp = FunctionPointer(
+            return_type=CType("int"),
+            parameters=[Parameter("a", CType("int"))],
+            is_pointer=False,
+        )
+        assert fp.is_pointer is False
+        assert fp.qualifiers == []
+        assert str(fp) == "int(int a)"
+
+    def test_one_star_function_pointer_with_qualifiers(self) -> None:
+        fp = FunctionPointer(
+            return_type=CType("void"),
+            parameters=[Parameter("code", CType("int"))],
+            calling_convention="stdcall",
+            qualifiers=["const"],
+            is_pointer=True,
+        )
+        assert fp.is_pointer is True
+        assert fp.qualifiers == ["const"]
+        assert str(fp) == "void ( __stdcall__* const)(int code)"
+
+    def test_two_star_pointer_to_function_pointer(self) -> None:
+        fp = FunctionPointer(
+            return_type=CType("void"),
+            parameters=[Parameter("x", CType("int"))],
+            is_pointer=True,
+        )
+        ptr_fp = Pointer(pointee=fp, qualifiers=["const"])
+        assert isinstance(ptr_fp.pointee, FunctionPointer)
+        assert ptr_fp.pointee.is_pointer is True
+        assert str(ptr_fp) == "void (*)(int x)* const"
+
+
+class TestTypeOverridesAndMacroExpr:
+    """Verify type_overrides on IR declarations/parameters/fields and Constant.is_macro_expr."""
+
+    def test_type_overrides_default_and_explicit(self) -> None:
+        param = Parameter("p", CType("int"), type_overrides={"nim": "cint", "cffi": "int32_t"})
+        fld = Field("f", CType("int"), type_overrides={"nim": "cint"})
+        fn = Function("fn", CType("void"), [param], type_overrides={"cython": "int"})
+        td = Typedef("my_int", CType("int"), type_overrides={"pyi": "int"})
+        var = Variable("g_var", CType("int"), type_overrides={"nim": "cint"})
+
+        assert param.type_overrides == {"nim": "cint", "cffi": "int32_t"}
+        assert fld.type_overrides == {"nim": "cint"}
+        assert fn.type_overrides == {"cython": "int"}
+        assert td.type_overrides == {"pyi": "int"}
+        assert var.type_overrides == {"nim": "cint"}
+
+        # Negative control: default is an independent empty dict per instance
+        p1 = Parameter("a", CType("int"))
+        p2 = Parameter("b", CType("int"))
+        p1.type_overrides["nim"] = "cint"
+        assert p2.type_overrides == {}
+
+    def test_constant_is_macro_expr(self) -> None:
+        lit = Constant("LITERAL", 42, is_macro=True)
+        expr = Constant("EXPR", None, type=CType("int"), is_macro=True, is_macro_expr=True, raw_expression="(A + B)")
+        assert lit.is_macro_expr is False
+        assert expr.is_macro_expr is True
+        assert expr.value is None
+
+
+class TestInputSpecTraversalFields:
+    """Verify InputSpec and InputSpec.from_path support multi-header & traversal fields."""
+
+    def test_input_spec_from_path_with_traversal_options(self, tmp_path) -> None:
+        from headerkit.ir import InputSpec
+
+        h1 = tmp_path / "a.h"
+        h2 = tmp_path / "b.h"
+        h1.write_text("int a(void);\n", encoding="utf-8")
+        h2.write_text("int b(void);\n", encoding="utf-8")
+
+        spec = InputSpec.from_path(
+            h1,
+            content="int a(void);\n",
+            headers=(h1, h2),
+            project_prefixes=(str(tmp_path),),
+            recursive_includes=False,
+            max_depth=3,
+            use_default_includes=False,
+        )
+        assert spec == InputSpec(
+            path=str(h1),
+            language="c",
+            classification="header",
+            content="int a(void);\n",
+            headers=(h1, h2),
+            project_prefixes=(str(tmp_path),),
+            recursive_includes=False,
+            max_depth=3,
+            use_default_includes=False,
+        )
+
         assert is_cpp_value_type(Pointer(CType("char"))) is False
         assert is_cpp_value_type(Reference(CType("int"))) is False
 

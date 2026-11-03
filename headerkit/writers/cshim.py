@@ -26,8 +26,7 @@ from headerkit.ir import (
     Struct,
     TypeExpr,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
+from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, ScaffoldOptions, WriterOption, render_block_template
 
 
 def _cshim_string_path(path: str | None) -> str:
@@ -251,14 +250,72 @@ class CShimWriter(BaseWriter):
     format_description: str = "C-ABI shim wrapper generator (extern C)"
     default_output_pattern: str = "{dir}/{stem}_cshim.cpp"
     default_extension: str = ".cpp"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "cmake")
+    comment_prefix: ClassVar[str] = "//"
+    language_aliases: ClassVar[tuple[str, ...]] = ("c", "cpp")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+
+    @staticmethod
+    def _platform_to_c(tag: str) -> str:
+        """Map a target triple or OS tag to its C/C++ preprocessor platform macro."""
+        lower = tag.lower()
+        if "darwin" in lower or "apple" in lower or "mac" in lower:
+            return "__APPLE__"
+        if "linux" in lower:
+            return "__linux__"
+        if "windows" in lower or "msvc" in lower or "win32" in lower:
+            return "_WIN32"
+        return "__unix__"
+
+    def format_platform_condition(self, cond: object) -> str:
+        """Format a PlatformCondition into a C/C++ preprocessor guard expression."""
+        from headerkit.reconcile import PlatformCondition
+
+        if not isinstance(cond, PlatformCondition):
+            return "1"
+        raw_tags = [tag for term in cond.terms for tag in term] if cond.terms else sorted(cond.tags)
+        plat_strs = sorted({self._platform_to_c(t) for t in raw_tags if t})
+        if len(plat_strs) > 1:
+            return f"({' || '.join(f'defined({p})' for p in plat_strs)})"
+        if plat_strs:
+            return f"defined({plat_strs[0]})"
+        return "1"
+
+    def format_matrix_condition(
+        self,
+        cond: object,
+        domain_matrix: dict[str, set[object]] | None = None,
+    ) -> str:
+        """Format a MatrixCondition into a C/C++ preprocessor guard expression."""
+        from headerkit.reconcile import MatrixCondition, minimize_conditions
+
+        if not isinstance(cond, MatrixCondition):
+            return "1"
+        effective = cond
+        if domain_matrix and cond.raw_conditions and cond.is_tautology:
+            effective = minimize_conditions(cond.raw_conditions, domain_matrix)
+
+        clauses: list[str] = []
+        if effective.platforms:
+            plat_strs = sorted({self._platform_to_c(p) for p in effective.platforms})
+            if len(plat_strs) > 1:
+                clauses.append(f"({' || '.join(f'defined({p})' for p in plat_strs)})")
+            elif plat_strs:
+                clauses.append(f"defined({plat_strs[0]})")
+
+        if effective.feature_implicants:
+            imp_clauses: list[str] = []
+            for imp in effective.feature_implicants:
+                term_parts = [f"defined({feat})" if val else f"!defined({feat})" for feat, val in imp]
+                if term_parts:
+                    imp_clauses.append(" && ".join(term_parts))
+            if len(imp_clauses) > 1:
+                clauses.append(f"({' || '.join(f'({c})' if ' ' in c else c for c in imp_clauses)})")
+            elif imp_clauses:
+                clauses.append(imp_clauses[0])
+
+        return " && ".join(clauses) if clauses else "1"
+
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
-        WriterOption(
-            name="test_type",
-            description="Type of test stubs to generate",
-            default="both",
-            choices=("both", "tripwire", "unit", "none"),
-        ),
         WriterOption(
             name="catch_exceptions",
             description="Wrap C++ functions in try-catch blocks for exception safety across ABI boundaries",
@@ -640,130 +697,6 @@ class CShimWriter(BaseWriter):
         ]
 
         return "\n".join(lines)
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
-        header_content, cpp_lines, fn_names = self._render_parts(unit)
-
-        cpp_header_includes = [
-            f'#include "{pkg}_cshim.h"',
-            "#include <new>",
-        ]
-        if any("std::string" in stmt or "_ret_str" in stmt for stmt in cpp_lines):
-            cpp_header_includes.append("#include <string>")
-        if any("std::vector" in stmt for stmt in cpp_lines):
-            cpp_header_includes.append("#include <vector>")
-        if any("size_t" in stmt or "std::vector" in stmt for stmt in cpp_lines):
-            cpp_header_includes.append("#include <cstddef>")
-        if self.catch_exceptions:
-            cpp_header_includes.append("#include <exception>")
-        include_path = self.header_path or _cshim_string_path(header.path)
-        if include_path:
-            cpp_header_includes.append(f'#include "{include_path}"')
-
-        cpp_code = "\n".join(
-            [
-                f"// Implementation for {pkg} C-ABI shim",
-                *cpp_header_includes,
-                "",
-                *cpp_lines,
-            ]
-        )
-        if not cpp_code.endswith("\n"):
-            cpp_code += "\n"
-
-        if test_type != "none":
-            cmake = textwrap.dedent(f"""\
-                cmake_minimum_required(VERSION 3.15)
-                project({pkg}_cshim C CXX)
-
-                set(CMAKE_CXX_STANDARD 17)
-                set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-                add_library({pkg}_cshim SHARED
-                    src/{pkg}_cshim.cpp
-                )
-
-                target_include_directories({pkg}_cshim PUBLIC
-                    include
-                )
-
-                enable_testing()
-                add_executable(test_{pkg}_cshim tests/test_cshim.c)
-                target_link_libraries(test_{pkg}_cshim PRIVATE {pkg}_cshim ${{CMAKE_DL_LIBS}})
-                add_test(NAME test_{pkg}_cshim COMMAND test_{pkg}_cshim)
-            """)
-        else:
-            cmake = textwrap.dedent(f"""\
-                cmake_minimum_required(VERSION 3.15)
-                project({pkg}_cshim C CXX)
-
-                set(CMAKE_CXX_STANDARD 17)
-                set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-                add_library({pkg}_cshim SHARED
-                    src/{pkg}_cshim.cpp
-                )
-
-                target_include_directories({pkg}_cshim PUBLIC
-                    include
-                )
-            """)
-
-        files = [
-            OutputFile(path="CMakeLists.txt", content=cmake),
-            OutputFile(path=f"include/{pkg}_cshim.h", content=header_content + "\n"),
-            OutputFile(path=f"src/{pkg}_cshim.cpp", content=cpp_code),
-        ]
-        if test_type != "none":
-            checks = (
-                "\n".join(
-                    f'    assert(resolve_symbol("{fn}") != NULL && "Entry point \'{fn}\' missing from native library");'
-                    for fn in fn_names[:10]
-                )
-                if fn_names
-                else '    printf("Shim header included successfully\\n");'
-            )
-            test_c = render_block_template(
-                f"""\
-                #include <stdio.h>
-                #include <stdlib.h>
-                #include <assert.h>
-                #include "{pkg}_cshim.h"
-
-                #ifdef _WIN32
-                #include <windows.h>
-                static void* resolve_symbol(const char* name) {{
-                    HMODULE mod = GetModuleHandleA("{pkg}_cshim.dll");
-                    if (!mod) mod = GetModuleHandleA(NULL);
-                    return mod ? (void*)GetProcAddress(mod, name) : NULL;
-                }}
-                #else
-                #include <dlfcn.h>
-                static void* resolve_symbol(const char* name) {{
-                    void* handle = dlopen(NULL, RTLD_NOW);
-                    if (!handle) return NULL;
-                    return dlsym(handle, name);
-                }}
-                #endif
-
-                int main(void) {{
-                    printf("Testing {pkg} C-ABI shim symbol resolution...\\n");
-                {DEDENT_BLOCK}
-                    return 0;
-                }}
-            """,
-                checks,
-            )
-            files.append(OutputFile(path="tests/test_cshim.c", content=test_c))
-
-        return ProjectLayout(files=files)
 
 
 def write_cshim(

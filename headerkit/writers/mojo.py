@@ -10,7 +10,6 @@ It supports:
 from __future__ import annotations
 
 import re
-import textwrap
 from typing import ClassVar
 
 from headerkit.ir import (
@@ -28,8 +27,7 @@ from headerkit.ir import (
     Typedef,
     TypeExpr,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
-from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
+from headerkit.writers.base import BaseWriter, WriterOption
 
 MOJO_KEYWORDS: set[str] = {
     "alias",
@@ -274,14 +272,8 @@ class MojoWriter(BaseWriter):
     format_description: str = "Mojo FFI binding generator (sys.ffi.DLHandle and CShim)"
     default_output_pattern: str = "{dir}/{stem}.mojo"
     default_extension: str = ".mojo"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
-        WriterOption(
-            name="test_type",
-            description="Type of test stubs to generate",
-            default="both",
-            choices=("both", "tripwire", "unit", "none"),
-        ),
         WriterOption(
             name="library_name",
             description="Name of the shared library to load via DLHandle",
@@ -591,75 +583,6 @@ class MojoWriter(BaseWriter):
                     lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        bindings_code = self._render(unit)
-
-        files: list[OutputFile] = []
-
-        # 1. mojoproject.toml
-        mojo_proj = textwrap.dedent(f"""\
-            [project]
-            name = "{pkg}"
-            version = "0.1.0"
-            description = "Mojo bindings for {pkg}"
-        """)
-        files.append(OutputFile(path="mojoproject.toml", content=mojo_proj))
-
-        # 2. Package init
-        init_mojo = textwrap.dedent("""\
-            from .bindings import *
-        """)
-        files.append(OutputFile(path=f"src/{pkg}/__init__.mojo", content=init_mojo))
-
-        # 3. Bindings
-        files.append(OutputFile(path=f"src/{pkg}/bindings.mojo", content=bindings_code))
-
-        # 4. Tests
-        if test_type in ("tripwire", "both"):
-            signatures = _extract_function_signatures(unit)
-            tw_lines = [f'    _ = handle.get_function[{sig}]("{sym}")' for sym, sig in signatures]
-            tw_body = "\n".join(tw_lines) if tw_lines else "    # Library opened successfully"
-
-            tripwire = render_block_template(
-                f"""\
-                from sys.ffi import DLHandle
-
-                fn test_tripwire_bindings() raises:
-                    # Tripwire: verifies foreign dynamic library can be opened and symbols resolved
-                    var handle = DLHandle("{pkg}")
-                {DEDENT_BLOCK}
-                    handle.close()
-
-                fn main() raises:
-                    test_tripwire_bindings()
-            """,
-                tw_body,
-            )
-            files.append(OutputFile(path="tests/test_tripwire.mojo", content=tripwire))
-
-        if test_type in ("unit", "both"):
-            unit_test = textwrap.dedent(f"""\
-                from {pkg}.bindings import Library
-
-                fn test_{pkg}_binding_types():
-                    # Verify Library struct type is defined and accessible
-                    var ptr_size = sizeof[Library]()
-                    if ptr_size == 0:
-                        print("Warning: unexpected 0-sized Library struct")
-
-                fn main():
-                    test_{pkg}_binding_types()
-            """)
-            files.append(OutputFile(path=f"tests/test_{pkg}.mojo", content=unit_test))
-
-        return ProjectLayout(files=files)
 
 
 def write_mojo(

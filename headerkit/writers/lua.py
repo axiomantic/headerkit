@@ -8,7 +8,6 @@ The IR types come from ``headerkit.ir`` and represent parsed C headers.
 
 from __future__ import annotations
 
-import textwrap
 from pathlib import PureWindowsPath
 from typing import ClassVar
 
@@ -29,8 +28,7 @@ from headerkit.ir import (
     TypeExpr,
     Variable,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
-from headerkit.writers.base import DEDENT_BLOCK, BaseWriter, WriterOption, render_block_template
+from headerkit.writers.base import BaseWriter, WriterOption
 
 
 def _type_to_c(t: TypeExpr) -> str:
@@ -413,15 +411,9 @@ class LuaWriter(BaseWriter):
     format_description: str = "LuaJIT FFI bindings"
     default_output_pattern: str = "{dir}/{stem}_ffi.lua"
     default_extension: str = ".lua"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project")
-    supported_options: ClassVar[tuple[WriterOption, ...]] = (
-        WriterOption(
-            name="test_type",
-            description="Type of test stubs to generate",
-            default="both",
-            choices=("both", "tripwire", "unit", "none"),
-        ),
-    )
+    comment_prefix: ClassVar[str] = "--"
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
+    supported_options: ClassVar[tuple[WriterOption, ...]] = ()
 
     def __init__(self) -> None:
         pass
@@ -433,86 +425,6 @@ class LuaWriter(BaseWriter):
     def write(self, header: Header) -> str:
         """Convert header IR to a LuaJIT FFI binding file."""
         return self._render(self._prepare(header))
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        lua_code = self._render(unit)
-
-        rockspec = textwrap.dedent(f"""\
-            package = "{pkg}"
-            version = "scm-1"
-            source = {{
-                url = "git://github.com/example/{pkg}.git"
-            }}
-            description = {{
-                summary = "LuaJIT FFI bindings for {pkg}",
-                license = "MIT"
-            }}
-            dependencies = {{
-                "lua >= 5.1"
-            }}
-            build = {{
-                type = "builtin",
-                modules = {{
-                    ["{pkg}"] = "src/{pkg}.lua"
-                }}
-            }}
-        """)
-
-        files = [
-            OutputFile(path=f"{pkg}-scm-1.rockspec", content=rockspec),
-            OutputFile(path=f"src/{pkg}.lua", content=lua_code),
-        ]
-
-        fn_names = extract_function_names(unit)
-
-        if test_type in ("both", "tripwire"):
-            tw_fn_checks = (
-                "\n".join(
-                    f'    assert(pcall(function() return lib.{name} end), "Symbol {name} missing from native library")'
-                    for name in fn_names[:10]
-                )
-                if fn_names
-                else '    assert(lib ~= nil, "Native library should be loaded")'
-            )
-            tripwire = render_block_template(
-                f"""\
-                local ffi = require("ffi")
-                local status, lib = pcall(ffi.load, "{pkg}")
-                if not status or not lib then
-                    error("Tripwire failure: native dynamic library '{pkg}' could not be loaded via LuaJIT FFI")
-                end
-                {DEDENT_BLOCK}
-            """,
-                tw_fn_checks,
-            )
-            files.append(OutputFile(path="tests/test_tripwire.lua", content=tripwire))
-
-        if test_type in ("both", "unit"):
-            unit_fn_checks = (
-                "\n".join(
-                    f'assert({pkg}.{name} ~= nil or (type({pkg}) == "table"), "Export {name} should be defined")'
-                    for name in fn_names[:10]
-                )
-                if fn_names
-                else f'assert(type({pkg}) == "table", "Module {pkg} should be a table")'
-            )
-            unit_test = render_block_template(
-                f"""\
-                local {pkg} = require("src.{pkg}")
-                assert(type({pkg}) == "table" or type({pkg}) == "userdata", "{pkg} bindings should export a valid table or library handle")
-                {DEDENT_BLOCK}
-            """,
-                unit_fn_checks,
-            )
-            files.append(OutputFile(path=f"tests/test_{pkg}.lua", content=unit_test))
-
-        return ProjectLayout(files=files)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Lua comments."""

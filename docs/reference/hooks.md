@@ -88,7 +88,7 @@ A project renamer registers at `Priority.PROJECT`; a writer registers its
 language's grammar rules at `Priority.FALLBACK` and therefore runs **last**.
 Whatever a project renames a symbol to must still survive the target language's
 lexer, and no configuration can bypass that floor. The Nim writer registers
-[`nim_legality_renamer`][headerkit.writers.nim.nim_legality_renamer] exactly the
+`_nim_legality_renamer` (`headerkit.writers.nim`) exactly the
 way it registers `write_output`.
 
 **`resolve_collision`** (`first_result`) decides what to do when two source
@@ -118,7 +118,7 @@ fails loudly.
 Renaming is not injective, and neither is the C-to-Nim spelling: `__sig` and
 `_sig` collapse under underscore repair, and to Nim `fooBar` and `foo_bar` are
 one identifier whatever the header called them
-([`nim_ident_identity`][headerkit.writers.nim.nim_ident_identity] is the
+(`_nim_ident_identity` in `headerkit.writers.nim` is the
 function that says so). Equality on the emitted string is the wrong test.
 
 ### Known limitation: collision checking is module-scope
@@ -199,16 +199,6 @@ A hook built from declarative config carries its config's digest, so two
 different rename configs cannot share a key. A hook written in Python is
 identified by module and qualified name: editing that function's body does not
 move the key, the same limitation writer plugins have with `cache_version`.
-
-## Scaffolding Lifecycle Hooks
-
-When project scaffolding is invoked (`--layout package`), HeaderKit executes specialized lifecycle hook points:
-
-1. **`resolve_version`** (`first_result`): Queries plugins to extract library version from custom metadata or AST declarations.
-2. **`scaffold_project`** (`first_result`): Allows Bring-Your-Own-Scaffolder plugins to replace the default `StdlibScaffolder` layout engine.
-3. **`scaffold_tests`** (`waterfall`): Post-processes and enriches test suites (e.g. generating 1:1 unit tests, tripwires, or test work orders).
-4. **`transform_layout`** (`waterfall`): Passes the complete `ProjectLayout` through sequential transformations (e.g. injecting platform frameworks, precompiled objects, or custom compiler flags into `nim.cfg` or `CMakeLists.txt`).
-5. **`merge_file`** (`first_result`): Allows plugins to handle custom file merging (e.g. AST-aware merge engines). Falls back to `merge_incremental_tests` when `OutputFile.merge_strategy` is set.
 
 ## API Reference
 

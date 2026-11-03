@@ -6,12 +6,12 @@ HeaderKit writers convert Intermediate Representation (IR) into target code, doc
 
 The standard and recommended way to create a writer is by inheriting from [`BaseWriter`][headerkit.writers.BaseWriter].
 
-`BaseWriter` handles single-string rendering (`writer.write(unit)`), layout scaffolding (`writer.write_layout(unit, options)`), layout validation, and option declarations out of the box:
+`BaseWriter` handles single-string rendering (`writer.write(unit)`), layout emission (`writer.write_layout(unit, options)`), layout validation, and option declarations out of the box:
 
 ```python
 from headerkit.ir import SourceUnit
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions
 from headerkit.writers import BaseWriter, WriterOption, register_writer
+from headerkit.writers.base import OutputFile, ProjectLayout, ScaffoldOptions
 
 
 class MarkdownWriter(BaseWriter):
@@ -63,13 +63,10 @@ Inheriting from `BaseWriter` gives you:
 
 1. **`write(unit)`**: Returns the rendered string output.
 2. **`write_layout(unit, options)`**: Produces single-file or multi-file package layouts according to `options.layout`.
-3. **CLI Integration**: Works immediately with the CLI for single files or scaffolded packages:
+3. **CLI Integration**: Works immediately with the CLI for single files:
    ```bash
-   # Single-file output (default)
+   # Single-file output
    headerkit mylib.h -w markdown -o docs.md
-
-   # Package scaffolding
-   headerkit mylib.h -w markdown --layout package --package-name mydocs -o ./docs_site
    ```
 4. **Introspection**: Supported options and layouts are automatically queryable via `list_writer_options("markdown")` and `list_writer_layouts("markdown")`.
 

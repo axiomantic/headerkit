@@ -44,16 +44,11 @@ from headerkit.reconcile import (
     MultiDimensionalReconciledUnit,
     PlatformGuardedBlock,
     ReconciledUnit,
-    condition_to_python,
 )
-from headerkit.scaffold import OutputFile, ProjectLayout, ScaffoldOptions, extract_function_names
-from headerkit.workorder import build_work_order_files
 from headerkit.writers.base import (
-    DEDENT_BLOCK,
     BaseWriter,
     WriterOption,
     module_level_bindings,
-    render_block_template,
 )
 
 # Maps C type names to their ctypes equivalents.
@@ -2380,9 +2375,6 @@ def header_to_ctypes(header: Header, lib_name: str = "_lib", *, library: str | N
     return "\n".join(output_lines)
 
 
-_condition_to_python = condition_to_python
-
-
 class CtypesWriter(BaseWriter):
     """Writer that generates Python ctypes binding modules from headerkit IR.
 
@@ -2419,17 +2411,12 @@ class CtypesWriter(BaseWriter):
     format_description: str = "Python ctypes bindings"
     default_output_pattern: str = "{dir}/{stem}_ctypes.py"
     default_extension: str = ".py"
-    supported_layouts: ClassVar[tuple[str, ...]] = ("file", "package", "project", "wheel")
+    file_extensions: ClassVar[tuple[str, ...] | None] = ()
+    supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     #: This writer reconstructs record layout rather than deferring to a C
     #: compiler, so it is the one consumer that needs the padding entries.
     consumes_padding_fields: ClassVar[bool] = True
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
-        WriterOption(
-            name="test_type",
-            description="Type of test stubs to generate",
-            default="both",
-            choices=("both", "tripwire", "unit", "none"),
-        ),
         WriterOption(
             name="lib_name",
             description="Variable name for loaded library instance",
@@ -2557,7 +2544,7 @@ class CtypesWriter(BaseWriter):
                 block_lines: list[str] = []
                 branches: Sequence[tuple[Any, list[Declaration]]] = item.branches
                 for idx, (b_cond, b_decls) in enumerate(branches):
-                    py_cond = _condition_to_python(b_cond, domain_matrix)
+                    py_cond = self.format_guard_condition(b_cond, domain_matrix)
                     kw = "if" if idx == 0 else "elif"
                     block_lines.append(f"{kw} {py_cond}:")
                     rendered_b = _render_decls(b_decls)
@@ -2582,116 +2569,6 @@ class CtypesWriter(BaseWriter):
             output_lines.append("\n\n".join(sections_out))
 
         return "\n".join(output_lines).rstrip() + "\n"
-
-    def _write_package_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        pkg = options.package_name
-        test_type = options.get_option("test_type", "both")
-        # The native library rarely shares the Python package's name -- a
-        # ``probe_bindings`` package around ``libprobe`` is the ordinary case --
-        # so the package name is the last resort, not the answer.
-        library = options.get_option("library") or pkg
-        # A package is a complete, importable artifact, so it loads its own
-        # library. The single-file layout stays a fragment and does not.
-        header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
-        bindings_code = self._render(unit, library=library)
-        fn_names = extract_function_names(unit)
-        # A function-less header still declares structs, enums and typedefs. The
-        # generated tests assert on those rather than on the module object,
-        # which ``AGENTS.md`` §1 prohibits as a sole assertion.
-        check_names = fn_names[:10] or declared_binding_names(header, self._lib_name)[:10]
-
-        pyproject = textwrap.dedent(f"""\
-            [build-system]
-            requires = ["setuptools>=61.0"]
-            build-backend = "setuptools.build_meta"
-
-            [project]
-            name = "{pkg}"
-            version = "0.1.0"
-            description = "Python ctypes bindings for {pkg}"
-            requires-python = ">=3.9"
-
-            [tool.setuptools.packages.find]
-            where = ["src"]
-        """)
-
-        init_py = textwrap.dedent(f"""\
-            \"\"\"{pkg} package initialization.\"\"\"
-            from {pkg}._bindings import *
-
-            __version__ = "0.1.0"
-        """)
-
-        files = [
-            OutputFile(path="pyproject.toml", content=pyproject),
-            OutputFile(path=f"src/{pkg}/__init__.py", content=init_py),
-            OutputFile(path=f"src/{pkg}/_bindings.py", content=bindings_code),
-        ]
-
-        if test_type in ("both", "tripwire"):
-            tw_fn_checks = "\n".join(
-                f'    assert hasattr(_bindings, "{name}"), "Symbol {name} missing from ctypes bindings"'
-                for name in check_names
-            ) or (
-                # A header declaring nothing at all leaves the load itself as
-                # the only thing to assert on. ``_lib`` is the CDLL, not the
-                # module, so this is still a claim about the native binary.
-                f'    assert _bindings.{self._lib_name} is not None, "the native library did not load"'
-            )
-            tripwire = render_block_template(
-                f"""\
-                import pytest
-                from {pkg} import _bindings
-
-                @pytest.mark.tripwire
-                def test_ctypes_tripwire():
-                    \"\"\"Tripwire: verify binary load and C symbols.\"\"\"
-                {DEDENT_BLOCK}
-            """,
-                tw_fn_checks,
-            )
-            files.append(OutputFile(path="tests/test_tripwire.py", content=tripwire))
-
-        if test_type in ("both", "unit"):
-            # No second ``ismodule`` restatement in the empty case: repeating the
-            # assertion already in the body adds a line and no coverage.
-            unit_fn_checks = "\n".join(
-                f'    assert hasattr(_bindings, "{name}"), "Expected declaration \'{name}\' in _bindings"'
-                for name in check_names
-            )
-            unit_test = render_block_template(
-                f"""\
-                import inspect
-                from {pkg} import _bindings
-
-                def test_{pkg}_declarations():
-                    \"\"\"Verify generated bindings module exports declarations.\"\"\"
-                    assert inspect.ismodule(_bindings)
-                {DEDENT_BLOCK}
-            """,
-                unit_fn_checks,
-            )
-            files.append(OutputFile(path="tests/test_bindings.py", content=unit_test))
-
-        if test_type in ("both", "unit"):
-            files.extend(build_work_order_files(unit, pkg, "python"))
-
-        return ProjectLayout(files=files)
-
-    def _write_custom_layout(
-        self,
-        unit: SourceUnit | Header,
-        options: ScaffoldOptions,
-    ) -> ProjectLayout:
-        if options.layout == "wheel":
-            from headerkit.packaging.ctypes import generate_ctypes_wheel_layout
-
-            return generate_ctypes_wheel_layout(unit, options)
-        return self._write_package_layout(unit, options)
 
     def hash_comment_format(self) -> str:
         """Return format string for wrapping TOML cache metadata in Python comments."""

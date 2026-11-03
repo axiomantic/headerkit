@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from headerkit.matrix.manifest import (
-    COMMENT_PREFIXES,
     MalformedOverrideError,
     MatrixManifest,
     emit_manifest_comment,
@@ -14,6 +13,7 @@ from headerkit.matrix.manifest import (
     inject_overrides,
 )
 from headerkit.matrix.matrix import ConfigMatrix
+from headerkit.writers import get_writer_comment_prefix
 
 
 def test_override_extraction_and_reinjection() -> None:
@@ -78,5 +78,5 @@ def test_manifest_roundtrip() -> None:
     assert parsed.schema_version == 1
     assert parsed.source_hash == "sha256:abc123def456"
     assert parsed.header_path == "include/test.h"
-    assert COMMENT_PREFIXES["nim"] == "#"
-    assert COMMENT_PREFIXES["c"] == "//"
+    assert get_writer_comment_prefix("nim") == "#"
+    assert get_writer_comment_prefix("c") == "//"

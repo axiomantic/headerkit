@@ -57,6 +57,28 @@ class WriterConfig:
 
 
 @dataclass
+class TargetConfig:
+    """Declarative multi-target entry from ``[[targets]]`` in ``headerkit.toml`` / ``pyproject.toml``."""
+
+    name: str = ""
+    writer: str = "json"
+    writers: list[str] = field(default_factory=list)
+    output: str | dict[str, str] | None = None
+    headers: list[str] = field(default_factory=list)
+    defines: list[str] = field(default_factory=list)
+    include_dirs: list[str] = field(default_factory=list)
+    backend: str | None = None
+    transforms: list[str | dict[str, object]] = field(default_factory=list)
+    options: dict[str, object] = field(default_factory=dict)
+    target: str | None = None
+    project_prefixes: list[str] = field(default_factory=list)
+    recursive_includes: bool = True
+    max_depth: int | None = None
+    use_default_includes: bool = True
+    extra_args: list[str] = field(default_factory=list)
+
+
+@dataclass
 class HeaderkitConfig:
     """Merged configuration from config file.
 
@@ -69,6 +91,7 @@ class HeaderkitConfig:
     defines: list[str] = field(default_factory=list)
     backend_args: list[str] = field(default_factory=list)
     plugins: list[str] = field(default_factory=list)
+    transforms: list[str | dict[str, object]] = field(default_factory=list)
     writer_options: dict[str, WriterConfig] = field(default_factory=dict)
     # Store directory for cache data
     store_dir: str | None = None
@@ -84,6 +107,8 @@ class HeaderkitConfig:
     output: dict[str, str] = field(default_factory=dict)
     # Per-pattern overrides (pattern string -> override config dict)
     header_overrides: dict[str, dict[str, object]] = field(default_factory=dict)
+    # Declarative multi-target configurations ([[targets]])
+    targets: list[TargetConfig] = field(default_factory=list)
     # Symbol renaming ([rename] section)
     rename: RenameConfig = field(default_factory=RenameConfig)
     # Resolved source path for error reporting
@@ -213,6 +238,25 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
     if "plugins" in data:
         config.plugins = _require_str_list(data["plugins"], "plugins", source)
 
+    # transforms: optional list of str or dict
+    if "transforms" in data:
+        transforms_val = data["transforms"]
+        if not isinstance(transforms_val, list):
+            raise ValueError(
+                f"headerkit: config error in {source}: transforms must be a list, got {type(transforms_val).__name__}"
+            )
+        parsed_transforms: list[str | dict[str, object]] = []
+        for item in transforms_val:
+            if isinstance(item, str):
+                parsed_transforms.append(item)
+            elif isinstance(item, dict):
+                parsed_transforms.append(cast(dict[str, object], item))
+            else:
+                raise ValueError(
+                    f"headerkit: config error in {source}: transforms entries must be str or table, got {type(item).__name__}"
+                )
+        config.transforms = parsed_transforms
+
     # target: optional string (target triple for cross-compilation)
     if "target" in data:
         val = data["target"]
@@ -231,12 +275,15 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
     if "exclude" in data:
         config.exclude = _require_str_list(data["exclude"], "exclude", source)
 
-    # headers: array of tables with "pattern" key and optional overrides
+    # headers: list of strings OR array of tables with "pattern" key and optional overrides
     if "headers" in data:
         headers_val = data["headers"]
         if not isinstance(headers_val, list):
-            raise ValueError(f"headerkit: config error in {source}: headers must be an array of tables")
+            raise ValueError(f"headerkit: config error in {source}: headers must be a list or an array of tables")
         for entry in headers_val:
+            if isinstance(entry, str):
+                config.headers.append(entry)
+                continue
             if not isinstance(entry, dict):
                 raise ValueError(f"headerkit: config error in {source}: each headers entry must be a table")
             entry_dict = cast(dict[str, object], entry)
@@ -303,19 +350,167 @@ def _extract_config(data: dict[str, object], source: Path) -> HeaderkitConfig:
         except RenameError as exc:
             raise ValueError(str(exc)) from exc
 
-    # writer options: [writer.NAME] sections -> writer_options[NAME].options
-    if "writer" in data:
-        val = data["writer"]
-        if not isinstance(val, dict):
-            raise ValueError(f"headerkit: config error in {source}: writer must be a table, got {type(val).__name__}")
-        writer_table: dict[str, object] = cast(dict[str, object], val)
-        for writer_name, writer_opts in writer_table.items():
-            if not isinstance(writer_opts, dict):
+    # writer options: [writer.NAME] or [writer_options.NAME] sections -> writer_options[NAME].options
+    for section_key in ("writer", "writer_options"):
+        if section_key in data:
+            val = data[section_key]
+            if not isinstance(val, dict):
                 raise ValueError(
-                    f"headerkit: config error in {source}: writer.{writer_name} must be a table, "
-                    f"got {type(writer_opts).__name__}"
+                    f"headerkit: config error in {source}: {section_key} must be a table, got {type(val).__name__}"
                 )
-            config.writer_options[writer_name] = WriterConfig(options=cast(dict[str, object], writer_opts))
+            writer_table: dict[str, object] = cast(dict[str, object], val)
+            for writer_name, writer_opts in writer_table.items():
+                if not isinstance(writer_opts, dict):
+                    raise ValueError(
+                        f"headerkit: config error in {source}: {section_key}.{writer_name} must be a table, "
+                        f"got {type(writer_opts).__name__}"
+                    )
+                if writer_name in config.writer_options:
+                    config.writer_options[writer_name].options.update(cast(dict[str, object], writer_opts))
+                else:
+                    config.writer_options[writer_name] = WriterConfig(
+                        options=dict(cast(dict[str, object], writer_opts))
+                    )
+
+    # targets: [[targets]] array of tables
+    if "targets" in data:
+        targets_val = data["targets"]
+        if not isinstance(targets_val, list):
+            raise ValueError(
+                f"headerkit: config error in {source}: targets must be an array of tables, got {type(targets_val).__name__}"
+            )
+        for idx, t_entry in enumerate(targets_val):
+            if not isinstance(t_entry, dict):
+                raise ValueError(
+                    f"headerkit: config error in {source}: each targets entry must be a table, got {type(t_entry).__name__}"
+                )
+            td = cast(dict[str, object], t_entry)
+            t_writer = td.get("writer")
+            t_writers_raw = td.get("writers")
+            if t_writer is not None and not isinstance(t_writer, str):
+                raise ValueError(f"headerkit: config error in {source}: targets[{idx}].writer must be str")
+            t_writers: list[str] = []
+            if t_writers_raw is not None:
+                t_writers = _require_str_list(t_writers_raw, f"targets[{idx}].writers", source)
+            if t_writer is None and t_writers:
+                t_writer = t_writers[0]
+            elif t_writer is None:
+                t_writer = "json"
+            if not t_writers:
+                t_writers = [t_writer]
+
+            t_name = td.get("name")
+            if t_name is not None and not isinstance(t_name, str):
+                raise ValueError(f"headerkit: config error in {source}: targets[{idx}].name must be str")
+            resolved_name = t_name or f"{t_writer}_{idx}"
+
+            t_output = td.get("output")
+            if t_output is not None and not isinstance(t_output, (str, dict)):
+                raise ValueError(f"headerkit: config error in {source}: targets[{idx}].output must be str or table")
+
+            t_headers = (
+                _require_str_list(td["headers"], f"targets[{idx}].headers", source)
+                if "headers" in td
+                else list(config.headers)
+            )
+            t_defines = (
+                _require_str_list(td["defines"], f"targets[{idx}].defines", source)
+                if "defines" in td
+                else list(config.defines)
+            )
+            t_includes = (
+                _require_str_list(td["include_dirs"], f"targets[{idx}].include_dirs", source)
+                if "include_dirs" in td
+                else list(config.include_dirs)
+            )
+            t_backend = td.get("backend", config.backend)
+            if t_backend is not None and not isinstance(t_backend, str):
+                raise ValueError(f"headerkit: config error in {source}: targets[{idx}].backend must be str")
+
+            t_transforms_raw = td.get("transforms")
+            t_transforms: list[str | dict[str, object]] = []
+            if t_transforms_raw is not None:
+                if not isinstance(t_transforms_raw, list):
+                    raise ValueError(f"headerkit: config error in {source}: targets[{idx}].transforms must be a list")
+                for tr in t_transforms_raw:
+                    if isinstance(tr, str):
+                        t_transforms.append(tr)
+                    elif isinstance(tr, dict):
+                        t_transforms.append(cast(dict[str, object], tr))
+                    else:
+                        raise ValueError(
+                            f"headerkit: config error in {source}: targets[{idx}].transforms entries must be str or table"
+                        )
+            elif config.transforms:
+                t_transforms = list(config.transforms)
+
+            t_options: dict[str, object] = {}
+            if len(t_writers) == 1 and t_writer in config.writer_options:
+                t_options.update(config.writer_options[t_writer].options)
+            elif len(t_writers) > 1:
+                for w in t_writers:
+                    if w in config.writer_options:
+                        t_options[w] = dict(config.writer_options[w].options)
+            raw_opts = td.get("options", td.get("writer_options"))
+            if raw_opts is not None:
+                if not isinstance(raw_opts, dict):
+                    raise ValueError(f"headerkit: config error in {source}: targets[{idx}].options must be a table")
+                for k, v in raw_opts.items():
+                    if k in t_options and isinstance(t_options[k], dict) and isinstance(v, dict):
+                        t_options[k] = {**cast(dict[str, object], t_options[k]), **cast(dict[str, object], v)}
+                    else:
+                        t_options[k] = v
+
+            t_target = td.get("target", config.target)
+            if t_target is not None and not isinstance(t_target, str):
+                raise ValueError(f"headerkit: config error in {source}: targets[{idx}].target must be str")
+
+            t_prefixes = (
+                _require_str_list(td["project_prefixes"], f"targets[{idx}].project_prefixes", source)
+                if "project_prefixes" in td
+                else []
+            )
+            t_rec_includes = td.get("recursive_includes", True)
+            if not isinstance(t_rec_includes, bool):
+                raise ValueError(f"headerkit: config error in {source}: targets[{idx}].recursive_includes must be bool")
+            t_max_depth = td.get("max_depth")
+            if t_max_depth is not None and (isinstance(t_max_depth, bool) or not isinstance(t_max_depth, int)):
+                raise ValueError(f"headerkit: config error in {source}: targets[{idx}].max_depth must be int")
+            t_use_def_inc = td.get("use_default_includes", True)
+            if not isinstance(t_use_def_inc, bool):
+                raise ValueError(
+                    f"headerkit: config error in {source}: targets[{idx}].use_default_includes must be bool"
+                )
+            t_extra_args = (
+                _require_str_list(td["extra_args"], f"targets[{idx}].extra_args", source)
+                if "extra_args" in td
+                else (
+                    _require_str_list(td["backend_args"], f"targets[{idx}].backend_args", source)
+                    if "backend_args" in td
+                    else list(config.backend_args)
+                )
+            )
+
+            config.targets.append(
+                TargetConfig(
+                    name=resolved_name,
+                    writer=t_writer,
+                    writers=t_writers,
+                    output=cast("str | dict[str, str] | None", t_output),
+                    headers=t_headers,
+                    defines=t_defines,
+                    include_dirs=t_includes,
+                    backend=t_backend,
+                    transforms=t_transforms,
+                    options=t_options,
+                    target=t_target,
+                    project_prefixes=t_prefixes,
+                    recursive_includes=t_rec_includes,
+                    max_depth=t_max_depth,
+                    use_default_includes=t_use_def_inc,
+                    extra_args=t_extra_args,
+                )
+            )
 
     return config
 
@@ -401,6 +596,10 @@ def merge_config(config: HeaderkitConfig | None, args: argparse.Namespace) -> ar
     # exclude: prepend config excludes (CLI --exclude appends)
     cli_excludes: list[str] = list(getattr(args, "exclude_patterns", None) or [])
     args.exclude_patterns = config.exclude + cli_excludes
+
+    # transforms: prepend config transforms (CLI --transform appends)
+    cli_transforms: list[object] = list(getattr(args, "transforms", None) or [])
+    args.transforms = list(config.transforms) + cli_transforms
 
     # writer_opts: merge config writer options (CLI values win per-key)
     # NOTE (F1): Populated for test assertions only. Not consumed by main().

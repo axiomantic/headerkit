@@ -8,6 +8,7 @@ entries. All write operations use atomic writes for metadata
 
 from __future__ import annotations
 
+import hashlib
 import importlib.metadata
 import json
 import logging
@@ -23,6 +24,32 @@ from headerkit.ir import Header
 from headerkit.writers.json import header_to_json_dict
 
 logger = logging.getLogger("headerkit.cache")
+
+
+def _collect_included_headers_meta(
+    included_headers: set[str],
+    header_path: str | None = None,
+) -> dict[str, dict[str, int | str]]:
+    """Record mtime_ns, size, and sha256 for existing header files on disk."""
+    meta: dict[str, dict[str, int | str]] = {}
+    candidates = set(included_headers)
+    if header_path:
+        candidates.add(header_path)
+    for raw_path in sorted(candidates):
+        p = Path(raw_path)
+        if not p.is_file():
+            continue
+        try:
+            st = p.stat()
+            digest = hashlib.sha256(p.read_bytes()).hexdigest()
+            meta[raw_path] = {
+                "mtime_ns": st.st_mtime_ns,
+                "size": st.st_size,
+                "sha256": digest,
+            }
+        except OSError:
+            continue
+    return meta
 
 
 def find_cache_dir(start_path: Path) -> Path | None:
@@ -101,6 +128,7 @@ def write_ir_entry(
 
     # Write metadata.json atomically
     now = datetime.now(UTC).isoformat()
+    included_headers_meta = _collect_included_headers_meta(header.included_headers, header_path)
     metadata: dict[str, Any] = {
         "cache_key": cache_key,
         "ir_schema_version": _IR_SCHEMA_VERSION,
@@ -110,6 +138,7 @@ def write_ir_entry(
         "defines": defines,
         "includes": includes,
         "other_args": other_args,
+        "included_headers": included_headers_meta,
         "created": now,
         "headerkit_version": importlib.metadata.version("headerkit"),
     }
@@ -151,6 +180,36 @@ def read_ir_entry(*, cache_dir: Path, slug: str) -> Header | None:
                 entry_dir,
             )
             return None
+
+        included_meta = meta.get("included_headers")
+        if isinstance(included_meta, dict):
+            for inc_path_str, expected in included_meta.items():
+                if not isinstance(expected, dict):
+                    continue
+                inc_path = Path(inc_path_str)
+                if not inc_path.is_file():
+                    logger.info(
+                        "Included header missing (%s) for %s, treating as cache miss",
+                        inc_path_str,
+                        entry_dir,
+                    )
+                    return None
+                st = inc_path.stat()
+                if st.st_size != expected.get("size"):
+                    logger.info(
+                        "Included header size changed (%s) for %s, treating as cache miss",
+                        inc_path_str,
+                        entry_dir,
+                    )
+                    return None
+                actual_sha = hashlib.sha256(inc_path.read_bytes()).hexdigest()
+                if actual_sha != expected.get("sha256"):
+                    logger.info(
+                        "Included header content changed (%s) for %s, treating as cache miss",
+                        inc_path_str,
+                        entry_dir,
+                    )
+                    return None
 
         ir_text = ir_path.read_text(encoding="utf-8")
         ir_data = json.loads(ir_text)

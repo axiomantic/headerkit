@@ -1822,6 +1822,21 @@ class TestClassTemplateForwardDeclaration:
             (["T"], {"value_type": "T"}, True)
         ]
 
+    def test_forward_declaration_after_definition_is_ignored(self) -> None:
+        source = textwrap.dedent("""\
+            template <typename T> class Box {
+            public:
+                T value;
+            };
+            template <typename T> class Box;
+        """)
+        unit = LibclangBackend().parse(source, "box.hpp")
+        structs = [d for d in unit.declarations if isinstance(d, Struct)]
+        assert len(structs) == 1
+        assert structs[0].name == "Box"
+        assert structs[0].has_body is True
+        assert [f.name for f in structs[0].fields] == ["value"]
+
 
 @libclang
 class TestBitfieldWidths:

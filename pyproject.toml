@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "headerkit"
-version = "0.49.4"
-description = "The universal C/C++ interop toolkit. Generates production-ready bindings and complete package scaffolding for Python, Nim, Mojo, LuaJIT, and C shims."
+version = "0.50.0"
+description = "The universal C/C++ header parser and FFI declaration generator for Python (cffi, ctypes, Cython, pyi), LuaJIT, JSON IR, and LLM prompts."
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
 license-files = ["LICENSE", "headerkit/_clang/LICENSE"]

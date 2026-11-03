@@ -33,6 +33,7 @@ from headerkit.ir import (
     Reference,
     SourceLocation,
     Struct,
+    TemplateParameter,
     Typedef,
     TypeExpr,
     Variable,
@@ -97,6 +98,8 @@ def _dict_to_function_pointer(d: dict[str, Any]) -> FunctionPointer:
         parameters=[_dict_to_parameter(p) for p in d.get("parameters", [])],
         is_variadic=d.get("is_variadic", False),
         calling_convention=d.get("calling_convention"),
+        qualifiers=d.get("qualifiers", _default(FunctionPointer, "qualifiers")),
+        is_pointer=d.get("is_pointer", _default(FunctionPointer, "is_pointer")),
     )
 
 
@@ -130,6 +133,7 @@ def _dict_to_parameter(d: dict[str, Any]) -> Parameter:
         name=d.get("name"),
         type=_dict_to_type(d["type"]),
         default_value=d.get("default_value"),
+        type_overrides=d.get("type_overrides", _default(Parameter, "type_overrides")),
     )
 
 
@@ -138,6 +142,16 @@ def _dict_to_base(d: dict[str, Any]) -> BaseSpecifier:
         name=d["name"],
         access=d.get("access", _default(BaseSpecifier, "access")),
         is_virtual=d.get("is_virtual", _default(BaseSpecifier, "is_virtual")),
+    )
+
+
+def _dict_to_template_param(d: dict[str, Any]) -> TemplateParameter:
+    return TemplateParameter(
+        name=d["name"],
+        default_value=d.get("default_value", _default(TemplateParameter, "default_value")),
+        is_type=d.get("is_type", _default(TemplateParameter, "is_type")),
+        type_name=d.get("type_name", _default(TemplateParameter, "type_name")),
+        is_parameter_pack=d.get("is_parameter_pack", _default(TemplateParameter, "is_parameter_pack")),
     )
 
 
@@ -151,6 +165,7 @@ def _dict_to_field(d: dict[str, Any]) -> Field:
         is_anonymous_transparent=d.get("is_anonymous_transparent", _default(Field, "is_anonymous_transparent")),
         access=d.get("access", _default(Field, "access")),
         is_static=d.get("is_static", _default(Field, "is_static")),
+        type_overrides=d.get("type_overrides", _default(Field, "type_overrides")),
     )
 
 
@@ -185,6 +200,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         is_packed=d.get("is_packed", _default(Struct, "is_packed")),
         namespace=d.get("namespace"),
         template_params=d.get("template_params", []),
+        template_parameters=[_dict_to_template_param(tp) for tp in d.get("template_parameters", [])],
         cpp_name=d.get("cpp_name"),
         notes=d.get("notes", []),
         inner_typedefs=d.get("inner_typedefs", {}),
@@ -197,6 +213,7 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         vtable_entries=([_dict_to_function(v) for v in d["vtable_entries"]] if "vtable_entries" in d else []),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
+        access=d.get("access", _default(Struct, "access")),
         alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
@@ -227,6 +244,7 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         calling_convention=d.get("calling_convention"),
         namespace=d.get("namespace"),
         template_params=d.get("template_params", []),
+        template_parameters=[_dict_to_template_param(tp) for tp in d.get("template_parameters", [])],
         is_static=d.get("is_static", False),
         is_const=d.get("is_const", False),
         is_virtual=d.get("is_virtual", False),
@@ -240,6 +258,8 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         body=d.get("body"),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
+        mangled_name=d.get("mangled_name"),
+        type_overrides=d.get("type_overrides", _default(Function, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )
@@ -252,6 +272,7 @@ def _dict_to_typedef(d: dict[str, Any]) -> Typedef:
         namespace=d.get("namespace"),
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
+        type_overrides=d.get("type_overrides", _default(Typedef, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )
@@ -265,6 +286,8 @@ def _dict_to_variable(d: dict[str, Any]) -> Variable:
         attributes=d.get("attributes", []),
         is_deprecated=d.get("is_deprecated", False),
         alignment=d.get("alignment"),
+        mangled_name=d.get("mangled_name"),
+        type_overrides=d.get("type_overrides", _default(Variable, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )
@@ -278,6 +301,7 @@ def _dict_to_constant(d: dict[str, Any]) -> Constant:
         raw_expression=d.get("raw_expression"),
         type=_dict_to_ctype(d["type"]) if "type" in d else None,
         is_macro=d.get("is_macro", False),
+        is_macro_expr=d.get("is_macro_expr", _default(Constant, "is_macro_expr")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
     )
