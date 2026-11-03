@@ -3,6 +3,8 @@
 import textwrap
 from pathlib import Path
 
+import pytest
+
 from headerkit.ir import (
     Array,
     BaseSpecifier,
@@ -1456,11 +1458,16 @@ class TestCythonWindowsPaths:
         pxd_file = next(f for f in layout.files if f.path.endswith(".pxd"))
         assert 'cdef extern from "api.h":' in pxd_file.content
 
-    def test_posix_backslash_and_quote_escaping(self) -> None:
-        """POSIX paths containing literal backslashes or quotes are escaped in extern string literals."""
+    def test_posix_backslash_and_quote_escaping(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """POSIX paths escape literal backslashes and quotes; Windows paths normalize backslashes."""
         h = Header(r'a\b"c.h', [Function("foo", CType("void"), [])])
-        out = write_pxd(h)
-        assert out == 'cdef extern from "a\\\\b\\"c.h":\n\n    void foo()\n'
+        monkeypatch.setattr("headerkit.writers.cython.os.sep", "/")
+        out_posix = write_pxd(h)
+        assert out_posix == 'cdef extern from "a\\\\b\\"c.h":\n\n    void foo()\n'
+
+        monkeypatch.setattr("headerkit.writers.cython.os.sep", "\\")
+        out_win = write_pxd(h)
+        assert out_win == 'cdef extern from "a/b\\"c.h":\n\n    void foo()\n'
 
     def test_stub_cimport_prefix_none_emits_undeclared_struct_forward(self) -> None:
         """When stub_cimport_prefix=None, struct sockaddr is forward-declared instead of dropped."""
