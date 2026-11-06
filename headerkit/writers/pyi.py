@@ -217,25 +217,58 @@ class PyiWriter(BaseWriter):
         self._enum_tags: dict[str, str] = {}
         self._typedef_map: dict[str, TypeExpr] = {}
         self._contested_tags: set[str] = set()
-        self._known_structs: set[str] = set()
 
-    def _typedef_resolves_to_struct(
+    def _typedef_resolves_to_primitive_or_pointer(
         self,
-        type_expr: TypeExpr,
+        key: str,
         _seen: frozenset[str] = frozenset(),
     ) -> bool:
-        if isinstance(type_expr, Struct):
+        if key not in self._typedef_map or key in _seen:
+            return False
+        underlying = self._typedef_map[key]
+        if isinstance(underlying, Pointer):
+            return not isinstance(underlying.pointee, FunctionPointer)
+        if isinstance(underlying, CType):
+            if underlying.is_elaborated is True:
+                return False
+            u_key = _normalize_ctype_key(underlying)
+            if u_key == "void" or u_key in _BOOL_TYPES or u_key in _INT_TYPES or u_key in _FLOAT_TYPES:
+                return True
+            return self._typedef_resolves_to_primitive_or_pointer(u_key, _seen | {key})
+        return False
+
+    def _typedef_resolves_to_pointer_or_fnptr(
+        self,
+        key: str,
+        _seen: frozenset[str] = frozenset(),
+    ) -> bool:
+        if key not in self._typedef_map or key in _seen:
+            return False
+        underlying = self._typedef_map[key]
+        if isinstance(underlying, FunctionPointer):
             return True
-        if isinstance(type_expr, CType):
-            u_key = _normalize_ctype_key(type_expr)
-            if u_key in self._known_structs or u_key in self._record_tags:
+        if isinstance(underlying, Pointer):
+            if isinstance(underlying.pointee, FunctionPointer):
                 return True
-            if u_key.startswith("struct ") or u_key.startswith("union "):
-                return True
-            if type_expr.is_elaborated is True and u_key not in self._enum_tags and not u_key.startswith("enum "):
-                return True
-            if u_key in self._typedef_map and u_key not in _seen:
-                return self._typedef_resolves_to_struct(self._typedef_map[u_key], _seen | {u_key})
+            if isinstance(underlying.pointee, Struct):
+                return bool(underlying.pointee.name and underlying.pointee.name.strip())
+            if isinstance(underlying.pointee, CType):
+                if underlying.pointee.is_elaborated is True:
+                    return True
+                p_key = _normalize_ctype_key(underlying.pointee)
+                if p_key == "char":
+                    return True
+                return not (
+                    p_key == "void"
+                    or p_key in _BOOL_TYPES
+                    or p_key in _INT_TYPES
+                    or p_key in _FLOAT_TYPES
+                    or self._typedef_resolves_to_primitive_or_pointer(p_key, _seen | {key})
+                )
+            return False
+        if isinstance(underlying, CType) and underlying.is_elaborated is not True:
+            u_key = _normalize_ctype_key(underlying)
+            return self._typedef_resolves_to_pointer_or_fnptr(u_key, _seen | {key})
         return False
 
     def _is_excluded(self, name: str | None) -> bool:
@@ -319,12 +352,25 @@ class PyiWriter(BaseWriter):
             res = _sanitize_identifier(key, fallback="Any")
             if res == "Any":
                 self._needs_any = True
+                return "Any"
+            if (
+                is_param
+                and self.mode == "cffi"
+                and self.pointer_style != "ctypes"
+                and self._typedef_resolves_to_pointer_or_fnptr(key)
+            ):
+                self._needs_cffi = True
+                return f"{res} | cffi.FFI.CData"
             return res
 
         if isinstance(type_expr, Pointer):
             pointee = type_expr.pointee
             if isinstance(pointee, FunctionPointer) and (not pointee.is_pointer or self.pointer_style != "ctypes"):
-                return self._format_function_pointer(pointee)
+                fn_ptr_str = self._format_function_pointer(pointee)
+                if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                    self._needs_cffi = True
+                    return f"{fn_ptr_str} | cffi.FFI.CData"
+                return fn_ptr_str
             if self.pointer_style == "ctypes":
                 if isinstance(pointee, CType):
                     p_key = _normalize_ctype_key(pointee)
@@ -353,21 +399,11 @@ class PyiWriter(BaseWriter):
                 p_key = _normalize_ctype_key(pointee)
                 if pointee.is_elaborated is True:
                     resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
-                    if resolved is not None:
-                        if is_param and self.mode == "cffi" and p_key in self._known_structs:
-                            self._needs_cffi = True
-                            return f"{resolved} | cffi.FFI.CData"
-                        return resolved
-                    res = _sanitize_identifier(p_key, fallback="Any")
+                    res = resolved if resolved is not None else _sanitize_identifier(p_key, fallback="Any")
                     if res == "Any":
                         self._needs_any = True
                         return "Any"
-                    if (
-                        is_param
-                        and self.mode == "cffi"
-                        and p_key not in self._enum_tags
-                        and not p_key.startswith("enum ")
-                    ):
+                    if is_param and self.mode == "cffi":
                         self._needs_cffi = True
                         return f"{res} | cffi.FFI.CData"
                     return res
@@ -390,17 +426,15 @@ class PyiWriter(BaseWriter):
                         is_param=is_param,
                         _seen_typedefs=_seen_typedefs | {p_key},
                     )
+                if self._typedef_resolves_to_primitive_or_pointer(p_key):
+                    self._needs_any = True
+                    return "Any"
                 resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
-                if resolved is not None:
-                    if is_param and self.mode == "cffi" and p_key in self._known_structs:
-                        self._needs_cffi = True
-                        return f"{resolved} | cffi.FFI.CData"
-                    return resolved
-                res = _sanitize_identifier(p_key, fallback="Any")
+                res = resolved if resolved is not None else _sanitize_identifier(p_key, fallback="Any")
                 if res == "Any":
                     self._needs_any = True
                     return "Any"
-                if is_param and self.mode == "cffi" and (p_key in self._known_structs or res in self._known_structs):
+                if is_param and self.mode == "cffi":
                     self._needs_cffi = True
                     return f"{res} | cffi.FFI.CData"
                 return res
@@ -421,7 +455,11 @@ class PyiWriter(BaseWriter):
             return f"list[{elem}]"
 
         if isinstance(type_expr, FunctionPointer):
-            return self._format_function_pointer(type_expr)
+            fn_ptr_str = self._format_function_pointer(type_expr)
+            if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                return f"{fn_ptr_str} | cffi.FFI.CData"
+            return fn_ptr_str
 
         self._needs_any = True
         return "Any"
@@ -643,7 +681,6 @@ class PyiWriter(BaseWriter):
         self._enum_tags = {}
         self._typedef_map = {}
         self._contested_tags = set()
-        self._known_structs = set()
 
         defined_record_names: set[str] = set()
         raw_record_tags: set[str] = set()
@@ -656,9 +693,6 @@ class PyiWriter(BaseWriter):
                 keyword = "union" if decl.is_union else "struct"
                 self._record_tags[tag] = cls_name
                 self._record_tags[f"{keyword} {tag}"] = cls_name
-                self._known_structs.add(tag)
-                self._known_structs.add(f"{keyword} {tag}")
-                self._known_structs.add(cls_name)
             elif isinstance(decl, Enum) and decl.name and not self._is_excluded(decl.name):
                 tag = decl.name.strip()
                 cls_name = _sanitize_identifier(tag)
@@ -678,13 +712,6 @@ class PyiWriter(BaseWriter):
                     and (self._record_tags.get(u_name) or self._enum_tags.get(u_name)) == _sanitize_identifier(td_name)
                 ):
                     self._contested_tags.add(td_name)
-
-        for td_name, underlying in self._typedef_map.items():
-            if td_name not in self._contested_tags and self._typedef_resolves_to_struct(
-                underlying, frozenset({td_name})
-            ):
-                self._known_structs.add(td_name)
-                self._known_structs.add(_sanitize_identifier(td_name))
 
         body_blocks: list[str] = []
         lib_member_lines: list[str] = []
