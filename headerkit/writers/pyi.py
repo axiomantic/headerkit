@@ -245,7 +245,7 @@ class PyiWriter(BaseWriter):
         if key not in self._typedef_map or key in _seen:
             return False
         underlying = self._typedef_map[key]
-        if isinstance(underlying, FunctionPointer):
+        if isinstance(underlying, (FunctionPointer, Array)):
             return True
         if isinstance(underlying, Pointer):
             if isinstance(underlying.pointee, FunctionPointer):
@@ -450,9 +450,14 @@ class PyiWriter(BaseWriter):
                 and type_expr.element_type.is_elaborated is not True
                 and _normalize_ctype_key(type_expr.element_type) == "char"
             ):
-                return "bytes"
-            elem = self._format_type(type_expr.element_type, is_param=False)
-            return f"list[{elem}]"
+                arr_res = "bytes"
+            else:
+                elem = self._format_type(type_expr.element_type, is_param=False)
+                arr_res = f"list[{elem}]"
+            if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                return f"{arr_res} | cffi.FFI.CData"
+            return arr_res
 
         if isinstance(type_expr, FunctionPointer):
             fn_ptr_str = self._format_function_pointer(type_expr)
