@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `PyiWriter` (`headerkit/writers/pyi.py`): in `mode="cffi"`, widen C function and `extern_python` callback pointer parameter annotations (`is_param=True`) for struct, union, opaque record, and typedef-to-struct pointers to `<StructName> | cffi.FFI.CData` and `char *` / `const char *` pointer parameters to `bytes | str | cffi.FFI.CData` (automatically registering `import cffi`), while keeping return types, struct fields, and by-value struct parameters narrowed.
+
 ## [0.50.0] - 2026-11-03
 
 ### Added
