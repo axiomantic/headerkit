@@ -142,7 +142,7 @@ class PyiWriter(BaseWriter):
     default_extension: str = ".pyi"
     output_extension: str = ".pyi"
     cache_output: bool = True
-    cache_version: str = "2"
+    cache_version: str = "3"
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
@@ -218,6 +218,59 @@ class PyiWriter(BaseWriter):
         self._typedef_map: dict[str, TypeExpr] = {}
         self._contested_tags: set[str] = set()
 
+    def _typedef_resolves_to_primitive_or_pointer(
+        self,
+        key: str,
+        _seen: frozenset[str] = frozenset(),
+    ) -> bool:
+        if key not in self._typedef_map or key in _seen:
+            return False
+        underlying = self._typedef_map[key]
+        if isinstance(underlying, Pointer):
+            return not isinstance(underlying.pointee, FunctionPointer)
+        if isinstance(underlying, CType):
+            if underlying.is_elaborated is True:
+                return False
+            u_key = _normalize_ctype_key(underlying)
+            if u_key == "void" or u_key in _BOOL_TYPES or u_key in _INT_TYPES or u_key in _FLOAT_TYPES:
+                return True
+            return self._typedef_resolves_to_primitive_or_pointer(u_key, _seen | {key})
+        return False
+
+    def _typedef_resolves_to_pointer_or_fnptr(
+        self,
+        key: str,
+        _seen: frozenset[str] = frozenset(),
+    ) -> bool:
+        if key not in self._typedef_map or key in _seen:
+            return False
+        underlying = self._typedef_map[key]
+        if isinstance(underlying, (FunctionPointer, Array)):
+            return True
+        if isinstance(underlying, Pointer):
+            if isinstance(underlying.pointee, FunctionPointer):
+                return True
+            if isinstance(underlying.pointee, Struct):
+                return bool(underlying.pointee.name and underlying.pointee.name.strip())
+            if isinstance(underlying.pointee, CType):
+                if underlying.pointee.is_elaborated is True:
+                    return True
+                p_key = _normalize_ctype_key(underlying.pointee)
+                if p_key == "char":
+                    return True
+                return not (
+                    p_key == "void"
+                    or p_key in _BOOL_TYPES
+                    or p_key in _INT_TYPES
+                    or p_key in _FLOAT_TYPES
+                    or self._typedef_resolves_to_primitive_or_pointer(p_key, _seen | {key})
+                )
+            return False
+        if isinstance(underlying, CType) and underlying.is_elaborated is not True:
+            u_key = _normalize_ctype_key(underlying)
+            return self._typedef_resolves_to_pointer_or_fnptr(u_key, _seen | {key})
+        return False
+
     def _is_excluded(self, name: str | None) -> bool:
         if not name or not self._compiled_excludes:
             return False
@@ -242,6 +295,8 @@ class PyiWriter(BaseWriter):
         cleaned = raw.strip().replace("ctypes.pointer[", "ctypes._Pointer[")
         if not self._is_valid_python_expr(cleaned):
             return None
+        if "cffi." in cleaned:
+            self._needs_cffi = True
         if "ctypes." in cleaned:
             self._needs_ctypes = True
         if re.search(r"\bAny\b", cleaned):
@@ -257,6 +312,16 @@ class PyiWriter(BaseWriter):
         is_param: bool = False,
         _seen_typedefs: frozenset[str] = frozenset(),
     ) -> str:
+        if isinstance(type_expr, Struct):
+            if type_expr.name and type_expr.name.strip():
+                s_key = type_expr.name.strip()
+                resolved = self._record_tags.get(s_key) or _sanitize_identifier(s_key, fallback="Any")
+                if resolved == "Any":
+                    self._needs_any = True
+                return resolved
+            self._needs_any = True
+            return "Any"
+
         if isinstance(type_expr, CType):
             key = _normalize_ctype_key(type_expr)
             if type_expr.is_elaborated is True:
@@ -287,12 +352,25 @@ class PyiWriter(BaseWriter):
             res = _sanitize_identifier(key, fallback="Any")
             if res == "Any":
                 self._needs_any = True
+                return "Any"
+            if (
+                is_param
+                and self.mode == "cffi"
+                and self.pointer_style != "ctypes"
+                and self._typedef_resolves_to_pointer_or_fnptr(key)
+            ):
+                self._needs_cffi = True
+                return f"{res} | cffi.FFI.CData"
             return res
 
         if isinstance(type_expr, Pointer):
             pointee = type_expr.pointee
             if isinstance(pointee, FunctionPointer) and (not pointee.is_pointer or self.pointer_style != "ctypes"):
-                return self._format_function_pointer(pointee)
+                fn_ptr_str = self._format_function_pointer(pointee)
+                if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                    self._needs_cffi = True
+                    return f"{fn_ptr_str} | cffi.FFI.CData"
+                return fn_ptr_str
             if self.pointer_style == "ctypes":
                 if isinstance(pointee, CType):
                     p_key = _normalize_ctype_key(pointee)
@@ -304,18 +382,38 @@ class PyiWriter(BaseWriter):
                 inner = self._format_type(pointee, is_param=False, _seen_typedefs=_seen_typedefs)
                 self._needs_ctypes = True
                 return f"ctypes._Pointer[{inner}]"
+            if isinstance(pointee, Struct):
+                if pointee.name and pointee.name.strip():
+                    s_key = pointee.name.strip()
+                    resolved = self._record_tags.get(s_key) or _sanitize_identifier(s_key, fallback="Any")
+                    if resolved == "Any":
+                        self._needs_any = True
+                        return "Any"
+                    if is_param and self.mode == "cffi":
+                        self._needs_cffi = True
+                        return f"{resolved} | cffi.FFI.CData"
+                    return resolved
+                self._needs_any = True
+                return "Any"
             if isinstance(pointee, CType):
                 p_key = _normalize_ctype_key(pointee)
                 if pointee.is_elaborated is True:
                     resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
-                    if resolved is not None:
-                        return resolved
-                    res = _sanitize_identifier(p_key, fallback="Any")
+                    res = resolved if resolved is not None else _sanitize_identifier(p_key, fallback="Any")
                     if res == "Any":
                         self._needs_any = True
+                        return "Any"
+                    if is_param and self.mode == "cffi":
+                        self._needs_cffi = True
+                        return f"{res} | cffi.FFI.CData"
                     return res
                 if p_key == "char":
-                    return "bytes | str" if is_param else "bytes"
+                    if is_param:
+                        if self.mode == "cffi":
+                            self._needs_cffi = True
+                            return "bytes | str | cffi.FFI.CData"
+                        return "bytes | str"
+                    return "bytes"
                 if p_key == "void":
                     self._needs_any = True
                     return "Any"
@@ -328,12 +426,17 @@ class PyiWriter(BaseWriter):
                         is_param=is_param,
                         _seen_typedefs=_seen_typedefs | {p_key},
                     )
+                if self._typedef_resolves_to_primitive_or_pointer(p_key):
+                    self._needs_any = True
+                    return "Any"
                 resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
-                if resolved is not None:
-                    return resolved
-                res = _sanitize_identifier(p_key, fallback="Any")
+                res = resolved if resolved is not None else _sanitize_identifier(p_key, fallback="Any")
                 if res == "Any":
                     self._needs_any = True
+                    return "Any"
+                if is_param and self.mode == "cffi":
+                    self._needs_cffi = True
+                    return f"{res} | cffi.FFI.CData"
                 return res
             self._needs_any = True
             return "Any"
@@ -347,12 +450,21 @@ class PyiWriter(BaseWriter):
                 and type_expr.element_type.is_elaborated is not True
                 and _normalize_ctype_key(type_expr.element_type) == "char"
             ):
-                return "bytes"
-            elem = self._format_type(type_expr.element_type, is_param=False)
-            return f"list[{elem}]"
+                arr_res = "bytes"
+            else:
+                elem = self._format_type(type_expr.element_type, is_param=False)
+                arr_res = f"list[{elem}]"
+            if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                return f"{arr_res} | cffi.FFI.CData"
+            return arr_res
 
         if isinstance(type_expr, FunctionPointer):
-            return self._format_function_pointer(type_expr)
+            fn_ptr_str = self._format_function_pointer(type_expr)
+            if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                return f"{fn_ptr_str} | cffi.FFI.CData"
+            return fn_ptr_str
 
         self._needs_any = True
         return "Any"
@@ -706,10 +818,9 @@ class PyiWriter(BaseWriter):
                         if py_cb_name in emitted_lib_funcs:
                             continue
                         emitted_lib_funcs.add(py_cb_name)
+                        ret_clean = re.sub(r"\b(const|volatile|restrict)\b", "", ret_raw.rstrip("*")).strip()
                         ret_t: TypeExpr = (
-                            Pointer(CType(ret_raw.rstrip("*").strip()))
-                            if ret_raw.endswith("*")
-                            else CType(ret_raw or "void")
+                            Pointer(CType(ret_clean or "void")) if ret_raw.endswith("*") else CType(ret_clean or "void")
                         )
                         cb_params: list[Parameter] = []
                         if params_raw and params_raw != "void":
@@ -720,9 +831,11 @@ class PyiWriter(BaseWriter):
                                 if "*" in p_clean:
                                     lhs, rhs = p_clean.rsplit("*", 1)
                                     p_n = rhs.strip() or f"arg{p_idx}"
-                                    p_t: TypeExpr = Pointer(CType(lhs.rstrip("*").strip() or "void"))
+                                    lhs_clean = re.sub(r"\b(const|volatile|restrict)\b", "", lhs.rstrip("*")).strip()
+                                    p_t: TypeExpr = Pointer(CType(lhs_clean or "void"))
                                 else:
-                                    parts = p_clean.rsplit(None, 1)
+                                    p_no_cv = re.sub(r"\b(const|volatile|restrict)\b", "", p_clean).strip()
+                                    parts = p_no_cv.rsplit(None, 1)
                                     if (
                                         len(parts) == 2
                                         and parts[1].isidentifier()
@@ -731,7 +844,7 @@ class PyiWriter(BaseWriter):
                                         p_t = CType(parts[0].strip())
                                         p_n = parts[1].strip()
                                     else:
-                                        p_t = CType(p_clean)
+                                        p_t = CType(p_no_cv or "void")
                                         p_n = f"arg{p_idx}"
                                 cb_params.append(Parameter(p_n, p_t))
                         synth_fn = Function(cb_name, ret_t, cb_params)
