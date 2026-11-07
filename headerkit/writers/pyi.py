@@ -105,6 +105,8 @@ _FLOAT_TYPES: frozenset[str] = frozenset(
     }
 )
 
+_STD_PRELUDE_TYPEDEFS: frozenset[str] = _BOOL_TYPES | _INT_TYPES | _FLOAT_TYPES | frozenset({"void"})
+
 
 def _sanitize_identifier(name: str, fallback: str = "arg") -> str:
     """Convert a C identifier into a valid non-keyword Python identifier."""
@@ -837,7 +839,7 @@ class PyiWriter(BaseWriter):
                     prelude_lines = ["#include <stdint.h>", "#include <stddef.h>", "#include <stdbool.h>"]
                     known_type_names = set(self._typedef_map) | set(self._record_tags) | set(self._enum_tags)
                     for t_name in sorted(known_type_names):
-                        if " " not in t_name and t_name.isidentifier():
+                        if " " not in t_name and t_name.isidentifier() and t_name not in _STD_PRELUDE_TYPEDEFS:
                             prelude_lines.append(f"typedef int {t_name};")
                     proto_src = "\n".join([*prelude_lines, f"{stripped};"])
                     parsed_ext = proto_backend.parse(proto_src, "extern_python.h")

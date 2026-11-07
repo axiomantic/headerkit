@@ -119,6 +119,126 @@ def _get_probe_index() -> Any:
     return _PROBE_INDEX
 
 
+def _strip_c_literal_suffixes(src: str) -> str:
+    """Strip C numeric literal suffixes (e.g. ``1ULL``, ``0xFFL``, ``3.14f``) while leaving identifiers intact."""
+    out: list[str] = []
+    i = 0
+    n = len(src)
+    while i < n:
+        if src[i].isdigit() and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] == "_")):
+            start = i
+            if src[i] == "0" and i + 1 < n and src[i + 1] in ("x", "X"):
+                i += 2
+                while i < n and src[i] in "0123456789abcdefABCDEF":
+                    i += 1
+                num_end = i
+                while i < n and src[i] in "uUlL":
+                    i += 1
+                if i == n or not (src[i].isalnum() or src[i] == "_"):
+                    out.append(src[start:num_end])
+                else:
+                    out.append(src[start:i])
+                continue
+            is_float = False
+            while i < n and src[i].isdigit():
+                i += 1
+            if i < n and src[i] == ".":
+                is_float = True
+                i += 1
+                while i < n and src[i].isdigit():
+                    i += 1
+            if i < n and src[i] in ("e", "E"):
+                exp_pos = i + 1
+                if exp_pos < n and src[exp_pos] in ("+", "-"):
+                    exp_pos += 1
+                if exp_pos < n and src[exp_pos].isdigit():
+                    is_float = True
+                    i = exp_pos
+                    while i < n and src[i].isdigit():
+                        i += 1
+            num_end = i
+            if is_float:
+                if i < n and src[i] in "fFlL":
+                    i += 1
+            else:
+                while i < n and src[i] in "uUlL":
+                    i += 1
+            if i == n or not (src[i].isalnum() or src[i] == "_"):
+                out.append(src[start:num_end])
+            else:
+                out.append(src[start:i])
+            continue
+        out.append(src[i])
+        i += 1
+    return "".join(out)
+
+
+def _extract_double_paren_attr_payloads(tokens: Sequence[str]) -> list[str]:
+    """Extract inner payload strings from ``__attribute__(( ... ))`` token sequences."""
+    payloads: list[str] = []
+    n_toks = len(tokens)
+    i = 0
+    while i < n_toks:
+        if tokens[i] == "__attribute__" and i + 2 < n_toks and tokens[i + 1] == "(" and tokens[i + 2] == "(":
+            depth = 2
+            j = i + 3
+            inner_tokens: list[str] = []
+            while j < n_toks and depth > 0:
+                if tokens[j] == "(":
+                    depth += 1
+                    inner_tokens.append(tokens[j])
+                elif tokens[j] == ")":
+                    depth -= 1
+                    if depth >= 2:
+                        inner_tokens.append(tokens[j])
+                else:
+                    if depth >= 2:
+                        inner_tokens.append(tokens[j])
+                j += 1
+            inner = " ".join(inner_tokens).strip()
+            if inner:
+                payloads.append(inner)
+            i = j
+            continue
+        i += 1
+    return payloads
+
+
+def _extract_double_bracket_attr_payloads(tokens: Sequence[str]) -> list[str]:
+    """Extract inner payload strings from ``[[ ... ]]`` C++/C23 attribute token sequences."""
+    payloads: list[str] = []
+    n_toks = len(tokens)
+    i = 0
+    while i < n_toks:
+        if tokens[i] == "[" and i + 1 < n_toks and tokens[i + 1] == "[":
+            depth = 2
+            j = i + 2
+            inner_tokens: list[str] = []
+            while j < n_toks and depth > 0:
+                if tokens[j] == "[":
+                    depth += 1
+                    inner_tokens.append(tokens[j])
+                elif tokens[j] == "]":
+                    depth -= 1
+                    if depth >= 2:
+                        inner_tokens.append(tokens[j])
+                else:
+                    if depth >= 2:
+                        inner_tokens.append(tokens[j])
+                j += 1
+            inner = " ".join(inner_tokens).strip()
+            if inner:
+                payloads.append(inner)
+            i = j
+            continue
+        if tokens[i].startswith("[[") and tokens[i].endswith("]]"):
+            inner = tokens[i][2:-2].strip()
+            if inner:
+                payloads.append(inner)
+        i += 1
+    return payloads
+
+
 def _cleanup_probe_index() -> None:
     """Dispose the shared ABI probe index and cached backend indices at exit while cindex.conf is alive."""
     global _PROBE_INDEX
@@ -2376,59 +2496,6 @@ class ClangASTConverter:
                 raise ValueError("Unsupported AST node")
 
         try:
-
-            def _strip_c_literal_suffixes(src: str) -> str:
-                out: list[str] = []
-                i = 0
-                n = len(src)
-                while i < n:
-                    if src[i].isdigit() and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] == "_")):
-                        start = i
-                        if src[i] == "0" and i + 1 < n and src[i + 1] in ("x", "X"):
-                            i += 2
-                            while i < n and src[i] in "0123456789abcdefABCDEF":
-                                i += 1
-                            num_end = i
-                            while i < n and src[i] in "uUlL":
-                                i += 1
-                            if i == n or not (src[i].isalnum() or src[i] == "_"):
-                                out.append(src[start:num_end])
-                            else:
-                                out.append(src[start:i])
-                            continue
-                        is_float = False
-                        while i < n and src[i].isdigit():
-                            i += 1
-                        if i < n and src[i] == ".":
-                            is_float = True
-                            i += 1
-                            while i < n and src[i].isdigit():
-                                i += 1
-                        if i < n and src[i] in ("e", "E"):
-                            exp_pos = i + 1
-                            if exp_pos < n and src[exp_pos] in ("+", "-"):
-                                exp_pos += 1
-                            if exp_pos < n and src[exp_pos].isdigit():
-                                is_float = True
-                                i = exp_pos
-                                while i < n and src[i].isdigit():
-                                    i += 1
-                        num_end = i
-                        if is_float:
-                            if i < n and src[i] in "fFlL":
-                                i += 1
-                        else:
-                            while i < n and src[i] in "uUlL":
-                                i += 1
-                        if i == n or not (src[i].isalnum() or src[i] == "_"):
-                            out.append(src[start:num_end])
-                        else:
-                            out.append(src[start:i])
-                        continue
-                    out.append(src[i])
-                    i += 1
-                return "".join(out)
-
             cleaned = _strip_c_literal_suffixes(expr_str)
             parsed = ast.parse(cleaned, mode="eval")
             evaluator = SafeEvaluator()
@@ -2464,53 +2531,14 @@ class ClangASTConverter:
 
         try:
             tokens = [t.spelling for t in cursor.get_tokens()]
-            n_toks = len(tokens)
-            i = 0
-            while i < n_toks:
-                if tokens[i] == "__attribute__" and i + 2 < n_toks and tokens[i + 1] == "(" and tokens[i + 2] == "(":
-                    depth = 2
-                    j = i + 3
-                    inner_tokens: list[str] = []
-                    while j < n_toks and depth > 0:
-                        if tokens[j] == "(":
-                            depth += 1
-                            inner_tokens.append(tokens[j])
-                        elif tokens[j] == ")":
-                            depth -= 1
-                            if depth >= 2:
-                                inner_tokens.append(tokens[j])
-                        else:
-                            if depth >= 2:
-                                inner_tokens.append(tokens[j])
-                        j += 1
-                    inner = " ".join(inner_tokens).strip()
-                    for attr in inner.split(","):
-                        attr_clean = attr.strip()
-                        if attr_clean and attr_clean not in attrs:
-                            attrs.append(attr_clean)
-                    i = j
-                    continue
-                if tokens[i] == "[" and i + 1 < n_toks and tokens[i + 1] == "[":
-                    j = i + 2
-                    inner_tokens = []
-                    while j + 1 < n_toks and not (tokens[j] == "]" and tokens[j + 1] == "]"):
-                        inner_tokens.append(tokens[j])
-                        j += 1
-                    if j + 1 < n_toks:
-                        inner = " ".join(inner_tokens).strip()
-                        for attr in inner.split(","):
-                            attr_clean = attr.strip()
-                            if attr_clean and attr_clean not in attrs:
-                                attrs.append(attr_clean)
-                        i = j + 2
-                        continue
-                if tokens[i].startswith("[[") and tokens[i].endswith("]]"):
-                    inner = tokens[i][2:-2].strip()
-                    for attr in inner.split(","):
-                        attr_clean = attr.strip()
-                        if attr_clean and attr_clean not in attrs:
-                            attrs.append(attr_clean)
-                i += 1
+            for payload in (
+                *_extract_double_paren_attr_payloads(tokens),
+                *_extract_double_bracket_attr_payloads(tokens),
+            ):
+                for attr in payload.split(","):
+                    attr_clean = attr.strip()
+                    if attr_clean and attr_clean not in attrs:
+                        attrs.append(attr_clean)
             if any("deprecated" in a.lower() for a in attrs):
                 is_deprecated = True
         except Exception:
