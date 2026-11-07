@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.50.1] - 2026-11-06
 
 ### Fixed
-- `PyiWriter` (`headerkit/writers/pyi.py`): in `mode="cffi"`, widen C function and `extern_python` callback pointer, array, and function-pointer parameter annotations (`is_param=True`) — including struct, union, enum, opaque record, array, and typedef-to-pointer/array/function-pointer parameters — with `| cffi.FFI.CData` (and `char *` / `const char *` pointer parameters to `bytes | str | cffi.FFI.CData`, automatically registering `import cffi`), resolve pointers to primitive/non-function-pointer typedefs (such as `typedef int32_t DurationMs; DurationMs *`) to `Any` when `pointer_style != "ctypes"`, and keep return types, struct fields, typedef declarations, and by-value parameters narrowed.
+- `PyiWriter` (`headerkit/writers/pyi.py`): in `mode="cffi"`, emit `cffi.FFI.CData` (instead of `Any`) for primitive pointers, primitive/non-function-pointer typedef pointers (such as `typedef int32_t DurationMs; DurationMs *`), multi-level pointers (`T **`), `void *` fields/returns (`cffi.FFI.CData` and `cffi.FFI.CData | bytes | bytearray | memoryview` for `void *` parameters), and variadic `*args: cffi.FFI.CData`; widen struct, union, enum, opaque record, array, and typedef-to-pointer/array/function-pointer parameters (`is_param=True`) with `| cffi.FFI.CData` (and `char *` / `const char *` pointer parameters to `bytes | str | cffi.FFI.CData`, automatically registering `import cffi`), while keeping return types, struct fields, typedef declarations, and by-value parameters narrowed.
 
 ## [0.50.0] - 2026-11-03
 

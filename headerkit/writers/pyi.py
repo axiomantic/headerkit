@@ -393,6 +393,9 @@ class PyiWriter(BaseWriter):
                         self._needs_cffi = True
                         return f"{resolved} | cffi.FFI.CData"
                     return resolved
+                if self.mode == "cffi":
+                    self._needs_cffi = True
+                    return "cffi.FFI.CData"
                 self._needs_any = True
                 return "Any"
             if isinstance(pointee, CType):
@@ -415,9 +418,17 @@ class PyiWriter(BaseWriter):
                         return "bytes | str"
                     return "bytes"
                 if p_key == "void":
+                    if self.mode == "cffi":
+                        self._needs_cffi = True
+                        if is_param:
+                            return "cffi.FFI.CData | bytes | bytearray | memoryview"
+                        return "cffi.FFI.CData"
                     self._needs_any = True
                     return "Any"
                 if p_key in _BOOL_TYPES or p_key in _INT_TYPES or p_key in _FLOAT_TYPES:
+                    if self.mode == "cffi":
+                        self._needs_cffi = True
+                        return "cffi.FFI.CData"
                     self._needs_any = True
                     return "Any"
                 if p_key in self._contested_tags and pointee.is_elaborated is False and p_key not in _seen_typedefs:
@@ -427,6 +438,9 @@ class PyiWriter(BaseWriter):
                         _seen_typedefs=_seen_typedefs | {p_key},
                     )
                 if self._typedef_resolves_to_primitive_or_pointer(p_key):
+                    if self.mode == "cffi":
+                        self._needs_cffi = True
+                        return "cffi.FFI.CData"
                     self._needs_any = True
                     return "Any"
                 resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
@@ -438,6 +452,9 @@ class PyiWriter(BaseWriter):
                     self._needs_cffi = True
                     return f"{res} | cffi.FFI.CData"
                 return res
+            if self.mode == "cffi":
+                self._needs_cffi = True
+                return "cffi.FFI.CData"
             self._needs_any = True
             return "Any"
 
@@ -640,8 +657,12 @@ class PyiWriter(BaseWriter):
                 param_parts.append(f"{p_name}: {p_type}")
 
         if func.is_variadic:
-            self._needs_any = True
-            param_parts.append("*args: Any")
+            if self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                param_parts.append("*args: cffi.FFI.CData")
+            else:
+                self._needs_any = True
+                param_parts.append("*args: Any")
 
         ret_override = self._resolve_override(getattr(func, "return_type_overrides", None)) or self._resolve_override(
             getattr(func, "type_overrides", None)

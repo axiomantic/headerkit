@@ -451,7 +451,7 @@ class TestPyiWriter:
         ast.parse(actual)
 
     def test_cffi_mode_pointer_parameters_and_narrow_returns(self) -> None:
-        """Verify mode='cffi' widens pointer/fnptr params with cffi.FFI.CData and primitive-typedef pointers to Any while keeping returns/fields/value-params narrow."""
+        """Verify mode='cffi' uses cffi.FFI.CData (and never Any) for pointers while keeping returns/fields/value-params narrow."""
         header = Header(
             path="device.h",
             declarations=[
@@ -503,6 +503,8 @@ class TestPyiWriter:
                         Parameter("dur_ptr", Pointer(CType("DurationMs"))),
                         Parameter("status_val", CType("DeviceStatus")),
                         Parameter("status_ptr", Pointer(CType("DeviceStatus", is_elaborated=True))),
+                        Parameter("void_buf", Pointer(CType("void", ["const"]))),
+                        Parameter("out_handle", Pointer(Pointer(CType("OpaqueHandle")))),
                     ],
                 ),
                 Function(
@@ -524,6 +526,7 @@ class TestPyiWriter:
                     "device_get_name",
                     Pointer(CType("char", ["const"])),
                     [Parameter("handle", Pointer(CType("OpaqueHandle")))],
+                    is_variadic=True,
                 ),
             ],
         )
@@ -538,7 +541,7 @@ class TestPyiWriter:
             import cffi
             import enum
             from collections.abc import Callable
-            from typing import Any, final
+            from typing import final
 
             class DeviceStatus(enum.IntEnum):
                 DEV_OK = 0
@@ -554,7 +557,7 @@ class TestPyiWriter:
 
             class PayloadUnion:
                 raw: int
-                ptr: Any
+                ptr: cffi.FFI.CData
 
             DeviceConfigAlias = DeviceConfig
 
@@ -564,7 +567,7 @@ class TestPyiWriter:
 
             DurationMs = int
 
-            Int32Ptr = Any
+            Int32Ptr = cffi.FFI.CData
 
             EventCallback = Callable[[int], None]
 
@@ -575,14 +578,15 @@ class TestPyiWriter:
                 DEV_OK: int = 0
                 DEV_ERR: int = 1
                 def device_init(self, cfg_ptr: DeviceConfig | cffi.FFI.CData, inline_struct_ptr: DeviceConfig | cffi.FFI.CData, alias_ptr: ChainedConfigAlias | cffi.FFI.CData, opaque_ptr: OpaqueHandle | cffi.FFI.CData, union_ptr: PayloadUnion | cffi.FFI.CData, name: bytes | str | cffi.FFI.CData) -> DeviceStatus: ...
-                def device_process_by_value(self, cfg_val: DeviceConfig, dur: DurationMs, dur_ptr: Any, status_val: DeviceStatus, status_ptr: DeviceStatus | cffi.FFI.CData) -> DeviceConfig: ...
+                def device_process_by_value(self, cfg_val: DeviceConfig, dur: DurationMs, dur_ptr: cffi.FFI.CData, status_val: DeviceStatus, status_ptr: DeviceStatus | cffi.FFI.CData, void_buf: cffi.FFI.CData | bytes | bytearray | memoryview, out_handle: cffi.FFI.CData) -> DeviceConfig: ...
                 def device_register_callbacks(self, cb: EventCallback | cffi.FFI.CData, raw_cb: Callable[[int], None] | cffi.FFI.CData, ptr_td: DeviceConfigPtr | cffi.FFI.CData, int_ptr_td: Int32Ptr, buf: bytes | cffi.FFI.CData, counts: list[int] | cffi.FFI.CData) -> int: ...
-                def device_get_name(self, handle: OpaqueHandle | cffi.FFI.CData) -> bytes: ...
+                def device_get_name(self, handle: OpaqueHandle | cffi.FFI.CData, *args: cffi.FFI.CData) -> bytes: ...
                 def on_device_event(self, cfg: DeviceConfig | cffi.FFI.CData, reason: bytes | str | cffi.FFI.CData, by_val: DeviceConfig) -> None: ...
 
             lib: _Lib
         """)
         assert actual == expected
+        assert "Any" not in actual
         ast.parse(actual)
 
         # Negative control: pep484 mode on the same Header must NOT emit cffi.FFI.CData or import cffi
@@ -625,11 +629,11 @@ class TestPyiWriter:
 
             def device_init(cfg_ptr: DeviceConfig, inline_struct_ptr: DeviceConfig, alias_ptr: ChainedConfigAlias, opaque_ptr: OpaqueHandle, union_ptr: PayloadUnion, name: bytes | str) -> DeviceStatus: ...
 
-            def device_process_by_value(cfg_val: DeviceConfig, dur: DurationMs, dur_ptr: Any, status_val: DeviceStatus, status_ptr: DeviceStatus) -> DeviceConfig: ...
+            def device_process_by_value(cfg_val: DeviceConfig, dur: DurationMs, dur_ptr: Any, status_val: DeviceStatus, status_ptr: DeviceStatus, void_buf: Any, out_handle: Any) -> DeviceConfig: ...
 
             def device_register_callbacks(cb: EventCallback, raw_cb: Callable[[int], None], ptr_td: DeviceConfigPtr, int_ptr_td: Int32Ptr, buf: bytes, counts: list[int]) -> int: ...
 
-            def device_get_name(handle: OpaqueHandle) -> bytes: ...
+            def device_get_name(handle: OpaqueHandle, *args: Any) -> bytes: ...
         """)
         assert pep484_actual == pep484_expected
         ast.parse(pep484_actual)
@@ -643,6 +647,7 @@ class TestPyiWriter:
             import ctypes
             import enum
             from collections.abc import Callable
+            from typing import Any
 
             class DeviceStatus(enum.IntEnum):
                 DEV_OK = 0
@@ -674,11 +679,11 @@ class TestPyiWriter:
 
             def device_init(cfg_ptr: ctypes._Pointer[DeviceConfig], inline_struct_ptr: ctypes._Pointer[DeviceConfig], alias_ptr: ctypes._Pointer[ChainedConfigAlias], opaque_ptr: ctypes._Pointer[OpaqueHandle], union_ptr: ctypes._Pointer[PayloadUnion], name: bytes | str) -> DeviceStatus: ...
 
-            def device_process_by_value(cfg_val: DeviceConfig, dur: DurationMs, dur_ptr: ctypes._Pointer[DurationMs], status_val: DeviceStatus, status_ptr: ctypes._Pointer[DeviceStatus]) -> ctypes._Pointer[DeviceConfig]: ...
+            def device_process_by_value(cfg_val: DeviceConfig, dur: DurationMs, dur_ptr: ctypes._Pointer[DurationMs], status_val: DeviceStatus, status_ptr: ctypes._Pointer[DeviceStatus], void_buf: ctypes.c_void_p, out_handle: ctypes._Pointer[ctypes._Pointer[OpaqueHandle]]) -> ctypes._Pointer[DeviceConfig]: ...
 
             def device_register_callbacks(cb: EventCallback, raw_cb: Callable[[int], None], ptr_td: DeviceConfigPtr, int_ptr_td: Int32Ptr, buf: bytes, counts: list[int]) -> int: ...
 
-            def device_get_name(handle: ctypes._Pointer[OpaqueHandle]) -> bytes: ...
+            def device_get_name(handle: ctypes._Pointer[OpaqueHandle], *args: Any) -> bytes: ...
         """)
         assert ctypes_actual == ctypes_expected
         ast.parse(ctypes_actual)
