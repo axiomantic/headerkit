@@ -73,6 +73,37 @@ Corollaries:
 - **Two independent predicates for one fact will drift, silently** (still open). Derive one from the other, or both from a single recorded value. The ctypes writer already carries two normalisations of "does this name already mean something else" -- `_typedef_aliases_its_own_tag` strips a `struct `/`union ` prefix to compare a typedef against its target, while `_enum_type_names` withholds by unprefixed name -- and the disagreement mapped a type onto a helper whose declaration had been withheld.
 - **Model nothing the real engine can be asked** (fixed). A model of an allocator or a layout algorithm is a second implementation, and it drifts from the first. Independent axes make a writer-side bit-field model untenable, and they are separate hazards. By **platform**: ctypes selects among System V, AAPCS64 and MSVC layout rules, and any writer-side model encodes exactly one -- the same declaration is laid out at three different sizes across them. By **interpreter version**: off Windows, the ctypes layout engine changed in 3.14, so a model calibrated against an earlier interpreter is silently wrong on a later one. The writer now builds the record and reads back what the engine actually did rather than predicting it.
 
+## Strict one-way pipeline & pure IR-only writer boundary (SEPARATION OF CONCERNS)
+
+HeaderKit is a strictly layered, one-way compiler pipeline:
+
+```text
+Backend (Parser) -> IR (SourceUnit / Header) -> Transforms -> Reconciler -> Writer (Output Plugin)
+```
+
+Every layer has a single responsibility and communicates with adjacent layers **exclusively** through the canonical IR (`headerkit.ir`). Crossing layer boundaries is an architectural defect and will be rejected immediately:
+
+1. **One-way dataflow (`Backend -> IR -> Transforms -> Reconciler -> Writer`)**:
+   - Data flows strictly left-to-right through `SourceUnit` / `Header` IR nodes (`Function`, `Struct`, `Enum`, `Typedef`, `Variable`, `Constant`, `TypeExpr`, etc.).
+   - Downstream stages never call back into upstream stages.
+
+2. **Writers consume IR only (Zero backend imports & zero raw C string options)**:
+   - Output plugins (`headerkit/writers/*`) are **100% agnostic to parser backends**.
+   - A writer **MUST NEVER** import `headerkit.backends`, call `get_backend()`, or invoke a parser on the side.
+   - Writer options (`WriterOption`) **MUST NEVER** accept unparsed C/C++ prototype strings or source snippets that require parsing inside the writer. All declarations (including `extern "Python"` callbacks, function-pointer typedefs, and macro constants) must be parsed by the backend into `Header.declarations` first; writer options only reference IR symbol names already present in `Header.declarations` or configure emission policy.
+
+3. **`LibclangBackend` is the primary production parser; `TreeSitterBackend` is a lightweight PoC/fallback**:
+   - `libclang` provides full preprocessor expansion, semantic type resolution, and compiler-grade AST fidelity.
+   - `tree-sitter` is a lightweight fallback/PoC backend for environments without LLVM/libclang.
+   - Pipeline and plugin code must never hardcode `get_backend("tree-sitter")` or bypass the configured backend.
+
+4. **Orthogonal isolation across layers**:
+   - **Backends (`headerkit/backends/*`)**: Parse C/C++ source into canonical IR without target-writer assumptions or foreign-generator hacks (such as special-casing `nimbase.h`).
+   - **Core IR (`headerkit/ir.py`)**: Models C/C++ declarations and type expressions cleanly without source-origin or target-writer tags.
+   - **Transforms (`headerkit/transforms/*`)**: Registry-driven IR-to-IR passes (`SourceUnit -> SourceUnit`) that normalize or enrich IR before emission.
+   - **Reconciler (`headerkit/reconcile.py` & `headerkit/matrix/*`)**: Reconciles multi-target IR across platforms/architectures and delegates target-language condition formatting to `BaseWriter` hooks rather than hardcoding writer-specific syntax.
+   - **Writers (`headerkit/writers/*`)**: Pure `IR -> output string` renderers. Writers must not import from `headerkit.backends`, `headerkit.transforms`, or other concrete writers.
+
 ## Anti-completion bias & anti-green-mirage discipline
 
 Completion bias is the failure mode where an agent rushes to check off roadmap items or satisfy the test runner by introducing superficial happy-path implementations, hollow file skeletons, or vacuous assertions that cannot fail. All code and tests must uphold the following non-negotiable invariants:

@@ -866,12 +866,13 @@ class TestShard1AndShard7AuditRemediations:
                 Constant("INT_CONST", 10),
                 Constant("FLOAT_MATCHED", 3.5),
                 Constant("FLOAT_UNMATCHED", 9.25),
+                Function("py_on_event", CType("int"), [Parameter("code", CType("int"))]),
             ],
         )
         writer = PyiWriter(
             mode="cffi",
             define_patterns=["^FLOAT_MATCHED$"],
-            extern_python=["int py_on_event(int code);"],
+            extern_python=["py_on_event"],
         )
         out = writer.write(header)
         assert out == textwrap.dedent("""\

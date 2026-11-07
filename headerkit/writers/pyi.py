@@ -8,7 +8,6 @@ from collections.abc import Mapping, Sequence
 from keyword import iskeyword
 from typing import Any, ClassVar, Literal
 
-from headerkit.backends import get_backend, is_backend_available
 from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     Array,
@@ -105,8 +104,6 @@ _FLOAT_TYPES: frozenset[str] = frozenset(
     }
 )
 
-_STD_PRELUDE_TYPEDEFS: frozenset[str] = _BOOL_TYPES | _INT_TYPES | _FLOAT_TYPES | frozenset({"void"})
-
 
 def _sanitize_identifier(name: str, fallback: str = "arg") -> str:
     """Convert a C identifier into a valid non-keyword Python identifier."""
@@ -181,7 +178,10 @@ class PyiWriter(BaseWriter):
         ),
         WriterOption(
             name="extern_python",
-            description='Function prototypes or names to emit on _Lib in cffi mode as extern "Python" callbacks',
+            description=(
+                "Function or function-pointer typedef symbol names in Header.declarations "
+                'to emit on _Lib in cffi mode as extern "Python" callbacks'
+            ),
             default=None,
             type=list,
         ),
@@ -219,6 +219,23 @@ class PyiWriter(BaseWriter):
         self._enum_tags: dict[str, str] = {}
         self._typedef_map: dict[str, TypeExpr] = {}
         self._contested_tags: set[str] = set()
+
+    def _resolve_typedef_function_pointer(
+        self,
+        key: str,
+        _seen: frozenset[str] = frozenset(),
+    ) -> FunctionPointer | None:
+        if key not in self._typedef_map or key in _seen:
+            return None
+        curr: TypeExpr = self._typedef_map[key]
+        while isinstance(curr, Pointer):
+            curr = curr.pointee
+        if isinstance(curr, FunctionPointer):
+            return curr
+        if isinstance(curr, CType):
+            t_key = _normalize_ctype_key(curr)
+            return self._resolve_typedef_function_pointer(t_key, _seen | {key})
+        return None
 
     def _typedef_resolves_to_primitive_or_pointer(
         self,
@@ -826,50 +843,43 @@ class PyiWriter(BaseWriter):
                     body_blocks.append("\n".join(fn_lines))
 
         if self.mode == "cffi":
+            all_func_decls = {decl.name: decl for decl in unit.declarations if isinstance(decl, Function)}
             for ext_entry in self.extern_python:
                 stripped = ext_entry.strip()
-                if stripped.startswith('extern "Python"'):
-                    stripped = stripped[len('extern "Python"') :].strip()
-                if stripped.endswith(";"):
-                    stripped = stripped[:-1].strip()
-                if not stripped:
+                if (
+                    not stripped
+                    or "(" in stripped
+                    or stripped.startswith('extern "Python"')
+                    or not stripped.isidentifier()
+                ):
+                    raise ValueError(
+                        f"extern_python entry {ext_entry!r} must be a symbol name of a Function or "
+                        "function-pointer Typedef in Header.declarations, not a raw C prototype string"
+                    )
+                py_cb_name = _sanitize_identifier(stripped)
+                if stripped in all_func_decls:
+                    if py_cb_name not in emitted_lib_funcs:
+                        emitted_lib_funcs.add(py_cb_name)
+                        lib_member_lines.extend(
+                            self._format_function(all_func_decls[stripped], indent="    ", include_self=True)
+                        )
                     continue
-                if "(" in stripped:
-                    proto_backend = get_backend("tree-sitter") if is_backend_available("tree-sitter") else get_backend()
-                    prelude_lines = ["#include <stdint.h>", "#include <stddef.h>", "#include <stdbool.h>"]
-                    known_type_names = set(self._typedef_map) | set(self._record_tags) | set(self._enum_tags)
-                    for t_name in sorted(known_type_names):
-                        if " " not in t_name and t_name.isidentifier() and t_name not in _STD_PRELUDE_TYPEDEFS:
-                            prelude_lines.append(f"typedef int {t_name};")
-                    proto_src = "\n".join([*prelude_lines, f"{stripped};"])
-                    parsed_ext = proto_backend.parse(proto_src, "extern_python.h")
-                    for ext_decl in parsed_ext.declarations:
-                        if isinstance(ext_decl, Function):
-                            py_cb_name = _sanitize_identifier(ext_decl.name)
-                            if py_cb_name in emitted_lib_funcs:
-                                continue
-                            emitted_lib_funcs.add(py_cb_name)
-                            lib_member_lines.extend(self._format_function(ext_decl, indent="    ", include_self=True))
-                else:
-                    py_cb_name = _sanitize_identifier(stripped)
-                    if py_cb_name in emitted_lib_funcs:
-                        continue
-                    matched_td = self._typedef_map.get(stripped)
-                    while isinstance(matched_td, Pointer):
-                        matched_td = matched_td.pointee
-                    if isinstance(matched_td, FunctionPointer):
+                matched_fp = self._resolve_typedef_function_pointer(stripped)
+                if matched_fp is not None:
+                    if py_cb_name not in emitted_lib_funcs:
                         emitted_lib_funcs.add(py_cb_name)
                         synth_fn = Function(
                             stripped,
-                            matched_td.return_type,
-                            list(matched_td.parameters),
-                            is_variadic=matched_td.is_variadic,
+                            matched_fp.return_type,
+                            list(matched_fp.parameters),
+                            is_variadic=matched_fp.is_variadic,
                         )
                         lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
-                    else:
-                        emitted_lib_funcs.add(py_cb_name)
-                        synth_fn = Function(stripped, CType("void"), [])
-                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+                    continue
+                raise ValueError(
+                    f"extern_python symbol {stripped!r} not found as a Function or "
+                    "function-pointer Typedef in Header.declarations"
+                )
 
             body_blocks.append("ffi: cffi.FFI")
             lib_cls_lines = ["@final", "class _Lib:"]

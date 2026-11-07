@@ -528,11 +528,20 @@ class TestPyiWriter:
                     [Parameter("handle", Pointer(CType("OpaqueHandle")))],
                     is_variadic=True,
                 ),
+                Function(
+                    "on_device_event",
+                    CType("void"),
+                    [
+                        Parameter("cfg", Pointer(CType("DeviceConfig"))),
+                        Parameter("reason", Pointer(CType("char", ["const"]))),
+                        Parameter("by_val", CType("DeviceConfig")),
+                    ],
+                ),
             ],
         )
         writer = PyiWriter(
             mode="cffi",
-            extern_python=["void on_device_event(DeviceConfig *cfg, const char *reason, DeviceConfig by_val);"],
+            extern_python=["on_device_event"],
         )
         actual = writer.write(header)
         expected = textwrap.dedent("""\
@@ -634,6 +643,8 @@ class TestPyiWriter:
             def device_register_callbacks(cb: EventCallback, raw_cb: Callable[[int], None], ptr_td: DeviceConfigPtr, int_ptr_td: Int32Ptr, buf: bytes, counts: list[int]) -> int: ...
 
             def device_get_name(handle: OpaqueHandle, *args: Any) -> bytes: ...
+
+            def on_device_event(cfg: DeviceConfig, reason: bytes | str, by_val: DeviceConfig) -> None: ...
         """)
         assert pep484_actual == pep484_expected
         ast.parse(pep484_actual)
@@ -684,6 +695,8 @@ class TestPyiWriter:
             def device_register_callbacks(cb: EventCallback, raw_cb: Callable[[int], None], ptr_td: DeviceConfigPtr, int_ptr_td: Int32Ptr, buf: bytes, counts: list[int]) -> int: ...
 
             def device_get_name(handle: ctypes._Pointer[OpaqueHandle], *args: Any) -> bytes: ...
+
+            def on_device_event(cfg: ctypes._Pointer[DeviceConfig], reason: bytes | str, by_val: DeviceConfig) -> None: ...
         """)
         assert ctypes_actual == ctypes_expected
         ast.parse(ctypes_actual)
@@ -697,20 +710,42 @@ class TestPyiWriter:
         )
         assert fresh_writer._needs_cffi is True
 
-    def test_cffi_mode_extern_python_parsed_via_backend(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """extern_python C prototypes are parsed via HeaderKit's parser backend (both tree-sitter and fallback get_backend())."""
+    def test_cffi_mode_extern_python_from_ir_and_negative_controls(self) -> None:
+        """extern_python resolves Function and FunctionPointer Typedef IR symbols only and rejects raw C strings."""
         header = Header(
             "callbacks.h",
             [
                 Struct("Ctx", [Field("id", CType("int"))], is_typedef=True),
                 Typedef("PipeId", CType("int32_t")),
+                Typedef(
+                    "on_dispatch",
+                    FunctionPointer(
+                        CType("int"),
+                        [
+                            Parameter("ctx", Pointer(CType("Ctx"))),
+                            Parameter("pipe", CType("PipeId")),
+                            Parameter(
+                                "handler",
+                                FunctionPointer(
+                                    CType("void"),
+                                    [Parameter("code", CType("int")), Parameter("user", Pointer(CType("void")))],
+                                ),
+                            ),
+                            Parameter("data", Array(CType("uint8_t", ["const"]), 16)),
+                        ],
+                    ),
+                ),
+                Typedef("on_dispatch_alias", CType("on_dispatch")),
+                Function("on_idle", CType("void"), []),
             ],
         )
         writer = PyiWriter(
             mode="cffi",
+            exclude_patterns=["^on_idle$"],
             extern_python=[
-                'extern "Python" int on_dispatch(Ctx *ctx, PipeId pipe, void (*handler)(int code, void *user), const uint8_t data[16]);',
-                "void on_idle(void);",
+                "on_dispatch",
+                "on_dispatch_alias",
+                "on_idle",
             ],
         )
         actual = writer.write(header)
@@ -726,11 +761,16 @@ class TestPyiWriter:
 
             PipeId = int
 
+            on_dispatch = Callable[[Ctx, PipeId, Callable[[int, cffi.FFI.CData], None], list[int]], int]
+
+            on_dispatch_alias = on_dispatch
+
             ffi: cffi.FFI
 
             @final
             class _Lib:
                 def on_dispatch(self, ctx: Ctx | cffi.FFI.CData, pipe: PipeId, handler: Callable[[int, cffi.FFI.CData], None] | cffi.FFI.CData, data: list[int] | cffi.FFI.CData) -> int: ...
+                def on_dispatch_alias(self, ctx: Ctx | cffi.FFI.CData, pipe: PipeId, handler: Callable[[int, cffi.FFI.CData], None] | cffi.FFI.CData, data: list[int] | cffi.FFI.CData) -> int: ...
                 def on_idle(self) -> None: ...
 
             lib: _Lib
@@ -738,55 +778,43 @@ class TestPyiWriter:
         assert actual == expected
         ast.parse(actual)
 
-        # Fallback path when tree-sitter is unavailable (uses get_backend() / libclang with prelude typedefs)
-        monkeypatch.setattr("headerkit.writers.pyi.is_backend_available", lambda _name=None: False)
-        fallback_writer = PyiWriter(
-            mode="cffi",
-            extern_python=[
-                'extern "Python" int on_dispatch(Ctx *ctx, PipeId pipe, void (*handler)(int code, void *user), const uint8_t data[16]);',
-                "void on_idle(void);",
-            ],
-        )
-        fallback_actual = fallback_writer.write(header)
-        assert fallback_actual == expected
-        ast.parse(fallback_actual)
+        # Negative controls: raw C prototype strings or non-identifier entries raise ValueError
+        for raw_proto in (
+            'extern "Python" int on_dispatch(Ctx *ctx);',
+            "void on_idle(void);",
+            "",
+            "int bad name",
+        ):
+            bad_writer = PyiWriter(mode="cffi", extern_python=[raw_proto])
+            with pytest.raises(ValueError, match="must be a symbol name"):
+                bad_writer.write(header)
 
-        # Verify standard stdint/stddef/stdbool typedefs in header do not break libclang prelude
-        header_with_std_typedefs = Header(
-            "callbacks_std.h",
-            [
-                Typedef("uint64_t", CType("unsigned long long")),
-                Typedef("size_t", CType("unsigned long")),
-                Typedef("PipeId", CType("int32_t")),
-            ],
-        )
-        std_fallback_writer = PyiWriter(
-            mode="cffi",
-            extern_python=["void on_bytes(PipeId pipe, uint64_t seq, size_t n);"],
-        )
-        std_actual = std_fallback_writer.write(header_with_std_typedefs)
-        std_expected = textwrap.dedent("""\
-            # Auto-generated by headerkit - do not edit
+        # Negative controls: unknown symbol names or non-function-pointer typedefs raise ValueError
+        for invalid_symbol in ("unknown_cb", "PipeId"):
+            missing_writer = PyiWriter(mode="cffi", extern_python=[invalid_symbol])
+            with pytest.raises(ValueError, match="not found as a Function or function-pointer Typedef"):
+                missing_writer.write(header)
 
-            import cffi
-            from typing import final
+    def test_writers_have_zero_backend_imports(self) -> None:
+        """All writer modules under headerkit/writers/ are 100% backend-agnostic (zero headerkit.backends imports)."""
+        from pathlib import Path
 
-            uint64_t = int
-
-            size_t = int
-
-            PipeId = int
-
-            ffi: cffi.FFI
-
-            @final
-            class _Lib:
-                def on_bytes(self, pipe: PipeId, seq: int, n: int) -> None: ...
-
-            lib: _Lib
-        """)
-        assert std_actual == std_expected
-        ast.parse(std_actual)
+        writers_dir = Path(__file__).resolve().parents[2] / "headerkit" / "writers"
+        offending: list[str] = []
+        for py_file in sorted(writers_dir.glob("*.py")):
+            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name == "headerkit.backends" or alias.name.startswith("headerkit.backends."):
+                            offending.append(f"{py_file.name}:{node.lineno}: import {alias.name}")
+                elif isinstance(node, ast.ImportFrom):
+                    mod = node.module or ""
+                    if mod == "headerkit.backends" or mod.startswith("headerkit.backends."):
+                        offending.append(f"{py_file.name}:{node.lineno}: from {mod} import ...")
+                elif isinstance(node, ast.Name) and node.id == "get_backend":
+                    offending.append(f"{py_file.name}:{node.lineno}: get_backend reference")
+        assert offending == []
 
     def test_non_regex_scanners_edge_cases(self) -> None:
         """Direct unit tests for non-regex scanners across backends, transforms, and writers."""
