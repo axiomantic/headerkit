@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import json
 import os
-import re
 import shutil
 import struct
 import subprocess
@@ -211,34 +210,58 @@ _NIM_SCALAR_TYPE_MAP: dict[str, str] = {
 }
 
 _NIM_BUILTIN_TYPEDEFS: frozenset[str] = frozenset({"NCSTRING", *_NIM_SCALAR_TYPE_MAP})
+_C_PTR_QUALS: frozenset[str] = frozenset({"const", "volatile", "restrict", "__restrict"})
 
-_NIM_COLON_MANGLE_RE = re.compile(r"_colon_([A-Za-z_][A-Za-z0-9_]*?)(?:_[0-9]+)?$")
-_NIM_PARAM_SUFFIX_RE = re.compile(r"_p\d+$")
-_NIM_TYOBJECT_RE = re.compile(r"^(struct\s+|union\s+)?tyObject_([A-Za-z_][A-Za-z0-9_]*)__[A-Za-z0-9_]+$")
-_NIM_TYENUM_RE = re.compile(r"^(enum\s+)?tyEnum_([A-Za-z_][A-Za-z0-9_]*)__[A-Za-z0-9_]+$")
-_NIM_TYPROC_RE = re.compile(r"^tyProc__[A-Za-z0-9_]+$")
+
+def _is_ascii_ident(text: str) -> bool:
+    return bool(text) and (text[0].isalpha() or text[0] == "_") and all(ch.isalnum() or ch == "_" for ch in text)
+
+
+def _is_typroc_name(name: str) -> bool:
+    if not name.startswith("tyProc__"):
+        return False
+    tail = name[len("tyProc__") :]
+    return bool(tail) and all(ch.isalnum() or ch == "_" for ch in tail)
 
 
 def _unmangle_nim_colon_name(name: str) -> str:
     """Unmangle Nim compiler ``_colon_<name>`` C identifier suffixes."""
-    match = _NIM_COLON_MANGLE_RE.search(name)
-    if match:
-        prefix = name[: match.start()]
-        if prefix:
-            return prefix
-    return name
+    search_start = 0
+    while True:
+        idx = name.find("_colon_", search_start)
+        if idx == -1:
+            return name
+        tail = name[idx + len("_colon_") :]
+        if idx > 0 and _is_ascii_ident(tail):
+            return name[:idx]
+        search_start = idx + 1
 
 
 def _unmangle_nim_type_name(name: str) -> str:
     """Unmangle Nim ``ccgtypes.nim`` ``tyObject_<Name>__<hash>`` and ``tyEnum_<Name>__<hash>`` names."""
-    obj_match = _NIM_TYOBJECT_RE.match(name)
-    if obj_match:
-        prefix = obj_match.group(1) or ""
-        return f"{prefix}{obj_match.group(2)}"
-    enum_match = _NIM_TYENUM_RE.match(name)
-    if enum_match:
-        prefix = enum_match.group(1) or ""
-        return f"{prefix}{enum_match.group(2)}"
+    prefix = ""
+    rest = name
+    for kw in ("struct ", "union ", "enum "):
+        if rest.startswith(kw):
+            idx = len(kw)
+            while idx < len(rest) and rest[idx].isspace():
+                idx += 1
+            prefix = rest[:idx]
+            rest = rest[idx:]
+            break
+
+    for tag_prefix, allowed_kws in (
+        ("tyObject_", ("", "struct", "union")),
+        ("tyEnum_", ("", "enum")),
+    ):
+        if rest.startswith(tag_prefix) and prefix.strip() in allowed_kws:
+            after_tag = rest[len(tag_prefix) :]
+            sep = after_tag.rfind("__")
+            if sep > 0:
+                type_ident = after_tag[:sep]
+                hash_tail = after_tag[sep + 2 :]
+                if _is_ascii_ident(type_ident) and hash_tail and all(ch.isalnum() or ch == "_" for ch in hash_tail):
+                    return f"{prefix}{type_ident}"
     return name
 
 
@@ -248,9 +271,9 @@ def _clean_nim_identifier(name: str | None) -> str | None:
         return name
     cleaned = _unmangle_nim_colon_name(name)
     # Strip at most ONE trailing _p<digits> disambiguation suffix
-    p_match = _NIM_PARAM_SUFFIX_RE.search(cleaned)
-    if p_match and p_match.start() > 0:
-        cleaned = cleaned[: p_match.start()]
+    p_idx = cleaned.rfind("_p")
+    if p_idx > 0 and cleaned[p_idx + 2 :].isdigit():
+        cleaned = cleaned[:p_idx]
     while True:
         prev = cleaned
         for sep in ("`gensym", "_gensym"):
@@ -286,12 +309,13 @@ def _is_direct_nim_bool(type_expr: TypeExpr) -> bool:
 def _parse_c_type_str(type_str: str) -> TypeExpr:
     """Parse a C type string (such as ``const char **`` or ``NI32 *``) into a ``TypeExpr``."""
     s = type_str.strip()
-    m_ptr = re.search(r"\*\s*((?:(?:const|volatile|restrict|__restrict)\b\s*)*)$", s)
-    if m_ptr:
-        prefix = s[: m_ptr.start()].strip()
-        qual_str = m_ptr.group(1).strip()
-        ptr_quals = [q for q in qual_str.split() if q]
-        return Pointer(pointee=_parse_c_type_str(prefix), qualifiers=ptr_quals)
+    star_idx = s.rfind("*")
+    if star_idx != -1:
+        after_star = s[star_idx + 1 :].strip()
+        after_tokens = [q for q in after_star.split() if q]
+        if all(q in _C_PTR_QUALS for q in after_tokens):
+            prefix = s[:star_idx].strip()
+            return Pointer(pointee=_parse_c_type_str(prefix), qualifiers=after_tokens)
 
     quals: list[str] = []
     tokens = s.split()
@@ -451,7 +475,7 @@ class NimCleanupTransform(PipelineFilter):
     def transform(self, unit: SourceUnit, context: PipelineContext | None = None) -> SourceUnit:
         typroc_map: dict[str, FunctionPointer] = {}
         for decl in unit.declarations:
-            if isinstance(decl, Typedef) and decl.name and _NIM_TYPROC_RE.match(decl.name):
+            if isinstance(decl, Typedef) and decl.name and _is_typroc_name(decl.name):
                 underlying = decl.underlying_type
                 fp: FunctionPointer | None = None
                 if isinstance(underlying, FunctionPointer):

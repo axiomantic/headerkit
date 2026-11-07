@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from keyword import iskeyword
 from typing import Any, ClassVar, Literal
 
+from headerkit.backends import get_backend
 from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     Array,
@@ -18,7 +19,6 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
-    Parameter,
     Pointer,
     Reference,
     SourceUnit,
@@ -114,7 +114,7 @@ def _sanitize_identifier(name: str, fallback: str = "arg") -> str:
     if "`" in cleaned:
         cleaned = cleaned.replace("`", "_")
     if not cleaned.isidentifier():
-        cleaned = re.sub(r"[^0-9a-zA-Z_]", "_", cleaned)
+        cleaned = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in cleaned)
         if cleaned and cleaned[0].isdigit():
             cleaned = f"_{cleaned}"
     if not cleaned:
@@ -293,15 +293,20 @@ class PyiWriter(BaseWriter):
         if not isinstance(raw, str) or not raw.strip():
             return None
         cleaned = raw.strip().replace("ctypes.pointer[", "ctypes._Pointer[")
-        if not self._is_valid_python_expr(cleaned):
+        if not cleaned:
+            return None
+        try:
+            tree = ast.parse(cleaned, mode="eval")
+        except SyntaxError:
             return None
         if "cffi." in cleaned:
             self._needs_cffi = True
         if "ctypes." in cleaned:
             self._needs_ctypes = True
-        if re.search(r"\bAny\b", cleaned):
+        names_used = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+        if "Any" in names_used:
             self._needs_any = True
-        if re.search(r"\bCallable\b", cleaned):
+        if "Callable" in names_used:
             self._needs_callable = True
         return cleaned
 
@@ -828,48 +833,15 @@ class PyiWriter(BaseWriter):
                 if not stripped:
                     continue
                 if "(" in stripped:
-                    m_proto = re.match(r"^(.*?)\b([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$", stripped)
-                    if m_proto:
-                        ret_raw, cb_name, params_raw = (
-                            m_proto.group(1).strip(),
-                            m_proto.group(2),
-                            m_proto.group(3).strip(),
-                        )
-                        py_cb_name = _sanitize_identifier(cb_name)
-                        if py_cb_name in emitted_lib_funcs:
-                            continue
-                        emitted_lib_funcs.add(py_cb_name)
-                        ret_clean = re.sub(r"\b(const|volatile|restrict)\b", "", ret_raw.rstrip("*")).strip()
-                        ret_t: TypeExpr = (
-                            Pointer(CType(ret_clean or "void")) if ret_raw.endswith("*") else CType(ret_clean or "void")
-                        )
-                        cb_params: list[Parameter] = []
-                        if params_raw and params_raw != "void":
-                            for p_idx, p_str in enumerate(params_raw.split(",")):
-                                p_clean = p_str.strip()
-                                if not p_clean or p_clean == "void":
-                                    continue
-                                if "*" in p_clean:
-                                    lhs, rhs = p_clean.rsplit("*", 1)
-                                    p_n = rhs.strip() or f"arg{p_idx}"
-                                    lhs_clean = re.sub(r"\b(const|volatile|restrict)\b", "", lhs.rstrip("*")).strip()
-                                    p_t: TypeExpr = Pointer(CType(lhs_clean or "void"))
-                                else:
-                                    p_no_cv = re.sub(r"\b(const|volatile|restrict)\b", "", p_clean).strip()
-                                    parts = p_no_cv.rsplit(None, 1)
-                                    if (
-                                        len(parts) == 2
-                                        and parts[1].isidentifier()
-                                        and parts[0] not in ("unsigned", "signed", "const", "struct", "enum", "union")
-                                    ):
-                                        p_t = CType(parts[0].strip())
-                                        p_n = parts[1].strip()
-                                    else:
-                                        p_t = CType(p_no_cv or "void")
-                                        p_n = f"arg{p_idx}"
-                                cb_params.append(Parameter(p_n, p_t))
-                        synth_fn = Function(cb_name, ret_t, cb_params)
-                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+                    proto_backend = get_backend("tree-sitter")
+                    parsed_ext = proto_backend.parse(f"{stripped};", "extern_python.h")
+                    for ext_decl in parsed_ext.declarations:
+                        if isinstance(ext_decl, Function):
+                            py_cb_name = _sanitize_identifier(ext_decl.name)
+                            if py_cb_name in emitted_lib_funcs:
+                                continue
+                            emitted_lib_funcs.add(py_cb_name)
+                            lib_member_lines.extend(self._format_function(ext_decl, indent="    ", include_self=True))
                 else:
                     py_cb_name = _sanitize_identifier(stripped)
                     if py_cb_name in emitted_lib_funcs:

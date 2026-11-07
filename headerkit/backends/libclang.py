@@ -44,7 +44,6 @@ import functools
 import glob
 import os
 import posixpath
-import re
 import subprocess
 import sys
 import weakref
@@ -2377,9 +2376,60 @@ class ClangASTConverter:
                 raise ValueError("Unsupported AST node")
 
         try:
-            # Clean C-style suffixes from float and integer literals (e.g., 3.14f -> 3.14, 1ULL -> 1, 0xFFL -> 0xFF)
-            cleaned = re.sub(r"(\b\d+\.\d*(?:[eE][+-]?\d+)?|\b\d+[eE][+-]?\d+)[fFlL]\b", r"\1", expr_str)
-            cleaned = re.sub(r"\b(0[xX][0-9a-fA-F]+|\d+)[uUlL]+\b", r"\1", cleaned)
+
+            def _strip_c_literal_suffixes(src: str) -> str:
+                out: list[str] = []
+                i = 0
+                n = len(src)
+                while i < n:
+                    if src[i].isdigit() and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] == "_")):
+                        start = i
+                        if src[i] == "0" and i + 1 < n and src[i + 1] in ("x", "X"):
+                            i += 2
+                            while i < n and src[i] in "0123456789abcdefABCDEF":
+                                i += 1
+                            num_end = i
+                            while i < n and src[i] in "uUlL":
+                                i += 1
+                            if i == n or not (src[i].isalnum() or src[i] == "_"):
+                                out.append(src[start:num_end])
+                            else:
+                                out.append(src[start:i])
+                            continue
+                        is_float = False
+                        while i < n and src[i].isdigit():
+                            i += 1
+                        if i < n and src[i] == ".":
+                            is_float = True
+                            i += 1
+                            while i < n and src[i].isdigit():
+                                i += 1
+                        if i < n and src[i] in ("e", "E"):
+                            exp_pos = i + 1
+                            if exp_pos < n and src[exp_pos] in ("+", "-"):
+                                exp_pos += 1
+                            if exp_pos < n and src[exp_pos].isdigit():
+                                is_float = True
+                                i = exp_pos
+                                while i < n and src[i].isdigit():
+                                    i += 1
+                        num_end = i
+                        if is_float:
+                            if i < n and src[i] in "fFlL":
+                                i += 1
+                        else:
+                            while i < n and src[i] in "uUlL":
+                                i += 1
+                        if i == n or not (src[i].isalnum() or src[i] == "_"):
+                            out.append(src[start:num_end])
+                        else:
+                            out.append(src[start:i])
+                        continue
+                    out.append(src[i])
+                    i += 1
+                return "".join(out)
+
+            cleaned = _strip_c_literal_suffixes(expr_str)
             parsed = ast.parse(cleaned, mode="eval")
             evaluator = SafeEvaluator()
             return evaluator.visit(parsed.body)
@@ -2414,22 +2464,55 @@ class ClangASTConverter:
 
         try:
             tokens = [t.spelling for t in cursor.get_tokens()]
-            tok_str = " ".join(tokens)
-            if "__attribute__" in tok_str or "[[" in tok_str:
-                for m in re.finditer(r"__attribute__\s*\(\s*\(\s*(.*?)\s*\)\s*\)", tok_str):
-                    inner = m.group(1).strip()
+            n_toks = len(tokens)
+            i = 0
+            while i < n_toks:
+                if tokens[i] == "__attribute__" and i + 2 < n_toks and tokens[i + 1] == "(" and tokens[i + 2] == "(":
+                    depth = 2
+                    j = i + 3
+                    inner_tokens: list[str] = []
+                    while j < n_toks and depth > 0:
+                        if tokens[j] == "(":
+                            depth += 1
+                            inner_tokens.append(tokens[j])
+                        elif tokens[j] == ")":
+                            depth -= 1
+                            if depth >= 2:
+                                inner_tokens.append(tokens[j])
+                        else:
+                            if depth >= 2:
+                                inner_tokens.append(tokens[j])
+                        j += 1
+                    inner = " ".join(inner_tokens).strip()
                     for attr in inner.split(","):
                         attr_clean = attr.strip()
                         if attr_clean and attr_clean not in attrs:
                             attrs.append(attr_clean)
-                for m in re.finditer(r"\[\[\s*(.*?)\s*\]\]", tok_str):
-                    inner = m.group(1).strip()
+                    i = j
+                    continue
+                if tokens[i] == "[" and i + 1 < n_toks and tokens[i + 1] == "[":
+                    j = i + 2
+                    inner_tokens = []
+                    while j + 1 < n_toks and not (tokens[j] == "]" and tokens[j + 1] == "]"):
+                        inner_tokens.append(tokens[j])
+                        j += 1
+                    if j + 1 < n_toks:
+                        inner = " ".join(inner_tokens).strip()
+                        for attr in inner.split(","):
+                            attr_clean = attr.strip()
+                            if attr_clean and attr_clean not in attrs:
+                                attrs.append(attr_clean)
+                        i = j + 2
+                        continue
+                if tokens[i].startswith("[[") and tokens[i].endswith("]]"):
+                    inner = tokens[i][2:-2].strip()
                     for attr in inner.split(","):
                         attr_clean = attr.strip()
                         if attr_clean and attr_clean not in attrs:
                             attrs.append(attr_clean)
-                if any("deprecated" in a.lower() for a in attrs):
-                    is_deprecated = True
+                i += 1
+            if any("deprecated" in a.lower() for a in attrs):
+                is_deprecated = True
         except Exception:
             pass
 
@@ -4372,11 +4455,8 @@ class ClangASTConverter:
         qualifiers = self._extract_quals(clang_type)
 
         # Clean up the spelling to get base type
-        base_type = spelling
-        for qual in qualifiers:
-            base_type = re.sub(r"\b" + re.escape(qual) + r"\b", "", base_type).strip()
-        # Clean up any double spaces
-        base_type = re.sub(r"\s+", " ", base_type).strip()
+        qual_set = set(qualifiers)
+        base_type = " ".join(tok for tok in spelling.split() if tok not in qual_set)
 
         return CType(name=base_type, qualifiers=qualifiers)
 
@@ -4385,15 +4465,25 @@ class ClangASTConverter:
         """Extract calling convention from a type or token spelling."""
         if not spelling:
             return None
-        conv_patterns = (
-            ("stdcall", r"(?:\b__stdcall\b|__attribute__\s*\(\(\s*(?:__)?stdcall(?:__)?\s*\)\))"),
-            ("fastcall", r"(?:\b__fastcall\b|__attribute__\s*\(\(\s*(?:__)?fastcall(?:__)?\s*\)\))"),
-            ("cdecl", r"(?:\b__cdecl\b|__attribute__\s*\(\(\s*(?:__)?cdecl(?:__)?\s*\)\))"),
-            ("thiscall", r"(?:\b__thiscall\b|__attribute__\s*\(\(\s*(?:__)?thiscall(?:__)?\s*\)\))"),
-            ("vectorcall", r"(?:\b__vectorcall\b|__attribute__\s*\(\(\s*(?:__)?vectorcall(?:__)?\s*\)\))"),
+        normalized = (
+            spelling.replace("(", " ")
+            .replace(")", " ")
+            .replace("[", " ")
+            .replace("]", " ")
+            .replace(",", " ")
+            .replace("*", " ")
         )
-        for conv_name, pattern in conv_patterns:
-            if re.search(pattern, spelling):
+        words = set(normalized.split())
+        conv_tokens = (
+            ("stdcall", ("__stdcall", "stdcall", "__stdcall__")),
+            ("fastcall", ("__fastcall", "fastcall", "__fastcall__")),
+            ("cdecl", ("__cdecl", "cdecl", "__cdecl__")),
+            ("thiscall", ("__thiscall", "thiscall", "__thiscall__")),
+            ("vectorcall", ("__vectorcall", "vectorcall", "__vectorcall__")),
+        )
+        has_attr = "__attribute__" in words
+        for conv_name, variants in conv_tokens:
+            if variants[0] in words or (has_attr and any(v in words for v in variants)):
                 return conv_name
         return None
 

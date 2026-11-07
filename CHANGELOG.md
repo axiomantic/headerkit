@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `PyiWriter` (`headerkit/writers/pyi.py`): in `mode="cffi"`, emit `cffi.FFI.CData` (instead of `Any`) for primitive pointers, primitive/non-function-pointer typedef pointers (such as `typedef int32_t DurationMs; DurationMs *`), multi-level pointers (`T **`), `void *` fields/returns (`cffi.FFI.CData` and `cffi.FFI.CData | bytes | bytearray | memoryview` for `void *` parameters), and variadic `*args: cffi.FFI.CData`; widen struct, union, enum, opaque record, array, and typedef-to-pointer/array/function-pointer parameters (`is_param=True`) with `| cffi.FFI.CData` (and `char *` / `const char *` pointer parameters to `bytes | str | cffi.FFI.CData`, automatically registering `import cffi`), while keeping return types, struct fields, typedef declarations, and by-value parameters narrowed.
+- `PyiWriter`, `TreeSitterBackend`, `LibclangBackend`, `NimWriter`, `CShimWriter`, `CythonWriter`, `MojoWriter`, `NimCleanupTransform`, and `NimJsonDocEnricher`: replace `extern_python` C prototype regex scraping in `PyiWriter` with `get_backend("tree-sitter").parse(...)` (and delegate `TreeSitterBackend._convert_parameter` to `_unwrap_declarator` so function-pointer and array parameters are preserved), inspect parsed Python AST `ast.Name` nodes in `PyiWriter._resolve_override`, and replace regex AST/type/signature extraction across backends, transforms, and writers with deterministic token/character scanning.
 
 ## [0.50.0] - 2026-11-03
 

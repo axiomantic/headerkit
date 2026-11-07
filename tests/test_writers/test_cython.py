@@ -1212,25 +1212,22 @@ class TestNamespaceStrippingTermination:
     MAX_PASSES = 8
 
     def _bounded_writer(self, monkeypatch) -> tuple[PxdWriter, list[int]]:
-        """Return a writer whose namespace-stripping regex is pass-bounded."""
-        import re as _re
-
+        """Return a writer whose namespace-stripping helper is pass-bounded."""
         from headerkit.writers import cython as cython_mod
 
+        orig_once = cython_mod._strip_namespace_qualifiers_once
         calls = [0]
 
-        class BoundedRe:
-            @staticmethod
-            def sub(pattern: str, repl: str, string: str) -> str:
-                calls[0] += 1
-                if calls[0] > TestNamespaceStrippingTermination.MAX_PASSES:
-                    raise RuntimeError(
-                        f"namespace stripping exceeded {TestNamespaceStrippingTermination.MAX_PASSES} "
-                        f"passes on {string!r}; the loop is not converging"
-                    )
-                return _re.sub(pattern, repl, string)
+        def bounded_once(string: str) -> str:
+            calls[0] += 1
+            if calls[0] > TestNamespaceStrippingTermination.MAX_PASSES:
+                raise RuntimeError(
+                    f"namespace stripping exceeded {TestNamespaceStrippingTermination.MAX_PASSES} "
+                    f"passes on {string!r}; the loop is not converging"
+                )
+            return orig_once(string)
 
-        monkeypatch.setattr(cython_mod, "re", BoundedRe)
+        monkeypatch.setattr(cython_mod, "_strip_namespace_qualifiers_once", bounded_once)
         return PxdWriter(Header("test.h", [])), calls
 
     def test_dependent_name_converges(self, monkeypatch) -> None:

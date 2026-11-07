@@ -15,7 +15,6 @@ Features
 from __future__ import annotations
 
 import fnmatch
-import re
 import textwrap
 import unicodedata
 from collections.abc import Sequence
@@ -364,10 +363,56 @@ _NIM_PRAGMA_TOKENS: frozenset[str] = frozenset(
 )
 
 
+def _strip_nim_pragmas(text: str) -> str:
+    """Remove ``{. ... .}`` pragma blocks from a formatted Nim type expression."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i : i + 2] == "{.":
+            end = text.find(".}", i + 2)
+            if end != -1:
+                out.append(" ")
+                i = end + 2
+                continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def _strip_nim_param_labels(text: str) -> str:
+    """Remove ``param_name:`` labels preceding ``:`` in Nim ``proc(...)`` signatures."""
+    out: list[str] = []
+    parts = text.split(":")
+    if len(parts) <= 1:
+        return text
+    for idx, seg in enumerate(parts[:-1]):
+        rstripped = seg.rstrip()
+        if rstripped.endswith("`"):
+            open_tick = rstripped.rfind("`", 0, len(rstripped) - 1)
+            if open_tick != -1 and (open_tick == 0 or rstripped[open_tick - 1] in " (,;["):
+                out.append(rstripped[:open_tick])
+                out.append(" ")
+                continue
+        j = len(rstripped)
+        while j > 0 and (rstripped[j - 1].isalnum() or rstripped[j - 1] == "_"):
+            j -= 1
+        token = rstripped[j:]
+        if token and (token[0].isalpha() or token[0] == "_") and (j == 0 or rstripped[j - 1] in " (,;["):
+            out.append(rstripped[:j])
+            out.append(" ")
+        else:
+            out.append(seg)
+            if idx < len(parts) - 1:
+                out.append(" ")
+    out.append(parts[-1])
+    return "".join(out)
+
+
 def _extract_type_identifiers(type_str: str) -> set[str]:
     """Extract individual identifier tokens from a formatted Nim type expression."""
-    without_pragmas = re.sub(r"\{\.[^}]*\.\}", " ", type_str)
-    without_param_names = re.sub(r"(?:`[^`]+`|\b[A-Za-z_][A-Za-z0-9_]*)\s*:", " ", without_pragmas)
+    without_pragmas = _strip_nim_pragmas(type_str)
+    without_param_names = _strip_nim_param_labels(without_pragmas)
     cleaned = (
         without_param_names.replace("[", " ")
         .replace("]", " ")

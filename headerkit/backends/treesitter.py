@@ -1364,7 +1364,7 @@ class TreeSitterBackend:
                 return self._unwrap_declarator(inner_decl, ptr_type)
             return None, ptr_type, node
 
-        if node.type == "reference_declarator":
+        if node.type in ("reference_declarator", "abstract_reference_declarator"):
             is_rval = any(c.type == "&&" for c in node.children)
             ref_type: TypeExpr = Reference(curr_type, is_rvalue=is_rval)
             inner_decl = node.child_by_field_name("declarator")
@@ -1377,7 +1377,7 @@ class TreeSitterBackend:
                 return self._unwrap_declarator(inner_decl, ref_type)
             return None, ref_type, node
 
-        if node.type == "array_declarator":
+        if node.type in ("array_declarator", "abstract_array_declarator"):
             inner_decl = node.child_by_field_name("declarator")
             size_node = node.child_by_field_name("size")
             size: int | str | None = None
@@ -2028,27 +2028,7 @@ class TreeSitterBackend:
         p_name: str | None = None
 
         if p_decl_node:
-            curr: Node | None = p_decl_node
-            while curr and curr.type in (
-                "pointer_declarator",
-                "abstract_pointer_declarator",
-                "reference_declarator",
-            ):
-                if curr.type in ("pointer_declarator", "abstract_pointer_declarator"):
-                    p_type = Pointer(p_type, qualifiers=_pointer_qualifiers(curr))
-                elif curr.type == "reference_declarator":
-                    is_rval = any(c.type == "&&" for c in curr.children)
-                    p_type = Reference(p_type, is_rvalue=is_rval)
-                child = curr.child_by_field_name("declarator")
-                if not child:
-                    for c in curr.children:
-                        if c.type not in ("*", "&", "&&", "type_qualifier", "const", "volatile"):
-                            child = c
-                            break
-                curr = child
-
-            if curr and curr.type in ("identifier", "type_identifier", "field_identifier"):
-                p_name = _node_text(curr).strip()
+            p_name, p_type, _ = self._unwrap_declarator(p_decl_node, p_type)
 
         if str(p_type) == "void" and p_name is None:
             return None

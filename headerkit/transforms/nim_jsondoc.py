@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -57,15 +56,168 @@ _TYPE_ENTRY_KINDS: frozenset[str] = frozenset({"skType", "type"})
 _VAR_ENTRY_KINDS: frozenset[str] = frozenset({"skVar", "skLet", "var", "let", "variable"})
 _CONST_ENTRY_KINDS: frozenset[str] = frozenset({"skConst", "const", "constant"})
 
-_EXPORTC_PRAGMA_RE = re.compile(r"""exportc\s*:\s*"([^"]+)"|exportc\s*=\s*"([^"]+)""")
-_DEPRECATED_PRAGMA_RE = re.compile(r"""\bdeprecated\b""")
-_INCLUDE_LINE_RE = re.compile(r"^\s*include\s+(.+?)(?:\s*#.*)?$")
-_PROC_HEADER_RE = re.compile(
-    r"^\s*(?:proc|func|method|iterator|converter|template)\s+"
-    r"`?([A-Za-z_][A-Za-z0-9_]*)`?\s*(\*)?"
-    r"(?:\s*\[[^\]]*\])?\s*"
-    r"\((.*)"
+_PROC_DECL_KEYWORDS: tuple[str, ...] = ("proc", "func", "method", "iterator", "converter", "template")
+_SECTION_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "proc",
+        "func",
+        "method",
+        "iterator",
+        "converter",
+        "template",
+        "var",
+        "let",
+        "const",
+        "include",
+        "import",
+        "from",
+        "when",
+    }
 )
+
+
+def _strip_nim_pragmas(text: str) -> str:
+    """Remove all ``{. ... .}`` pragma blocks from ``text``."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i : i + 2] == "{.":
+            end = text.find(".}", i + 2)
+            if end != -1:
+                i = end + 2
+                continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def _collect_nim_pragmas(text: str) -> list[str]:
+    """Return the contents of all ``{. ... .}`` pragma blocks in ``text``."""
+    pragmas: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        start = text.find("{.", i)
+        if start == -1:
+            break
+        end = text.find(".}", start + 2)
+        if end == -1:
+            break
+        pragmas.append(text[start + 2 : end])
+        i = end + 2
+    return pragmas
+
+
+def _parse_include_line(line: str) -> str | None:
+    """Extract the raw target list from a Nim ``include ...`` line, or None."""
+    s = line.lstrip()
+    if not s.startswith("include") or len(s) <= 7 or not s[7].isspace():
+        return None
+    rest = s[7:].strip()
+    in_quotes = False
+    quote_char = ""
+    for idx, ch in enumerate(rest):
+        if in_quotes:
+            if ch == quote_char:
+                in_quotes = False
+        elif ch in ('"', "'"):
+            in_quotes = True
+            quote_char = ch
+        elif ch == "#":
+            rest = rest[:idx].rstrip()
+            break
+    return rest if rest else None
+
+
+def _parse_nim_ident_at(text: str, pos: int) -> tuple[str, int] | None:
+    """Parse an identifier (plain or backtick-quoted) starting at ``pos`` after skipping whitespace."""
+    n = len(text)
+    while pos < n and text[pos].isspace():
+        pos += 1
+    if pos >= n:
+        return None
+    if text[pos] == "`":
+        end_tick = text.find("`", pos + 1)
+        if end_tick == -1:
+            return None
+        ident = text[pos + 1 : end_tick].strip()
+        if not ident:
+            return None
+        return ident, end_tick + 1
+    start = pos
+    if not (text[pos].isalpha() or text[pos] == "_"):
+        return None
+    while pos < n and (text[pos].isalnum() or text[pos] == "_"):
+        pos += 1
+    return text[start:pos], pos
+
+
+def _match_proc_header_name(raw_line: str) -> str | None:
+    """If ``raw_line`` starts a Nim routine header with ``(``, return its identifier name."""
+    s = raw_line.lstrip()
+    kw_end = -1
+    for kw in _PROC_DECL_KEYWORDS:
+        if s.startswith(kw) and len(s) > len(kw) and s[len(kw)].isspace():
+            kw_end = len(kw)
+            break
+    if kw_end == -1:
+        return None
+    parsed = _parse_nim_ident_at(s, kw_end)
+    if parsed is None:
+        return None
+    ident, pos = parsed
+    n = len(s)
+    while pos < n and s[pos].isspace():
+        pos += 1
+    if pos < n and s[pos] == "*":
+        pos += 1
+        while pos < n and s[pos].isspace():
+            pos += 1
+    if pos < n and s[pos] == "[":
+        close_bracket = s.find("]", pos + 1)
+        if close_bracket == -1:
+            return None
+        pos = close_bracket + 1
+        while pos < n and s[pos].isspace():
+            pos += 1
+    if pos < n and s[pos] == "(":
+        return ident
+    return None
+
+
+def _match_type_decl_line(stripped: str) -> tuple[str, str] | None:
+    """Match a Nim type declaration ``Name* {.pragma.} = ...`` and return ``(nim_name, pragma_text)``."""
+    parsed = _parse_nim_ident_at(stripped, 0)
+    if parsed is None:
+        return None
+    ident, pos = parsed
+    n = len(stripped)
+    while pos < n and stripped[pos].isspace():
+        pos += 1
+    if pos < n and stripped[pos] == "*":
+        pos += 1
+        while pos < n and stripped[pos].isspace():
+            pos += 1
+    if pos < n and stripped[pos] == "[":
+        close_bracket = stripped.find("]", pos + 1)
+        if close_bracket == -1:
+            return None
+        pos = close_bracket + 1
+        while pos < n and stripped[pos].isspace():
+            pos += 1
+    pragma = ""
+    if stripped[pos : pos + 2] == "{.":
+        end_pragma = stripped.find(".}", pos + 2)
+        if end_pragma == -1:
+            return None
+        pragma = stripped[pos + 2 : end_pragma]
+        pos = end_pragma + 2
+        while pos < n and stripped[pos].isspace():
+            pos += 1
+    if pos < n and stripped[pos] == "=":
+        return ident, pragma
+    return None
 
 
 def _categorize_entry_kind(raw_kind: Any) -> str | None:
@@ -157,10 +309,10 @@ def _collect_constituent_nim_files(entrypoint: Path, project_root: Path) -> list
         except OSError:
             return
         for line in lines:
-            m = _INCLUDE_LINE_RE.match(line)
-            if not m:
+            raw_targets = _parse_include_line(line)
+            if raw_targets is None:
                 continue
-            for target in _parse_include_targets(m.group(1)):
+            for target in _parse_include_targets(raw_targets):
                 inc_file = _resolve_included_nim_file(target, resolved.parent, project_root)
                 if inc_file is not None:
                     _walk(inc_file)
@@ -191,10 +343,10 @@ def _is_included_fragment(nim_file: Path, project_root: Path) -> bool:
             except OSError:
                 continue
             for line in text.splitlines():
-                m = _INCLUDE_LINE_RE.match(line)
-                if not m:
+                raw_targets = _parse_include_line(line)
+                if raw_targets is None:
                     continue
-                for inc_target in _parse_include_targets(m.group(1)):
+                for inc_target in _parse_include_targets(raw_targets):
                     resolved_inc = _resolve_included_nim_file(inc_target, other_res.parent, project_root)
                     if resolved_inc == target_resolved:
                         return True
@@ -248,8 +400,7 @@ def _parse_nim_params(params_str: str) -> tuple[list[str], list[str]]:
         # Strip default value '= ...' from rhs at depth 0
         type_part = _split_top_level(rhs, ("=",))[0].strip() if "=" in rhs else rhs.strip()
         for raw_ident in lhs.split(","):
-            ident = raw_ident.strip()
-            ident = re.sub(r"\{\..*?\.\}", "", ident).strip()
+            ident = _strip_nim_pragmas(raw_ident).strip()
             ident = ident.rstrip("*").strip().strip("`")
             if ident:
                 names.append(ident)
@@ -260,12 +411,38 @@ def _parse_nim_params(params_str: str) -> tuple[list[str], list[str]]:
 def _extract_pragma_info(nim_name: str, pragma_text: str) -> tuple[str, bool]:
     """Extract ``(exported_c_name, is_deprecated)`` from a Nim ``{. ... .}`` pragma block."""
     c_name = nim_name
-    m_exp = _EXPORTC_PRAGMA_RE.search(pragma_text)
-    if m_exp:
-        raw_c = m_exp.group(1) or m_exp.group(2) or ""
-        if raw_c:
-            c_name = raw_c.replace("$1", nim_name)
-    is_dep = _DEPRECATED_PRAGMA_RE.search(pragma_text) is not None
+    idx = pragma_text.find("exportc")
+    if idx != -1:
+        pos = idx + len("exportc")
+        n = len(pragma_text)
+        while pos < n and pragma_text[pos].isspace():
+            pos += 1
+        if pos < n and pragma_text[pos] in (":", "="):
+            pos += 1
+            while pos < n and pragma_text[pos].isspace():
+                pos += 1
+            if pos < n and pragma_text[pos] == '"':
+                end_quote = pragma_text.find('"', pos + 1)
+                if end_quote != -1:
+                    raw_c = pragma_text[pos + 1 : end_quote]
+                    if raw_c:
+                        c_name = raw_c.replace("$1", nim_name)
+
+    is_dep = False
+    search_pos = 0
+    while True:
+        dep_idx = pragma_text.find("deprecated", search_pos)
+        if dep_idx == -1:
+            break
+        before_ok = dep_idx == 0 or not (pragma_text[dep_idx - 1].isalnum() or pragma_text[dep_idx - 1] == "_")
+        after_pos = dep_idx + len("deprecated")
+        after_ok = after_pos >= len(pragma_text) or not (
+            pragma_text[after_pos].isalnum() or pragma_text[after_pos] == "_"
+        )
+        if before_ok and after_ok:
+            is_dep = True
+            break
+        search_pos = dep_idx + 1
     return c_name, is_dep
 
 
@@ -306,10 +483,10 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
             continue
 
         # Check for proc/func/method/iterator/converter/template declaration
-        m_proc = _PROC_HEADER_RE.match(raw_line)
-        if m_proc:
+        proc_nim_name = _match_proc_header_name(raw_line)
+        if proc_nim_name is not None:
             in_type_section = False
-            nim_name = m_proc.group(1)
+            nim_name = proc_nim_name
             header_lines = [raw_line]
             # Accumulate multi-line signature until ')' is closed and '=' or end of prototype is reached
             paren_depth = raw_line.count("(") - raw_line.count(")")
@@ -343,9 +520,7 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
             params_str = full_sig[open_idx + 1 : close_idx] if open_idx >= 0 and close_idx > open_idx else ""
             after_params = full_sig[close_idx + 1 :] if close_idx >= 0 else ""
 
-            pragma_text = ""
-            for pm in re.finditer(r"\{\.(.*?)\.\}", full_sig):
-                pragma_text += " " + pm.group(1)
+            pragma_text = " ".join(_collect_nim_pragmas(full_sig))
 
             c_name, is_dep = _extract_pragma_info(nim_name, pragma_text)
             if is_dep:
@@ -353,7 +528,7 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
                 deprecated_symbols.add(nim_name)
 
             # Extract return type if present before '{.' or '='
-            after_no_pragma = re.sub(r"\{\..*?\.\}", "", after_params)
+            after_no_pragma = _strip_nim_pragmas(after_params)
             if "=" in after_no_pragma:
                 after_no_pragma = after_no_pragma.split("=", 1)[0]
             ret_nim_type: str | None = None
@@ -397,7 +572,7 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
             continue
 
         # Track 'type' section and type declarations
-        if re.match(r"^type\b", stripped):
+        if stripped == "type" or (stripped.startswith("type") and len(stripped) > 4 and stripped[4].isspace()):
             in_type_section = True
             rest = stripped[4:].strip()
             if not rest:
@@ -405,19 +580,16 @@ def _parse_nim_source_file(path: Path) -> tuple[list[_FuncDocMeta], dict[tuple[s
                 continue
             stripped = rest
 
-        if in_type_section and (raw_line.startswith((" ", "\t")) or re.match(r"^[A-Za-z_`]", stripped)):
-            if re.match(
-                r"^(?:proc|func|method|iterator|converter|template|var|let|const|include|import|from|when)\b", stripped
-            ):
+        if in_type_section and (
+            raw_line.startswith((" ", "\t")) or (stripped and (stripped[0].isalpha() or stripped[0] in ("_", "`")))
+        ):
+            first_word = stripped.split(None, 1)[0] if stripped else ""
+            if first_word in _SECTION_KEYWORDS:
                 in_type_section = False
             else:
-                m_type = re.match(
-                    r"^`?([A-Za-z_][A-Za-z0-9_]*)`?\s*\*?(?:\s*\[[^\]]*\])?\s*(?:\{\.(.*?)\.\})?\s*=",
-                    stripped,
-                )
-                if m_type:
-                    t_nim_name = m_type.group(1)
-                    t_pragma = m_type.group(2) or ""
+                type_match = _match_type_decl_line(stripped)
+                if type_match is not None:
+                    t_nim_name, t_pragma = type_match
                     t_c_name, t_dep = _extract_pragma_info(t_nim_name, t_pragma)
                     if t_dep:
                         deprecated_symbols.add(t_c_name)

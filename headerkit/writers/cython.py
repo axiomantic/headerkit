@@ -26,7 +26,6 @@ Example
 from __future__ import annotations
 
 import os
-import re
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import replace
@@ -119,6 +118,23 @@ def _cython_string_path(path: str | None) -> str:
     return path.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _strip_namespace_qualifiers_once(name: str) -> str:
+    """Perform one left-to-right pass removing ``ns::`` qualifiers from a C++ name."""
+    idx = 0
+    while True:
+        pos = name.find("::", idx)
+        if pos == -1:
+            return name
+        start = pos
+        while start > 0 and (name[start - 1].isalnum() or name[start - 1] == "_"):
+            start -= 1
+        if start < pos:
+            name = name[:start] + name[pos + 2 :]
+            idx = start
+        else:
+            idx = pos + 2
+
+
 def _strip_namespace_qualifiers(name: str) -> str:
     """Remove every ``ns::`` qualifier from a C++ name.
 
@@ -127,11 +143,11 @@ def _strip_namespace_qualifiers(name: str) -> str:
 
     Iterates to a fixpoint rather than until ``::`` disappears: a dependent name
     such as ``types::remove_reference<T>::type`` retains a ``>::`` that no
-    ``\\w+::`` match can consume, so the latter condition never becomes false and
-    the loop spins forever.
+    identifier ``ns::`` match can consume, so the latter condition never becomes
+    false and the loop spins forever.
     """
     while True:
-        stripped = re.sub(r"\b\w+::", "", name)
+        stripped = _strip_namespace_qualifiers_once(name)
         if stripped == name:
             return name
         name = stripped
