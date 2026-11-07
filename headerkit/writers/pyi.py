@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from keyword import iskeyword
 from typing import Any, ClassVar, Literal
 
-from headerkit.backends import get_backend
+from headerkit.backends import get_backend, is_backend_available
 from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     Array,
@@ -833,8 +833,14 @@ class PyiWriter(BaseWriter):
                 if not stripped:
                     continue
                 if "(" in stripped:
-                    proto_backend = get_backend("tree-sitter")
-                    parsed_ext = proto_backend.parse(f"{stripped};", "extern_python.h")
+                    proto_backend = get_backend("tree-sitter") if is_backend_available("tree-sitter") else get_backend()
+                    prelude_lines = ["#include <stdint.h>", "#include <stddef.h>", "#include <stdbool.h>"]
+                    known_type_names = set(self._typedef_map) | set(self._record_tags) | set(self._enum_tags)
+                    for t_name in sorted(known_type_names):
+                        if " " not in t_name and t_name.isidentifier():
+                            prelude_lines.append(f"typedef int {t_name};")
+                    proto_src = "\n".join([*prelude_lines, f"{stripped};"])
+                    parsed_ext = proto_backend.parse(proto_src, "extern_python.h")
                     for ext_decl in parsed_ext.declarations:
                         if isinstance(ext_decl, Function):
                             py_cb_name = _sanitize_identifier(ext_decl.name)

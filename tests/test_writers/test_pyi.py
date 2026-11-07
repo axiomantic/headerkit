@@ -697,18 +697,19 @@ class TestPyiWriter:
         )
         assert fresh_writer._needs_cffi is True
 
-    def test_cffi_mode_extern_python_parsed_via_backend(self) -> None:
-        """extern_python C prototypes are parsed via HeaderKit's parser backend (including fnptrs, arrays, void)."""
+    def test_cffi_mode_extern_python_parsed_via_backend(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """extern_python C prototypes are parsed via HeaderKit's parser backend (both tree-sitter and fallback get_backend())."""
         header = Header(
             "callbacks.h",
             [
                 Struct("Ctx", [Field("id", CType("int"))], is_typedef=True),
+                Typedef("PipeId", CType("int32_t")),
             ],
         )
         writer = PyiWriter(
             mode="cffi",
             extern_python=[
-                'extern "Python" int on_dispatch(Ctx *ctx, void (*handler)(int code, void *user), const uint8_t data[16]);',
+                'extern "Python" int on_dispatch(Ctx *ctx, PipeId pipe, void (*handler)(int code, void *user), const uint8_t data[16]);',
                 "void on_idle(void);",
             ],
         )
@@ -723,17 +724,32 @@ class TestPyiWriter:
             class Ctx:
                 id: int
 
+            PipeId = int
+
             ffi: cffi.FFI
 
             @final
             class _Lib:
-                def on_dispatch(self, ctx: Ctx | cffi.FFI.CData, handler: Callable[[int, cffi.FFI.CData], None] | cffi.FFI.CData, data: list[int] | cffi.FFI.CData) -> int: ...
+                def on_dispatch(self, ctx: Ctx | cffi.FFI.CData, pipe: PipeId, handler: Callable[[int, cffi.FFI.CData], None] | cffi.FFI.CData, data: list[int] | cffi.FFI.CData) -> int: ...
                 def on_idle(self) -> None: ...
 
             lib: _Lib
         """)
         assert actual == expected
         ast.parse(actual)
+
+        # Fallback path when tree-sitter is unavailable (uses get_backend() / libclang with prelude typedefs)
+        monkeypatch.setattr("headerkit.writers.pyi.is_backend_available", lambda _name=None: False)
+        fallback_writer = PyiWriter(
+            mode="cffi",
+            extern_python=[
+                'extern "Python" int on_dispatch(Ctx *ctx, PipeId pipe, void (*handler)(int code, void *user), const uint8_t data[16]);',
+                "void on_idle(void);",
+            ],
+        )
+        fallback_actual = fallback_writer.write(header)
+        assert fallback_actual == expected
+        ast.parse(fallback_actual)
 
     def test_invalid_mode_or_pointer_style_raises(self) -> None:
         with pytest.raises(ValueError, match="Unsupported PyiWriter mode"):
