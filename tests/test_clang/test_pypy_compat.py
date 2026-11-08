@@ -2,11 +2,38 @@
 
 from __future__ import annotations
 
+import ctypes
+import importlib
 import platform
+import sys
+import types
+from typing import Any
 
 import pytest
 
 from headerkit._clang import _compat_c_interop_string
+
+
+def _fresh_cindex(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    """Import a private copy of the loaded bindings module for the duration of a test.
+
+    The PyPy patches mutate the module object they are given, and re-importing
+    by name returns the shared one from ``sys.modules``, so a test that patches
+    it would leave every later test running against patched bindings. The
+    shared module, and the parent package's reference to it, are restored
+    afterwards.
+    """
+    import headerkit._clang
+    from headerkit._clang import get_cindex
+
+    shared = get_cindex()
+    package = importlib.import_module(shared.__name__.rpartition(".")[0])
+    monkeypatch.delitem(sys.modules, shared.__name__)
+    monkeypatch.setattr(package, "cindex", shared)
+    monkeypatch.setattr(headerkit._clang, "_cached_cindex", None)
+    fresh = importlib.import_module(shared.__name__)
+    assert fresh is not shared
+    return fresh
 
 
 class TestCompatCInteropStringInit:
@@ -150,21 +177,19 @@ class TestMonkeyPatchMechanism:
         finally:
             headerkit._clang._cached_cindex = saved
 
-    def test_patch_applied_when_forced(self) -> None:
+    def test_patch_applied_when_forced(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When _NEEDS_INTEROP_STRING_PATCH is forced True, the compat class is used."""
         import headerkit._clang
         from headerkit._clang import get_cindex
 
-        saved_cindex = headerkit._clang._cached_cindex
-        saved_flag = headerkit._clang._NEEDS_INTEROP_STRING_PATCH
-        try:
-            headerkit._clang._cached_cindex = None
-            headerkit._clang._NEEDS_INTEROP_STRING_PATCH = True
-            cindex = get_cindex()
-            assert cindex.c_interop_string is _compat_c_interop_string
-        finally:
-            headerkit._clang._NEEDS_INTEROP_STRING_PATCH = saved_flag
-            headerkit._clang._cached_cindex = saved_cindex
+        shared = get_cindex()
+        _fresh_cindex(monkeypatch)
+        monkeypatch.setattr(headerkit._clang, "_NEEDS_INTEROP_STRING_PATCH", True)
+
+        cindex = get_cindex()
+
+        assert cindex is not shared
+        assert cindex.c_interop_string is _compat_c_interop_string
 
 
 class TestPyPyPatches:
@@ -195,19 +220,123 @@ class TestPyPyPatches:
         c_param.data[1] = 0
         assert c.data[1] == 1
 
-    def test_patch_pypy_callbacks(self) -> None:
-        from headerkit._clang import _patch_pypy_callbacks, get_cindex
 
-        cindex = get_cindex()
+_CALLBACK_NAMES = ("cursor_visit", "fields_visit", "translation_unit_includes")
+
+
+def _passthrough(visitor: object) -> object:
+    """Stand-in for a CFUNCTYPE: hands back the visitor so the test can call it directly."""
+    return visitor
+
+
+def _bindings_module(shape: str) -> types.ModuleType:
+    """A module shaped like the vendored bindings, with pass-through callback types.
+
+    ``attributes`` is the LLVM 20+ layout (``cursor_visit_callback`` and so on);
+    ``dict`` is the LLVM 14-19 layout (``callbacks["cursor_visit"]`` and so on).
+    The real ``Cursor`` and ``c_object_p`` are used, so the copies are real copies.
+    """
+    from headerkit._clang import get_cindex
+
+    cindex = get_cindex()
+    module = types.ModuleType(f"fake_cindex_{shape}")
+    module.Cursor = cindex.Cursor  # type: ignore[attr-defined]
+    module.c_object_p = cindex.c_object_p  # type: ignore[attr-defined]
+    if shape == "attributes":
+        for name in _CALLBACK_NAMES:
+            setattr(module, f"{name}_callback", _passthrough)
+    else:
+        module.callbacks = dict.fromkeys(_CALLBACK_NAMES, _passthrough)  # type: ignore[attr-defined]
+    return module
+
+
+def _callback_type(module: types.ModuleType, name: str) -> Any:
+    if hasattr(module, f"{name}_callback"):
+        return getattr(module, f"{name}_callback")
+    return module.callbacks[name]
+
+
+@pytest.mark.parametrize("shape", ["attributes", "dict"])
+class TestPyPyCallbackPatch:
+    """``_patch_pypy_callbacks`` must hand every visitor a copy, in both binding layouts."""
+
+    def test_cursor_visitor_receives_an_independent_copy(self, shape: str) -> None:
+        from headerkit._clang import _patch_pypy_callbacks
+
+        module = _bindings_module(shape)
+        _patch_pypy_callbacks(module)
+        received: list[Any] = []
+        visitor = _callback_type(module, "cursor_visit")(lambda child, _parent, _data: received.append(child) or 1)
+
+        child = module.Cursor()
+        child._kind_id = 2
+        child.data[0] = 100
+        child.data[1] = 1
+        child.data[2] = 300
+        assert visitor(child, None, None) == 1
+
+        [copy] = received
+        assert copy is not child
+        assert bytes(copy) == bytes(child)
+        child.data[1] = 0
+        assert copy.data[1] == 1
+
+    def test_fields_visitor_receives_an_independent_copy(self, shape: str) -> None:
+        from headerkit._clang import _patch_pypy_callbacks
+
+        module = _bindings_module(shape)
+        _patch_pypy_callbacks(module)
+        received: list[Any] = []
+        visitor = _callback_type(module, "fields_visit")(lambda field, _data: received.append(field) or 1)
+
+        field = module.Cursor()
+        field.data[1] = 7
+        assert visitor(field, None) == 1
+
+        [copy] = received
+        assert copy is not field
+        assert bytes(copy) == bytes(field)
+        field.data[1] = 0
+        assert copy.data[1] == 7
+
+    def test_includes_visitor_receives_a_fresh_pointer_to_the_same_file(self, shape: str) -> None:
+        from headerkit._clang import _patch_pypy_callbacks
+
+        module = _bindings_module(shape)
+        _patch_pypy_callbacks(module)
+        received: list[Any] = []
+        visitor = _callback_type(module, "translation_unit_includes")(
+            lambda fobj, _lptr, depth, _data: received.append((fobj, depth))
+        )
+
+        fobj = ctypes.cast(0x1234, module.c_object_p)
+        visitor(fobj, None, 3, None)
+
+        [(copy, depth)] = received
+        assert copy is not fobj
+        assert ctypes.cast(copy, ctypes.c_void_p).value == 0x1234
+        assert depth == 3
+
+
+class TestPyPyCallbackPatchOnLoadedBindings:
+    """The patch must reach the callback types of whichever bindings are actually loaded."""
+
+    def test_every_callback_type_is_wrapped_and_keeps_its_ctypes_type(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from headerkit._clang import _patch_pypy_callbacks
+
+        cindex = _fresh_cindex(monkeypatch)
+        original = {name: _callback_type(cindex, name) for name in _CALLBACK_NAMES}
+
         _patch_pypy_callbacks(cindex)
 
-        received: list[object] = []
-
-        def visitor(fobj_copy: object, _lptr: object, _depth: object, _data: object) -> None:
-            received.append(fobj_copy)
-
-        cb_wrapper = cindex.translation_unit_includes_callback
-        # Invoking the callback wrapper with dummy args
-        cb_func = cb_wrapper(visitor)
-        # Verify it returns a callable CFunctionType
-        assert callable(cb_func)
+        visitors = {
+            "cursor_visit": lambda _child, _parent, _data: 1,
+            "fields_visit": lambda _field, _data: 1,
+            "translation_unit_includes": lambda _fobj, _lptr, _depth, _data: None,
+        }
+        for name, orig_type in original.items():
+            patched = _callback_type(cindex, name)
+            assert patched is not orig_type, f"{name} was left unpatched"
+            # libclang's registered argtypes name the original CFUNCTYPE, so the
+            # wrapper must still produce an instance of it.
+            assert isinstance(patched(visitors[name]), orig_type)
