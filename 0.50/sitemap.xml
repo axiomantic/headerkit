@@ -2,178 +2,178 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/design/target-triples/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/architecture/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/build-backend/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/cache/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/cffi-integration/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/cffi/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/cibuildwheel/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/configuration_matrix/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/custom-backends/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/custom-writers/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/github-action/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/install-libclang/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/installation/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/ir_transformations/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/matrix_reconciliation_and_overrides/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/nim-python-packaging/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/platform_guarded_store_merge/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/guides/quickstart/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/backends/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/cffi/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/cshim/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/ctypes/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/cython/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/diff/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/generate/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/hooks/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/install-libclang/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/ir/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/json/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/lua/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/matrix/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/mojo/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/nim/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/prompt/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/reconcile/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/transforms/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/treesitter/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/reference/writers/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/tutorials/ctypes-writer/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/tutorials/header-cleanup/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/tutorials/json-export/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://axiomantic.github.io/headerkit/0.50/tutorials/pxd-writer/</loc>
-         <lastmod>2026-11-03</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
 </urlset>
