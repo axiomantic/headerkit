@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.1] - 2026-11-08
+
+### Fixed
+- `headerkit._clang`: apply the PyPy callback wrapper patch (`_patch_pypy_callbacks`) to LLVM 14–19 `cindex.callbacks` dictionary entries (`cursor_visit`, `fields_visit`, `translation_unit_includes`) in addition to LLVM 20+ module-level `<name>_callback` attributes (#124).
+
 ## [0.50.0] - 2026-11-03
 
 ### Added
