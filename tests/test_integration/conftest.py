@@ -129,7 +129,7 @@ def zlib_header() -> Path | None:
 # -- lua --------------------------------------------------------------------
 
 LUA_VERSION = "5.4.7"
-LUA_URL = f"https://www.lua.org/ftp/lua-{LUA_VERSION}.tar.gz"
+LUA_URL = f"https://github.com/lua/lua/archive/refs/tags/v{LUA_VERSION}.tar.gz"
 
 
 @pytest.fixture(scope="session")
