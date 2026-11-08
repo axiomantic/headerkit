@@ -10,11 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - `README.md`, `docs/guides/architecture.md`, and `docs/index.md`: add the 4-stage HeaderKit Extensibility & Separation of Concerns Mermaid architecture diagram (`flowchart TD`) and document the 5 orthogonal extension layers (Parser Backends, IR Transforms & Pipeline Filters, Fine-Grained Policy Hooks, Output Writers, and Project Scaffolders & Build Hooks) and their strict layer boundary invariants.
 
-## [0.50.1] - 2026-11-06
+## [0.51.0] - 2026-11-08
 
 ### Fixed
 - `PyiWriter` (`headerkit/writers/pyi.py`): in `mode="cffi"`, emit `cffi.FFI.CData` (instead of `Any`) for primitive pointers, primitive/non-function-pointer typedef pointers (such as `typedef int32_t DurationMs; DurationMs *`), multi-level pointers (`T **`), `void *` fields/returns (`cffi.FFI.CData` and `cffi.FFI.CData | bytes | bytearray | memoryview` for `void *` parameters), and variadic `*args: cffi.FFI.CData`; widen struct, union, enum, opaque record, array, and typedef-to-pointer/array/function-pointer parameters (`is_param=True`) with `| cffi.FFI.CData` (and `char *` / `const char *` pointer parameters to `bytes | str | cffi.FFI.CData`, automatically registering `import cffi`), while keeping return types, struct fields, typedef declarations, and by-value parameters narrowed.
-- `PyiWriter`, `CffiWriter`, `TreeSitterBackend`, `LibclangBackend`, `NimWriter`, `CShimWriter`, `CythonWriter`, `MojoWriter`, `NimCleanupTransform`, and `NimJsonDocEnricher`: enforce a pure IR-only writer boundary in `CffiWriter` and `PyiWriter` so `extern_python` resolves `Function` and `FunctionPointer` `Typedef` symbol names directly from `Header.declarations` (rejecting raw C prototype strings and unknown symbols with `ValueError`, with zero `headerkit.backends` imports in `headerkit/writers/`), delegate `TreeSitterBackend._convert_parameter` to `_unwrap_declarator` so function-pointer and array parameters are preserved, inspect parsed Python AST `ast.Name` nodes in `PyiWriter._resolve_override`, and replace regex AST/type/signature extraction across backends, transforms, and writers with deterministic token/character scanning.
+- `PyiWriter`, `CffiWriter`, `TreeSitterBackend`, `LibclangBackend`, `NimWriter`, `CShimWriter`, `CythonWriter`, `MojoWriter`: enforce a pure IR-only writer boundary in `CffiWriter` and `PyiWriter` so `extern_python` resolves `Function` and `FunctionPointer` `Typedef` symbol names directly from `Header.declarations` (rejecting raw C prototype strings and unknown symbols with `ValueError`, with zero `headerkit.backends` imports in `headerkit/writers/`), delegate `TreeSitterBackend._convert_parameter` to `_unwrap_declarator` so function-pointer and array parameters are preserved, inspect parsed Python AST `ast.Name` nodes in `PyiWriter._resolve_override`, and replace regex AST/type/signature extraction across backends, transforms, and writers with deterministic token/character scanning.
+
+## [0.50.1] - 2026-11-08
+
+### Fixed
+- `headerkit._clang`: apply the PyPy callback wrapper patch (`_patch_pypy_callbacks`) to LLVM 14–19 `cindex.callbacks` dictionary entries (`cursor_visit`, `fields_visit`, `translation_unit_includes`) in addition to LLVM 20+ module-level `<name>_callback` attributes (#124).
 
 ## [0.50.0] - 2026-11-03
 

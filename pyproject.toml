@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "headerkit"
-version = "0.50.1"
+version = "0.51.0"
 description = "The universal C/C++ header parser and FFI declaration generator for Python (cffi, ctypes, Cython, pyi), LuaJIT, JSON IR, and LLM prompts."
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"

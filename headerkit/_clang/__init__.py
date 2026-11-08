@@ -80,17 +80,20 @@ def _patch_pypy_callbacks(cindex: ModuleType) -> None:
     cursors would all point to the same corrupted memory once the callback
     unwinds.
 
-    Wrapping cursor_visit_callback, fields_visit_callback, and
-    translation_unit_includes_callback to create independent copies of
-    incoming structs and pointer objects before passing them to the visitor
-    function ensures that AST traversal and inclusion gathering retain valid
-    data across iterations.
+    Wrapping the cursor_visit, fields_visit, and translation_unit_includes
+    callback types to create independent copies of incoming structs and
+    pointer objects before passing them to the visitor function ensures that
+    AST traversal and inclusion gathering retain valid data across iterations.
+
+    LLVM 20+ bindings expose each callback type as a module attribute named
+    ``<name>_callback``; LLVM 14-19 bindings keep them in a module-level
+    ``callbacks`` dict. Every call site looks the type up at call time, so both
+    shapes are replaced. Each wrapper still returns an instance of the original
+    callback type, which is what the registered ``argtypes`` expect.
     """
     from typing import Any
 
-    if hasattr(cindex, "cursor_visit_callback"):
-        orig_cursor_cb = cindex.cursor_visit_callback
-
+    def wrap_cursor_cb(orig_cursor_cb: Any) -> Any:
         def cursor_cb_wrapper(visitor: Any) -> Any:
             def copying_visitor(child: Any, parent: Any, data: Any) -> Any:
                 child_copy = cindex.Cursor()
@@ -103,11 +106,9 @@ def _patch_pypy_callbacks(cindex: ModuleType) -> None:
 
             return orig_cursor_cb(copying_visitor)
 
-        cindex.cursor_visit_callback = cursor_cb_wrapper  # type: ignore[attr-defined]
+        return cursor_cb_wrapper
 
-    if hasattr(cindex, "fields_visit_callback"):
-        orig_fields_cb = cindex.fields_visit_callback
-
+    def wrap_fields_cb(orig_fields_cb: Any) -> Any:
         def fields_cb_wrapper(visitor: Any) -> Any:
             def copying_visitor(field: Any, data: Any) -> Any:
                 field_copy = cindex.Cursor()
@@ -120,11 +121,9 @@ def _patch_pypy_callbacks(cindex: ModuleType) -> None:
 
             return orig_fields_cb(copying_visitor)
 
-        cindex.fields_visit_callback = fields_cb_wrapper  # type: ignore[attr-defined]
+        return fields_cb_wrapper
 
-    if hasattr(cindex, "translation_unit_includes_callback"):
-        orig_includes_cb = cindex.translation_unit_includes_callback
-
+    def wrap_includes_cb(orig_includes_cb: Any) -> Any:
         def includes_cb_wrapper(visitor: Any) -> Any:
             def copying_visitor(fobj: Any, lptr: Any, depth: Any, data: Any) -> Any:
                 raw_ptr = ctypes.cast(fobj, ctypes.c_void_p).value
@@ -133,7 +132,20 @@ def _patch_pypy_callbacks(cindex: ModuleType) -> None:
 
             return orig_includes_cb(copying_visitor)
 
-        cindex.translation_unit_includes_callback = includes_cb_wrapper  # type: ignore[attr-defined]
+        return includes_cb_wrapper
+
+    wrappers = {
+        "cursor_visit": wrap_cursor_cb,
+        "fields_visit": wrap_fields_cb,
+        "translation_unit_includes": wrap_includes_cb,
+    }
+    callbacks = getattr(cindex, "callbacks", None)
+    for name, wrap in wrappers.items():
+        attr = f"{name}_callback"
+        if hasattr(cindex, attr):
+            setattr(cindex, attr, wrap(getattr(cindex, attr)))
+        if isinstance(callbacks, dict) and name in callbacks:
+            callbacks[name] = wrap(callbacks[name])
 
 
 def _patch_pypy_struct_pass_by_value(cindex: ModuleType) -> None:
