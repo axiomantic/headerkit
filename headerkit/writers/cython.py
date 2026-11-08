@@ -1257,6 +1257,30 @@ class PxdWriter:
     # Declaration dispatch
     # -----------------------------------------------------------------
 
+    @staticmethod
+    def _doc_comment_lines(decl: Declaration) -> list[str]:
+        """Return ``# ...`` comment lines when ``decl.parsed_doc`` is populated."""
+        parsed = getattr(decl, "parsed_doc", None)
+        if parsed is None:
+            return []
+        comment_lines: list[str] = []
+        summary = getattr(parsed, "summary", "")
+        if isinstance(summary, str) and summary.strip():
+            for line in summary.strip().splitlines():
+                comment_lines.append(f"# {line}")
+        for param_doc in getattr(parsed, "params", ()):
+            if param_doc.description:
+                comment_lines.append(f"# @param {param_doc.name}: {param_doc.description}")
+            else:
+                comment_lines.append(f"# @param {param_doc.name}")
+        returns = getattr(parsed, "returns", None)
+        if isinstance(returns, str) and returns.strip():
+            comment_lines.append(f"# @return {returns.strip()}")
+        deprecated = getattr(parsed, "deprecated", None)
+        if isinstance(deprecated, str) and deprecated.strip():
+            comment_lines.append(f"# DEPRECATED: {deprecated.strip()}")
+        return comment_lines
+
     def _write_declaration(self, decl: Declaration) -> list[str]:
         """Write a single declaration.
 
@@ -1267,21 +1291,26 @@ class PxdWriter:
         overwrites and clears this for its own members.
         """
         self._current_namespace = getattr(decl, "namespace", None)
+        doc_lines = self._doc_comment_lines(decl)
         if isinstance(decl, Struct):
-            return self._write_struct(decl)
-        if isinstance(decl, Enum):
-            return self._write_enum(decl)
-        if isinstance(decl, Function):
-            return self._write_function(decl)
-        if isinstance(decl, Typedef):
-            return self._write_typedef(decl)
-        if isinstance(decl, Variable):
-            return self._write_variable(decl)
-        if isinstance(decl, Constant):
-            return self._write_constant(decl)
-        if isinstance(decl, MacroFunction):
-            return self._write_macro_function(decl)
-        return []
+            rendered = self._write_struct(decl)
+        elif isinstance(decl, Enum):
+            rendered = self._write_enum(decl)
+        elif isinstance(decl, Function):
+            rendered = self._write_function(decl)
+        elif isinstance(decl, Typedef):
+            rendered = self._write_typedef(decl)
+        elif isinstance(decl, Variable):
+            rendered = self._write_variable(decl)
+        elif isinstance(decl, Constant):
+            rendered = self._write_constant(decl)
+        elif isinstance(decl, MacroFunction):
+            rendered = self._write_macro_function(decl)
+        else:
+            rendered = []
+        if rendered and doc_lines:
+            return [*doc_lines, *rendered]
+        return rendered
 
     def _write_macro_function(self, decl: MacroFunction) -> list[str]:
         """Convert a MacroFunction to Cython comment stub."""

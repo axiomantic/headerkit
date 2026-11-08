@@ -54,6 +54,8 @@ class HookImpl:
         """Check whether this hook matches the provided pipeline context."""
         for attr, pattern in self.matchers.items():
             val = getattr(context, attr, None)
+            if val is None and context.options is not None and attr in context.options:
+                val = context.options[attr]
             if val is None:
                 if pattern != "*":
                     return False

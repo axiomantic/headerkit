@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from headerkit import get_backend
+from headerkit import NimBackend, clean_nim_c_unit, get_backend
 from headerkit.ir import (
     Array,
     CType,
@@ -16,7 +16,6 @@ from headerkit.ir import (
     Struct,
     Typedef,
 )
-from headerkit.transforms.nim_cleanup import NimCleanupTransform
 from headerkit.writers.diff import DiffEntry, diff_headers
 
 _BASELINE_LOCKFREE_C = """\
@@ -175,13 +174,12 @@ def test_c_enum_vs_nim_int32_t_matches_in_abi_mode() -> None:
     assert report.breaking_count == 0
 
 
-def test_lockfree_header_vs_nim_cleanup_pipeline_zero_false_positives() -> None:
-    """End-to-end parse + NimCleanupTransform + diff_headers(abi_mode=True) on lockfree C ABI."""
-    cleanup = NimCleanupTransform()
+def test_lockfree_header_vs_nim_backend_pipeline_zero_false_positives() -> None:
+    """End-to-end parse + NimBackend + diff_headers(abi_mode=True) on lockfree C ABI."""
     backend = get_backend("tree-sitter")
     baseline_ir = backend.parse(_BASELINE_LOCKFREE_C, "lockfree.h")
-    raw_target_ir = backend.parse(_TARGET_NIM_HEADER_C, "cabi.h", **cleanup.backend_options())
-    target_ir = cleanup.apply(raw_target_ir)
+    raw_target_ir = backend.parse(_TARGET_NIM_HEADER_C, "cabi.h", **NimBackend.c_backend_options())
+    target_ir = clean_nim_c_unit(raw_target_ir)
 
     report = diff_headers(baseline_ir, target_ir, abi_mode=True, ignore_pointer_const=True)
     sig_changes = [e for e in report.entries if e.kind == "function_signature_changed"]
@@ -264,7 +262,7 @@ def test_function_parameter_array_decay_c99_matches_pointer_in_abi_mode() -> Non
             ),
         ],
     )
-    target = raw_target >> NimCleanupTransform()
+    target = clean_nim_c_unit(raw_target)
 
     report = diff_headers(baseline, target, abi_mode=True)
     assert report.entries == []
@@ -328,7 +326,7 @@ def test_struct_tag_s_suffix_vs_typedef_stem_matches_in_abi_mode() -> None:
             ),
         ],
     )
-    target = raw_target >> NimCleanupTransform()
+    target = clean_nim_c_unit(raw_target)
 
     report = diff_headers(baseline, target, abi_mode=True)
     assert report.entries == []

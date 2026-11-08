@@ -9,13 +9,13 @@ HeaderKit is structured as a 4-stage, one-way compiler pipeline with 5 orthogona
 ```mermaid
 flowchart TD
     subgraph Stage1["Stage 1: Parse (parse_unit — first_result)"]
-        Src["C / C++ Headers & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend, Custom)"]
+        Src["C / C++ / Nim / NIF Sources & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend, NimBackend, NimonyBackend, Custom)"]
         Backend --> IRCache["Layer 1 IR Cache (.headerkit/ir/)"]
     end
 
     subgraph Stage2["Stage 2: Transform & Reconcile (transform_unit — waterfall)"]
-        IRCache --> IR1["Canonical IR (SourceUnit / Header)<br/>Function, Struct, Enum, Typedef, Variable, Constant, TypeExpr"]
-        IR1 --> Transforms["Layer 2: IR Transforms & Pipeline Filters<br/>(IRTransform >> pipelines, NimCleanupTransform, StripPrefix, MakeOpaque)"]
+        IRCache --> IR1["Canonical IR (SourceUnit / Header)<br/>Function, Struct, Enum, Typedef, Variable, Constant, TypeExpr, SourceMeta, ParsedDoc"]
+        IR1 --> Transforms["Layer 2: IR Transforms & Pipeline Filters<br/>(IRTransform >> pipelines, DocParserTransform, StripPrefix, MakeOpaque)"]
         Transforms --> Reconcile["Multi-Target Matrix Reconciler<br/>(ConfigMatrix, reconcile_matrix)"]
         Reconcile --> IR2["Normalized / Guarded SourceUnit IR"]
     end
@@ -36,14 +36,14 @@ Each stage is decoupled through the unified hook engine (`headerkit.hooks`) and 
 ## Extensibility & Separation of Concerns (The 5 Extension Layers)
 
 1. **Layer 1 — Parser Backends (`headerkit.backends` / `parse_unit`)**:
-   - **Role**: Parse C/C++ source headers into canonical `SourceUnit` (`Header`) IR dataclasses. `LibclangBackend` is the primary production parser (full preprocessor expansion, macro evaluation, and compiler AST semantics); `TreeSitterBackend` is a lightweight zero-LLVM fallback.
+   - **Role**: Parse C/C++/Nim/NIF source and header units into canonical `SourceUnit` (`Header`) IR dataclasses. `LibclangBackend` is the primary C/C++ production parser (full preprocessor expansion, macro evaluation, and compiler AST semantics); `TreeSitterBackend` is a lightweight zero-LLVM C/C++ fallback; `NimBackend` and `NimonyBackend` extract native Nim 2.x (`std/macros`) and Nimony NIF AST metadata (`SourceMeta`) and docstrings directly into the IR.
    - **Extension Point**: Implement `ParserBackend` and call `register_backend()`, register `@hook("parse_unit")`, or declare `[project.entry-points."headerkit.backends"]`.
-   - **Boundary Invariant**: Backends record factual C/C++ semantics in the IR (`is_typedef`, `is_elaborated`, `underlying_type`, `language`) without target-writer assumptions or foreign-generator hacks.
+   - **Boundary Invariant**: Backends record factual C/C++ ABI and source-language semantics (`SourceMeta`) in the IR (`is_typedef`, `is_elaborated`, `underlying_type`, `language`, `source_meta`) without target-writer assumptions or foreign-generator hacks.
 
 2. **Layer 2 — IR Transforms & Pipeline Filters (`headerkit.transforms` / `transform_unit`)**:
-   - **Role**: Registry-driven IR-to-IR (`SourceUnit -> SourceUnit`) passes (`StripPrefix`, `MakeOpaque`, `FilterBySymbol`, `NimCleanupTransform`, `NimJsonDocEnricher`) and multi-target matrix reconciliation (`ConfigMatrix`, `reconcile_matrix`).
-   - **Extension Point**: Subclass `IRTransform` and compose with `>>`, call `register_transform()`, or register `@hook("transform_unit")` in the waterfall pipeline.
-   - **Boundary Invariant**: Transforms operate purely on IR nodes (plus optional pre-parse `prepare_parse()` / `backend_options()` hooks) and never import concrete writers.
+   - **Role**: Registry-driven IR-to-IR (`SourceUnit -> SourceUnit`) passes (`StripPrefix`, `MakeOpaque`, `FilterBySymbol`, `DocParserTransform`) and multi-target matrix reconciliation (`ConfigMatrix`, `reconcile_matrix`).
+   - **Extension Point**: Subclass `IRTransform` and compose with `>>`, call `register_transform()`, or register `@hook("transform_unit")`, `@hook("preprocess_doc")`, and `@hook("parse_doc")` in the hook pipeline.
+   - **Boundary Invariant**: Transforms operate purely on IR nodes and never import concrete writers.
 
 3. **Layer 3 — Fine-Grained Policy Hooks (`headerkit.hooks` / `rename_symbol`, `resolve_collision`)**:
    - **Role**: Priority-tiered (`Priority.FALLBACK = 10`, `STANDARD = 50`, `PROJECT = 100`, `OVERRIDE = 1000`) hooks governing symbol renaming, casing, target-language lexical legality, and identifier collision resolution, plus `BaseWriter` condition formatters (`format_platform_condition`, `format_matrix_condition`).

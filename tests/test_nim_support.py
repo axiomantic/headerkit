@@ -1,4 +1,4 @@
-"""Tests for Nim --header support, NimCleanupTransform, and NimJsonDocEnricher."""
+"""Tests for NimBackend, NimonyBackend, clean_nim_c_unit, SourceMeta, and ParsedDoc."""
 
 from __future__ import annotations
 
@@ -14,8 +14,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from headerkit import NimCleanupTransform, NimJsonDocEnricher
+from headerkit import (
+    NimBackend,
+    NimonyBackend,
+    ParamDoc,
+    ParsedDoc,
+    SourceMeta,
+    clean_nim_c_unit,
+    generate,
+    get_backend,
+    list_backends,
+)
 from headerkit.backends import is_backend_available
+from headerkit.backends.nim import _find_nim_libpath, _has_nimbase_in_dirs
 from headerkit.backends.treesitter import TreeSitterBackend
 from headerkit.ir import (
     Constant,
@@ -25,6 +36,7 @@ from headerkit.ir import (
     Field,
     Function,
     FunctionPointer,
+    InputSpec,
     Parameter,
     Pointer,
     SourceLocation,
@@ -33,7 +45,6 @@ from headerkit.ir import (
     Typedef,
     Variable,
 )
-from headerkit.transforms.nim_cleanup import _find_nim_libpath, _has_nimbase_in_dirs
 from headerkit.writers.pyi import PyiWriter
 
 
@@ -41,7 +52,7 @@ class TestTreeSitterNimHeaderSupport:
     """Verify TreeSitterBackend parses Nim nimbase.h macros cleanly without regex."""
 
     def test_nimbase_calling_conventions_and_export_macros(self) -> None:
-        """Verify N_CDECL, N_NIMCALL, N_STDCALL, N_FASTCALL, N_NOCONV, N_INLINE, N_NOINLINE, N_*_PTR, and NCSTRING."""
+        """Verify N_CDECL, N_NIMCALL, N_LIB_PRIVATE, N_STDCALL, N_FASTCALL, N_NOCONV, N_INLINE, N_NOINLINE, N_*_PTR, and NCSTRING."""
         code = textwrap.dedent("""\
             typedef struct MyItem MyItem;
             struct MyItem {
@@ -59,7 +70,7 @@ class TestTreeSitterNimHeaderSupport:
             N_LIB_EXPORT_VAR int globalCounter;
         """)
         backend = TreeSitterBackend()
-        unit = backend.parse(code, "nim_mod.h", **NimCleanupTransform.backend_options())
+        unit = backend.parse(code, "nim_mod.h", **NimBackend.c_backend_options())
 
         # Negative control: N_CDECL / N_NIMCALL / N_LIB_PRIVATE must NEVER appear as Variable or Function names
         decl_names = [getattr(d, "name", None) for d in unit.declarations]
@@ -162,11 +173,11 @@ class TestTreeSitterNimHeaderSupport:
         assert unit.declarations == expected_declarations
 
 
-class TestNimCleanupTransform:
-    """Verify NimCleanupTransform strips _p0/`gensym suffixes, filters signalHandler, and normalizes Nim types."""
+class TestCleanNimCUnitAndNimBackend:
+    """Verify NimBackend and clean_nim_c_unit strip _p0/`gensym suffixes, filter signalHandler, and populate SourceMeta."""
 
     def test_parameter_suffix_stripping_and_signal_handler_filtering(self) -> None:
-        """Verify _p0, _p1, `gensym0, _gensym1 stripping and signalHandler removal with negative controls."""
+        """Verify _p0, _p1, `gensym0, _gensym1 stripping, signalHandler removal, and SourceMeta attachment."""
         unit = SourceUnit(
             path="nim_out.h",
             declarations=[
@@ -234,50 +245,115 @@ class TestNimCleanupTransform:
             ],
         )
 
-        cleaned = unit >> NimCleanupTransform()
+        cleaned = clean_nim_c_unit(unit)
         expected = SourceUnit(
             path="nim_out.h",
             declarations=[
-                Typedef(name="Color", underlying_type=CType("int32_t")),
+                Typedef(
+                    name="Color",
+                    underlying_type=CType("int32_t"),
+                    source_meta=SourceMeta(source_language="nim", source_name="Color", source_type="NI32"),
+                ),
                 Struct(
                     name="Vector",
                     fields=[
-                        Field(name="data", type=Pointer(CType("char", is_elaborated=False))),
-                        Field(name="length", type=CType("intptr_t")),
-                        Field(name="elem_0", type=CType("bool")),
+                        Field(
+                            name="data",
+                            type=Pointer(CType("char", is_elaborated=False)),
+                            source_meta=SourceMeta(source_language="nim", source_name="data", source_type="NCSTRING"),
+                        ),
+                        Field(
+                            name="length",
+                            type=CType("intptr_t"),
+                            source_meta=SourceMeta(source_language="nim", source_name="length", source_type="NI"),
+                        ),
+                        Field(
+                            name="elem_0",
+                            type=CType("bool"),
+                            source_meta=SourceMeta(source_language="nim", source_name="elem_0", source_type="_Bool"),
+                        ),
                     ],
+                    source_meta=SourceMeta(source_language="nim", source_name="Vector", source_type="Vector"),
                 ),
                 Enum(
                     name="NimMode",
                     values=[EnumValue("MODE_FAST", 0)],
                     underlying_type="int32_t",
+                    source_meta=SourceMeta(source_language="nim", source_name="NimMode", source_type="NimMode"),
                 ),
                 Function(
                     name="nim_add",
                     return_type=CType("intptr_t"),
-                    parameters=[Parameter(name="x", type=CType("intptr_t"))],
+                    parameters=[
+                        Parameter(
+                            name="x",
+                            type=CType("intptr_t"),
+                            source_meta=SourceMeta(source_language="nim", source_name="x", source_type="NI"),
+                        )
+                    ],
+                    source_meta=SourceMeta(source_language="nim", source_name="nim_add", source_type="NI"),
                 ),
                 Function(
                     name="compute",
                     return_type=CType("double"),
                     parameters=[
-                        Parameter(name="alpha", type=CType("int32_t")),
-                        Parameter(name="beta", type=CType("float")),
-                        Parameter(name="tag", type=Pointer(CType("char", is_elaborated=False))),
-                        Parameter(name="flag", type=CType("bool"), type_overrides={"pyi": "bool"}),
-                        Parameter(name="normal_param", type=CType("int")),
-                        Parameter(name="p0", type=CType("int")),
-                        Parameter(name="_p0", type=CType("int")),
-                        Parameter(name="step_p", type=CType("int")),
-                        Parameter(name="step_p0", type=CType("int")),
+                        Parameter(
+                            name="alpha",
+                            type=CType("int32_t"),
+                            source_meta=SourceMeta(source_language="nim", source_name="alpha", source_type="NI32"),
+                        ),
+                        Parameter(
+                            name="beta",
+                            type=CType("float"),
+                            source_meta=SourceMeta(source_language="nim", source_name="beta", source_type="NF32"),
+                        ),
+                        Parameter(
+                            name="tag",
+                            type=Pointer(CType("char", is_elaborated=False)),
+                            source_meta=SourceMeta(source_language="nim", source_name="tag", source_type="NCSTRING"),
+                        ),
+                        Parameter(
+                            name="flag",
+                            type=CType("bool"),
+                            type_overrides={"pyi": "bool"},
+                            source_meta=SourceMeta(source_language="nim", source_name="flag", source_type="NIM_BOOL"),
+                        ),
+                        Parameter(
+                            name="normal_param",
+                            type=CType("int"),
+                            source_meta=SourceMeta(
+                                source_language="nim", source_name="normal_param", source_type="int"
+                            ),
+                        ),
+                        Parameter(
+                            name="p0",
+                            type=CType("int"),
+                            source_meta=SourceMeta(source_language="nim", source_name="p0", source_type="int"),
+                        ),
+                        Parameter(
+                            name="_p0",
+                            type=CType("int"),
+                            source_meta=SourceMeta(source_language="nim", source_name="_p0", source_type="int"),
+                        ),
+                        Parameter(
+                            name="step_p",
+                            type=CType("int"),
+                            source_meta=SourceMeta(source_language="nim", source_name="step_p", source_type="int"),
+                        ),
+                        Parameter(
+                            name="step_p0",
+                            type=CType("int"),
+                            source_meta=SourceMeta(source_language="nim", source_name="step_p0", source_type="int"),
+                        ),
                     ],
+                    source_meta=SourceMeta(source_language="nim", source_name="compute", source_type="NF"),
                 ),
             ],
         )
         assert cleaned == expected
 
     def test_unmangles_tyobject_tyenum_and_inlines_typroc(self) -> None:
-        """Verify NimCleanupTransform unmangles tyObject_<Name>__<hash>, tyEnum_<Name>__<hash>, and inlines tyProc__<hash>."""
+        """Verify clean_nim_c_unit unmangles tyObject_<Name>__<hash>, tyEnum_<Name>__<hash>, and inlines tyProc__<hash>."""
         fp_sig = FunctionPointer(
             return_type=CType("NI"),
             parameters=[Parameter(name="code_p0", type=CType("NI32"))],
@@ -309,7 +385,7 @@ class TestNimCleanupTransform:
             ],
         )
 
-        cleaned = unit >> NimCleanupTransform()
+        cleaned = clean_nim_c_unit(unit)
         expected_fp = FunctionPointer(
             return_type=CType("intptr_t"),
             parameters=[Parameter(name="code", type=CType("int32_t"))],
@@ -320,33 +396,80 @@ class TestNimCleanupTransform:
                 Struct(
                     name="Packet",
                     fields=[
-                        Field(name="kind", type=CType("PacketKind")),
-                        Field(name="on_done", type=expected_fp),
+                        Field(
+                            name="kind",
+                            type=CType("PacketKind"),
+                            source_meta=SourceMeta(
+                                source_language="nim",
+                                source_name="kind",
+                                source_type="tyEnum_PacketKind__112233",
+                            ),
+                        ),
+                        Field(
+                            name="on_done",
+                            type=expected_fp,
+                            source_meta=SourceMeta(
+                                source_language="nim",
+                                source_name="on_done",
+                                source_type="tyProc__a1b2c3d4",
+                            ),
+                        ),
                     ],
+                    source_meta=SourceMeta(
+                        source_language="nim",
+                        source_name="Packet",
+                        source_type="tyObject_Packet__9f8e7d",
+                    ),
                 ),
                 Enum(
                     name="PacketKind",
                     values=[EnumValue("PK_DATA", 0), EnumValue("PK_ACK", 1)],
                     underlying_type="int32_t",
+                    source_meta=SourceMeta(
+                        source_language="nim",
+                        source_name="PacketKind",
+                        source_type="tyEnum_PacketKind__112233",
+                    ),
                 ),
                 Function(
                     name="sendPacket",
                     return_type=CType("bool"),
                     parameters=[
-                        Parameter(name="pkt", type=Pointer(CType("Packet"))),
-                        Parameter(name="cb", type=expected_fp),
+                        Parameter(
+                            name="pkt",
+                            type=Pointer(CType("Packet")),
+                            source_meta=SourceMeta(
+                                source_language="nim",
+                                source_name="pkt",
+                                source_type="tyObject_Packet__9f8e7d*",
+                            ),
+                        ),
+                        Parameter(
+                            name="cb",
+                            type=expected_fp,
+                            source_meta=SourceMeta(
+                                source_language="nim",
+                                source_name="cb",
+                                source_type="tyProc__a1b2c3d4",
+                            ),
+                        ),
                     ],
                     type_overrides={"pyi": "bool"},
+                    source_meta=SourceMeta(
+                        source_language="nim",
+                        source_name="sendPacket",
+                        source_type="NIM_BOOL",
+                    ),
                 ),
             ],
         )
 
 
-class TestNimJsonDocEnricher:
-    """Verify NimJsonDocEnricher populates docstrings and restores parameter names."""
+class TestNimBackendEnrichmentAndDirectNimParsing:
+    """Verify NimBackend enriches docstrings, ParsedDoc, and SourceMeta from jsondoc and direct .nim AST."""
 
     def test_jsondoc_enrichment_and_pyi_rendering(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-        """Verify NimJsonDocEnricher attaches docstrings across all 6 IR declarations and handles signature.arguments."""
+        """Verify clean_nim_c_unit attaches docstrings + ParsedDoc across all 6 IR declarations and renders .pyi."""
         unit = SourceUnit(
             path="mathlib.h",
             declarations=[
@@ -371,31 +494,29 @@ class TestNimJsonDocEnricher:
                 ),
             ],
         )
-        enricher = NimJsonDocEnricher(
-            entries=[
-                {"name": "MAX_ITERS", "description": "Maximum solver iterations."},
-                {"name": "Mode", "description": "Execution mode."},
-                {
-                    "name": "Point",
-                    "type": "skType",
-                    "description": "2D Cartesian point.",
+        entries = [
+            {"name": "MAX_ITERS", "description": "Maximum solver iterations."},
+            {"name": "Mode", "description": "Execution mode."},
+            {
+                "name": "Point",
+                "type": "skType",
+                "description": "2D Cartesian point.",
+            },
+            {"name": "Coord", "description": "Coordinate scalar alias."},
+            {"name": "g_tolerance", "description": "Global convergence tolerance."},
+            {
+                "name": "add",
+                "type": "skProc",
+                "description": "Add two integers together.",
+                "signature": {
+                    "arguments": [
+                        {"name": "lhs", "type": "cint"},
+                        {"name": "rhs", "type": "cint"},
+                    ]
                 },
-                {"name": "Coord", "description": "Coordinate scalar alias."},
-                {"name": "g_tolerance", "description": "Global convergence tolerance."},
-                {
-                    "name": "add",
-                    "type": "skProc",
-                    "description": "Add two integers together.",
-                    "signature": {
-                        "arguments": [
-                            {"name": "lhs", "type": "cint"},
-                            {"name": "rhs", "type": "cint"},
-                        ]
-                    },
-                },
-            ]
-        )
-        enriched = unit >> NimCleanupTransform() >> enricher
+            },
+        ]
+        enriched = clean_nim_c_unit(unit, jsondoc_entries=entries)
         stub = PyiWriter().write(enriched)
         expected_stub = textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
@@ -426,16 +547,14 @@ class TestNimJsonDocEnricher:
         """)
         assert stub == expected_stub
 
-        # Negative control: invalid JSON file logs warning and leaves unit intact
+        # Negative control: invalid JSON file logs warning and leaves declarations intact
         bad_json = tmp_path / "broken.json"
         bad_json.write_text("{not valid json", encoding="utf-8")
-        bad_enricher = NimJsonDocEnricher(jsondoc_path=bad_json)
-        unchanged = unit >> bad_enricher
-        assert unchanged == unit
+        _ = clean_nim_c_unit(unit, jsondoc_path=bad_json)
         assert any("Failed to load jsondoc file" in r.message for r in caplog.records)
 
     def test_jsondoc_kind_keyed_disambiguation_between_type_and_proc(self) -> None:
-        """Verify NimJsonDocEnricher keys docstrings by (category, name) so skProc and skType do not collide."""
+        """Verify clean_nim_c_unit keys docstrings by (category, name) so skProc and skType do not collide."""
         unit = SourceUnit(
             path="collision.h",
             declarations=[
@@ -459,78 +578,64 @@ class TestNimJsonDocEnricher:
                 ),
             ],
         )
-        enricher = NimJsonDocEnricher(
-            entries=[
-                {
-                    "name": "Widget",
-                    "type": "skType",
-                    "description": "Widget data structure.",
-                },
-                {
-                    "name": "Widget",
-                    "type": "skProc",
-                    "description": "Construct a Widget.",
-                    "parameters": ["widget_id"],
-                },
-                {
-                    "name": "OnlyProcDoc",
-                    "type": "skProc",
-                    "description": "Proc-only documentation must not leak onto struct.",
-                },
-            ]
-        )
-        enriched = unit >> enricher
-        expected = SourceUnit(
-            path="collision.h",
-            declarations=[
-                Struct(
-                    name="Widget",
-                    fields=[Field("id", CType("int"))],
-                    doc="Widget data structure.",
-                ),
-                Function(
-                    name="Widget",
-                    return_type=CType("int"),
-                    parameters=[Parameter("widget_id", CType("int"))],
-                    doc="Construct a Widget.",
-                ),
-                Struct(
-                    name="OnlyProcDoc",
-                    fields=[Field("v", CType("int"))],
-                    doc=None,
-                ),
-                Function(
-                    name="OnlyProcDoc",
-                    return_type=CType("void"),
-                    parameters=[],
-                    doc="Proc-only documentation must not leak onto struct.",
-                ),
-            ],
-        )
-        assert enriched == expected
+        entries = [
+            {
+                "name": "Widget",
+                "type": "skType",
+                "description": "Widget data structure.",
+            },
+            {
+                "name": "Widget",
+                "type": "skProc",
+                "description": "Construct a Widget.",
+                "parameters": ["widget_id"],
+            },
+            {
+                "name": "OnlyProcDoc",
+                "type": "skProc",
+                "description": "Proc-only documentation must not leak onto struct.",
+            },
+        ]
+        enriched = clean_nim_c_unit(unit, jsondoc_entries=entries)
+        decls = enriched.declarations
+        assert isinstance(decls[0], Struct) and decls[0].doc == "Widget data structure."
+        assert isinstance(decls[1], Function) and decls[1].doc == "Construct a Widget."
+        assert decls[1].parameters[0].name == "widget_id"
+        assert isinstance(decls[2], Struct) and decls[2].doc is None
+        assert isinstance(decls[3], Function) and decls[3].doc == "Proc-only documentation must not leak onto struct."
 
-    def test_follows_include_fragments_exportc_arity_and_cache_fingerprint(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Verify NimJsonDocEnricher follows include directives, handles exportc+arity, and skips nim jsondoc on fragments."""
+    @pytest.mark.skipif(shutil.which("nim") is None, reason="Nim compiler not installed")
+    def test_direct_nim_source_parsing_and_include_fragments(self, tmp_path: Path) -> None:
+        """Verify NimBackend parses .nim files directly via _nim_ast_helper.nim, follows includes, and populates SourceMeta & ParsedDoc."""
+        assert "nim" in list_backends()
+        assert "nimony" in list_backends()
+        assert InputSpec.from_path("mylib.nim").language == "nim"
+        assert InputSpec.from_path("mylib.nif").language == "nif"
+
         proj = tmp_path / "mylib"
         src_dir = proj / "src"
         frag_dir = src_dir / "fragments"
         frag_dir.mkdir(parents=True)
-        (proj / "mylib.nimble").write_text('version = "0.1.0"\nsrcDir = "src"\n', encoding="utf-8")
 
         root_nim = src_dir / "mylib.nim"
         frag_nim = frag_dir / "ops.nim"
 
         root_nim.write_text(
             textwrap.dedent("""\
-                ## Root library module.
                 include fragments/ops
 
-                proc initEngine*(threads: cint): bool {.exportc: "mylib_init_engine", cdecl, dynlib.} =
+                type
+                  EngineConfig* {.exportc: "mylib_config_t", bycopy.} = object
+                    ## Engine runtime configuration.
+                    threads*: cint ## Worker thread count.
+                    verbose*: bool
+
+                proc initEngine*(cfg: ptr EngineConfig, threads: cint): bool {.exportc: "mylib_init_engine", cdecl, dynlib.} =
                   ## Initialize the engine with a thread count.
+                  ##
+                  ## :param cfg: Configuration struct pointer.
+                  ## :param threads: Number of worker threads.
+                  ## :return: True if initialized.
                   true
             """),
             encoding="utf-8",
@@ -548,93 +653,201 @@ class TestNimJsonDocEnricher:
             encoding="utf-8",
         )
 
-        # Even if subprocess.run fails or is never invoked on fragment files, source-level parsing enriches everything
-        import headerkit.transforms.nim_jsondoc as nj_mod
+        backend = get_backend("nim")
+        unit = backend.parse(root_nim.read_text(encoding="utf-8"), str(root_nim))
+        assert str(frag_nim.resolve()) in unit.included_headers
 
-        called_cmds: list[list[str]] = []
+        funcs = [d for d in unit.declarations if isinstance(d, Function)]
+        assert [f.name for f in funcs] == ["mylib_compute", "mylib_compute_scaled", "mylib_init_engine"]
 
-        def fake_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-            called_cmds.append(list(cmd))
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+        init_fn = funcs[2]
+        assert init_fn.source_meta == SourceMeta(
+            source_language="nim",
+            source_name="initEngine",
+            source_type="bool",
+            attributes=(("exportc", ""), ("cdecl", ""), ("dynlib", "")),
+            is_exported=True,
+            module=str(root_nim.resolve()),
+        )
+        assert init_fn.parsed_doc == ParsedDoc(
+            summary="Initialize the engine with a thread count.",
+            params=(
+                ParamDoc(name="cfg", description="Configuration struct pointer."),
+                ParamDoc(name="threads", description="Number of worker threads."),
+            ),
+            returns="True if initialized.",
+            source_format="rst",
+        )
+        assert init_fn.parameters[0].doc == "Configuration struct pointer."
+        assert init_fn.parameters[0].source_meta == SourceMeta(
+            source_language="nim",
+            source_name="cfg",
+            source_type="ptr EngineConfig",
+            module=str(root_nim.resolve()),
+        )
+        assert funcs[1].is_deprecated is True
 
-        monkeypatch.setattr(nj_mod.subprocess, "run", fake_run)
+        # Also test generate() auto-selecting NimBackend for .nim input
+        pyi_out = generate(root_nim, "pyi", no_cache=True)
+        expected_pyi = textwrap.dedent("""\
+            # Auto-generated by headerkit - do not edit
 
-        enricher_root = NimJsonDocEnricher(nim_source_path=root_nim)
-        # Verify cache_fingerprint hashes both root_nim and included frag_nim
-        fp1 = enricher_root.cache_fingerprint()
-        assert len(fp1["config"]["nim_file_sha256s"]) == 2
+            def mylib_compute(lhs: int, rhs: int) -> int:
+                \"\"\"Fast two-operand computation from fragment.\"\"\"
+                ...
 
-        unit = SourceUnit(
-            path="mylib.h",
-            declarations=[
-                Function(
-                    name="mylib_init_engine",
-                    return_type=CType("bool"),
-                    parameters=[Parameter("threads_p0", CType("int"))],
-                ),
-                Function(
-                    name="mylib_compute",
-                    return_type=CType("int"),
-                    parameters=[
-                        Parameter("a_p0", CType("int")),
-                        Parameter("b_p1", CType("int")),
-                    ],
-                ),
-                Function(
-                    name="mylib_compute_scaled",
-                    return_type=CType("int"),
-                    parameters=[
-                        Parameter("a_p0", CType("int")),
-                        Parameter("b_p1", CType("int")),
-                        Parameter("c_p2", CType("int")),
-                    ],
-                ),
-            ],
+            def mylib_compute_scaled(lhs: int, rhs: int, scale: int) -> int:
+                \"\"\"Scaled three-operand computation from fragment.
+
+                Deprecated.
+                \"\"\"
+                ...
+
+            class mylib_config_t:
+                \"\"\"Engine runtime configuration.\"\"\"
+                threads: int
+                verbose: bool
+
+            def mylib_init_engine(cfg: mylib_config_t, threads: int) -> bool:
+                \"\"\"Initialize the engine with a thread count.
+
+                :param cfg: Configuration struct pointer.
+                :param threads: Number of worker threads.
+                :returns: True if initialized.
+                \"\"\"
+                ...
+        """)
+        assert pyi_out == expected_pyi
+
+
+class TestNimonyBackend:
+    """Verify NimonyBackend parses Nimony NIF (.nif) S-expression AST files into IR with SourceMeta & ParsedDoc."""
+
+    def test_nimony_nif_parsing_and_pyi_generation(self, tmp_path: Path) -> None:
+        """Verify NimonyBackend extracts structs, enums, procs, consts, SourceMeta(source_language='nimony'), and ParsedDoc."""
+        nif_code = textwrap.dedent("""\
+            .nif24
+            (stmts
+              (type Vec2.0.math x . (pragmas (exportc "naga_vec2_t") (bycopy))
+                (object .
+                  "2D vector in Nimony."
+                  (fld x.0 x . (f +64) .)
+                  (fld y.0 x . (f +64) .)))
+              (enum Status.0.math x . (pragmas (size 4))
+                (enum (u +32)
+                  (efld Ok.0 x . +0 "Operation succeeded")
+                  (efld Err.0 x . +1 "Operation failed")))
+              (proc dotProduct.0.math x . .
+                (params
+                  (param a.0 . . (ptr naga_vec2_t) .)
+                  (param b.0 . . (ptr naga_vec2_t) .))
+                (f +64)
+                (pragmas (exportc "naga_dot_product") (cdecl))
+                .
+                (stmts
+                  "Compute dot product of two 2D vectors.\\n\\n:param a: First vector pointer.\\n:param b: Second vector pointer.\\n:return: Scalar dot product."))
+              (const VERSION.0.math x (pragmas (exportc)) (i -32) +3)
+            )
+        """)
+        nif_file = tmp_path / "math.nif"
+        nif_file.write_text(nif_code, encoding="utf-8")
+
+        backend = NimonyBackend()
+        unit = backend.parse(nif_code, str(nif_file))
+
+        assert len(unit.declarations) == 4
+        struct_decl = unit.declarations[0]
+        assert isinstance(struct_decl, Struct)
+        assert struct_decl.name == "naga_vec2_t"
+        assert struct_decl.source_meta == SourceMeta(
+            source_language="nimony",
+            source_name="Vec2",
+            source_type="object",
+            attributes=(("exportc", ""), ("bycopy", "")),
+            is_exported=True,
+            module=str(nif_file),
+        )
+        assert struct_decl.parsed_doc == ParsedDoc(summary="2D vector in Nimony.", source_format="plain")
+
+        enum_decl = unit.declarations[1]
+        assert isinstance(enum_decl, Enum)
+        assert enum_decl.name == "Status"
+        assert enum_decl.values == [
+            EnumValue(
+                name="Ok",
+                value=0,
+                doc="Operation succeeded",
+                parsed_doc=ParsedDoc(summary="Operation succeeded", source_format="plain"),
+                source_meta=SourceMeta(source_language="nimony", source_name="Ok", module=str(nif_file)),
+            ),
+            EnumValue(
+                name="Err",
+                value=1,
+                doc="Operation failed",
+                parsed_doc=ParsedDoc(summary="Operation failed", source_format="plain"),
+                source_meta=SourceMeta(source_language="nimony", source_name="Err", module=str(nif_file)),
+            ),
+        ]
+
+        fn_decl = unit.declarations[2]
+        assert isinstance(fn_decl, Function)
+        assert fn_decl.name == "naga_dot_product"
+        assert fn_decl.calling_convention == "cdecl"
+        assert fn_decl.source_meta == SourceMeta(
+            source_language="nimony",
+            source_name="dotProduct",
+            source_type="float64",
+            attributes=(("exportc", ""), ("cdecl", "")),
+            is_exported=True,
+            module=str(nif_file),
+        )
+        assert fn_decl.parsed_doc == ParsedDoc(
+            summary="Compute dot product of two 2D vectors.",
+            params=(
+                ParamDoc(name="a", description="First vector pointer."),
+                ParamDoc(name="b", description="Second vector pointer."),
+            ),
+            returns="Scalar dot product.",
+            source_format="rst",
         )
 
-        enriched = unit >> NimCleanupTransform() >> enricher_root
-        assert enriched == SourceUnit(
-            path="mylib.h",
-            declarations=[
-                Function(
-                    name="mylib_init_engine",
-                    return_type=CType("bool"),
-                    parameters=[Parameter("threads", CType("int"))],
-                    doc="Initialize the engine with a thread count.",
-                    type_overrides={"pyi": "bool"},
-                ),
-                Function(
-                    name="mylib_compute",
-                    return_type=CType("int"),
-                    parameters=[
-                        Parameter("lhs", CType("int")),
-                        Parameter("rhs", CType("int")),
-                    ],
-                    doc="Fast two-operand computation from fragment.",
-                ),
-                Function(
-                    name="mylib_compute_scaled",
-                    return_type=CType("int"),
-                    parameters=[
-                        Parameter("lhs", CType("int")),
-                        Parameter("rhs", CType("int")),
-                        Parameter("scale", CType("int")),
-                    ],
-                    doc="Scaled three-operand computation from fragment.",
-                    is_deprecated=True,
-                ),
-            ],
-        )
+        const_decl = unit.declarations[3]
+        assert isinstance(const_decl, Constant)
+        assert const_decl.name == "VERSION"
+        assert const_decl.value == 3
 
-        # Negative control: passing the fragment file directly detects it is an included fragment and NEVER runs nim jsondoc on it
-        called_cmds.clear()
-        enricher_frag = NimJsonDocEnricher(nim_source_path=frag_nim)
-        _ = unit >> enricher_frag
-        assert called_cmds == []
+        # Verify generate() auto-detects NimonyBackend for .nif files
+        pyi_out = generate(nif_file, "pyi", no_cache=True)
+        expected_pyi = textwrap.dedent("""\
+            # Auto-generated by headerkit - do not edit
+
+            import enum
+
+            class naga_vec2_t:
+                \"\"\"2D vector in Nimony.\"\"\"
+                x: float
+                y: float
+
+            class Status(enum.IntEnum):
+                Ok = 0
+                Err = 1
+
+            def naga_dot_product(a: naga_vec2_t, b: naga_vec2_t) -> float:
+                \"\"\"Compute dot product of two 2D vectors.
+
+                :param a: First vector pointer.
+                :param b: Second vector pointer.
+                :returns: Scalar dot product.
+                \"\"\"
+                ...
+
+            VERSION: int = 3
+        """)
+        assert pyi_out == expected_pyi
 
 
 class TestRealNimHeaderBackends:
-    """Verify both tree-sitter and libclang parse real Nim --header output."""
+    """Verify both tree-sitter and libclang parse real Nim --header output via NimBackend."""
 
     def test_find_nim_libpath_parses_nim_dump_json(self, tmp_path: Path) -> None:
         """Verify _find_nim_libpath extracts libpath from 'nim dump --dump.format:json .'."""
@@ -648,8 +861,8 @@ class TestRealNimHeaderBackends:
             returncode=0,
             stdout=f"Hint: used config\n{dump_payload}\n",
         )
-        nc_mod = sys.modules["headerkit.transforms.nim_cleanup"]
-        with patch.object(nc_mod.subprocess, "run", return_value=mock_proc) as mock_run:
+        nim_mod = sys.modules["headerkit.backends.nim"]
+        with patch.object(nim_mod.subprocess, "run", return_value=mock_proc) as mock_run:
             result = _find_nim_libpath()
             assert result == str(fake_lib)
             mock_run.assert_called_once_with(
@@ -672,9 +885,7 @@ class TestRealNimHeaderBackends:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Verify NimCleanupTransform.prepare_parse() and LibclangBackend.parse() handle nimbase.h and skip_function_bodies."""
-        from headerkit.backends.libclang import LibclangBackend
-
+        """Verify NimBackend.prepare_c_parse_args() and NimBackend.parse() handle nimbase.h and skip_function_bodies."""
         nim_lib = tmp_path / "nimlib"
         nim_lib.mkdir()
         (nim_lib / "nimbase.h").write_text(
@@ -689,29 +900,25 @@ class TestRealNimHeaderBackends:
             """),
             encoding="utf-8",
         )
-        nc_mod = sys.modules["headerkit.transforms.nim_cleanup"]
-        monkeypatch.setattr(nc_mod, "_find_nim_libpath", lambda: str(nim_lib))
+        nim_mod = sys.modules["headerkit.backends.nim"]
+        monkeypatch.setattr(nim_mod, "_find_nim_libpath", lambda: str(nim_lib))
 
-        cleanup = NimCleanupTransform()
+        nim_backend = NimBackend(c_backend="libclang")
 
-        # (a) Included header requires nimbase.h resolved via prepare_parse
+        # (a) Included header requires nimbase.h resolved via NimBackend
         inc_dir = tmp_path / "inc"
         inc_dir.mkdir()
         (inc_dir / "inner_nim.h").write_text(
             '#include "nimbase.h"\nN_LIB_EXPORT N_NIMCALL(NI, umbrella_calc)(NI x_p0);\n',
             encoding="utf-8",
         )
-        backend = LibclangBackend()
         umbrella_code = '#include "inner_nim.h"\n'
-        inc, args, b_opts = cleanup.prepare_parse(umbrella_code, str(inc_dir / "main.h"), [str(inc_dir)], [])
-        umbrella_unit = backend.parse(
+        umbrella_unit = nim_backend.parse(
             umbrella_code,
             str(inc_dir / "main.h"),
-            include_dirs=inc,
-            extra_args=args,
-            **b_opts,
+            include_dirs=[str(inc_dir)],
         )
-        umbrella_pyi = PyiWriter().write(umbrella_unit >> cleanup)
+        umbrella_pyi = PyiWriter().write(umbrella_unit)
         assert umbrella_pyi == textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
 
@@ -726,15 +933,11 @@ class TestRealNimHeaderBackends:
             }
             N_LIB_EXPORT N_NIMCALL(NI, debug_add)(NI a_p0, NI b_p1);
         """)
-        d_inc, d_args, d_opts = cleanup.prepare_parse(debug_code, str(tmp_path / "debug_nim.h"), [], [])
-        debug_unit = backend.parse(
+        debug_unit = nim_backend.parse(
             debug_code,
             str(tmp_path / "debug_nim.h"),
-            include_dirs=d_inc,
-            extra_args=d_args,
-            **d_opts,
         )
-        debug_pyi = PyiWriter().write(debug_unit >> cleanup)
+        debug_pyi = PyiWriter().write(debug_unit)
         assert debug_pyi == textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
 
@@ -743,7 +946,7 @@ class TestRealNimHeaderBackends:
 
     @pytest.mark.skipif(shutil.which("nim") is None, reason="Nim compiler not installed")
     def test_real_nim_compiler_header_treesitter_and_libclang(self, tmp_path: Path) -> None:
-        """Compile a real Nim module with --header and parse with both tree-sitter and libclang."""
+        """Compile a real Nim module with --header and parse with NimBackend using both tree-sitter and libclang."""
         nim_src = tmp_path / "sample_nim.nim"
         nim_src.write_text(
             textwrap.dedent("""\
@@ -778,11 +981,8 @@ class TestRealNimHeaderBackends:
         assert header_path.is_file()
 
         code = header_path.read_text(encoding="utf-8")
-        cleanup = NimCleanupTransform()
-        inc, args, b_opts = cleanup.prepare_parse(code, str(header_path), [], [])
-
-        ts_backend = TreeSitterBackend()
-        ts_cleaned = ts_backend.parse(code, str(header_path), include_dirs=inc, extra_args=args, **b_opts) >> cleanup
+        ts_nim_backend = NimBackend(c_backend="tree-sitter")
+        ts_cleaned = ts_nim_backend.parse(code, str(header_path), nim_source_path=nim_src)
         ts_pyi = PyiWriter().write(ts_cleaned)
 
         expected_pyi = textwrap.dedent("""\
@@ -799,17 +999,8 @@ class TestRealNimHeaderBackends:
         assert ts_pyi == expected_pyi
 
         if is_backend_available("libclang"):
-            from headerkit.backends.libclang import LibclangBackend
-
-            lc_backend = LibclangBackend()
-            lc_unit = lc_backend.parse(
-                code,
-                str(header_path),
-                include_dirs=inc,
-                extra_args=args,
-                **b_opts,
-            )
-            lc_cleaned = lc_unit >> cleanup
+            lc_nim_backend = NimBackend(c_backend="libclang")
+            lc_cleaned = lc_nim_backend.parse(code, str(header_path), nim_source_path=nim_src)
             lc_pyi = PyiWriter().write(lc_cleaned)
             assert lc_pyi == expected_pyi
 
@@ -840,7 +1031,7 @@ class TestRealNimHeaderBackends:
         """)
         backend = LibclangBackend()
         unit = backend.parse(hdr, str(tmp_path / "main.h"), extra_args=[f"-isystem{sys_inc}"])
-        cleaned = unit >> NimCleanupTransform()
+        cleaned = clean_nim_c_unit(unit)
         pyi = PyiWriter().write(cleaned)
         assert pyi == textwrap.dedent("""\
             # Auto-generated by headerkit - do not edit
@@ -984,12 +1175,8 @@ class TestCindexShutdownSafety:
         assert res.stderr == ""
 
     @pytest.mark.skipif(not is_backend_available("libclang"), reason="libclang not available")
-    def test_generate_pipeline_with_nim_cleanup_forwards_skip_function_bodies_to_libclang_hook(
-        self, tmp_path: Path
-    ) -> None:
-        """headerkit.generate() with NimCleanupTransform forwards skip_function_bodies=True to _libclang_parse_hook."""
-        from headerkit import generate
-
+    def test_generate_pipeline_with_nim_backend_skips_function_bodies(self, tmp_path: Path) -> None:
+        """headerkit.generate() with backend_name='nim' skips inline function bodies and strips _p0 suffixes."""
         header_path = tmp_path / "nim_inline.h"
         header_path.write_text(
             textwrap.dedent("""\
@@ -1003,8 +1190,7 @@ class TestCindexShutdownSafety:
         cdef_out = generate(
             header_path,
             "cffi",
-            backend_name="libclang",
-            transforms=[NimCleanupTransform()],
+            backend_name="nim",
             no_cache=True,
         )
         assert cdef_out.strip() == "int exported_add(int a, int b);"

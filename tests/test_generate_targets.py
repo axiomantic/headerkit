@@ -15,10 +15,10 @@ from headerkit._config import TargetConfig, load_config
 from headerkit._generate import generate, generate_all, resolve_transforms
 from headerkit.ir import CType, Function, Header, Parameter
 from headerkit.transforms import (
+    DocParserTransform,
     FilterByHeader,
     FilterBySymbol,
     FilterDeprecated,
-    NimCleanupTransform,
     StripPaddingFields,
     StripPrefix,
 )
@@ -41,7 +41,7 @@ class TestResolveTransforms:
     def test_resolve_string_shorthands_and_params(self) -> None:
         resolved = resolve_transforms(
             [
-                "nim_cleanup",
+                "doc_parser",
                 "filter_by_symbol:include=pub_*,exclude=*_priv",
                 "filter_deprecated",
                 "filter_by_header:allow=api.h,deny=internal.h",
@@ -50,7 +50,7 @@ class TestResolveTransforms:
             ]
         )
         assert [t.cache_fingerprint() for t in resolved] == [
-            NimCleanupTransform().cache_fingerprint(),
+            DocParserTransform().cache_fingerprint(),
             FilterBySymbol(include=["pub_*"], exclude=["*_priv"]).cache_fingerprint(),
             FilterDeprecated().cache_fingerprint(),
             FilterByHeader(allow=["api.h"], deny=["internal.h"]).cache_fingerprint(),
@@ -62,12 +62,12 @@ class TestResolveTransforms:
         resolved = resolve_transforms(
             [
                 {"name": "filter_by_symbol", "include": ["api_*"], "exclude": ["api_internal_*"]},
-                {"name": "nim_cleanup", "keep_nim_main": True},
+                {"name": "doc_parser", "doc_format": "doxygen", "on_error": "strict"},
             ]
         )
         assert [t.cache_fingerprint() for t in resolved] == [
             FilterBySymbol(include=["api_*"], exclude=["api_internal_*"]).cache_fingerprint(),
-            NimCleanupTransform(keep_nim_main=True).cache_fingerprint(),
+            DocParserTransform(doc_format="doxygen", on_error="strict").cache_fingerprint(),
         ]
 
     def test_negative_controls_invalid_transform_specs(self) -> None:

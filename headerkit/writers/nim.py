@@ -2568,7 +2568,8 @@ class NimWriter(BaseWriter):
                 base_str = " of RootObj"
 
         pragma_str = f" {{.{', '.join(pragma_parts)}.}}" if pragma_parts else ""
-        lines = [*base_notes, f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
+        doc_lines = self._nim_doc_comment_lines(s)
+        lines = [*doc_lines, *base_notes, f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
 
         def _flatten_visible_fields(field_list: list[Field]) -> list[Field]:
             flat: list[Field] = []
@@ -3008,7 +3009,9 @@ class NimWriter(BaseWriter):
             spelling = _c_type_spelling(name, e.is_typedef, "enum")
             import_pragma = f'importc: "{spelling}", header: "{header_file}"'
         size_type = self._enum_size_type(e)
+        doc_lines = self._nim_doc_comment_lines(e)
         lines = [
+            *doc_lines,
             *self._enum_width_notes(e),
             f"{e_name}* {{.size: sizeof({size_type}), {import_pragma}.}} = enum",
         ]
@@ -3070,6 +3073,30 @@ class NimWriter(BaseWriter):
             emitted_types.add(t_name)
 
         return [f"{t_name}* = {underlying}"]
+
+    @staticmethod
+    def _nim_doc_comment_lines(decl: object, *, indent: str = "") -> list[str]:
+        """Return ``## ...`` Nim doc comment lines when ``decl.parsed_doc`` is populated."""
+        parsed = getattr(decl, "parsed_doc", None)
+        if parsed is None:
+            return []
+        lines: list[str] = []
+        summary = getattr(parsed, "summary", "")
+        if isinstance(summary, str) and summary.strip():
+            for line in summary.strip().splitlines():
+                lines.append(f"{indent}## {line}")
+        for param_doc in getattr(parsed, "params", ()):
+            if param_doc.description:
+                lines.append(f"{indent}## @param {param_doc.name}: {param_doc.description}")
+            else:
+                lines.append(f"{indent}## @param {param_doc.name}")
+        returns = getattr(parsed, "returns", None)
+        if isinstance(returns, str) and returns.strip():
+            lines.append(f"{indent}## @return {returns.strip()}")
+        deprecated = getattr(parsed, "deprecated", None)
+        if isinstance(deprecated, str) and deprecated.strip():
+            lines.append(f"{indent}## DEPRECATED: {deprecated.strip()}")
+        return lines
 
     def _write_function(self, f: Function, header_file: str) -> list[str]:
         """Render a function declaration."""
@@ -3140,7 +3167,8 @@ class NimWriter(BaseWriter):
             pragmas.append("discardable")
 
         t_params = f"[{', '.join(_template_param_ident(tp) for tp in f.template_params)}]" if f.template_params else ""
-        return [f"proc {f_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"]
+        doc_lines = self._nim_doc_comment_lines(f)
+        return [*doc_lines, f"proc {f_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"]
 
     def _write_variable(self, v: Variable, header_file: str) -> list[str]:
         """Render an extern global variable."""

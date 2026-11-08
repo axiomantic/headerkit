@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `SourceMeta`, `ParsedDoc`, `ParamDoc`, and `RaisesDoc` (`headerkit/ir.py`, `headerkit/_ir_json.py`, `headerkit/writers/json.py`, `headerkit/_cache_key.py`): add structured documentation IR nodes (`ParsedDoc`, `ParamDoc`, `RaisesDoc`) and language-agnostic source-language semantic metadata (`SourceMeta`) attached to `Function`, `Struct`, `Enum`, `Typedef`, `Variable`, `Constant`, `Field`, `EnumValue`, and `Parameter` (along with `doc` on `Field`, `EnumValue`, and `Parameter`), round-trip them losslessly through JSON IR serialization (`_IR_SCHEMA_VERSION = "9"`), and extend `InputSpec.from_path` to classify `.nim` (`language="nim"`, `classification="source"`) and `.nif` (`language="nif"`, `classification="interface"`).
+- `DocParserTransform` (`headerkit/transforms/doc_parser.py`) and writer docstring rendering (`PyiWriter`, `CtypesWriter`, `CythonWriter`, `NimWriter`, `PromptWriter`): add `DocParserTransform` (`doc_parser` / `doc-parser`) with `@hook("preprocess_doc")` (waterfall) and `@hook("parse_doc")` (first-result) supporting `"doxygen"`, `"rst"`, `"sphinx"`, `"jsdoc"`, `"google"`, `"numpy"`, `"rustdoc"`, `"markdown"`, `"plain"`, and `"auto"` docstring styles, `strict=True` `DocParseError` validation, parameter/field/enum-value doc propagation, and structured docstring rendering across target writers.
+- `NimBackend` (`headerkit/backends/nim.py`, `headerkit/backends/_nim_ast_helper.nim`) and `NimonyBackend` (`headerkit/backends/nimony.py`, `headerkit/backends/_nimony_nif_helper.nim`): add native Nim 2.x compiler `std/macros` AST extraction (`NimBackend`) and Nimony (Nim 3.0) NIF S-expression extraction (`NimonyBackend`) populating `SourceUnit` declarations, `SourceMeta`, and docstrings directly at the parser backend layer.
+
+### Removed
+- `NimCleanupTransform` and `NimJsonDocEnricher`: remove `headerkit/transforms/nim_cleanup.py` and `headerkit/transforms/nim_jsondoc.py` (along with `IRTransform.prepare_parse()`) in favor of `NimBackend`, `NimonyBackend`, and `DocParserTransform`.
+
 ### Documentation
-- `README.md`, `docs/guides/architecture.md`, and `docs/index.md`: add the 4-stage HeaderKit Extensibility & Separation of Concerns Mermaid architecture diagram (`flowchart TD`) and document the 5 orthogonal extension layers (Parser Backends, IR Transforms & Pipeline Filters, Fine-Grained Policy Hooks, Output Writers, and Project Scaffolders & Build Hooks) and their strict layer boundary invariants.
+- `README.md`, `docs/guides/architecture.md`, `docs/reference/backends.md`, and `docs/index.md`: add the 4-stage HeaderKit Extensibility & Separation of Concerns Mermaid architecture diagram (`flowchart TD`), document the 5 orthogonal extension layers (Parser Backends, IR Transforms & Pipeline Filters, Fine-Grained Policy Hooks, Output Writers, and Project Scaffolders & Build Hooks) and their strict layer boundary invariants, and document `NimBackend`, `NimonyBackend`, `DocParserTransform`, `SourceMeta`, and `ParsedDoc`.
 
 ## [0.51.0] - 2026-11-08
 

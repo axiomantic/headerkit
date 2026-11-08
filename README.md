@@ -326,13 +326,13 @@ HeaderKit enforces a strict, one-way compiler pipeline where every stage communi
 ```mermaid
 flowchart TD
     subgraph Stage1["Stage 1: Parse (parse_unit — first_result)"]
-        Src["C / C++ Headers & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend, Custom)"]
+        Src["C / C++ / Nim / NIF Sources & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend, NimBackend, NimonyBackend, Custom)"]
         Backend --> IRCache["Layer 1 IR Cache (.headerkit/ir/)"]
     end
 
     subgraph Stage2["Stage 2: Transform & Reconcile (transform_unit — waterfall)"]
-        IRCache --> IR1["Canonical IR (SourceUnit / Header)<br/>Function, Struct, Enum, Typedef, Variable, Constant, TypeExpr"]
-        IR1 --> Transforms["Layer 2: IR Transforms & Pipeline Filters<br/>(IRTransform >> pipelines, NimCleanupTransform, StripPrefix, MakeOpaque)"]
+        IRCache --> IR1["Canonical IR (SourceUnit / Header)<br/>Function, Struct, Enum, Typedef, Variable, Constant, TypeExpr, SourceMeta, ParsedDoc"]
+        IR1 --> Transforms["Layer 2: IR Transforms & Pipeline Filters<br/>(IRTransform >> pipelines, DocParserTransform, StripPrefix, MakeOpaque)"]
         Transforms --> Reconcile["Multi-Target Matrix Reconciler<br/>(ConfigMatrix, reconcile_matrix)"]
         Reconcile --> IR2["Normalized / Guarded SourceUnit IR"]
     end
@@ -352,8 +352,8 @@ flowchart TD
 
 | Layer | Hook / Protocol | Responsibility | Strict Boundary Invariant |
 | :--- | :--- | :--- | :--- |
-| **1. Parser Backends** | `ParserBackend`, `@hook("parse_unit")`, `register_backend()` | Parse C/C++ headers into canonical `SourceUnit` (`Header`) IR (`LibclangBackend` primary; `TreeSitterBackend` fallback). | Backends never emit target-language syntax or embed foreign-generator hacks; they record factual C/C++ semantics in the IR. |
-| **2. IR Transforms & Filters** | `IRTransform`, `>>` operator, `@hook("transform_unit")`, `register_transform()` | Pure `SourceUnit -> SourceUnit` AST passes (`StripPrefix`, `MakeOpaque`, `FilterBySymbol`, `NimCleanupTransform`, `NimJsonDocEnricher`) and `reconcile_matrix`. | Transforms mutate or enrich IR nodes without importing or coupling to concrete output writers. |
+| **1. Parser Backends** | `ParserBackend`, `@hook("parse_unit")`, `register_backend()` | Parse C/C++/Nim/NIF sources into canonical `SourceUnit` (`Header`) IR (`LibclangBackend` primary; `TreeSitterBackend` fallback; `NimBackend` & `NimonyBackend` for Nim 2.x / Nimony NIF). | Backends never emit target-language syntax or embed foreign-generator hacks; they record factual C/C++ ABI and `SourceMeta` semantics in the IR. |
+| **2. IR Transforms & Filters** | `IRTransform`, `>>` operator, `@hook("transform_unit")`, `@hook("parse_doc")`, `register_transform()` | Pure `SourceUnit -> SourceUnit` AST passes (`StripPrefix`, `MakeOpaque`, `FilterBySymbol`, `DocParserTransform`) and `reconcile_matrix`. | Transforms mutate or enrich IR nodes without importing or coupling to concrete output writers. |
 | **3. Fine-Grained Policy Hooks** | `@hook("rename_symbol")`, `@hook("resolve_collision")`, `[rename]` in `.headerkit.toml` | Priority-tiered (`FALLBACK` $\to$ `STANDARD` $\to$ `PROJECT` $\to$ `OVERRIDE`) identifier renaming, casing, lexical legality, and collision resolution. | Project renamers (`Priority.PROJECT`) run before target-language lexer legality guards (`Priority.FALLBACK`), so custom rules cannot produce illegal target identifiers. |
 | **4. Output Writers** | `BaseWriter`, `@hook("write_output")`, `register_writer()` | Pure `SourceUnit -> str` code generators (`cffi`, `pyi`, `ctypes`, `cython`, `nim`, `mojo`, `lua`, `ts_wasm`, `cshim`, `diff`, `json`, `prompt`). | **Pure IR-only boundary**: writers are 100% backend-agnostic (zero `headerkit.backends` imports, zero raw C prototype strings parsed inside writer options, no guessing from C type spellings). |
 | **5. Project Scaffolders & Build Hooks** | `BaseWriter.write_layout()`, `ProjectLayout`, `headerkit.build_backend` | Multi-file project scaffolding (CMake, `pyproject.toml`, `.nimble`, tripwires, test harnesses) and PEP 517 wheel builds backed by `.headerkit/`. | Downstream `pip install` consumes committed `.headerkit/` IR/output caches deterministically without requiring `libclang` or LLVM on user machines. |

@@ -18,6 +18,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    ParsedDoc,
     Pointer,
     Reference,
     SourceUnit,
@@ -556,8 +557,8 @@ class PyiWriter(BaseWriter):
             self._needs_any = True
             line = f"{indent}{name}: Any"
         lines = [line]
-        doc = getattr(const, "doc", None)
-        if isinstance(doc, str) and doc.strip():
+        doc = self._resolve_doc_text(const)
+        if doc is not None:
             lines.extend(self._format_docstring(doc, indent=indent))
         return lines
 
@@ -587,11 +588,11 @@ class PyiWriter(BaseWriter):
             self._needs_enum = True
             cls_name = _sanitize_identifier(enum.name)
             lines.append(f"class {cls_name}(enum.IntEnum):")
-            doc = getattr(enum, "doc", None)
-            if isinstance(doc, str) and doc.strip():
+            doc = self._resolve_doc_text(enum)
+            if doc is not None:
                 lines.extend(self._format_docstring(doc, indent="    "))
             if not enum.values:
-                if not (isinstance(doc, str) and doc.strip()):
+                if doc is None:
                     lines.append("    ...")
             else:
                 next_val = 0
@@ -636,9 +637,9 @@ class PyiWriter(BaseWriter):
             return []
         cls_name = _sanitize_identifier(struct.name)
         lines: list[str] = [f"class {cls_name}:"]
-        doc = getattr(struct, "doc", None)
+        doc = self._resolve_doc_text(struct)
         has_body = False
-        if isinstance(doc, str) and doc.strip():
+        if doc is not None:
             lines.extend(self._format_docstring(doc, indent="    "))
             has_body = True
 
@@ -695,6 +696,59 @@ class PyiWriter(BaseWriter):
         return f"({', '.join(param_parts)}) -> {ret_str}"
 
     @staticmethod
+    def _format_parsed_doc(parsed: ParsedDoc, *, is_deprecated: bool = False) -> str:
+        sections: list[str] = []
+        if parsed.summary:
+            sections.append(parsed.summary)
+        if parsed.body:
+            sections.append(parsed.body)
+        if parsed.deprecated:
+            sections.append(f"Deprecated: {parsed.deprecated}")
+        elif is_deprecated:
+            sections.append("Deprecated.")
+        tag_lines: list[str] = []
+        for param_doc in parsed.params:
+            if param_doc.type_hint:
+                tag_lines.append(f":param {param_doc.name}: ({param_doc.type_hint}) {param_doc.description}".rstrip())
+            elif param_doc.description:
+                tag_lines.append(f":param {param_doc.name}: {param_doc.description}")
+            else:
+                tag_lines.append(f":param {param_doc.name}:")
+        if parsed.returns:
+            tag_lines.append(f":returns: {parsed.returns}")
+        if parsed.return_type_hint:
+            tag_lines.append(f":rtype: {parsed.return_type_hint}")
+        for raises_doc in parsed.raises:
+            if raises_doc.description:
+                tag_lines.append(f":raises {raises_doc.exception}: {raises_doc.description}")
+            else:
+                tag_lines.append(f":raises {raises_doc.exception}:")
+        if tag_lines:
+            sections.append("\n".join(tag_lines))
+        for note in parsed.notes:
+            sections.append(f"Note: {note}")
+        for warning in parsed.warnings:
+            sections.append(f"Warning: {warning}")
+        for example in parsed.examples:
+            sections.append(f"Example:\n{example}")
+        if parsed.see_also:
+            sections.append(f"See also: {', '.join(parsed.see_also)}")
+        return "\n\n".join(s for s in sections if s.strip())
+
+    @classmethod
+    def _resolve_doc_text(cls, decl: Any) -> str | None:
+        parsed = getattr(decl, "parsed_doc", None)
+        is_dep = bool(getattr(decl, "is_deprecated", False))
+        if isinstance(parsed, ParsedDoc):
+            rendered = cls._format_parsed_doc(parsed, is_deprecated=is_dep)
+            if rendered.strip():
+                return rendered
+        doc = getattr(decl, "doc", None)
+        if isinstance(doc, str) and doc.strip():
+            return doc
+        return None
+
+    @staticmethod
     def _format_docstring(doc: str, *, indent: str = "    ") -> list[str]:
         cleaned = doc.strip().replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
         if cleaned.endswith('"'):
@@ -711,8 +765,8 @@ class PyiWriter(BaseWriter):
     def _format_function(self, func: Function, *, indent: str = "", include_self: bool = False) -> list[str]:
         fn_name = _sanitize_identifier(func.name)
         sig = self._format_function_params_and_return(func, include_self=include_self)
-        doc = getattr(func, "doc", None)
-        if isinstance(doc, str) and doc.strip():
+        doc = self._resolve_doc_text(func)
+        if doc is not None:
             lines = [f"{indent}def {fn_name}{sig}:"]
             lines.extend(self._format_docstring(doc, indent=f"{indent}    "))
             lines.append(f"{indent}    ...")
@@ -788,8 +842,8 @@ class PyiWriter(BaseWriter):
                     elif matches_define:
                         c_name = _sanitize_identifier(decl.name)
                         lib_member_lines.append(f"    {c_name}: int = ...")
-                        doc = getattr(decl, "doc", None)
-                        if isinstance(doc, str) and doc.strip():
+                        doc = self._resolve_doc_text(decl)
+                        if doc is not None:
                             lib_member_lines.extend(self._format_docstring(doc, indent="    "))
                 else:
                     const_lines = self._format_constant(decl)
@@ -813,8 +867,8 @@ class PyiWriter(BaseWriter):
                     continue
                 if alias_name != target_str:
                     td_lines = [f"{alias_name} = {target_str}"]
-                    doc = getattr(decl, "doc", None)
-                    if isinstance(doc, str) and doc.strip():
+                    doc = self._resolve_doc_text(decl)
+                    if doc is not None:
                         td_lines.extend(self._format_docstring(doc, indent=""))
                     body_blocks.append("\n".join(td_lines))
             elif isinstance(decl, Variable):
@@ -824,14 +878,14 @@ class PyiWriter(BaseWriter):
                 )
                 if self.mode == "cffi":
                     var_lines = [f"    {v_name}: {v_type}"]
-                    doc = getattr(decl, "doc", None)
-                    if isinstance(doc, str) and doc.strip():
+                    doc = self._resolve_doc_text(decl)
+                    if doc is not None:
                         var_lines.extend(self._format_docstring(doc, indent="    "))
                     lib_member_lines.extend(var_lines)
                 else:
                     var_lines = [f"{v_name}: {v_type}"]
-                    doc = getattr(decl, "doc", None)
-                    if isinstance(doc, str) and doc.strip():
+                    doc = self._resolve_doc_text(decl)
+                    if doc is not None:
                         var_lines.extend(self._format_docstring(doc, indent=""))
                     body_blocks.append("\n".join(var_lines))
             elif isinstance(decl, Function):

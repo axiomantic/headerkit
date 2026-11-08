@@ -24,10 +24,14 @@ from headerkit.ir import (
     Header,
     MacroFunction,
     MacroParameter,
+    ParamDoc,
     Parameter,
+    ParsedDoc,
     Pointer,
+    RaisesDoc,
     Reference,
     SourceLocation,
+    SourceMeta,
     SourceUnit,
     Struct,
     TemplateParameter,
@@ -94,6 +98,79 @@ def _location_to_dict(loc: SourceLocation) -> dict[str, Any]:
     return d
 
 
+def _param_doc_to_dict(pd: ParamDoc) -> dict[str, Any]:
+    """Convert a ParamDoc to a JSON-serializable dict."""
+    d: dict[str, Any] = {"name": pd.name, "description": pd.description}
+    if pd.type_hint is not None:
+        d["type_hint"] = pd.type_hint
+    if pd.direction is not None:
+        d["direction"] = pd.direction
+    if pd.optional:
+        d["optional"] = True
+    return d
+
+
+def _raises_doc_to_dict(rd: RaisesDoc) -> dict[str, Any]:
+    """Convert a RaisesDoc to a JSON-serializable dict."""
+    return {"exception": rd.exception, "description": rd.description}
+
+
+def _parsed_doc_to_dict(pd: ParsedDoc) -> dict[str, Any]:
+    """Convert a ParsedDoc to a JSON-serializable dict."""
+    d: dict[str, Any] = {}
+    if pd.summary is not None:
+        d["summary"] = pd.summary
+    if pd.body is not None:
+        d["body"] = pd.body
+    if pd.params:
+        d["params"] = [_param_doc_to_dict(p) for p in pd.params]
+    if pd.returns is not None:
+        d["returns"] = pd.returns
+    if pd.return_type_hint is not None:
+        d["return_type_hint"] = pd.return_type_hint
+    if pd.raises:
+        d["raises"] = [_raises_doc_to_dict(r) for r in pd.raises]
+    if pd.deprecated is not None:
+        d["deprecated"] = pd.deprecated
+    if pd.examples:
+        d["examples"] = list(pd.examples)
+    if pd.see_also:
+        d["see_also"] = list(pd.see_also)
+    if pd.since is not None:
+        d["since"] = pd.since
+    if pd.notes:
+        d["notes"] = list(pd.notes)
+    if pd.warnings:
+        d["warnings"] = list(pd.warnings)
+    if pd.source_format != "plain":
+        d["source_format"] = pd.source_format
+    if pd.parse_errors:
+        d["parse_errors"] = list(pd.parse_errors)
+    return d
+
+
+def _source_meta_to_dict(sm: SourceMeta) -> dict[str, Any]:
+    """Convert a SourceMeta to a JSON-serializable dict."""
+    d: dict[str, Any] = {}
+    if sm.source_language is not None:
+        d["source_language"] = sm.source_language
+    if sm.source_name is not None:
+        d["source_name"] = sm.source_name
+    if sm.source_type is not None:
+        d["source_type"] = sm.source_type
+    if sm.module is not None:
+        d["module"] = sm.module
+    if not sm.is_exported:
+        d["is_exported"] = False
+    if sm.is_nothrow:
+        d["is_nothrow"] = True
+    if sm.ownership is not None:
+        d["ownership"] = sm.ownership
+    if sm.attributes:
+        d["attributes"] = [[k, v] for k, v in sm.attributes]
+    return d
+
+
 def _param_to_dict(p: Parameter) -> dict[str, Any]:
     """Convert a Parameter to a dict."""
     d: dict[str, Any] = {"type": _type_to_dict(p.type)}
@@ -103,6 +180,12 @@ def _param_to_dict(p: Parameter) -> dict[str, Any]:
         d["default_value"] = p.default_value
     if p.type_overrides:
         d["type_overrides"] = dict(p.type_overrides)
+    if p.doc is not None:
+        d["doc"] = p.doc
+    if p.parsed_doc is not None:
+        d["parsed_doc"] = _parsed_doc_to_dict(p.parsed_doc)
+    if p.source_meta is not None:
+        d["source_meta"] = _source_meta_to_dict(p.source_meta)
     return d
 
 
@@ -153,6 +236,12 @@ def _field_to_dict(f: Field) -> dict[str, Any]:
         d["is_static"] = True
     if f.type_overrides:
         d["type_overrides"] = dict(f.type_overrides)
+    if f.doc is not None:
+        d["doc"] = f.doc
+    if f.parsed_doc is not None:
+        d["parsed_doc"] = _parsed_doc_to_dict(f.parsed_doc)
+    if f.source_meta is not None:
+        d["source_meta"] = _source_meta_to_dict(f.source_meta)
     return d
 
 
@@ -216,6 +305,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
             d["doc"] = decl.doc
+        if decl.parsed_doc is not None:
+            d["parsed_doc"] = _parsed_doc_to_dict(decl.parsed_doc)
+        if decl.source_meta is not None:
+            d["source_meta"] = _source_meta_to_dict(decl.source_meta)
         return d
     elif isinstance(decl, Enum):
         d = {
@@ -239,6 +332,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
             d["doc"] = decl.doc
+        if decl.parsed_doc is not None:
+            d["parsed_doc"] = _parsed_doc_to_dict(decl.parsed_doc)
+        if decl.source_meta is not None:
+            d["source_meta"] = _source_meta_to_dict(decl.source_meta)
         return d
     elif isinstance(decl, Function):
         d = {
@@ -296,6 +393,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
             d["doc"] = decl.doc
+        if decl.parsed_doc is not None:
+            d["parsed_doc"] = _parsed_doc_to_dict(decl.parsed_doc)
+        if decl.source_meta is not None:
+            d["source_meta"] = _source_meta_to_dict(decl.source_meta)
         return d
     elif isinstance(decl, Typedef):
         d = {
@@ -315,6 +416,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
             d["doc"] = decl.doc
+        if decl.parsed_doc is not None:
+            d["parsed_doc"] = _parsed_doc_to_dict(decl.parsed_doc)
+        if decl.source_meta is not None:
+            d["source_meta"] = _source_meta_to_dict(decl.source_meta)
         return d
     elif isinstance(decl, Variable):
         d = {
@@ -338,6 +443,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
             d["doc"] = decl.doc
+        if decl.parsed_doc is not None:
+            d["parsed_doc"] = _parsed_doc_to_dict(decl.parsed_doc)
+        if decl.source_meta is not None:
+            d["source_meta"] = _source_meta_to_dict(decl.source_meta)
         return d
     elif isinstance(decl, Constant):
         d = {
@@ -360,6 +469,10 @@ def _decl_to_dict(decl: Declaration) -> dict[str, Any]:
             d["location"] = _location_to_dict(decl.location)
         if decl.doc is not None:
             d["doc"] = decl.doc
+        if decl.parsed_doc is not None:
+            d["parsed_doc"] = _parsed_doc_to_dict(decl.parsed_doc)
+        if decl.source_meta is not None:
+            d["source_meta"] = _source_meta_to_dict(decl.source_meta)
         return d
     elif isinstance(decl, MacroFunction):
         return _macro_function_to_dict(decl)
@@ -393,6 +506,12 @@ def _enum_value_to_dict(v: EnumValue) -> dict[str, Any]:
     d: dict[str, Any] = {"name": v.name}
     if v.value is not None:
         d["value"] = v.value
+    if v.doc is not None:
+        d["doc"] = v.doc
+    if v.parsed_doc is not None:
+        d["parsed_doc"] = _parsed_doc_to_dict(v.parsed_doc)
+    if v.source_meta is not None:
+        d["source_meta"] = _source_meta_to_dict(v.source_meta)
     return d
 
 

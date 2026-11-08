@@ -28,10 +28,14 @@ from headerkit.ir import (
     Header,
     MacroFunction,
     MacroParameter,
+    ParamDoc,
     Parameter,
+    ParsedDoc,
     Pointer,
+    RaisesDoc,
     Reference,
     SourceLocation,
+    SourceMeta,
     Struct,
     TemplateParameter,
     Typedef,
@@ -134,6 +138,9 @@ def _dict_to_parameter(d: dict[str, Any]) -> Parameter:
         type=_dict_to_type(d["type"]),
         default_value=d.get("default_value"),
         type_overrides=d.get("type_overrides", _default(Parameter, "type_overrides")),
+        doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -166,6 +173,9 @@ def _dict_to_field(d: dict[str, Any]) -> Field:
         access=d.get("access", _default(Field, "access")),
         is_static=d.get("is_static", _default(Field, "is_static")),
         type_overrides=d.get("type_overrides", _default(Field, "type_overrides")),
+        doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -173,6 +183,9 @@ def _dict_to_enum_value(d: dict[str, Any]) -> EnumValue:
     return EnumValue(
         name=d["name"],
         value=d.get("value"),
+        doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -181,6 +194,55 @@ def _dict_to_location(d: dict[str, Any]) -> SourceLocation:
         file=d["file"],
         line=d["line"],
         column=d.get("column"),
+    )
+
+
+def _dict_to_param_doc(d: dict[str, Any]) -> ParamDoc:
+    return ParamDoc(
+        name=d["name"],
+        description=d["description"],
+        type_hint=d.get("type_hint", _default(ParamDoc, "type_hint")),
+        direction=d.get("direction", _default(ParamDoc, "direction")),
+        optional=d.get("optional", _default(ParamDoc, "optional")),
+    )
+
+
+def _dict_to_raises_doc(d: dict[str, Any]) -> RaisesDoc:
+    return RaisesDoc(
+        exception=d["exception"],
+        description=d["description"],
+    )
+
+
+def _dict_to_parsed_doc(d: dict[str, Any]) -> ParsedDoc:
+    return ParsedDoc(
+        summary=d.get("summary", _default(ParsedDoc, "summary")),
+        body=d.get("body", _default(ParsedDoc, "body")),
+        params=tuple(_dict_to_param_doc(p) for p in d.get("params", ())),
+        returns=d.get("returns", _default(ParsedDoc, "returns")),
+        return_type_hint=d.get("return_type_hint", _default(ParsedDoc, "return_type_hint")),
+        raises=tuple(_dict_to_raises_doc(r) for r in d.get("raises", ())),
+        deprecated=d.get("deprecated", _default(ParsedDoc, "deprecated")),
+        examples=tuple(d.get("examples", ())),
+        see_also=tuple(d.get("see_also", ())),
+        since=d.get("since", _default(ParsedDoc, "since")),
+        notes=tuple(d.get("notes", ())),
+        warnings=tuple(d.get("warnings", ())),
+        source_format=d.get("source_format", _default(ParsedDoc, "source_format")),
+        parse_errors=tuple(d.get("parse_errors", ())),
+    )
+
+
+def _dict_to_source_meta(d: dict[str, Any]) -> SourceMeta:
+    return SourceMeta(
+        source_language=d.get("source_language", _default(SourceMeta, "source_language")),
+        source_name=d.get("source_name", _default(SourceMeta, "source_name")),
+        source_type=d.get("source_type", _default(SourceMeta, "source_type")),
+        module=d.get("module", _default(SourceMeta, "module")),
+        is_exported=d.get("is_exported", _default(SourceMeta, "is_exported")),
+        is_nothrow=d.get("is_nothrow", _default(SourceMeta, "is_nothrow")),
+        ownership=d.get("ownership", _default(SourceMeta, "ownership")),
+        attributes=tuple((str(k), str(v)) for k, v in d.get("attributes", ())),
     )
 
 
@@ -217,6 +279,8 @@ def _dict_to_struct(d: dict[str, Any]) -> Struct:
         alignment=d.get("alignment"),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -232,6 +296,8 @@ def _dict_to_enum(d: dict[str, Any]) -> Enum:
         underlying_type=d.get("underlying_type"),
         underlying_type_known=d.get("underlying_type_known", _default(Enum, "underlying_type_known")),
         doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -262,6 +328,8 @@ def _dict_to_function(d: dict[str, Any]) -> Function:
         type_overrides=d.get("type_overrides", _default(Function, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -275,6 +343,8 @@ def _dict_to_typedef(d: dict[str, Any]) -> Typedef:
         type_overrides=d.get("type_overrides", _default(Typedef, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -290,6 +360,8 @@ def _dict_to_variable(d: dict[str, Any]) -> Variable:
         type_overrides=d.get("type_overrides", _default(Variable, "type_overrides")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 
@@ -304,6 +376,8 @@ def _dict_to_constant(d: dict[str, Any]) -> Constant:
         is_macro_expr=d.get("is_macro_expr", _default(Constant, "is_macro_expr")),
         location=_dict_to_location(d["location"]) if "location" in d else None,
         doc=d.get("doc"),
+        parsed_doc=_dict_to_parsed_doc(d["parsed_doc"]) if "parsed_doc" in d else None,
+        source_meta=_dict_to_source_meta(d["source_meta"]) if "source_meta" in d else None,
     )
 
 

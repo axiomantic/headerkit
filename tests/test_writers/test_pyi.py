@@ -823,23 +823,8 @@ class TestPyiWriter:
             _extract_double_paren_attr_payloads,
             _strip_c_literal_suffixes,
         )
-        from headerkit.transforms.nim_cleanup import _unmangle_nim_type_name
-        from headerkit.transforms.nim_jsondoc import (
-            _match_proc_header_name,
-            _match_type_decl_line,
-        )
+        from headerkit.backends.nim import _unmangle_nim_type_name
         from headerkit.writers.nim import _extract_type_identifiers, _strip_nim_param_labels
-
-        assert _match_proc_header_name("proc `my_proc`*(x: cint): cint =") == "my_proc"
-        assert _match_proc_header_name("func compute*[T](a: T): T") == "compute"
-        assert _match_proc_header_name("let x = 1") is None
-
-        assert _match_type_decl_line('MyObj* {.exportc: "c_obj", deprecated.} = object') == (
-            "MyObj",
-            'exportc: "c_obj", deprecated',
-        )
-        assert _match_type_decl_line("` QuotedType `*[T] = ref object") == ("QuotedType", "")
-        assert _match_type_decl_line("proc not_a_type(x: int)") is None
 
         assert _unmangle_nim_type_name("struct tyObject_MyWidget__AbCdEf123") == "struct MyWidget"
         assert _unmangle_nim_type_name("enum tyEnum_ColorMode__998877") == "enum ColorMode"

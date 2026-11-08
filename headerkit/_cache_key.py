@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 # ``test_cache_key.py`` fingerprints the IR dataclasses and fails when this
 # constant has not moved with them, so the reminder is a check rather than a
 # comment nobody reads.
-_IR_SCHEMA_VERSION = "8"
+_IR_SCHEMA_VERSION = "9"
 
 
 @dataclass

@@ -338,10 +338,17 @@ def test_transforms_and_matrix_public_exports() -> None:
         "IRTransformer",
         "PipelineFilter",
         "ChainedFilter",
+        "DocParseError",
+        "DocParserTransform",
+        "ParamDoc",
+        "RaisesDoc",
+        "ParsedDoc",
+        "SourceMeta",
+        "NimBackend",
+        "NimonyBackend",
+        "clean_nim_c_unit",
         "StripPrefix",
         "MakeOpaque",
-        "NimCleanupTransform",
-        "NimJsonDocEnricher",
         "RenameTypes",
         "StripPaddingFields",
         "FilterByHeader",
@@ -378,3 +385,7 @@ def test_transforms_and_matrix_public_exports() -> None:
     for sym in expected_symbols:
         assert hasattr(headerkit, sym), f"Expected symbol {sym!r} in headerkit"
         assert sym in headerkit.__all__, f"Symbol {sym!r} missing from headerkit.__all__"
+
+    for purged_nim in ("NimCleanupTransform", "NimJsonDocEnricher"):
+        assert purged_nim not in headerkit.__all__
+        assert not hasattr(headerkit, purged_nim)
