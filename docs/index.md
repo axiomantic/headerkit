@@ -40,19 +40,28 @@ print(json_writer.write(header))
 ## How It Works
 
 ```mermaid
-graph LR
-    A["C/C++ Header"] --> B["Backend"]
-    B --> C["IR"]
-    C --> D["Writer"]
-    D --> E["Output"]
-    B -.- B1["ParserBackend<br>Protocol"]
-    D -.- D1["WriterBackend<br>Protocol"]
+flowchart TD
+    subgraph Stage1["Stage 1: Parse"]
+        Src["C / C++ Headers & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend)"]
+    end
+    subgraph Stage2["Stage 2: Transform & Reconcile"]
+        Backend --> IR["Canonical IR (SourceUnit / Header)"]
+        IR --> Transforms["Layer 2: IR Transforms & Reconciler<br/>(IRTransform >> pipelines, reconcile_matrix)"]
+    end
+    subgraph Stage3["Stage 3: Emit"]
+        Transforms --> Writers["Layer 4: Output Writers (BaseWriter)<br/>(cffi, pyi, ctypes, cython, nim, mojo, lua, ts_wasm, cshim, diff, json, prompt)"]
+        PolicyHooks["Layer 3: Policy Hooks<br/>(rename_symbol, resolve_collision)"] -.-> Writers
+    end
+    subgraph Stage4["Stage 4: Package & Build"]
+        Writers --> Scaffold["Layer 5: Project Scaffolders & Build Hooks<br/>(write_layout, PEP 517 headerkit.build_backend)"]
+    end
 ```
 
-1. A **backend** (e.g., `LibclangBackend`, `TreeSitterBackend`) parses source code and produces a normalized `SourceUnit` containing typed declarations.
-2. A **writer** (inheriting from `BaseWriter`, such as `CtypesWriter`, `CffiWriter`, `MojoWriter`, `NimWriter`, `CshimWriter`, etc.) consumes the IR and produces single-file or multi-file bindings.
-
-Backends and writers self-register via unified hooks and Python entry points, so you can add new source languages or output formats without modifying HeaderKit itself.
+1. **Parser Backends** (`LibclangBackend`, `TreeSitterBackend`) parse C/C++ source code into a normalized `SourceUnit` (`Header`) IR containing typed declarations.
+2. **IR Transforms & Reconcilers** (`IRTransform`, `reconcile_matrix`) filter, unmangle, enrich, or merge multi-target IR trees before emission.
+3. **Fine-Grained Policy Hooks** (`rename_symbol`, `resolve_collision`) apply priority-ordered naming, casing, and collision rules.
+4. **Output Writers** (`BaseWriter` subclasses) consume the pure IR (with zero backend dependencies) to emit bindings.
+5. **Project Scaffolders & Build Hooks** (`write_layout()`, `headerkit.build_backend`) emit complete package layouts and build wheels using the `.headerkit/` two-layer cache.
 
 ## Next Steps
 

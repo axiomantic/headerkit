@@ -319,9 +319,46 @@ Values support `${ENV_VAR}` expansion for build-time paths injected by CMake or 
 
 ---
 
-## Extensibility & Plugins
+## Extensibility & Architecture Pipeline
 
-HeaderKit's hook architecture makes it straightforward to add new source languages, transforms, or target writers without modifying the core repository.
+HeaderKit enforces a strict, one-way compiler pipeline where every stage communicates exclusively through the canonical [`SourceUnit`][headerkit.ir.SourceUnit] (`Header`) Intermediate Representation. Five orthogonal extension layers let you customize or extend any stage without modifying core code:
+
+```mermaid
+flowchart TD
+    subgraph Stage1["Stage 1: Parse (parse_unit — first_result)"]
+        Src["C / C++ Headers & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend, Custom)"]
+        Backend --> IRCache["Layer 1 IR Cache (.headerkit/ir/)"]
+    end
+
+    subgraph Stage2["Stage 2: Transform & Reconcile (transform_unit — waterfall)"]
+        IRCache --> IR1["Canonical IR (SourceUnit / Header)<br/>Function, Struct, Enum, Typedef, Variable, Constant, TypeExpr"]
+        IR1 --> Transforms["Layer 2: IR Transforms & Pipeline Filters<br/>(IRTransform >> pipelines, NimCleanupTransform, StripPrefix, MakeOpaque)"]
+        Transforms --> Reconcile["Multi-Target Matrix Reconciler<br/>(ConfigMatrix, reconcile_matrix)"]
+        Reconcile --> IR2["Normalized / Guarded SourceUnit IR"]
+    end
+
+    subgraph Stage3["Stage 3: Emit (write_output — first_result)"]
+        IR2 --> Writers["Layer 4: Output Writers (BaseWriter)<br/>(cffi, pyi, ctypes, cython, nim, mojo, lua, ts_wasm, cshim, diff, json, prompt)"]
+        PolicyHooks["Layer 3: Fine-Grained Policy Hooks<br/>(rename_symbol waterfall, resolve_collision, condition formatters)"] -.-> Writers
+        Writers --> OutCache["Layer 2 Output Cache (.headerkit/output/)"]
+    end
+
+    subgraph Stage4["Stage 4: Package & Build"]
+        OutCache --> Scaffold["Layer 5: Project Scaffolders & Build Hooks<br/>(write_layout, ProjectLayout, PEP 517 headerkit.build_backend)"]
+    end
+```
+
+### The 5 Extension Layers & Separation of Concerns
+
+| Layer | Hook / Protocol | Responsibility | Strict Boundary Invariant |
+| :--- | :--- | :--- | :--- |
+| **1. Parser Backends** | `ParserBackend`, `@hook("parse_unit")`, `register_backend()` | Parse C/C++ headers into canonical `SourceUnit` (`Header`) IR (`LibclangBackend` primary; `TreeSitterBackend` fallback). | Backends never emit target-language syntax or embed foreign-generator hacks; they record factual C/C++ semantics in the IR. |
+| **2. IR Transforms & Filters** | `IRTransform`, `>>` operator, `@hook("transform_unit")`, `register_transform()` | Pure `SourceUnit -> SourceUnit` AST passes (`StripPrefix`, `MakeOpaque`, `FilterBySymbol`, `NimCleanupTransform`, `NimJsonDocEnricher`) and `reconcile_matrix`. | Transforms mutate or enrich IR nodes without importing or coupling to concrete output writers. |
+| **3. Fine-Grained Policy Hooks** | `@hook("rename_symbol")`, `@hook("resolve_collision")`, `[rename]` in `.headerkit.toml` | Priority-tiered (`FALLBACK` $\to$ `STANDARD` $\to$ `PROJECT` $\to$ `OVERRIDE`) identifier renaming, casing, lexical legality, and collision resolution. | Project renamers (`Priority.PROJECT`) run before target-language lexer legality guards (`Priority.FALLBACK`), so custom rules cannot produce illegal target identifiers. |
+| **4. Output Writers** | `BaseWriter`, `@hook("write_output")`, `register_writer()` | Pure `SourceUnit -> str` code generators (`cffi`, `pyi`, `ctypes`, `cython`, `nim`, `mojo`, `lua`, `ts_wasm`, `cshim`, `diff`, `json`, `prompt`). | **Pure IR-only boundary**: writers are 100% backend-agnostic (zero `headerkit.backends` imports, zero raw C prototype strings parsed inside writer options, no guessing from C type spellings). |
+| **5. Project Scaffolders & Build Hooks** | `BaseWriter.write_layout()`, `ProjectLayout`, `headerkit.build_backend` | Multi-file project scaffolding (CMake, `pyproject.toml`, `.nimble`, tripwires, test harnesses) and PEP 517 wheel builds backed by `.headerkit/`. | Downstream `pip install` consumes committed `.headerkit/` IR/output caches deterministically without requiring `libclang` or LLVM on user machines. |
+
+### Registering Custom Plugins
 
 Register third-party plugins in your own package via `pyproject.toml` entry points:
 

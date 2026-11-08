@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- `README.md`, `docs/guides/architecture.md`, and `docs/index.md`: add the 4-stage HeaderKit Extensibility & Separation of Concerns Mermaid architecture diagram (`flowchart TD`) and document the 5 orthogonal extension layers (Parser Backends, IR Transforms & Pipeline Filters, Fine-Grained Policy Hooks, Output Writers, and Project Scaffolders & Build Hooks) and their strict layer boundary invariants.
+
 ## [0.50.1] - 2026-11-06
 
 ### Fixed

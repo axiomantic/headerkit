@@ -4,20 +4,61 @@ headerkit is organized around a unified, hook-driven pipeline: **backends** pars
 
 ## The Pipeline
 
-```mermaid
-graph TD
-    A["Input Source / InputSpec"] --> B
-    B["Backend: parse_unit<br>(ParserBackend protocol)"] --> C
-    C["IR<br>(SourceUnit, Declaration, TypeExpr)"] --> D
-    D["Transformations: transform_unit<br>(Waterfall hook pipeline)"] --> E
-    E["Writer: write_output<br>(WriterBackend protocol)"] --> F
-    F["Output String<br>(CFFI cdef, ctypes, Cython .pxd, Nim, ...)"]
+HeaderKit is structured as a 4-stage, one-way compiler pipeline with 5 orthogonal extension layers:
 
-    B -.- B1["e.g., LibclangBackend, TreeSitterBackend"]
-    E -.- E1["e.g., CffiWriter, CtypesWriter,<br>CythonWriter, NimWriter, LuaWriter, ..."]
+```mermaid
+flowchart TD
+    subgraph Stage1["Stage 1: Parse (parse_unit — first_result)"]
+        Src["C / C++ Headers & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend, Custom)"]
+        Backend --> IRCache["Layer 1 IR Cache (.headerkit/ir/)"]
+    end
+
+    subgraph Stage2["Stage 2: Transform & Reconcile (transform_unit — waterfall)"]
+        IRCache --> IR1["Canonical IR (SourceUnit / Header)<br/>Function, Struct, Enum, Typedef, Variable, Constant, TypeExpr"]
+        IR1 --> Transforms["Layer 2: IR Transforms & Pipeline Filters<br/>(IRTransform >> pipelines, NimCleanupTransform, StripPrefix, MakeOpaque)"]
+        Transforms --> Reconcile["Multi-Target Matrix Reconciler<br/>(ConfigMatrix, reconcile_matrix)"]
+        Reconcile --> IR2["Normalized / Guarded SourceUnit IR"]
+    end
+
+    subgraph Stage3["Stage 3: Emit (write_output — first_result)"]
+        IR2 --> Writers["Layer 4: Output Writers (BaseWriter)<br/>(cffi, pyi, ctypes, cython, nim, mojo, lua, ts_wasm, cshim, diff, json, prompt)"]
+        PolicyHooks["Layer 3: Fine-Grained Policy Hooks<br/>(rename_symbol waterfall, resolve_collision, condition formatters)"] -.-> Writers
+        Writers --> OutCache["Layer 2 Output Cache (.headerkit/output/)"]
+    end
+
+    subgraph Stage4["Stage 4: Package & Build"]
+        OutCache --> Scaffold["Layer 5: Project Scaffolders & Build Hooks<br/>(write_layout, ProjectLayout, PEP 517 headerkit.build_backend)"]
+    end
 ```
 
-Each stage is decoupled through the unified hook engine (`headerkit.hooks`). Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.
+Each stage is decoupled through the unified hook engine (`headerkit.hooks`) and communicates exclusively through the canonical [`SourceUnit`][headerkit.ir.SourceUnit] (`Header`) IR. Backends know nothing about writers. Writers know nothing about backends. The IR is the sole contract between them.
+
+## Extensibility & Separation of Concerns (The 5 Extension Layers)
+
+1. **Layer 1 — Parser Backends (`headerkit.backends` / `parse_unit`)**:
+   - **Role**: Parse C/C++ source headers into canonical `SourceUnit` (`Header`) IR dataclasses. `LibclangBackend` is the primary production parser (full preprocessor expansion, macro evaluation, and compiler AST semantics); `TreeSitterBackend` is a lightweight zero-LLVM fallback.
+   - **Extension Point**: Implement `ParserBackend` and call `register_backend()`, register `@hook("parse_unit")`, or declare `[project.entry-points."headerkit.backends"]`.
+   - **Boundary Invariant**: Backends record factual C/C++ semantics in the IR (`is_typedef`, `is_elaborated`, `underlying_type`, `language`) without target-writer assumptions or foreign-generator hacks.
+
+2. **Layer 2 — IR Transforms & Pipeline Filters (`headerkit.transforms` / `transform_unit`)**:
+   - **Role**: Registry-driven IR-to-IR (`SourceUnit -> SourceUnit`) passes (`StripPrefix`, `MakeOpaque`, `FilterBySymbol`, `NimCleanupTransform`, `NimJsonDocEnricher`) and multi-target matrix reconciliation (`ConfigMatrix`, `reconcile_matrix`).
+   - **Extension Point**: Subclass `IRTransform` and compose with `>>`, call `register_transform()`, or register `@hook("transform_unit")` in the waterfall pipeline.
+   - **Boundary Invariant**: Transforms operate purely on IR nodes (plus optional pre-parse `prepare_parse()` / `backend_options()` hooks) and never import concrete writers.
+
+3. **Layer 3 — Fine-Grained Policy Hooks (`headerkit.hooks` / `rename_symbol`, `resolve_collision`)**:
+   - **Role**: Priority-tiered (`Priority.FALLBACK = 10`, `STANDARD = 50`, `PROJECT = 100`, `OVERRIDE = 1000`) hooks governing symbol renaming, casing, target-language lexical legality, and identifier collision resolution, plus `BaseWriter` condition formatters (`format_platform_condition`, `format_matrix_condition`).
+   - **Extension Point**: Configure declarative `[rename]` rules in `.headerkit.toml` or register `@hook("rename_symbol")` (waterfall) and `@hook("resolve_collision")` (first-result).
+   - **Boundary Invariant**: Project renamers (`Priority.PROJECT`) execute before writer lexical legality hooks (`Priority.FALLBACK`), ensuring custom naming rules can never emit an invalid target-language identifier.
+
+4. **Layer 4 — Output Writers (`headerkit.writers` / `write_output`)**:
+   - **Role**: Pure `SourceUnit -> str` code generators (`BaseWriter` subclasses: `cffi`, `pyi`, `ctypes`, `cython`, `nim`, `mojo`, `lua`, `ts_wasm`, `cshim`, `diff`, `json`, `prompt`).
+   - **Extension Point**: Subclass `BaseWriter` and call `register_writer()`, register `@hook("write_output")`, or declare `[project.entry-points."headerkit.writers"]`.
+   - **Boundary Invariant**: Writers consume **IR only**. A writer must never import `headerkit.backends`, call `get_backend()`, accept unparsed C/C++ prototype strings in writer options to parse on the side, or guess semantics from C type spellings. All declarations (including `extern "Python"` callbacks) must exist in `Header.declarations` first; writer options only reference IR symbol names or configure emission policy.
+
+5. **Layer 5 — Project Scaffolders & Build Hooks (`write_layout` / `headerkit.build_backend`)**:
+   - **Role**: Multi-file project layout emission (`BaseWriter.write_layout()`, `ProjectLayout`, CMakeLists, `pyproject.toml`, `.nimble`, tripwires, test harnesses) and PEP 517 build-time wheel integration (`headerkit.build_backend`) backed by the two-layer `.headerkit/` cache.
+   - **Extension Point**: Override `BaseWriter.write_layout()` or configure `[build-system]` with `build-backend = "headerkit.build_backend"`.
+   - **Boundary Invariant**: Downstream `pip install` builds consume committed `.headerkit/` IR and output caches deterministically without requiring `libclang` or LLVM on user machines.
 
 ## Layer 1: Backends (Parsing)
 
