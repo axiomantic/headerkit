@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import importlib.resources
 import json
 import logging
 import os
@@ -437,17 +438,34 @@ def _rewrite_nim_type(
     return type_expr
 
 
+def _load_backend_resource_bytes(resource_name: str) -> bytes | None:
+    """Load a packaged backend helper file via ``importlib.resources.files`` with ``Path(__file__)`` fallback."""
+    try:
+        ref = importlib.resources.files("headerkit.backends").joinpath(resource_name)
+        data = ref.read_bytes()
+        if data:
+            return data
+    except (OSError, TypeError, ModuleNotFoundError, FileNotFoundError):
+        pass
+    fallback = Path(__file__).with_name(resource_name)
+    if fallback.is_file():
+        try:
+            return fallback.read_bytes()
+        except OSError:
+            return None
+    return None
+
+
 @functools.lru_cache(maxsize=1)
 def _get_nim_ast_helper_binary() -> Path | None:
     """Compile and cache ``_nim_ast_helper.nim`` under ``~/.cache/headerkit/bin/``."""
     nim_bin = shutil.which("nim")
     if not nim_bin:
         return None
-    helper_src = Path(__file__).with_name("_nim_ast_helper.nim")
-    if not helper_src.is_file():
+    src_bytes = _load_backend_resource_bytes("_nim_ast_helper.nim")
+    if not src_bytes:
         return None
     try:
-        src_bytes = helper_src.read_bytes()
         ver_proc = subprocess.run(
             ["nim", "--version"],
             capture_output=True,

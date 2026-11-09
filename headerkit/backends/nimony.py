@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import importlib.resources
 import json
 import logging
 import os
@@ -21,7 +22,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from headerkit.backends import register_backend
-from headerkit.backends.nim import _ast_json_to_declarations
+from headerkit.backends.nim import _ast_json_to_declarations, _load_backend_resource_bytes
 from headerkit.hooks import PipelineContext, Priority, hook
 from headerkit.ir import (
     Constant,
@@ -48,12 +49,15 @@ def _get_nimony_nif_helper_binary() -> Path | None:
     nim_bin = shutil.which("nim")
     if not nim_bin:
         return None
-    helper_src = Path(__file__).with_name("_nimony_nif_helper.nim")
-    if not helper_src.is_file():
+    try:
+        ref = importlib.resources.files("headerkit.backends").joinpath("_nimony_nif_helper.nim")
+        src_bytes: bytes | None = ref.read_bytes()
+    except (OSError, TypeError, ModuleNotFoundError, FileNotFoundError):
+        src_bytes = _load_backend_resource_bytes("_nimony_nif_helper.nim")
+    if not src_bytes:
         return None
 
     try:
-        src_bytes = helper_src.read_bytes()
         ver_res = subprocess.run(
             [nim_bin, "--version"],
             capture_output=True,

@@ -1194,3 +1194,26 @@ class TestCindexShutdownSafety:
             no_cache=True,
         )
         assert cdef_out.strip() == "int exported_add(int a, int b);"
+
+    def test_packaged_nim_helper_resources_via_importlib_resources(self) -> None:
+        """Verify _nim_ast_helper.nim and _nimony_nif_helper.nim are accessible via importlib.resources.files."""
+        import importlib.resources
+
+        from headerkit.backends.nim import _load_backend_resource_bytes
+
+        pkg_files = importlib.resources.files("headerkit.backends")
+        ast_helper = pkg_files.joinpath("_nim_ast_helper.nim")
+        nif_helper = pkg_files.joinpath("_nimony_nif_helper.nim")
+
+        assert ast_helper.is_file() is True
+        assert nif_helper.is_file() is True
+
+        ast_bytes = ast_helper.read_bytes()
+        nif_bytes = nif_helper.read_bytes()
+        assert len(ast_bytes) > 0
+        assert len(nif_bytes) > 0
+        assert _load_backend_resource_bytes("_nim_ast_helper.nim") == ast_bytes
+        assert _load_backend_resource_bytes("_nimony_nif_helper.nim") == nif_bytes
+
+        # Negative control: nonexistent resource returns None
+        assert _load_backend_resource_bytes("_nonexistent_helper_file.nim") is None

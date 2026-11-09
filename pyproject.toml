@@ -59,6 +59,10 @@ dev = ["headerkit[test,lint,docs,treesitter]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["headerkit"]
+artifacts = ["headerkit/backends/*.nim", "headerkit/py.typed"]
+
+[tool.hatch.build.targets.sdist]
+artifacts = ["headerkit/backends/*.nim", "headerkit/py.typed"]
 
 
 [tool.ruff]
