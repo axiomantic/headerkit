@@ -456,18 +456,18 @@ def _load_backend_resource_bytes(resource_name: str) -> bytes | None:
     return None
 
 
-@functools.lru_cache(maxsize=1)
-def _get_nim_ast_helper_binary() -> Path | None:
+@functools.lru_cache(maxsize=4)
+def _get_nim_ast_helper_binary(nim_executable: str | None = None) -> Path | None:
     """Compile and cache ``_nim_ast_helper.nim`` under ``~/.cache/headerkit/bin/``."""
-    nim_bin = shutil.which("nim")
-    if not nim_bin:
+    nim_cmd = nim_executable or "nim"
+    if not shutil.which(nim_cmd):
         return None
     src_bytes = _load_backend_resource_bytes("_nim_ast_helper.nim")
     if not src_bytes:
         return None
     try:
         ver_proc = subprocess.run(
-            ["nim", "--version"],
+            [nim_cmd, "--version"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -488,7 +488,7 @@ def _get_nim_ast_helper_binary() -> Path | None:
             tmp_bin = Path(tmpdir) / f"nim_ast_helper{exe_suffix}"
             compile_res = subprocess.run(
                 [
-                    "nim",
+                    nim_cmd,
                     "c",
                     "-d:release",
                     "--hints:off",
@@ -511,9 +511,14 @@ def _get_nim_ast_helper_binary() -> Path | None:
     return None
 
 
-def _run_nim_ast_helper(nim_path: str | Path, code: str | None = None) -> dict[str, Any] | None:
+def _run_nim_ast_helper(
+    nim_path: str | Path,
+    code: str | None = None,
+    *,
+    nim_executable: str | None = None,
+) -> dict[str, Any] | None:
     """Execute the compiled ``_nim_ast_helper`` binary on ``nim_path`` (or ``code`` via stdin)."""
-    helper_bin = _get_nim_ast_helper_binary()
+    helper_bin = _get_nim_ast_helper_binary(nim_executable)
     if helper_bin is None:
         return None
     try:
@@ -535,6 +540,31 @@ def _run_nim_ast_helper(nim_path: str | Path, code: str | None = None) -> dict[s
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         logger.warning("Failed running _nim_ast_helper on %s: %s", nim_path, exc)
     return None
+
+
+def extract_nim_ast_data(
+    filename: str | Path,
+    *,
+    code: str | None = None,
+    nim_executable: str | None = None,
+) -> dict[str, Any] | None:
+    """Extract structured Nim compiler AST metadata from a ``.nim`` source file or code string.
+
+    Compiles and invokes HeaderKit's ``_nim_ast_helper.nim`` compiler AST extractor
+    (using ``compiler/[ast, parser, idents, options, lineinfos, renderer]``) and returns
+    the parsed JSON dictionary with schema:
+
+    - ``"path"``: ``str`` — target ``.nim`` file path.
+    - ``"included_files"``: ``list[str]`` — recursively resolved ``include`` file paths.
+    - ``"declarations"``: ``list[dict[str, Any]]`` — extracted declaration items with
+      ``"kind"`` in ``{"routine", "object", "enum", "typedef", "const", "var"}`` (representing
+      procs/funcs/routines, object/tuple types, enums, typedefs/distinct types, and constants/vars),
+      including ``name``, ``c_name``, ``has_exportc``, ``exported``, ``is_deprecated``,
+      ``attributes``, ``parameters``, ``return_type``, ``doc``, ``file``, ``line``, and ``column``.
+
+    Returns ``None`` if the ``nim`` compiler is unavailable or AST extraction fails.
+    """
+    return _run_nim_ast_helper(Path(filename), code=code, nim_executable=nim_executable)
 
 
 def _lower_nim_type_json(
@@ -1635,3 +1665,9 @@ def _nim_parse_unit_by_lang(
 
 
 register_backend("nim", NimBackend)
+
+__all__ = [
+    "NimBackend",
+    "clean_nim_c_unit",
+    "extract_nim_ast_data",
+]

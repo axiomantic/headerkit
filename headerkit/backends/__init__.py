@@ -55,6 +55,7 @@ def _normalize_backend_name(name: str) -> str:
 
 __all__ = [
     "LibclangUnavailableError",
+    "extract_nim_ast_data",
     "get_backend",
     "get_backend_info",
     "get_default_backend",
@@ -392,3 +393,6 @@ def _load_backend_plugins() -> None:
             import logging
 
             logging.getLogger(__name__).warning("Failed to load backend plugin %r: %s", ep.name, exc)
+
+
+from headerkit.backends.nim import extract_nim_ast_data  # noqa: E402

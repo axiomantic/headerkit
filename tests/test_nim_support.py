@@ -1217,3 +1217,35 @@ class TestCindexShutdownSafety:
 
         # Negative control: nonexistent resource returns None
         assert _load_backend_resource_bytes("_nonexistent_helper_file.nim") is None
+
+    @pytest.mark.skipif(shutil.which("nim") is None, reason="Nim compiler not installed")
+    def test_public_extract_nim_ast_data_exports_and_schema(self, tmp_path: Path) -> None:
+        """Verify extract_nim_ast_data is publicly exported from headerkit, headerkit.backends, and headerkit.backends.nim."""
+        from headerkit import extract_nim_ast_data as hk_extract
+        from headerkit.backends import extract_nim_ast_data as b_extract
+        from headerkit.backends.nim import extract_nim_ast_data as nim_extract
+
+        assert hk_extract is nim_extract
+        assert b_extract is nim_extract
+
+        nim_file = tmp_path / "ast_api.nim"
+        nim_code = textwrap.dedent("""\
+            proc addTwo*(a: int32, b: int32): int32 {.exportc: "c_add_two", cdecl.} =
+              ## Add two 32-bit integers.
+              a + b
+        """)
+        nim_file.write_text(nim_code, encoding="utf-8")
+
+        ast_data = hk_extract(nim_file)
+        assert isinstance(ast_data, dict)
+        assert ast_data["path"] == str(nim_file)
+        assert ast_data["included_files"] == []
+        decls = ast_data["declarations"]
+        assert len(decls) == 1
+        assert decls[0]["kind"] == "routine"
+        assert decls[0]["name"] == "addTwo"
+        assert decls[0]["c_name"] == "c_add_two"
+        assert decls[0]["doc"] == "Add two 32-bit integers."
+
+        # Negative control: unavailable nim_executable returns None
+        assert hk_extract(nim_file, nim_executable="nonexistent-nim-binary-xyz") is None

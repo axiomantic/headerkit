@@ -31,7 +31,7 @@ from headerkit.backends import (
     is_backend_available,
     list_backends,
 )
-from headerkit.backends.nim import NimBackend, clean_nim_c_unit
+from headerkit.backends.nim import NimBackend, clean_nim_c_unit, extract_nim_ast_data
 from headerkit.backends.nimony import NimonyBackend
 from headerkit.hooks import (
     HookCaller,
@@ -192,6 +192,7 @@ __all__ = [
     "NimBackend",
     "NimonyBackend",
     "clean_nim_c_unit",
+    "extract_nim_ast_data",
     # Writer Protocol
     "WriterBackend",
     "BaseWriter",
