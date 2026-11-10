@@ -42,24 +42,24 @@ print(json_writer.write(header))
 ```mermaid
 flowchart TD
     subgraph Stage1["Stage 1: Parse"]
-        Src["C / C++ Headers & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend)"]
+        Src["C / C++ / Nim / NIF Sources & InputSpec"] --> Backend["Layer 1: Parser Backends<br/>(LibclangBackend, TreeSitterBackend, NimBackend, NimonyBackend)"]
     end
     subgraph Stage2["Stage 2: Transform & Reconcile"]
-        Backend --> IR["Canonical IR (SourceUnit / Header)"]
-        IR --> Transforms["Layer 2: IR Transforms & Reconciler<br/>(IRTransform >> pipelines, reconcile_matrix)"]
+        Backend --> IR["Canonical IR (SourceUnit / Header, SourceMeta, ParsedDoc)"]
+        IR --> Transforms["Layer 2: IR Transforms & Reconciler<br/>(IRTransform >> pipelines, DocParserTransform, reconcile_matrix)"]
     end
     subgraph Stage3["Stage 3: Emit"]
         Transforms --> Writers["Layer 4: Output Writers (BaseWriter)<br/>(cffi, pyi, ctypes, cython, nim, mojo, lua, ts_wasm, cshim, diff, json, prompt)"]
-        PolicyHooks["Layer 3: Policy Hooks<br/>(rename_symbol, resolve_collision)"] -.-> Writers
+        PolicyHooks["Layer 3: Policy & Doc Hooks<br/>(rename_symbol, resolve_collision, preprocess_doc, parse_doc)"] -.-> Writers
     end
     subgraph Stage4["Stage 4: Package & Build"]
         Writers --> Scaffold["Layer 5: Project Scaffolders & Build Hooks<br/>(write_layout, PEP 517 headerkit.build_backend)"]
     end
 ```
 
-1. **Parser Backends** (`LibclangBackend`, `TreeSitterBackend`) parse C/C++ source code into a normalized `SourceUnit` (`Header`) IR containing typed declarations.
-2. **IR Transforms & Reconcilers** (`IRTransform`, `reconcile_matrix`) filter, unmangle, enrich, or merge multi-target IR trees before emission.
-3. **Fine-Grained Policy Hooks** (`rename_symbol`, `resolve_collision`) apply priority-ordered naming, casing, and collision rules.
+1. **Parser Backends** (`LibclangBackend`, `TreeSitterBackend`, `NimBackend`, `NimonyBackend`) parse C/C++/Nim/NIF source code into a normalized `SourceUnit` (`Header`) IR containing typed declarations, `SourceMeta`, and raw docstrings.
+2. **IR Transforms & Reconcilers** (`IRTransform`, `DocParserTransform`, `reconcile_matrix`) filter, unmangle, parse structured documentation (`ParsedDoc`), or merge multi-target IR trees before emission.
+3. **Fine-Grained Policy & Doc Hooks** (`rename_symbol`, `resolve_collision`, `preprocess_doc`, `parse_doc`) apply priority-ordered naming, casing, collision, and docstring parsing rules.
 4. **Output Writers** (`BaseWriter` subclasses) consume the pure IR (with zero backend dependencies) to emit bindings.
 5. **Project Scaffolders & Build Hooks** (`write_layout()`, `headerkit.build_backend`) emit complete package layouts and build wheels using the `.headerkit/` two-layer cache.
 

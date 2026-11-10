@@ -106,9 +106,25 @@ TypeExpr = Union[CType, Pointer, Array, FunctionPointer]
 
 Any type expression that can appear in a declaration's type fields.
 
-## Source Location
+## Source Location, Metadata & Structured Documentation
 
 ::: headerkit.ir.SourceLocation
+    options:
+      show_source: false
+
+::: headerkit.ir.SourceMeta
+    options:
+      show_source: false
+
+::: headerkit.ir.ParsedDoc
+    options:
+      show_source: false
+
+::: headerkit.ir.ParamDoc
+    options:
+      show_source: false
+
+::: headerkit.ir.RaisesDoc
     options:
       show_source: false
 

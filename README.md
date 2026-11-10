@@ -282,8 +282,8 @@ headerkit [options] HEADER_OR_GLOB [HEADER_OR_GLOB ...]
 
 | Flag | Description |
 | :--- | :--- |
-| `-b NAME`, `--backend NAME` | Parser backend (default: `libclang`, or `tree-sitter`) |
-| `-w WRITER`, `--writer WRITER` | Output writer to invoke (repeatable) |
+| `-b NAME`, `--backend NAME` | Parser backend (`libclang`, `tree-sitter`, `nim`, or `nimony`; default: `libclang`) |
+| `-w WRITER`, `--writer WRITER` | Output writer to invoke (`cffi`, `pyi`, `ctypes`, `cython`, `nim`, `mojo`, `lua`, `ts_wasm`, `cshim`, `diff`, `json`, `prompt`; repeatable) |
 | `-o WRITER:PATH`, `--output` | Output destination template (repeatable, e.g. `ctypes:bindings.py`) |
 | `-I DIR`, `--include-dir DIR` | Add include directory (repeatable) |
 | `-D MACRO[=VALUE]` | Define preprocessor macro (repeatable) |

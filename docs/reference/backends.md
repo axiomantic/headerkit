@@ -54,3 +54,21 @@ full protocol definition including `parse()`, `name`, `supports_macros`,
 ::: headerkit.backends.get_backend_info
     options:
       show_source: false
+
+## Nim & Nimony Backends
+
+::: headerkit.backends.nim.NimBackend
+    options:
+      show_source: false
+
+::: headerkit.backends.nim.extract_nim_ast_data
+    options:
+      show_source: false
+
+::: headerkit.backends.nim.clean_nim_c_unit
+    options:
+      show_source: false
+
+::: headerkit.backends.nimony.NimonyBackend
+    options:
+      show_source: false

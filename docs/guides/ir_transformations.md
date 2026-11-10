@@ -79,13 +79,28 @@ from headerkit.transforms import FilterByHeader
 transformed_unit = unit >> FilterByHeader(["mylib.h", "mylib_types.h"])
 ```
 
+### DocParserTransform
+Parses raw `doc` strings on IR declarations (`Function`, `Struct`, `Enum`, `Typedef`, `Variable`, `Constant`, `Field`, `EnumValue`, `Parameter`) into structured [`ParsedDoc`][headerkit.ir.ParsedDoc] nodes (`summary`, `body`, `params`, `returns`, `return_type_hint`, `raises`, `deprecated`, `examples`, `see_also`, `since`, `notes`, `warnings`, `source_format`, `parse_errors`). Supports `"auto"`, `"doxygen"`, `"rst"`, `"sphinx"`, `"jsdoc"`, `"google"`, `"numpy"`, `"rustdoc"`, `"markdown"`, and `"plain"` conventions, propagates `@param` / `:param:` entries onto `Parameter` and `Field` nodes, and supports strict validation (`on_error="strict"` raising [`DocParseError`][headerkit.transforms.doc_parser.DocParseError]).
+
+```python
+from headerkit.transforms import DocParserTransform
+
+# Parse Doxygen / Sphinx / rST / Google / NumPy docstrings into ParsedDoc
+transformed_unit = unit >> DocParserTransform(
+    doc_format="auto",
+    on_error="strict",
+    require_docstrings=False,
+    require_param_docs=True,
+)
+```
+
 ### Chaining Filters with `>>`
 Multiple filters can be combined fluently using the `>>` operator:
 
 ```python
-from headerkit.transforms import FilterByHeader, MakeOpaque, StripPrefix
+from headerkit.transforms import DocParserTransform, FilterByHeader, MakeOpaque, StripPrefix
 
-pipeline = FilterByHeader(["sound.h"]) >> StripPrefix("ma_") >> MakeOpaque("device")
+pipeline = FilterByHeader(["sound.h"]) >> StripPrefix("ma_") >> MakeOpaque("device") >> DocParserTransform()
 
 final_unit = pipeline.transform(unit)
 ```

@@ -19,12 +19,17 @@ the registry functions mirror the backend API.
 | Writer | Module | Description |
 |--------|--------|-------------|
 | [CFFI](cffi.md) | `headerkit.writers.cffi` | Generates `ffibuilder.cdef()` strings |
+| [CShim](cshim.md) | `headerkit.writers.cshim` | Generates pure C-ABI (`extern "C"`) wrappers for C++ classes |
 | [ctypes](ctypes.md) | `headerkit.writers.ctypes` | Generates Python ctypes binding modules |
 | [Cython](cython.md) | `headerkit.writers.cython` | Generates Cython `.pxd` declarations with C++ support |
 | [Diff](diff.md) | `headerkit.writers.diff` | Produces API compatibility diff reports (JSON/Markdown) |
 | [JSON](json.md) | `headerkit.writers.json` | Serializes IR to JSON for inspection and tooling |
 | [Lua](lua.md) | `headerkit.writers.lua` | Generates LuaJIT FFI binding files |
+| [Mojo](mojo.md) | `headerkit.writers.mojo` | Generates idiomatic Mojo FFI bindings |
+| [Nim](nim.md) | `headerkit.writers.nim` | Generates native Nim bindings with C and C++ interop |
 | [Prompt](prompt.md) | `headerkit.writers.prompt` | Token-optimized output for LLM context |
+| [pyi](writers.md#pyiwriter) | `headerkit.writers.pyi` | Generates Python `.pyi` type stubs (`pep484` and `cffi` modes) |
+| [ts_wasm](writers.md#tswasmwriter) | `headerkit.writers.ts_wasm` | Generates TypeScript WebAssembly `.d.ts` declaration files |
 
 ## Generation Pipeline
 

@@ -72,6 +72,19 @@ Filters declarations to keep only those defined in the specified list of source 
 
 - **`allowed_headers`** (`Sequence[str]`): Collection of filenames or path substrings to retain.
 
+### `DocParserTransform`
+Parses raw `doc` strings on IR declarations into normalized [`ParsedDoc`][headerkit.ir.ParsedDoc] objects (with [`ParamDoc`][headerkit.ir.ParamDoc] and [`RaisesDoc`][headerkit.ir.RaisesDoc]), runs `@hook("preprocess_doc")` (waterfall) and `@hook("parse_doc")` (first-result) hooks, propagates parameter/field/enum-value documentation, backfills synthetic parameter names when documented positionally, and enforces configurable docstring validation (`on_error="lenient" | "warn" | "strict"`, `require_docstrings`, `require_param_docs`). Registered as `"doc-parser"` (`"doc_parser"`).
+
+Supported `doc_format` styles: `"auto"`, `"doxygen"`, `"rst"`, `"sphinx"`, `"jsdoc"`, `"google"`, `"numpy"`, `"rustdoc"`, `"markdown"`, and `"plain"`.
+
+::: headerkit.transforms.doc_parser.DocParserTransform
+    options:
+      show_source: false
+
+::: headerkit.transforms.doc_parser.DocParseError
+    options:
+      show_source: false
+
 ---
 
 ## Functions

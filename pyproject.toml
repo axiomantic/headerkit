@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "headerkit"
 version = "0.51.0"
-description = "The universal C/C++ header parser and FFI declaration generator for Python (cffi, ctypes, Cython, pyi), LuaJIT, JSON IR, and LLM prompts."
+description = "The universal C/C++/Nim header and AST parser and FFI declaration generator for Python (cffi, ctypes, Cython, pyi), Nim, Mojo, LuaJIT, TypeScript/Wasm, C shims, JSON IR, and LLM prompts."
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
 license-files = ["LICENSE", "headerkit/_clang/LICENSE"]
 authors = [
     { name = "elijahr", email = "elijahr+cir@gmail.com" },
 ]
-keywords = ["c", "c++", "parser", "cffi", "libclang", "ir", "code-generation", "ctypes", "cython", "ffi", "bindings", "header-parser"]
+keywords = ["c", "c++", "nim", "parser", "cffi", "libclang", "ir", "code-generation", "ctypes", "cython", "ffi", "bindings", "header-parser"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
