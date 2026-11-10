@@ -1249,3 +1249,56 @@ class TestCindexShutdownSafety:
 
         # Negative control: unavailable nim_executable returns None
         assert hk_extract(nim_file, nim_executable="nonexistent-nim-binary-xyz") is None
+
+    @pytest.mark.skipif(shutil.which("nim") is None, reason="Nim compiler not installed")
+    def test_find_nim_compiler_path_args_resolves_compiler_ast(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify _find_nim_compiler_path_args and NimScript fallback both extract Nim AST cleanly."""
+        from headerkit.backends import nim as nim_mod
+        from headerkit.backends.nim import _find_nim_compiler_path_args, extract_nim_ast_data
+
+        path_args = _find_nim_compiler_path_args("nim")
+        assert len(path_args) >= 1
+        assert all(arg.startswith("--path:") for arg in path_args)
+        first_dir = Path(path_args[0].removeprefix("--path:"))
+        assert (first_dir / "compiler" / "ast.nim").is_file()
+        assert _find_nim_compiler_path_args("nonexistent-nim-binary-xyz") == []
+
+        nim_file = tmp_path / "fallback_test.nim"
+        nim_code = textwrap.dedent("""\
+            type
+              Point* {.exportc: "c_point", bycopy.} = object
+                x*: float64
+                y*: float64
+
+            proc scalePoint*(p: ptr Point, factor: float64): int32 {.exportc: "c_scale_point", cdecl.} =
+              ## Scale point coordinates in place.
+              0
+        """)
+        nim_file.write_text(nim_code, encoding="utf-8")
+
+        # 1. Compiled helper binary extraction
+        compiled_data = extract_nim_ast_data(nim_file)
+        assert isinstance(compiled_data, dict)
+        assert len(compiled_data["declarations"]) == 2
+        assert compiled_data["declarations"][0]["kind"] == "object"
+        assert compiled_data["declarations"][0]["name"] == "Point"
+        assert compiled_data["declarations"][0]["c_name"] == "c_point"
+        assert compiled_data["declarations"][1]["kind"] == "routine"
+        assert compiled_data["declarations"][1]["name"] == "scalePoint"
+        assert compiled_data["declarations"][1]["c_name"] == "c_scale_point"
+        assert compiled_data["declarations"][1]["doc"] == "Scale point coordinates in place."
+
+        # 2. NimScript (`nim e`) fallback when compiled helper binary is unavailable
+        monkeypatch.setattr(nim_mod, "_get_nim_ast_helper_binary", lambda _exe=None: None)
+        fallback_data = extract_nim_ast_data(nim_file, code=nim_code)
+        assert isinstance(fallback_data, dict)
+        assert len(fallback_data["declarations"]) == 2
+        assert fallback_data["declarations"][0]["kind"] == "object"
+        assert fallback_data["declarations"][0]["name"] == "Point"
+        assert fallback_data["declarations"][0]["c_name"] == "c_point"
+        assert fallback_data["declarations"][1]["kind"] == "routine"
+        assert fallback_data["declarations"][1]["name"] == "scalePoint"
+        assert fallback_data["declarations"][1]["c_name"] == "c_scale_point"
+        assert fallback_data["declarations"][1]["doc"] == "Scale point coordinates in place."
