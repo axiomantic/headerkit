@@ -1949,18 +1949,28 @@
 <a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="nb">print</span><span class="p">(</span><span class="n">json_writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">))</span>
 </code></pre></div>
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>graph LR
-    A["C/C++ Header"] --&gt; B["Backend"]
-    B --&gt; C["IR"]
-    C --&gt; D["Writer"]
-    D --&gt; E["Output"]
-    B -.- B1["ParserBackend&lt;br&gt;Protocol"]
-    D -.- D1["WriterBackend&lt;br&gt;Protocol"]</code></pre>
+<pre class="mermaid"><code>flowchart TD
+    subgraph Stage1["Stage 1: Parse"]
+        Src["C / C++ / Nim / NIF Sources &amp; InputSpec"] --&gt; Backend["Layer 1: Parser Backends&lt;br/&gt;(LibclangBackend, TreeSitterBackend, NimBackend, NimonyBackend)"]
+    end
+    subgraph Stage2["Stage 2: Transform &amp; Reconcile"]
+        Backend --&gt; IR["Canonical IR (SourceUnit / Header, SourceMeta, ParsedDoc)"]
+        IR --&gt; Transforms["Layer 2: IR Transforms &amp; Reconciler&lt;br/&gt;(IRTransform &gt;&gt; pipelines, DocParserTransform, reconcile_matrix)"]
+    end
+    subgraph Stage3["Stage 3: Emit"]
+        Transforms --&gt; Writers["Layer 4: Output Writers (BaseWriter)&lt;br/&gt;(cffi, pyi, ctypes, cython, nim, mojo, lua, ts_wasm, cshim, diff, json, prompt)"]
+        PolicyHooks["Layer 3: Policy &amp; Doc Hooks&lt;br/&gt;(rename_symbol, resolve_collision, preprocess_doc, parse_doc)"] -.-&gt; Writers
+    end
+    subgraph Stage4["Stage 4: Package &amp; Build"]
+        Writers --&gt; Scaffold["Layer 5: Project Scaffolders &amp; Build Hooks&lt;br/&gt;(write_layout, PEP 517 headerkit.build_backend)"]
+    end</code></pre>
 <ol>
-<li>A <strong>backend</strong> (e.g., <code>LibclangBackend</code>, <code>TreeSitterBackend</code>) parses source code and produces a normalized <code>SourceUnit</code> containing typed declarations.</li>
-<li>A <strong>writer</strong> (inheriting from <code>BaseWriter</code>, such as <code>CtypesWriter</code>, <code>CffiWriter</code>, <code>MojoWriter</code>, <code>NimWriter</code>, <code>CshimWriter</code>, etc.) consumes the IR and produces single-file or multi-file bindings.</li>
+<li><strong>Parser Backends</strong> (<code>LibclangBackend</code>, <code>TreeSitterBackend</code>, <code>NimBackend</code>, <code>NimonyBackend</code>) parse C/C++/Nim/NIF source code into a normalized <code>SourceUnit</code> (<code>Header</code>) IR containing typed declarations, <code>SourceMeta</code>, and raw docstrings.</li>
+<li><strong>IR Transforms &amp; Reconcilers</strong> (<code>IRTransform</code>, <code>DocParserTransform</code>, <code>reconcile_matrix</code>) filter, unmangle, parse structured documentation (<code>ParsedDoc</code>), or merge multi-target IR trees before emission.</li>
+<li><strong>Fine-Grained Policy &amp; Doc Hooks</strong> (<code>rename_symbol</code>, <code>resolve_collision</code>, <code>preprocess_doc</code>, <code>parse_doc</code>) apply priority-ordered naming, casing, collision, and docstring parsing rules.</li>
+<li><strong>Output Writers</strong> (<code>BaseWriter</code> subclasses) consume the pure IR (with zero backend dependencies) to emit bindings.</li>
+<li><strong>Project Scaffolders &amp; Build Hooks</strong> (<code>write_layout()</code>, <code>headerkit.build_backend</code>) emit complete package layouts and build wheels using the <code>.headerkit/</code> two-layer cache.</li>
 </ol>
-<p>Backends and writers self-register via unified hooks and Python entry points, so you can add new source languages or output formats without modifying HeaderKit itself.</p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>

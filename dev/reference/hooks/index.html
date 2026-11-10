@@ -1436,6 +1436,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#documentation-hooks-preprocess_doc-and-parse_doc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Hooks: preprocess_doc and parse_doc
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2374,6 +2385,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#documentation-hooks-preprocess_doc-and-parse_doc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Hooks: preprocess_doc and parse_doc
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2908,6 +2930,52 @@ A hook built from declarative config carries its config's digest, so two
 different rename configs cannot share a key. A hook written in Python is
 identified by module and qualified name: editing that function's body does not
 move the key, the same limitation writer plugins have with <code>cache_version</code>.</p>
+<h2 id="documentation-hooks-preprocess_doc-and-parse_doc">Documentation Hooks: <code>preprocess_doc</code> and <code>parse_doc</code><a class="headerlink" href="#documentation-hooks-preprocess_doc-and-parse_doc" title="Permanent link">&para;</a></h2>
+<p><a class="autorefs autorefs-internal" title="            DocParserTransform
+
+
+  
+      dataclass
+  " href="../transforms/#headerkit.transforms.doc_parser.DocParserTransform"><code>DocParserTransform</code></a> dispatches two hook points when converting raw <code>doc</code> strings into structured <a class="autorefs autorefs-internal" title="            ParsedDoc
+
+
+  
+      dataclass
+  " href="../ir/#headerkit.ir.ParsedDoc"><code>ParsedDoc</code></a> nodes:</p>
+<ol>
+<li><strong><code>preprocess_doc</code></strong> (<code>waterfall</code>): Transforms or normalizes raw comment strings (such as expanding custom company macro banners or stripping legacy annotations) before structured parsing.</li>
+<li><strong><code>parse_doc</code></strong> (<code>first_result</code>): Parses the preprocessed comment string into a <a class="autorefs autorefs-internal" title="            ParsedDoc
+
+
+  
+      dataclass
+  " href="../ir/#headerkit.ir.ParsedDoc"><code>ParsedDoc</code></a> instance. Matched on <code>doc_format</code> (<code>"doxygen"</code>, <code>"rst"</code>, <code>"sphinx"</code>, <code>"jsdoc"</code>, <code>"google"</code>, <code>"numpy"</code>, <code>"rustdoc"</code>, <code>"markdown"</code>, <code>"plain"</code>, <code>"auto"</code>) and <code>language</code>.</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">PipelineContext</span><span class="p">,</span> <span class="n">Priority</span><span class="p">,</span> <span class="n">hook</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParamDoc</span><span class="p">,</span> <span class="n">ParsedDoc</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"preprocess_doc"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">PROJECT</span><span class="p">)</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">expand_custom_macros</span><span class="p">(</span><span class="n">raw_doc</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">decl</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="k">return</span> <span class="n">raw_doc</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"@MY_DEPRECATED"</span><span class="p">,</span> <span class="s2">"@deprecated Use the v2 API."</span><span class="p">)</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"parse_doc"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="n">Priority</span><span class="o">.</span><span class="n">PROJECT</span><span class="p">,</span> <span class="n">doc_format</span><span class="o">=</span><span class="s2">"custom-dsl"</span><span class="p">)</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">parse_custom_dsl</span><span class="p">(</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">raw_doc</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="n">decl</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span><span class="p">,</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>    <span class="n">doc_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"custom-dsl"</span><span class="p">,</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    <span class="n">on_error</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"lenient"</span><span class="p">,</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ParsedDoc</span><span class="p">:</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="k">return</span> <span class="n">ParsedDoc</span><span class="p">(</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>        <span class="n">summary</span><span class="o">=</span><span class="n">raw_doc</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>        <span class="n">params</span><span class="o">=</span><span class="p">(</span><span class="n">ParamDoc</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Input value"</span><span class="p">),),</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>        <span class="n">source_format</span><span class="o">=</span><span class="n">doc_format</span><span class="p">,</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>    <span class="p">)</span>
+</code></pre></div>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 
 

@@ -1013,6 +1013,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#docparsertransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DocParserTransform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#chaining-filters-with" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2010,6 +2021,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#docparsertransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DocParserTransform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#chaining-filters-with" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2155,13 +2177,30 @@
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Exclude stdio.h and stdlib.h symbols, keeping only mylib declarations</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">transformed_unit</span> <span class="o">=</span> <span class="n">unit</span> <span class="o">&gt;&gt;</span> <span class="n">FilterByHeader</span><span class="p">([</span><span class="s2">"mylib.h"</span><span class="p">,</span> <span class="s2">"mylib_types.h"</span><span class="p">])</span>
 </code></pre></div>
+<h3 id="docparsertransform">DocParserTransform<a class="headerlink" href="#docparsertransform" title="Permanent link">&para;</a></h3>
+<p>Parses raw <code>doc</code> strings on IR declarations (<code>Function</code>, <code>Struct</code>, <code>Enum</code>, <code>Typedef</code>, <code>Variable</code>, <code>Constant</code>, <code>Field</code>, <code>EnumValue</code>, <code>Parameter</code>) into structured <a class="autorefs autorefs-internal" title="            ParsedDoc
+
+
+  
+      dataclass
+  " href="../../reference/ir/#headerkit.ir.ParsedDoc"><code>ParsedDoc</code></a> nodes (<code>summary</code>, <code>body</code>, <code>params</code>, <code>returns</code>, <code>return_type_hint</code>, <code>raises</code>, <code>deprecated</code>, <code>examples</code>, <code>see_also</code>, <code>since</code>, <code>notes</code>, <code>warnings</code>, <code>source_format</code>, <code>parse_errors</code>). Supports <code>"auto"</code>, <code>"doxygen"</code>, <code>"rst"</code>, <code>"sphinx"</code>, <code>"jsdoc"</code>, <code>"google"</code>, <code>"numpy"</code>, <code>"rustdoc"</code>, <code>"markdown"</code>, and <code>"plain"</code> conventions, propagates <code>@param</code> / <code>:param:</code> entries onto <code>Parameter</code> and <code>Field</code> nodes, and supports strict validation (<code>on_error="strict"</code> raising <a class="autorefs autorefs-internal" title="            DocParseError" href="../../reference/transforms/#headerkit.transforms.doc_parser.DocParseError"><code>DocParseError</code></a>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">DocParserTransform</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Parse Doxygen / Sphinx / rST / Google / NumPy docstrings into ParsedDoc</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">transformed_unit</span> <span class="o">=</span> <span class="n">unit</span> <span class="o">&gt;&gt;</span> <span class="n">DocParserTransform</span><span class="p">(</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">doc_format</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">on_error</span><span class="o">=</span><span class="s2">"strict"</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">require_docstrings</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">require_param_docs</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="p">)</span>
+</code></pre></div>
 <h3 id="chaining-filters-with">Chaining Filters with <code>&gt;&gt;</code><a class="headerlink" href="#chaining-filters-with" title="Permanent link">&para;</a></h3>
 <p>Multiple filters can be combined fluently using the <code>&gt;&gt;</code> operator:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">FilterByHeader</span><span class="p">,</span> <span class="n">MakeOpaque</span><span class="p">,</span> <span class="n">StripPrefix</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">FilterByHeader</span><span class="p">([</span><span class="s2">"sound.h"</span><span class="p">])</span> <span class="o">&gt;&gt;</span> <span class="n">StripPrefix</span><span class="p">(</span><span class="s2">"ma_"</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="n">MakeOpaque</span><span class="p">(</span><span class="s2">"device"</span><span class="p">)</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">final_unit</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">DocParserTransform</span><span class="p">,</span> <span class="n">FilterByHeader</span><span class="p">,</span> <span class="n">MakeOpaque</span><span class="p">,</span> <span class="n">StripPrefix</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">FilterByHeader</span><span class="p">([</span><span class="s2">"sound.h"</span><span class="p">])</span> <span class="o">&gt;&gt;</span> <span class="n">StripPrefix</span><span class="p">(</span><span class="s2">"ma_"</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="n">MakeOpaque</span><span class="p">(</span><span class="s2">"device"</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="n">DocParserTransform</span><span class="p">()</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">final_unit</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="3-creating-custom-irtransformer-subclasses">3. Creating Custom <code>IRTransformer</code> Subclasses<a class="headerlink" href="#3-creating-custom-irtransformer-subclasses" title="Permanent link">&para;</a></h2>
@@ -2173,36 +2212,36 @@
 <li>Return a <code>list[Declaration]</code> to <strong>splice</strong> multiple declarations in place of the single original node.</li>
 </ul>
 <h3 id="example-splitting-functions-with-legacy-deprecated-aliases">Example: Splitting Functions with Legacy Deprecated Aliases<a class="headerlink" href="#example-splitting-functions-with-legacy-deprecated-aliases" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">replace</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Function</span><span class="p">,</span> <span class="n">SourceUnit</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">IRTransformer</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">DeprecateAliases</span><span class="p">(</span><span class="n">IRTransformer</span><span class="p">):</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">visit_Function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">Function</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Function</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">Function</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>        <span class="c1"># If function starts with 'legacy_', emit both modern and deprecated alias</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"legacy_"</span><span class="p">):</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>            <span class="n">modern_name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"legacy_"</span><span class="p">)</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>            <span class="n">modern_func</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">modern_name</span><span class="p">)</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>            <span class="n">deprecated_func</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">docstring</span><span class="o">=</span><span class="s2">"[Deprecated] Use modern alias."</span><span class="p">)</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>            <span class="k">return</span> <span class="p">[</span><span class="n">modern_func</span><span class="p">,</span> <span class="n">deprecated_func</span><span class="p">]</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">transformer</span> <span class="o">=</span> <span class="n">DeprecateAliases</span><span class="p">()</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">updated_unit</span> <span class="o">=</span> <span class="n">transformer</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">replace</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Function</span><span class="p">,</span> <span class="n">SourceUnit</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">IRTransformer</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">DeprecateAliases</span><span class="p">(</span><span class="n">IRTransformer</span><span class="p">):</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">visit_Function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">Function</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Function</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">Function</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="c1"># If function starts with 'legacy_', emit both modern and deprecated alias</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"legacy_"</span><span class="p">):</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>            <span class="n">modern_name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"legacy_"</span><span class="p">)</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>            <span class="n">modern_func</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">modern_name</span><span class="p">)</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>            <span class="n">deprecated_func</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">docstring</span><span class="o">=</span><span class="s2">"[Deprecated] Use modern alias."</span><span class="p">)</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>            <span class="k">return</span> <span class="p">[</span><span class="n">modern_func</span><span class="p">,</span> <span class="n">deprecated_func</span><span class="p">]</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="n">transformer</span> <span class="o">=</span> <span class="n">DeprecateAliases</span><span class="p">()</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">updated_unit</span> <span class="o">=</span> <span class="n">transformer</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="4-hook-integration-fast-path-matching">4. Hook Integration &amp; Fast-Path Matching<a class="headerlink" href="#4-hook-integration-fast-path-matching" title="Permanent link">&para;</a></h2>
 <p>Plugins can hook into node-level transformations dynamically without modifying existing writers or backends:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">PipelineContext</span><span class="p">,</span> <span class="n">hook</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Function</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"transform:Function"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"nim"</span><span class="p">)</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">custom_nim_proc_transform</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Function</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Function</span><span class="p">:</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="c1"># Custom adjustments for Nim procs</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="k">return</span> <span class="n">node</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.hooks</span><span class="w"> </span><span class="kn">import</span> <span class="n">PipelineContext</span><span class="p">,</span> <span class="n">hook</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">Function</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nd">@hook</span><span class="p">(</span><span class="s2">"transform:Function"</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"nim"</span><span class="p">)</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">custom_nim_proc_transform</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Function</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">PipelineContext</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Function</span><span class="p">:</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="c1"># Custom adjustments for Nim procs</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="k">return</span> <span class="n">node</span>
 </code></pre></div>
 <p>HeaderKit's hook engine uses point indexing (<code>_by_point</code>), ensuring that nodes without registered hooks incur zero visitor overhead during AST traversal.</p>
 

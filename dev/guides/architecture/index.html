@@ -565,6 +565,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#extensibility-separation-of-concerns-the-5-extension-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extensibility &amp; Separation of Concerns (The 5 Extension Layers)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#layer-1-backends-parsing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1971,6 +1982,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#extensibility-separation-of-concerns-the-5-extension-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extensibility &amp; Separation of Concerns (The 5 Extension Layers)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#layer-1-backends-parsing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2132,17 +2154,74 @@
 <h1 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h1>
 <p>headerkit is organized around a unified, hook-driven pipeline: <strong>backends</strong> parse source units into an <strong>IR</strong> (Intermediate Representation) rooted at <code>SourceUnit</code>, optional <strong>transform hooks</strong> apply AST mutations or dialect adaptations, and <strong>writers</strong> consume the IR to generate target output.</p>
 <h2 id="the-pipeline">The Pipeline<a class="headerlink" href="#the-pipeline" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>graph TD
-    A["Input Source / InputSpec"] --&gt; B
-    B["Backend: parse_unit&lt;br&gt;(ParserBackend protocol)"] --&gt; C
-    C["IR&lt;br&gt;(SourceUnit, Declaration, TypeExpr)"] --&gt; D
-    D["Transformations: transform_unit&lt;br&gt;(Waterfall hook pipeline)"] --&gt; E
-    E["Writer: write_output&lt;br&gt;(WriterBackend protocol)"] --&gt; F
-    F["Output String&lt;br&gt;(CFFI cdef, ctypes, Cython .pxd, Nim, ...)"]
+<p>HeaderKit is structured as a 4-stage, one-way compiler pipeline with 5 orthogonal extension layers:</p>
+<pre class="mermaid"><code>flowchart TD
+    subgraph Stage1["Stage 1: Parse (parse_unit — first_result)"]
+        Src["C / C++ / Nim / NIF Sources &amp; InputSpec"] --&gt; Backend["Layer 1: Parser Backends&lt;br/&gt;(LibclangBackend, TreeSitterBackend, NimBackend, NimonyBackend, Custom)"]
+        Backend --&gt; IRCache["Layer 1 IR Cache (.headerkit/ir/)"]
+    end
 
-    B -.- B1["e.g., LibclangBackend, TreeSitterBackend"]
-    E -.- E1["e.g., CffiWriter, CtypesWriter,&lt;br&gt;CythonWriter, NimWriter, LuaWriter, ..."]</code></pre>
-<p>Each stage is decoupled through the unified hook engine (<code>headerkit.hooks</code>). Backends know nothing about writers. Writers know nothing about backends. The IR is the contract between them.</p>
+    subgraph Stage2["Stage 2: Transform &amp; Reconcile (transform_unit — waterfall)"]
+        IRCache --&gt; IR1["Canonical IR (SourceUnit / Header)&lt;br/&gt;Function, Struct, Enum, Typedef, Variable, Constant, TypeExpr, SourceMeta, ParsedDoc"]
+        IR1 --&gt; Transforms["Layer 2: IR Transforms &amp; Pipeline Filters&lt;br/&gt;(IRTransform &gt;&gt; pipelines, DocParserTransform, StripPrefix, MakeOpaque)"]
+        Transforms --&gt; Reconcile["Multi-Target Matrix Reconciler&lt;br/&gt;(ConfigMatrix, reconcile_matrix)"]
+        Reconcile --&gt; IR2["Normalized / Guarded SourceUnit IR"]
+    end
+
+    subgraph Stage3["Stage 3: Emit (write_output — first_result)"]
+        IR2 --&gt; Writers["Layer 4: Output Writers (BaseWriter)&lt;br/&gt;(cffi, pyi, ctypes, cython, nim, mojo, lua, ts_wasm, cshim, diff, json, prompt)"]
+        PolicyHooks["Layer 3: Fine-Grained Policy Hooks&lt;br/&gt;(rename_symbol waterfall, resolve_collision, condition formatters)"] -.-&gt; Writers
+        Writers --&gt; OutCache["Layer 2 Output Cache (.headerkit/output/)"]
+    end
+
+    subgraph Stage4["Stage 4: Package &amp; Build"]
+        OutCache --&gt; Scaffold["Layer 5: Project Scaffolders &amp; Build Hooks&lt;br/&gt;(write_layout, ProjectLayout, PEP 517 headerkit.build_backend)"]
+    end</code></pre>
+<p>Each stage is decoupled through the unified hook engine (<code>headerkit.hooks</code>) and communicates exclusively through the canonical <a class="autorefs autorefs-internal" title="            SourceUnit
+
+
+  
+      dataclass
+  " href="../../reference/ir/#headerkit.ir.SourceUnit"><code>SourceUnit</code></a> (<code>Header</code>) IR. Backends know nothing about writers. Writers know nothing about backends. The IR is the sole contract between them.</p>
+<h2 id="extensibility-separation-of-concerns-the-5-extension-layers">Extensibility &amp; Separation of Concerns (The 5 Extension Layers)<a class="headerlink" href="#extensibility-separation-of-concerns-the-5-extension-layers" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Layer 1 — Parser Backends (<code>headerkit.backends</code> / <code>parse_unit</code>)</strong>:</li>
+<li><strong>Role</strong>: Parse C/C++/Nim/NIF source and header units into canonical <code>SourceUnit</code> (<code>Header</code>) IR dataclasses. <code>LibclangBackend</code> is the primary C/C++ production parser (full preprocessor expansion, macro evaluation, and compiler AST semantics); <code>TreeSitterBackend</code> is a lightweight zero-LLVM C/C++ fallback; <code>NimBackend</code> and <code>NimonyBackend</code> extract native Nim 2.x (<code>std/macros</code>) and Nimony NIF AST metadata (<code>SourceMeta</code>) and docstrings directly into the IR.</li>
+<li><strong>Extension Point</strong>: Implement <code>ParserBackend</code> and call <code>register_backend()</code>, register <code>@hook("parse_unit")</code>, or declare <code>[project.entry-points."headerkit.backends"]</code>.</li>
+<li>
+<p><strong>Boundary Invariant</strong>: Backends record factual C/C++ ABI and source-language semantics (<code>SourceMeta</code>) in the IR (<code>is_typedef</code>, <code>is_elaborated</code>, <code>underlying_type</code>, <code>language</code>, <code>source_meta</code>) without target-writer assumptions or foreign-generator hacks.</p>
+</li>
+<li>
+<p><strong>Layer 2 — IR Transforms &amp; Pipeline Filters (<code>headerkit.transforms</code> / <code>transform_unit</code>)</strong>:</p>
+</li>
+<li><strong>Role</strong>: Registry-driven IR-to-IR (<code>SourceUnit -&gt; SourceUnit</code>) passes (<code>StripPrefix</code>, <code>MakeOpaque</code>, <code>FilterBySymbol</code>, <code>DocParserTransform</code>) and multi-target matrix reconciliation (<code>ConfigMatrix</code>, <code>reconcile_matrix</code>).</li>
+<li><strong>Extension Point</strong>: Subclass <code>IRTransform</code> and compose with <code>&gt;&gt;</code>, call <code>register_transform()</code>, or register <code>@hook("transform_unit")</code>, <code>@hook("preprocess_doc")</code>, and <code>@hook("parse_doc")</code> in the hook pipeline.</li>
+<li>
+<p><strong>Boundary Invariant</strong>: Transforms operate purely on IR nodes and never import concrete writers.</p>
+</li>
+<li>
+<p><strong>Layer 3 — Fine-Grained Policy Hooks (<code>headerkit.hooks</code> / <code>rename_symbol</code>, <code>resolve_collision</code>)</strong>:</p>
+</li>
+<li><strong>Role</strong>: Priority-tiered (<code>Priority.FALLBACK = 10</code>, <code>STANDARD = 50</code>, <code>PROJECT = 100</code>, <code>OVERRIDE = 1000</code>) hooks governing symbol renaming, casing, target-language lexical legality, and identifier collision resolution, plus <code>BaseWriter</code> condition formatters (<code>format_platform_condition</code>, <code>format_matrix_condition</code>).</li>
+<li><strong>Extension Point</strong>: Configure declarative <code>[rename]</code> rules in <code>.headerkit.toml</code> or register <code>@hook("rename_symbol")</code> (waterfall) and <code>@hook("resolve_collision")</code> (first-result).</li>
+<li>
+<p><strong>Boundary Invariant</strong>: Project renamers (<code>Priority.PROJECT</code>) execute before writer lexical legality hooks (<code>Priority.FALLBACK</code>), ensuring custom naming rules can never emit an invalid target-language identifier.</p>
+</li>
+<li>
+<p><strong>Layer 4 — Output Writers (<code>headerkit.writers</code> / <code>write_output</code>)</strong>:</p>
+</li>
+<li><strong>Role</strong>: Pure <code>SourceUnit -&gt; str</code> code generators (<code>BaseWriter</code> subclasses: <code>cffi</code>, <code>pyi</code>, <code>ctypes</code>, <code>cython</code>, <code>nim</code>, <code>mojo</code>, <code>lua</code>, <code>ts_wasm</code>, <code>cshim</code>, <code>diff</code>, <code>json</code>, <code>prompt</code>).</li>
+<li><strong>Extension Point</strong>: Subclass <code>BaseWriter</code> and call <code>register_writer()</code>, register <code>@hook("write_output")</code>, or declare <code>[project.entry-points."headerkit.writers"]</code>.</li>
+<li>
+<p><strong>Boundary Invariant</strong>: Writers consume <strong>IR only</strong>. A writer must never import <code>headerkit.backends</code>, call <code>get_backend()</code>, accept unparsed C/C++ prototype strings in writer options to parse on the side, or guess semantics from C type spellings. All declarations (including <code>extern "Python"</code> callbacks) must exist in <code>Header.declarations</code> first; writer options only reference IR symbol names or configure emission policy.</p>
+</li>
+<li>
+<p><strong>Layer 5 — Project Scaffolders &amp; Build Hooks (<code>write_layout</code> / <code>headerkit.build_backend</code>)</strong>:</p>
+</li>
+<li><strong>Role</strong>: Multi-file project layout emission (<code>BaseWriter.write_layout()</code>, <code>ProjectLayout</code>, CMakeLists, <code>pyproject.toml</code>, <code>.nimble</code>, tripwires, test harnesses) and PEP 517 build-time wheel integration (<code>headerkit.build_backend</code>) backed by the two-layer <code>.headerkit/</code> cache.</li>
+<li><strong>Extension Point</strong>: Override <code>BaseWriter.write_layout()</code> or configure <code>[build-system]</code> with <code>build-backend = "headerkit.build_backend"</code>.</li>
+<li><strong>Boundary Invariant</strong>: Downstream <code>pip install</code> builds consume committed <code>.headerkit/</code> IR and output caches deterministically without requiring <code>libclang</code> or LLVM on user machines.</li>
+</ol>
 <h2 id="layer-1-backends-parsing">Layer 1: Backends (Parsing)<a class="headerlink" href="#layer-1-backends-parsing" title="Permanent link">&para;</a></h2>
 <p>A backend implements the <a class="autorefs autorefs-internal" title="            ParserBackend" href="../../reference/ir/#headerkit.ir.ParserBackend"><code>ParserBackend</code></a> protocol and converts C/C++ source code into IR.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParserBackend</span>

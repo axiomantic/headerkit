@@ -1910,8 +1910,41 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#docparsertransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DocParserTransform
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.transforms.doc_parser.DocParserTransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DocParserTransform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.transforms.doc_parser.DocParseError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DocParseError
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2130,8 +2163,41 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#docparsertransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DocParserTransform
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.transforms.doc_parser.DocParserTransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DocParserTransform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headerkit.transforms.doc_parser.DocParseError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DocParseError
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2244,7 +2310,113 @@
 <ul>
 <li><strong><code>allowed_headers</code></strong> (<code>Sequence[str]</code>): Collection of filenames or path substrings to retain.</li>
 </ul>
-<hr />
+<h3 id="docparsertransform"><code>DocParserTransform</code><a class="headerlink" href="#docparsertransform" title="Permanent link">&para;</a></h3>
+<p>Parses raw <code>doc</code> strings on IR declarations into normalized <a class="autorefs autorefs-internal" title="            ParsedDoc
+
+
+  
+      dataclass
+  " href="../ir/#headerkit.ir.ParsedDoc"><code>ParsedDoc</code></a> objects (with <a class="autorefs autorefs-internal" title="            ParamDoc
+
+
+  
+      dataclass
+  " href="../ir/#headerkit.ir.ParamDoc"><code>ParamDoc</code></a> and <a class="autorefs autorefs-internal" title="            RaisesDoc
+
+
+  
+      dataclass
+  " href="../ir/#headerkit.ir.RaisesDoc"><code>RaisesDoc</code></a>), runs <code>@hook("preprocess_doc")</code> (waterfall) and <code>@hook("parse_doc")</code> (first-result) hooks, propagates parameter/field/enum-value documentation, backfills synthetic parameter names when documented positionally, and enforces configurable docstring validation (<code>on_error="lenient" | "warn" | "strict"</code>, <code>require_docstrings</code>, <code>require_param_docs</code>). Registered as <code>"doc-parser"</code> (<code>"doc_parser"</code>).</p>
+<p>Supported <code>doc_format</code> styles: <code>"auto"</code>, <code>"doxygen"</code>, <code>"rst"</code>, <code>"sphinx"</code>, <code>"jsdoc"</code>, <code>"google"</code>, <code>"numpy"</code>, <code>"rustdoc"</code>, <code>"markdown"</code>, and <code>"plain"</code>.</p>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.transforms.doc_parser.DocParserTransform" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">DocParserTransform</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#headerkit.transforms.doc_parser.DocParserTransform" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">DocParserTransform</span><span class="p">(</span><span class="n">doc_format</span><span class="o">=</span><span class="s1">'auto'</span><span class="p">,</span> <span class="n">on_error</span><span class="o">=</span><span class="s1">'lenient'</span><span class="p">,</span> <span class="n">require_docstrings</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">require_param_docs</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="headerkit.transforms.filter.PipelineFilter">PipelineFilter</span></code></p>
+
+
+
+        <p>Layer-2 IR transform that parses raw <code>doc</code> strings into structured :class:<code>~headerkit.ir.ParsedDoc</code>.</p>
+<p>Executes <code>preprocess_doc</code> (waterfall) and <code>parse_doc</code> (first_result) hooks,
+propagates parameter documentation onto :class:<code>~headerkit.ir.Parameter</code> nodes,
+backfills synthetic parameter names when documented positionally, and enforces
+configurable validation in <code>lenient</code>, <code>warn</code>, or <code>strict</code> mode.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="headerkit.transforms.doc_parser.DocParseError" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">DocParseError</span>
+
+
+<a href="#headerkit.transforms.doc_parser.DocParseError" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="ValueError">ValueError</span></code></p>
+
+
+
+        <p>Raised in <code>strict</code> mode when docstring parsing or validation fails.</p>
+
+
+
+
+
+
+
+
+
+    </div>
+
+</div><hr />
 <h2 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h2>
 <h3 id="rewrite_type_referencestype_expr-typeexpr-mapping-mappingstr-str-typeexpr"><code>rewrite_type_references(type_expr: TypeExpr, mapping: Mapping[str, str]) -&gt; TypeExpr</code><a class="headerlink" href="#rewrite_type_referencestype_expr-typeexpr-mapping-mappingstr-str-typeexpr" title="Permanent link">&para;</a></h3>
 <p>Recursively traverses a <code>TypeExpr</code> hierarchy (<code>CType</code>, <code>Pointer</code>, <code>Reference</code>, <code>Array</code>, <code>FunctionPointer</code>) and replaces type names that match keys in <code>mapping</code>.</p>

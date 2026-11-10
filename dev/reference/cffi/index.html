@@ -2124,8 +2124,8 @@ module_var : str | None
     When set (e.g. <code>"CDEF"</code>), wraps the output as a valid Python module
     exporting <code>&lt;module_var&gt;: str = ...</code> and <code>__all__ = [&lt;module_var&gt;]</code>.
 extern_python : Sequence[str] | None
-    C function prototypes, <code>extern "Python"</code> lines, or declaration names
-    to append as <code>extern "Python"</code> callback declarations.</p>
+    Symbol names of <code>Function</code> or function-pointer <code>Typedef</code> declarations
+    in <code>Header.declarations</code> to emit as <code>extern "Python"</code> callbacks.</p>
 
 
 
@@ -2225,7 +2225,7 @@ extern_python : Sequence[str] | None
 
 
 <a href="#headerkit.writers.cffi.header_to_cffi" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">header_to_cffi</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">header_to_cffi</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">exclude_patterns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extern_python_names</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2276,6 +2276,24 @@ extern_python : Sequence[str] | None
               <div class="doc-md-description">
                 <p>List of regex patterns. Declarations with names
 matching any pattern will be excluded.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>extern_python_names</code>
+            </td>
+            <td>
+                  <code><span title="set">set</span>[<span title="str">str</span>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional set of Function symbol names that will
+be emitted as <code>extern "Python"</code> declarations instead of plain C
+function declarations.</p>
               </div>
             </td>
             <td>

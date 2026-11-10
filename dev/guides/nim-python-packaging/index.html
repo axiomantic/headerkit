@@ -856,10 +856,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-defining-the-c-api-header" class="md-nav__link">
+  <a href="#2-direct-nim-ast-parsing-with-nimbackend-recommended" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Defining the C API Header
+        2. Direct Nim AST Parsing with NimBackend (Recommended)
       
     </span>
   </a>
@@ -867,10 +867,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-parsing-with-headerkit-generating-bindings" class="md-nav__link">
+  <a href="#3-alternative-defining-a-hand-written-c-api-header" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Parsing with Headerkit &amp; Generating Bindings
+        3. Alternative: Defining a Hand-Written C API Header
       
     </span>
   </a>
@@ -878,15 +878,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-packaging-as-a-python-wheel-scikit-build-core" class="md-nav__link">
+  <a href="#4-parsing-the-c-header-generating-bindings" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Packaging as a Python Wheel (scikit-build-core)
+        4. Parsing the C Header &amp; Generating Bindings
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="4. Packaging as a Python Wheel (scikit-build-core)">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-packaging-as-a-python-wheel-scikit-build-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Packaging as a Python Wheel (scikit-build-core)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Packaging as a Python Wheel (scikit-build-core)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1926,10 +1937,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-defining-the-c-api-header" class="md-nav__link">
+  <a href="#2-direct-nim-ast-parsing-with-nimbackend-recommended" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Defining the C API Header
+        2. Direct Nim AST Parsing with NimBackend (Recommended)
       
     </span>
   </a>
@@ -1937,10 +1948,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-parsing-with-headerkit-generating-bindings" class="md-nav__link">
+  <a href="#3-alternative-defining-a-hand-written-c-api-header" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Parsing with Headerkit &amp; Generating Bindings
+        3. Alternative: Defining a Hand-Written C API Header
       
     </span>
   </a>
@@ -1948,15 +1959,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-packaging-as-a-python-wheel-scikit-build-core" class="md-nav__link">
+  <a href="#4-parsing-the-c-header-generating-bindings" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Packaging as a Python Wheel (scikit-build-core)
+        4. Parsing the C Header &amp; Generating Bindings
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="4. Packaging as a Python Wheel (scikit-build-core)">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-packaging-as-a-python-wheel-scikit-build-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Packaging as a Python Wheel (scikit-build-core)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Packaging as a Python Wheel (scikit-build-core)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2060,95 +2082,122 @@
 <a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">s</span>
 </code></pre></div>
 <hr />
-<h2 id="2-defining-the-c-api-header">2. Defining the C API Header<a class="headerlink" href="#2-defining-the-c-api-header" title="Permanent link">&para;</a></h2>
-<p>Define <code>src/fastmath_api.h</code> representing the exported C interface:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="cp">#ifndef FASTMATH_API_H</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="cp">#define FASTMATH_API_H</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdint.h&gt;</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="cp">#ifdef __cplusplus</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">extern</span><span class="w"> </span><span class="s">"C"</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="cp">#endif</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="nc">FastMatrix</span><span class="w"> </span><span class="n">FastMatrix</span><span class="p">;</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="kt">void</span><span class="w"> </span><span class="nf">NimMain</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="kt">void</span><span class="w"> </span><span class="nf">NimDestroyGlobals</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">FastMatrix</span><span class="o">*</span><span class="w"> </span><span class="nf">createMatrix</span><span class="p">(</span><span class="kt">int64_t</span><span class="w"> </span><span class="n">rows</span><span class="p">,</span><span class="w"> </span><span class="kt">int64_t</span><span class="w"> </span><span class="n">cols</span><span class="p">);</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="kt">void</span><span class="w"> </span><span class="nf">destroyMatrix</span><span class="p">(</span><span class="n">FastMatrix</span><span class="o">*</span><span class="w"> </span><span class="n">m</span><span class="p">);</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="kt">int64_t</span><span class="w"> </span><span class="nf">addNumbers</span><span class="p">(</span><span class="kt">int64_t</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="kt">int64_t</span><span class="w"> </span><span class="n">b</span><span class="p">);</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="kt">double</span><span class="w"> </span><span class="nf">computeSum</span><span class="p">(</span><span class="n">FastMatrix</span><span class="o">*</span><span class="w"> </span><span class="n">m</span><span class="p">);</span>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="cp">#ifdef __cplusplus</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="p">}</span>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="cp">#endif</span>
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="cp">#endif</span>
+<h2 id="2-direct-nim-ast-parsing-with-nimbackend-recommended">2. Direct Nim AST Parsing with <code>NimBackend</code> (Recommended)<a class="headerlink" href="#2-direct-nim-ast-parsing-with-nimbackend-recommended" title="Permanent link">&para;</a></h2>
+<p>With HeaderKit's first-class <a class="autorefs autorefs-internal" title="            NimBackend" href="../../reference/backends/#headerkit.backends.nim.NimBackend"><code>NimBackend</code></a>, you do <strong>not</strong> need to hand-maintain a separate <code>.h</code> file. <code>NimBackend</code> parses <code>.nim</code> source files (and <code>nim c --header</code> generated headers) directly using Nim's compiler <code>std/macros</code> AST extractor (<code>_nim_ast_helper.nim</code>), preserving parameter names, <code>SourceMeta</code>, deprecation pragmas, and docstrings (<code>ParsedDoc</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Parse .nim source directly and emit CFFI cdefs + PEP 484 / CFFI .pyi stubs</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>headerkit<span class="w"> </span>src/fastmath.nim<span class="w"> </span>-b<span class="w"> </span>nim<span class="w"> </span>-w<span class="w"> </span>cffi<span class="w"> </span>-w<span class="w"> </span>pyi<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>-o<span class="w"> </span>cffi:fastmath/_defs.cdef.txt<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>-o<span class="w"> </span>pyi:fastmath/_fastmath.pyi<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--writer-opt<span class="w"> </span>pyi:mode<span class="o">=</span>cffi
+</code></pre></div>
+<p>Or programmatically in Python with <a class="autorefs autorefs-internal" title="            DocParserTransform
+
+
+  
+      dataclass
+  " href="../../reference/transforms/#headerkit.transforms.doc_parser.DocParserTransform"><code>DocParserTransform</code></a>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_backend</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">DocParserTransform</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_writer</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">nim_backend</span> <span class="o">=</span> <span class="n">get_backend</span><span class="p">(</span><span class="s2">"nim"</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">unit</span> <span class="o">=</span> <span class="n">nim_backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">"src/fastmath.nim"</span><span class="p">)</span><span class="o">.</span><span class="n">read_text</span><span class="p">(),</span> <span class="s2">"src/fastmath.nim"</span><span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">unit</span> <span class="o">=</span> <span class="n">DocParserTransform</span><span class="p">(</span><span class="n">doc_format</span><span class="o">=</span><span class="s2">"rst"</span><span class="p">)</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">cdef_code</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">"cffi"</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">pyi_code</span> <span class="o">=</span> <span class="n">get_writer</span><span class="p">(</span><span class="s2">"pyi"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"cffi"</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span>
 </code></pre></div>
 <hr />
-<h2 id="3-parsing-with-headerkit-generating-bindings">3. Parsing with Headerkit &amp; Generating Bindings<a class="headerlink" href="#3-parsing-with-headerkit-generating-bindings" title="Permanent link">&para;</a></h2>
+<h2 id="3-alternative-defining-a-hand-written-c-api-header">3. Alternative: Defining a Hand-Written C API Header<a class="headerlink" href="#3-alternative-defining-a-hand-written-c-api-header" title="Permanent link">&para;</a></h2>
+<p>If you prefer maintaining an explicit C header file (<code>src/fastmath_api.h</code>) representing the exported C interface:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="cp">#ifndef FASTMATH_API_H</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="cp">#define FASTMATH_API_H</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdint.h&gt;</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="cp">#ifdef __cplusplus</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">extern</span><span class="w"> </span><span class="s">"C"</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="cp">#endif</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="nc">FastMatrix</span><span class="w"> </span><span class="n">FastMatrix</span><span class="p">;</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="kt">void</span><span class="w"> </span><span class="nf">NimMain</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="kt">void</span><span class="w"> </span><span class="nf">NimDestroyGlobals</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">FastMatrix</span><span class="o">*</span><span class="w"> </span><span class="nf">createMatrix</span><span class="p">(</span><span class="kt">int64_t</span><span class="w"> </span><span class="n">rows</span><span class="p">,</span><span class="w"> </span><span class="kt">int64_t</span><span class="w"> </span><span class="n">cols</span><span class="p">);</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="kt">void</span><span class="w"> </span><span class="nf">destroyMatrix</span><span class="p">(</span><span class="n">FastMatrix</span><span class="o">*</span><span class="w"> </span><span class="n">m</span><span class="p">);</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="kt">int64_t</span><span class="w"> </span><span class="nf">addNumbers</span><span class="p">(</span><span class="kt">int64_t</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="kt">int64_t</span><span class="w"> </span><span class="n">b</span><span class="p">);</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="kt">double</span><span class="w"> </span><span class="nf">computeSum</span><span class="p">(</span><span class="n">FastMatrix</span><span class="o">*</span><span class="w"> </span><span class="n">m</span><span class="p">);</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="cp">#ifdef __cplusplus</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="p">}</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="cp">#endif</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="cp">#endif</span>
+</code></pre></div>
+<hr />
+<h2 id="4-parsing-the-c-header-generating-bindings">4. Parsing the C Header &amp; Generating Bindings<a class="headerlink" href="#4-parsing-the-c-header-generating-bindings" title="Permanent link">&para;</a></h2>
 <p>Use Headerkit to parse the C API and emit Python <code>ctypes</code> bindings:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>headerkit<span class="w"> </span>src/fastmath_api.h<span class="w"> </span>-w<span class="w"> </span>ctypes<span class="w"> </span>-o<span class="w"> </span>ctypes:fastmath/_bindings.py
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>headerkit<span class="w"> </span>src/fastmath_api.h<span class="w"> </span>-w<span class="w"> </span>ctypes<span class="w"> </span>-o<span class="w"> </span>ctypes:fastmath/_bindings.py
 </code></pre></div>
 <p>Or programmatically in Python:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.backends.treesitter</span><span class="w"> </span><span class="kn">import</span> <span class="n">TreeSitterBackend</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers.ctypes</span><span class="w"> </span><span class="kn">import</span> <span class="n">CtypesWriter</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">TreeSitterBackend</span><span class="p">()</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">header_code</span><span class="p">,</span> <span class="s2">"fastmath_api.h"</span><span class="p">)</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">CtypesWriter</span><span class="p">(</span><span class="n">lib_name</span><span class="o">=</span><span class="s2">"_lib"</span><span class="p">)</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">bindings_code</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.backends.treesitter</span><span class="w"> </span><span class="kn">import</span> <span class="n">TreeSitterBackend</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">headerkit.writers.ctypes</span><span class="w"> </span><span class="kn">import</span> <span class="n">CtypesWriter</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">TreeSitterBackend</span><span class="p">()</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">header</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">header_code</span><span class="p">,</span> <span class="s2">"fastmath_api.h"</span><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">writer</span> <span class="o">=</span> <span class="n">CtypesWriter</span><span class="p">(</span><span class="n">lib_name</span><span class="o">=</span><span class="s2">"_lib"</span><span class="p">)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">bindings_code</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
 </code></pre></div>
 <hr />
-<h2 id="4-packaging-as-a-python-wheel-scikit-build-core">4. Packaging as a Python Wheel (<code>scikit-build-core</code>)<a class="headerlink" href="#4-packaging-as-a-python-wheel-scikit-build-core" title="Permanent link">&para;</a></h2>
+<h2 id="5-packaging-as-a-python-wheel-scikit-build-core">5. Packaging as a Python Wheel (<code>scikit-build-core</code>)<a class="headerlink" href="#5-packaging-as-a-python-wheel-scikit-build-core" title="Permanent link">&para;</a></h2>
 <p>Define <code>pyproject.toml</code> and <code>CMakeLists.txt</code> to automate compiling the Nim library and packaging it into binary wheels:</p>
 <h3 id="pyprojecttoml"><code>pyproject.toml</code><a class="headerlink" href="#pyprojecttoml" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[build-system]</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"scikit-build-core&gt;=0.9.0"</span><span class="p">]</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"scikit_build_core.build"</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">[project]</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"fastmath"</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0.1.0"</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"Nim extension packaged with Headerkit"</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;=3.11"</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">[tool.scikit-build]</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">cmake</span><span class="p">.</span><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;=3.18"</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">wheel</span><span class="p">.</span><span class="n">packages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"fastmath"</span><span class="p">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[build-system]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"scikit-build-core&gt;=0.9.0"</span><span class="p">]</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"scikit_build_core.build"</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[project]</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"fastmath"</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0.1.0"</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"Nim extension packaged with Headerkit"</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;=3.11"</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">[tool.scikit-build]</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">cmake</span><span class="p">.</span><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;=3.18"</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="n">wheel</span><span class="p">.</span><span class="n">packages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"fastmath"</span><span class="p">]</span>
 </code></pre></div>
 <h3 id="cmakeliststxt"><code>CMakeLists.txt</code><a class="headerlink" href="#cmakeliststxt" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.18</span><span class="p">)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">project</span><span class="p">(</span><span class="s">fastmath_pkg</span><span class="w"> </span><span class="s">LANGUAGES</span><span class="w"> </span><span class="s">C</span><span class="p">)</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">find_program</span><span class="p">(</span><span class="s">NIM_EXECUTABLE</span><span class="w"> </span><span class="s">nim</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">set</span><span class="p">(</span><span class="s">NIM_SRC</span><span class="w"> </span><span class="s2">"${CMAKE_CURRENT_SOURCE_DIR}/src/fastmath.nim"</span><span class="p">)</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="nb">set</span><span class="p">(</span><span class="s">NIM_LIB</span><span class="w"> </span><span class="s2">"${CMAKE_CURRENT_BINARY_DIR}/libfastmath${CMAKE_SHARED_LIBRARY_SUFFIX}"</span><span class="p">)</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="nb">add_custom_command</span><span class="p">(</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="s">OUTPUT</span><span class="w"> </span><span class="s2">"${NIM_LIB}"</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="s2">"${NIM_EXECUTABLE}"</span><span class="w"> </span><span class="s">c</span><span class="w"> </span><span class="s">--app:lib</span><span class="w"> </span><span class="s">--mm:orc</span><span class="w"> </span><span class="s">--threads:on</span><span class="w"> </span><span class="s">-d:release</span><span class="w"> </span><span class="s">--out:</span><span class="s2">"${NIM_LIB}"</span><span class="w"> </span><span class="s2">"${NIM_SRC}"</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s2">"${NIM_SRC}"</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">"Compiling Nim module with ORC memory management"</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="p">)</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
-<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="nb">add_custom_target</span><span class="p">(</span><span class="s">nim_fastmath</span><span class="w"> </span><span class="s">ALL</span><span class="w"> </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s2">"${NIM_LIB}"</span><span class="p">)</span>
-<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
-<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="nb">install</span><span class="p">(</span>
-<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">    </span><span class="s">FILES</span><span class="w"> </span><span class="s2">"${NIM_LIB}"</span>
-<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">    </span><span class="s">DESTINATION</span><span class="w"> </span><span class="s2">"fastmath"</span>
-<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.18</span><span class="p">)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">project</span><span class="p">(</span><span class="s">fastmath_pkg</span><span class="w"> </span><span class="s">LANGUAGES</span><span class="w"> </span><span class="s">C</span><span class="p">)</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">find_program</span><span class="p">(</span><span class="s">NIM_EXECUTABLE</span><span class="w"> </span><span class="s">nim</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="nb">set</span><span class="p">(</span><span class="s">NIM_SRC</span><span class="w"> </span><span class="s2">"${CMAKE_CURRENT_SOURCE_DIR}/src/fastmath.nim"</span><span class="p">)</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="nb">set</span><span class="p">(</span><span class="s">NIM_LIB</span><span class="w"> </span><span class="s2">"${CMAKE_CURRENT_BINARY_DIR}/libfastmath${CMAKE_SHARED_LIBRARY_SUFFIX}"</span><span class="p">)</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="nb">add_custom_command</span><span class="p">(</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="s">OUTPUT</span><span class="w"> </span><span class="s2">"${NIM_LIB}"</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="s2">"${NIM_EXECUTABLE}"</span><span class="w"> </span><span class="s">c</span><span class="w"> </span><span class="s">--app:lib</span><span class="w"> </span><span class="s">--mm:orc</span><span class="w"> </span><span class="s">--threads:on</span><span class="w"> </span><span class="s">-d:release</span><span class="w"> </span><span class="s">--out:</span><span class="s2">"${NIM_LIB}"</span><span class="w"> </span><span class="s2">"${NIM_SRC}"</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s2">"${NIM_SRC}"</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span><span class="s">COMMENT</span><span class="w"> </span><span class="s2">"Compiling Nim module with ORC memory management"</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="p">)</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="nb">add_custom_target</span><span class="p">(</span><span class="s">nim_fastmath</span><span class="w"> </span><span class="s">ALL</span><span class="w"> </span><span class="s">DEPENDS</span><span class="w"> </span><span class="s2">"${NIM_LIB}"</span><span class="p">)</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="nb">install</span><span class="p">(</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span><span class="s">FILES</span><span class="w"> </span><span class="s2">"${NIM_LIB}"</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span><span class="s">DESTINATION</span><span class="w"> </span><span class="s2">"fastmath"</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="p">)</span>
 </code></pre></div>
 <h3 id="building-the-wheel">Building the Wheel<a class="headerlink" href="#building-the-wheel" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>python<span class="w"> </span>-m<span class="w"> </span>build<span class="w"> </span>--wheel
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>python<span class="w"> </span>-m<span class="w"> </span>build<span class="w"> </span>--wheel
 </code></pre></div>
 <p>Install and verify in any standard Python environment:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pip<span class="w"> </span>install<span class="w"> </span>dist/fastmath-*.whl
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import fastmath; print(fastmath.add_numbers(10, 20))"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pip<span class="w"> </span>install<span class="w"> </span>dist/fastmath-*.whl
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import fastmath; print(fastmath.add_numbers(10, 20))"</span>
 </code></pre></div></p>
 
 

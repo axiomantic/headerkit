@@ -1944,6 +1944,11 @@ the registry functions mirror the backend API.</p>
 <td>Generates <code>ffibuilder.cdef()</code> strings</td>
 </tr>
 <tr>
+<td><a href="cshim/">CShim</a></td>
+<td><code>headerkit.writers.cshim</code></td>
+<td>Generates pure C-ABI (<code>extern "C"</code>) wrappers for C++ classes</td>
+</tr>
+<tr>
 <td><a href="ctypes/">ctypes</a></td>
 <td><code>headerkit.writers.ctypes</code></td>
 <td>Generates Python ctypes binding modules</td>
@@ -1969,9 +1974,29 @@ the registry functions mirror the backend API.</p>
 <td>Generates LuaJIT FFI binding files</td>
 </tr>
 <tr>
+<td><a href="mojo/">Mojo</a></td>
+<td><code>headerkit.writers.mojo</code></td>
+<td>Generates idiomatic Mojo FFI bindings</td>
+</tr>
+<tr>
+<td><a href="nim/">Nim</a></td>
+<td><code>headerkit.writers.nim</code></td>
+<td>Generates native Nim bindings with C and C++ interop</td>
+</tr>
+<tr>
 <td><a href="prompt/">Prompt</a></td>
 <td><code>headerkit.writers.prompt</code></td>
 <td>Token-optimized output for LLM context</td>
+</tr>
+<tr>
+<td><a href="writers/#pyiwriter">pyi</a></td>
+<td><code>headerkit.writers.pyi</code></td>
+<td>Generates Python <code>.pyi</code> type stubs (<code>pep484</code> and <code>cffi</code> modes)</td>
+</tr>
+<tr>
+<td><a href="writers/#tswasmwriter">ts_wasm</a></td>
+<td><code>headerkit.writers.ts_wasm</code></td>
+<td>Generates TypeScript WebAssembly <code>.d.ts</code> declaration files</td>
 </tr>
 </tbody>
 </table>
