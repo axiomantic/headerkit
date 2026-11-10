@@ -456,6 +456,34 @@ def _load_backend_resource_bytes(resource_name: str) -> bytes | None:
     return None
 
 
+def _find_nim_compiler_path_args(nim_cmd: str = "nim") -> list[str]:
+    """Return ``--path:<dir>`` compiler flags for directories containing ``compiler/ast.nim``."""
+    resolved_nim = shutil.which(nim_cmd)
+    if not resolved_nim:
+        return []
+    candidates: list[Path] = []
+    try:
+        real_bin = Path(resolved_nim).resolve()
+        candidates.extend([real_bin.parent.parent, real_bin.parent])
+    except OSError:
+        pass
+    libpath = _find_nim_libpath()
+    if libpath:
+        try:
+            real_lib = Path(libpath).resolve()
+            candidates.extend([real_lib.parent, real_lib])
+        except OSError:
+            pass
+    seen: set[str] = set()
+    path_args: list[str] = []
+    for cand in candidates:
+        cand_str = str(cand)
+        if cand_str not in seen and (cand / "compiler" / "ast.nim").is_file():
+            seen.add(cand_str)
+            path_args.append(f"--path:{cand_str}")
+    return path_args
+
+
 @functools.lru_cache(maxsize=4)
 def _get_nim_ast_helper_binary(nim_executable: str | None = None) -> Path | None:
     """Compile and cache ``_nim_ast_helper.nim`` under ``~/.cache/headerkit/bin/``."""
@@ -482,6 +510,7 @@ def _get_nim_ast_helper_binary(nim_executable: str | None = None) -> Path | None
         if bin_path.is_file() and os.access(bin_path, os.X_OK):
             return bin_path
 
+        compiler_path_args = _find_nim_compiler_path_args(nim_cmd)
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_src = Path(tmpdir) / "nim_ast_helper.nim"
             tmp_src.write_bytes(src_bytes)
@@ -493,6 +522,7 @@ def _get_nim_ast_helper_binary(nim_executable: str | None = None) -> Path | None
                     "-d:release",
                     "--hints:off",
                     "--warnings:off",
+                    *compiler_path_args,
                     f"-o:{tmp_bin}",
                     str(tmp_src),
                 ],
@@ -517,28 +547,60 @@ def _run_nim_ast_helper(
     *,
     nim_executable: str | None = None,
 ) -> dict[str, Any] | None:
-    """Execute the compiled ``_nim_ast_helper`` binary on ``nim_path`` (or ``code`` via stdin)."""
+    """Execute the compiled ``_nim_ast_helper`` binary on ``nim_path`` (or ``code`` via stdin).
+
+    Falls back to ``nim e`` (NimScript ``std/macros`` ``parseStmt`` mode) when
+    ``compiler/ast.nim`` is unavailable on a binary-only Nim installation.
+    """
     helper_bin = _get_nim_ast_helper_binary(nim_executable)
-    if helper_bin is None:
+    if helper_bin is not None:
+        try:
+            cmd = [str(helper_bin), str(nim_path)]
+            if code is not None:
+                cmd.append("--stdin")
+            res = subprocess.run(
+                cmd,
+                input=code,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                if isinstance(data, dict):
+                    return data
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            logger.warning("Failed running _nim_ast_helper on %s: %s", nim_path, exc)
+
+    nim_cmd = nim_executable or "nim"
+    if not shutil.which(nim_cmd):
+        return None
+    src_bytes = _load_backend_resource_bytes("_nim_ast_helper.nim")
+    if not src_bytes:
         return None
     try:
-        cmd = [str(helper_bin), str(nim_path)]
-        if code is not None:
-            cmd.append("--stdin")
-        res = subprocess.run(
-            cmd,
-            input=code,
-            capture_output=True,
-            text=True,
-            timeout=20,
-            check=False,
-        )
-        if res.returncode == 0 and res.stdout.strip():
-            data = json.loads(res.stdout)
-            if isinstance(data, dict):
-                return data
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_nims = Path(tmpdir) / "nim_ast_helper.nims"
+            tmp_nims.write_bytes(src_bytes)
+            cmd = [nim_cmd, "e", "--hints:off", "--warnings:off", str(tmp_nims), str(nim_path)]
+            if code is not None:
+                tmp_code = Path(tmpdir) / "input_code.nim"
+                tmp_code.write_text(code, encoding="utf-8")
+                cmd.extend(["--code-file", str(tmp_code)])
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                if isinstance(data, dict):
+                    return data
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
-        logger.warning("Failed running _nim_ast_helper on %s: %s", nim_path, exc)
+        logger.warning("Failed running NimScript _nim_ast_helper fallback on %s: %s", nim_path, exc)
     return None
 
 

@@ -1,10 +1,186 @@
 # Nim Compiler AST Extractor for HeaderKit NimBackend.
 # Parses .nim source files (and recursively follows nkIncludeStmt nodes) using
 # Nim's built-in compiler/[ast, parser, idents, options, lineinfos, renderer]
-# and emits structured JSON to stdout.
+# when compiled as a native helper binary, or std/macros parseStmt when
+# executed via `nim e` (NimScript fallback), and emits structured JSON to stdout.
 
 import std/[json, os, strutils, sets]
-import compiler/[ast, parser, idents, options, lineinfos, renderer]
+
+when defined(nimscript):
+  import std/macros
+
+  type
+    PNode = NimNode
+    IdentCache = int
+    ConfigRef = int
+
+  proc newConfigRef(): ConfigRef = 0
+  proc newIdentCache(): IdentCache = 0
+
+  const
+    nkEmpty = nnkEmpty
+    nkIdent = nnkIdent
+    nkSym = nnkSym
+    nkAccQuoted = nnkAccQuoted
+    nkPostfix = nnkPostfix
+    nkPragmaExpr = nnkPragmaExpr
+    nkPragma = nnkPragma
+    nkExprColonExpr = nnkExprColonExpr
+    nkExprEqExpr = nnkExprEqExpr
+    nkCall = nnkCall
+    nkCommand = nnkCommand
+    nkCharLit = nnkCharLit
+    nkUInt64Lit = nnkUInt64Lit
+    nkFloatLit = nnkFloatLit
+    nkFloat128Lit = nnkFloat128Lit
+    nkStrLit = nnkStrLit
+    nkTripleStrLit = nnkTripleStrLit
+    nkPtrTy = nnkPtrTy
+    nkVarTy = nnkVarTy
+    nkRefTy = nnkRefTy
+    nkDistinctTy = nnkDistinctTy
+    nkBracketExpr = nnkBracketExpr
+    nkInfix = nnkInfix
+    nkProcTy = nnkProcTy
+    nkFormalParams = nnkFormalParams
+    nkIdentDefs = nnkIdentDefs
+    nkTupleTy = nnkTupleTy
+    nkTupleClassTy = nnkTupleClassTy
+    nkRecList = nnkRecList
+    nkCommentStmt = nnkCommentStmt
+    nkRecCase = nnkRecCase
+    nkIncludeStmt = nnkIncludeStmt
+    nkProcDef = nnkProcDef
+    nkFuncDef = nnkFuncDef
+    nkMethodDef = nnkMethodDef
+    nkConverterDef = nnkConverterDef
+    nkIteratorDef = nnkIteratorDef
+    nkTemplateDef = nnkTemplateDef
+    nkStmtList = nnkStmtList
+    nkTypeSection = nnkTypeSection
+    nkTypeDef = nnkTypeDef
+    nkObjectTy = nnkObjectTy
+    nkEnumTy = nnkEnumTy
+    nkEnumFieldDef = nnkEnumFieldDef
+    nkTupleConstr = nnkTupleConstr
+    nkConstSection = nnkConstSection
+    nkConstDef = nnkConstDef
+    nkVarSection = nnkVarSection
+    nkLetSection = nnkLetSection
+    nkWhenStmt = nnkWhenStmt
+
+  var sourceLinesStack: seq[seq[string]] = @[]
+
+  proc currentSourceLines(): seq[string] =
+    if sourceLinesStack.len > 0: sourceLinesStack[^1] else: @[]
+
+  proc renderTree(n: PNode): string =
+    if n == nil: "" else: repr(n)
+
+  proc nodeIdentStr(n: PNode): string =
+    n.strVal
+
+  proc nodeSymStr(n: PNode): string =
+    n.strVal
+
+  proc nodeLine(n: PNode): int =
+    if n == nil: 0 else: n.lineInfoObj.line
+
+  proc nodeCol(n: PNode): int =
+    if n == nil: 0 else: n.lineInfoObj.column
+
+  proc extractInlineOrIndentedDoc(line1Based: int, allowIndentedBelow: bool): string =
+    let lines = currentSourceLines()
+    if line1Based < 1 or line1Based > lines.len:
+      return ""
+    let declLine = lines[line1Based - 1]
+    if not declLine.strip().startswith("##"):
+      let docIdx = declLine.find("##")
+      if docIdx >= 0:
+        return declLine[docIdx + 2 .. ^1].strip()
+    if not allowIndentedBelow:
+      return ""
+    var baseIndent = 0
+    while baseIndent < declLine.len and declLine[baseIndent] == ' ':
+      inc baseIndent
+    var docLines: seq[string] = @[]
+    var idx = line1Based - 1
+    while idx < lines.len:
+      let ln = lines[idx]
+      let stripped = ln.strip()
+      if idx == line1Based - 1 and not stripped.startswith("##"):
+        inc idx
+        continue
+      if stripped.len == 0:
+        inc idx
+        continue
+      var ind = 0
+      while ind < ln.len and ln[ind] == ' ':
+        inc ind
+      if (idx == line1Based - 1 or ind > baseIndent) and stripped.startswith("##"):
+        var content = stripped[2 .. ^1]
+        if content.startswith(" "):
+          content = content[1 .. ^1]
+        docLines.add(content)
+        inc idx
+      else:
+        break
+    return docLines.join("\n").strip()
+
+  proc nodeComment(n: PNode, allowIndentedBelow: bool = false): string =
+    if n == nil:
+      return ""
+    if n.kind == nnkCommentStmt:
+      return n.strVal.strip()
+    return extractInlineOrIndentedDoc(nodeLine(n), allowIndentedBelow)
+
+  proc expandPath(p: string): string =
+    p
+
+  proc parseNimSource(src: string, cache: IdentCache, conf: ConfigRef, filename: string): PNode =
+    discard cache
+    discard conf
+    discard filename
+    sourceLinesStack.add(src.splitLines())
+    result = parseStmt(src)
+
+  proc getCliArgs(): seq[string] =
+    var foundSelf = false
+    for i in 1 .. paramCount():
+      let p = paramStr(i)
+      if not foundSelf:
+        if p.endsWith(".nim") or p.endsWith(".nims"):
+          foundSelf = true
+      else:
+        result.add(p)
+
+else:
+  import compiler/[ast, parser, idents, options, lineinfos, renderer]
+
+  proc nodeIdentStr(n: PNode): string =
+    n.ident.s
+
+  proc nodeSymStr(n: PNode): string =
+    n.sym.name.s
+
+  proc nodeLine(n: PNode): int =
+    if n == nil: 0 else: int(n.info.line)
+
+  proc nodeCol(n: PNode): int =
+    if n == nil: 0 else: int(n.info.col)
+
+  proc nodeComment(n: PNode, allowIndentedBelow: bool = false): string =
+    discard allowIndentedBelow
+    if n == nil: "" else: n.comment.strip()
+
+  proc expandPath(p: string): string =
+    expandFilename(p)
+
+  proc parseNimSource(src: string, cache: IdentCache, conf: ConfigRef, filename: string): PNode =
+    parseString(src, cache, conf, filename)
+
+  proc getCliArgs(): seq[string] =
+    commandLineParams()
 
 type
   PragmaData = object
@@ -26,9 +202,9 @@ proc extractIdent(n: PNode): string =
     return ""
   case n.kind
   of nkIdent:
-    return n.ident.s
+    return nodeIdentStr(n)
   of nkSym:
-    return n.sym.name.s
+    return nodeSymStr(n)
   of nkAccQuoted:
     var parts = ""
     for i in 0 ..< n.len:
@@ -267,8 +443,9 @@ proc serializeTypeNode(n: PNode): JsonNode =
 proc collectObjectFields(recNode: PNode, outFields: var JsonNode, outDoc: var seq[string]) =
   if recNode == nil:
     return
-  if recNode.comment.len > 0:
-    outDoc.add(recNode.comment.strip())
+  let recComment = nodeComment(recNode)
+  if recComment.len > 0:
+    outDoc.add(recComment)
   case recNode.kind
   of nkRecList:
     var pendingFieldDoc: seq[string] = @[]
@@ -277,16 +454,17 @@ proc collectObjectFields(recNode: PNode, outFields: var JsonNode, outDoc: var se
       if item == nil:
         continue
       if item.kind == nkCommentStmt:
-        if item.comment.strip().len > 0:
+        let itemComment = nodeComment(item)
+        if itemComment.len > 0:
           if outFields.len == 0:
-            outDoc.add(item.comment.strip())
+            outDoc.add(itemComment)
           else:
-            pendingFieldDoc.add(item.comment.strip())
+            pendingFieldDoc.add(itemComment)
         continue
       if item.kind == nkIdentDefs and item.len >= 3:
         let fTypeNode = item[item.len - 2]
         let fTypeJson = serializeTypeNode(fTypeNode)
-        var fDoc = item.comment.strip()
+        var fDoc = nodeComment(item)
         if fDoc.len == 0 and pendingFieldDoc.len > 0:
           fDoc = pendingFieldDoc.join("\n").strip()
         pendingFieldDoc.setLen(0)
@@ -308,6 +486,7 @@ proc collectObjectFields(recNode: PNode, outFields: var JsonNode, outDoc: var se
     if recNode.len >= 1 and recNode[0].kind == nkIdentDefs:
       var dummyDoc: seq[string] = @[]
       let disc = recNode[0]
+      let discDoc = nodeComment(disc)
       let fTypeJson = serializeTypeNode(disc[disc.len - 2])
       for j in 0 ..< disc.len - 2:
         let fInfo = extractNameAndPragmas(disc[j])
@@ -318,7 +497,7 @@ proc collectObjectFields(recNode: PNode, outFields: var JsonNode, outDoc: var se
           "exported": fInfo.exported,
           "type": fTypeJson,
           "bit_width": (if fPragma.hasBitsize: %fPragma.bitsize else: newJNull()),
-          "doc": (if disc.comment.strip().len > 0: %disc.comment.strip() else: newJNull()),
+          "doc": (if discDoc.len > 0: %discDoc else: newJNull()),
           "attributes": %fPragma.attributes
         })
       for i in 1 ..< recNode.len:
@@ -376,7 +555,7 @@ proc processStmtList(
 
     case n.kind
     of nkCommentStmt:
-      let c = n.comment.strip()
+      let c = nodeComment(n)
       if c.len > 0:
         pendingDoc.add(c)
 
@@ -391,7 +570,7 @@ proc processStmtList(
           rel.add(".nim")
         let candidate = normalizedPath(baseDir / rel)
         if fileExists(candidate):
-          let absPath = expandFilename(candidate)
+          let absPath = expandPath(candidate)
           if absPath notin visited:
             includedFiles.add(absPath)
             parseNimFileRecursive(absPath, "", cache, conf, visited, decls, includedFiles)
@@ -405,20 +584,28 @@ proc processStmtList(
       let pData = parsePragmaNode(pNode, nameInfo.name)
 
       var bodyDoc: seq[string] = @[]
-      if n.comment.strip().len > 0:
-        bodyDoc.add(n.comment.strip())
+      let nDoc = nodeComment(n)
+      if nDoc.len > 0:
+        bodyDoc.add(nDoc)
       let bodyNode = n[6]
       if bodyNode != nil:
-        if bodyNode.kind == nkCommentStmt and bodyNode.comment.strip().len > 0:
-          bodyDoc.add(bodyNode.comment.strip())
+        if bodyNode.kind == nkCommentStmt:
+          let bComment = nodeComment(bodyNode)
+          if bComment.len > 0 and bComment notin bodyDoc:
+            bodyDoc.add(bComment)
         elif bodyNode.kind == nkStmtList:
           for bIdx in 0 ..< bodyNode.len:
             let bStmt = bodyNode[bIdx]
             if bStmt != nil and bStmt.kind == nkCommentStmt:
-              if bStmt.comment.strip().len > 0:
-                bodyDoc.add(bStmt.comment.strip())
+              let bComment = nodeComment(bStmt)
+              if bComment.len > 0 and bComment notin bodyDoc:
+                bodyDoc.add(bComment)
             else:
               break
+      if bodyDoc.len == 0:
+        let indDoc = nodeComment(n, allowIndentedBelow = true)
+        if indDoc.len > 0:
+          bodyDoc.add(indDoc)
 
       let finalDocLines = if bodyDoc.len > 0: bodyDoc else: pendingDoc
       let docStr = finalDocLines.join("\n").strip()
@@ -469,8 +656,8 @@ proc processStmtList(
         "parameters": paramsArr,
         "doc": (if docStr.len > 0: %docStr else: newJNull()),
         "file": currentFile,
-        "line": int(n.info.line),
-        "column": int(n.info.col)
+        "line": nodeLine(n),
+        "column": nodeCol(n)
       })
 
     of nkTypeSection:
@@ -479,8 +666,9 @@ proc processStmtList(
         if td == nil:
           continue
         if td.kind == nkCommentStmt:
-          if td.comment.strip().len > 0:
-            pendingDoc.add(td.comment.strip())
+          let tdComment = nodeComment(td)
+          if tdComment.len > 0:
+            pendingDoc.add(tdComment)
           continue
         if td.kind != nkTypeDef or td.len < 3:
           continue
@@ -489,10 +677,17 @@ proc processStmtList(
         let body = td[2]
 
         var typeDoc: seq[string] = @[]
-        if td.comment.strip().len > 0:
-          typeDoc.add(td.comment.strip())
-        if body != nil and body.comment.strip().len > 0:
-          typeDoc.add(body.comment.strip())
+        let tdDoc = nodeComment(td, allowIndentedBelow = (body == nil or body.kind != nkEnumTy))
+        if tdDoc.len > 0:
+          typeDoc.add(tdDoc)
+        elif td[0] != nil:
+          let td0Doc = nodeComment(td[0], allowIndentedBelow = (body == nil or body.kind != nkEnumTy))
+          if td0Doc.len > 0:
+            typeDoc.add(td0Doc)
+        if body != nil:
+          let bodyDoc = nodeComment(body)
+          if bodyDoc.len > 0 and bodyDoc notin typeDoc:
+            typeDoc.add(bodyDoc)
 
         if body != nil and body.kind == nkObjectTy:
           var fieldsArr = newJArray()
@@ -515,8 +710,8 @@ proc processStmtList(
             "fields": fieldsArr,
             "doc": (if finalDoc.len > 0: %finalDoc else: newJNull()),
             "file": currentFile,
-            "line": int(td.info.line),
-            "column": int(td.info.col)
+            "line": nodeLine(td),
+            "column": nodeCol(td)
           })
         elif body != nil and body.kind in {nkTupleTy, nkTupleClassTy}:
           let tupJson = serializeTypeNode(body)
@@ -538,8 +733,8 @@ proc processStmtList(
             "fields": tupJson["fields"],
             "doc": (if finalDoc.len > 0: %finalDoc else: newJNull()),
             "file": currentFile,
-            "line": int(td.info.line),
-            "column": int(td.info.col)
+            "line": nodeLine(td),
+            "column": nodeCol(td)
           })
         elif body != nil and body.kind == nkEnumTy:
           var valuesArr = newJArray()
@@ -550,7 +745,7 @@ proc processStmtList(
               continue
             var eName = ""
             var eVal = nextVal
-            var eDoc = ef.comment.strip()
+            var eDoc = nodeComment(ef)
             case ef.kind
             of nkIdent, nkSym, nkAccQuoted, nkPragmaExpr:
               let eInfo = extractNameAndPragmas(ef)
@@ -593,8 +788,8 @@ proc processStmtList(
             "values": valuesArr,
             "doc": (if finalDoc.len > 0: %finalDoc else: newJNull()),
             "file": currentFile,
-            "line": int(td.info.line),
-            "column": int(td.info.col)
+            "line": nodeLine(td),
+            "column": nodeCol(td)
           })
         else:
           let finalDoc = (if typeDoc.len > 0: typeDoc else: pendingDoc).join("\n").strip()
@@ -613,8 +808,8 @@ proc processStmtList(
             "underlying_type": underJson,
             "doc": (if finalDoc.len > 0: %finalDoc else: newJNull()),
             "file": currentFile,
-            "line": int(td.info.line),
-            "column": int(td.info.col)
+            "line": nodeLine(td),
+            "column": nodeCol(td)
           })
 
     of nkConstSection:
@@ -623,8 +818,9 @@ proc processStmtList(
         if cd == nil:
           continue
         if cd.kind == nkCommentStmt:
-          if cd.comment.strip().len > 0:
-            pendingDoc.add(cd.comment.strip())
+          let cdComment = nodeComment(cd)
+          if cdComment.len > 0:
+            pendingDoc.add(cdComment)
           continue
         if cd.kind != nkConstDef or cd.len < 3:
           continue
@@ -632,7 +828,7 @@ proc processStmtList(
         let pData = parsePragmaNode(nameInfo.pragmaNode, nameInfo.name)
         let typeNode = cd[1]
         let valNode = cd[2]
-        var cDoc = cd.comment.strip()
+        var cDoc = nodeComment(cd)
         if cDoc.len == 0 and pendingDoc.len > 0:
           cDoc = pendingDoc.join("\n").strip()
         pendingDoc.setLen(0)
@@ -651,10 +847,11 @@ proc processStmtList(
             valJson = %valNode.strVal
             valKind = "string"
           of nkIdent:
-            if valNode.ident.s == "true":
+            let idVal = nodeIdentStr(valNode)
+            if idVal == "true":
               valJson = %true
               valKind = "bool"
-            elif valNode.ident.s == "false":
+            elif idVal == "false":
               valJson = %false
               valKind = "bool"
             else:
@@ -676,8 +873,8 @@ proc processStmtList(
           "value_kind": valKind,
           "doc": (if cDoc.len > 0: %cDoc else: newJNull()),
           "file": currentFile,
-          "line": int(cd.info.line),
-          "column": int(cd.info.col)
+          "line": nodeLine(cd),
+          "column": nodeCol(cd)
         })
 
     of nkVarSection, nkLetSection:
@@ -687,14 +884,15 @@ proc processStmtList(
         if vd == nil:
           continue
         if vd.kind == nkCommentStmt:
-          if vd.comment.strip().len > 0:
-            pendingDoc.add(vd.comment.strip())
+          let vdComment = nodeComment(vd)
+          if vdComment.len > 0:
+            pendingDoc.add(vdComment)
           continue
         if vd.kind != nkIdentDefs or vd.len < 3:
           continue
         let vTypeNode = vd[vd.len - 2]
         let vTypeJson = serializeTypeNode(vTypeNode)
-        var vDoc = vd.comment.strip()
+        var vDoc = nodeComment(vd)
         if vDoc.len == 0 and pendingDoc.len > 0:
           vDoc = pendingDoc.join("\n").strip()
         pendingDoc.setLen(0)
@@ -714,8 +912,8 @@ proc processStmtList(
             "type": vTypeJson,
             "doc": (if vDoc.len > 0: %vDoc else: newJNull()),
             "file": currentFile,
-            "line": int(vd.info.line),
-            "column": int(vd.info.col)
+            "line": nodeLine(vd),
+            "column": nodeCol(vd)
           })
 
     of nkWhenStmt:
@@ -738,7 +936,7 @@ proc parseNimFileRecursive(
   decls: var JsonNode,
   includedFiles: var seq[string]
 ) =
-  let normPath = if filePath.len > 0 and fileExists(filePath): expandFilename(filePath) else: filePath
+  let normPath = if filePath.len > 0 and fileExists(filePath): expandPath(filePath) else: filePath
   if normPath.len > 0:
     visited.incl(normPath)
   let src = if codeOverride.len > 0: codeOverride
@@ -746,17 +944,24 @@ proc parseNimFileRecursive(
             else: ""
   if src.len == 0:
     return
-  let ast = parseString(src, cache, conf, (if normPath.len > 0: normPath else: "input.nim"))
+  let ast = parseNimSource(src, cache, conf, (if normPath.len > 0: normPath else: "input.nim"))
   processStmtList(ast, normPath, cache, conf, visited, decls, includedFiles)
+  when defined(nimscript):
+    if sourceLinesStack.len > 0:
+      discard sourceLinesStack.pop()
 
 when isMainModule:
-  let args = commandLineParams()
+  let args = getCliArgs()
   if args.len < 1:
-    stderr.writeLine("Usage: _nim_ast_helper <file.nim> [--stdin]")
+    echo("Usage: _nim_ast_helper <file.nim> [--stdin | --code-file <path>]")
     quit(1)
   let targetPath = args[0]
-  let useStdin = args.len >= 2 and args[1] == "--stdin"
-  let codeText = if useStdin: stdin.readAll() else: ""
+  var codeText = ""
+  if args.len >= 2 and args[1] == "--stdin":
+    when not defined(nimscript):
+      codeText = stdin.readAll()
+  elif args.len >= 3 and args[1] == "--code-file":
+    codeText = readFile(args[2])
 
   let conf = newConfigRef()
   let cache = newIdentCache()
