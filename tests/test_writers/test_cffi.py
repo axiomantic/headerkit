@@ -2,6 +2,8 @@
 
 import textwrap
 
+import pytest
+
 from headerkit.ir import (
     Array,
     Constant,
@@ -664,22 +666,51 @@ class TestTaglessStructTypedefAndModuleVarAndExternPython:
             path="nng.h",
             declarations=[
                 Function("nng_aio_alloc", CType("int"), []),
-                Function("_nng_pipe_cb", CType("void"), [Parameter("arg", Pointer(CType("void")))]),
+                Function("_async_complete", CType("void"), [Parameter("arg", Pointer(CType("void")))]),
+                Typedef(
+                    "_nng_pipe_cb",
+                    FunctionPointer(CType("void"), [Parameter("arg", Pointer(CType("void")))]),
+                ),
             ],
         )
         writer = CffiWriter(
             extern_python=[
-                "void _async_complete(void *)",
+                "_async_complete",
                 "_nng_pipe_cb",
             ]
         )
         result = writer.write(header)
         assert result == (
             "int nng_aio_alloc(void);\n"
-            "void _nng_pipe_cb(void * arg);\n"
-            'extern "Python" void _async_complete(void *);\n'
+            "typedef void (*_nng_pipe_cb)(void * arg);\n"
+            'extern "Python" void _async_complete(void * arg);\n'
             'extern "Python" void _nng_pipe_cb(void * arg);'
         )
+
+    def test_extern_python_rejects_raw_prototypes_and_unknown_symbols(self):
+        from headerkit.writers.cffi import CffiWriter
+
+        header = Header(
+            path="nng.h",
+            declarations=[
+                Function("nng_aio_alloc", CType("int"), []),
+                Typedef("my_int_t", CType("int")),
+            ],
+        )
+        for bad_entry in (
+            "void _async_complete(void *)",
+            'extern "Python" void _async_complete(void *);',
+            "",
+            "not a symbol",
+        ):
+            writer = CffiWriter(extern_python=[bad_entry])
+            with pytest.raises(ValueError, match="must be a symbol name"):
+                writer.write(header)
+
+        for missing_or_non_fn in ("nonexistent_cb", "my_int_t"):
+            writer = CffiWriter(extern_python=[missing_or_non_fn])
+            with pytest.raises(ValueError, match="not found as a Function or function-pointer Typedef"):
+                writer.write(header)
 
 
 class TestExtraCdef:

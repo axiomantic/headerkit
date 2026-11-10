@@ -18,7 +18,7 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
-    Parameter,
+    ParsedDoc,
     Pointer,
     Reference,
     SourceUnit,
@@ -114,7 +114,7 @@ def _sanitize_identifier(name: str, fallback: str = "arg") -> str:
     if "`" in cleaned:
         cleaned = cleaned.replace("`", "_")
     if not cleaned.isidentifier():
-        cleaned = re.sub(r"[^0-9a-zA-Z_]", "_", cleaned)
+        cleaned = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in cleaned)
         if cleaned and cleaned[0].isdigit():
             cleaned = f"_{cleaned}"
     if not cleaned:
@@ -142,7 +142,7 @@ class PyiWriter(BaseWriter):
     default_extension: str = ".pyi"
     output_extension: str = ".pyi"
     cache_output: bool = True
-    cache_version: str = "2"
+    cache_version: str = "3"
     supported_layouts: ClassVar[tuple[str, ...]] = ("file",)
     supported_options: ClassVar[tuple[WriterOption, ...]] = (
         WriterOption(
@@ -179,7 +179,10 @@ class PyiWriter(BaseWriter):
         ),
         WriterOption(
             name="extern_python",
-            description='Function prototypes or names to emit on _Lib in cffi mode as extern "Python" callbacks',
+            description=(
+                "Function or function-pointer typedef symbol names in Header.declarations "
+                'to emit on _Lib in cffi mode as extern "Python" callbacks'
+            ),
             default=None,
             type=list,
         ),
@@ -218,6 +221,76 @@ class PyiWriter(BaseWriter):
         self._typedef_map: dict[str, TypeExpr] = {}
         self._contested_tags: set[str] = set()
 
+    def _resolve_typedef_function_pointer(
+        self,
+        key: str,
+        _seen: frozenset[str] = frozenset(),
+    ) -> FunctionPointer | None:
+        if key not in self._typedef_map or key in _seen:
+            return None
+        curr: TypeExpr = self._typedef_map[key]
+        while isinstance(curr, Pointer):
+            curr = curr.pointee
+        if isinstance(curr, FunctionPointer):
+            return curr
+        if isinstance(curr, CType):
+            t_key = _normalize_ctype_key(curr)
+            return self._resolve_typedef_function_pointer(t_key, _seen | {key})
+        return None
+
+    def _typedef_resolves_to_primitive_or_pointer(
+        self,
+        key: str,
+        _seen: frozenset[str] = frozenset(),
+    ) -> bool:
+        if key not in self._typedef_map or key in _seen:
+            return False
+        underlying = self._typedef_map[key]
+        if isinstance(underlying, Pointer):
+            return not isinstance(underlying.pointee, FunctionPointer)
+        if isinstance(underlying, CType):
+            if underlying.is_elaborated is True:
+                return False
+            u_key = _normalize_ctype_key(underlying)
+            if u_key == "void" or u_key in _BOOL_TYPES or u_key in _INT_TYPES or u_key in _FLOAT_TYPES:
+                return True
+            return self._typedef_resolves_to_primitive_or_pointer(u_key, _seen | {key})
+        return False
+
+    def _typedef_resolves_to_pointer_or_fnptr(
+        self,
+        key: str,
+        _seen: frozenset[str] = frozenset(),
+    ) -> bool:
+        if key not in self._typedef_map or key in _seen:
+            return False
+        underlying = self._typedef_map[key]
+        if isinstance(underlying, (FunctionPointer, Array)):
+            return True
+        if isinstance(underlying, Pointer):
+            if isinstance(underlying.pointee, FunctionPointer):
+                return True
+            if isinstance(underlying.pointee, Struct):
+                return bool(underlying.pointee.name and underlying.pointee.name.strip())
+            if isinstance(underlying.pointee, CType):
+                if underlying.pointee.is_elaborated is True:
+                    return True
+                p_key = _normalize_ctype_key(underlying.pointee)
+                if p_key == "char":
+                    return True
+                return not (
+                    p_key == "void"
+                    or p_key in _BOOL_TYPES
+                    or p_key in _INT_TYPES
+                    or p_key in _FLOAT_TYPES
+                    or self._typedef_resolves_to_primitive_or_pointer(p_key, _seen | {key})
+                )
+            return False
+        if isinstance(underlying, CType) and underlying.is_elaborated is not True:
+            u_key = _normalize_ctype_key(underlying)
+            return self._typedef_resolves_to_pointer_or_fnptr(u_key, _seen | {key})
+        return False
+
     def _is_excluded(self, name: str | None) -> bool:
         if not name or not self._compiled_excludes:
             return False
@@ -240,13 +313,20 @@ class PyiWriter(BaseWriter):
         if not isinstance(raw, str) or not raw.strip():
             return None
         cleaned = raw.strip().replace("ctypes.pointer[", "ctypes._Pointer[")
-        if not self._is_valid_python_expr(cleaned):
+        if not cleaned:
             return None
+        try:
+            tree = ast.parse(cleaned, mode="eval")
+        except SyntaxError:
+            return None
+        if "cffi." in cleaned:
+            self._needs_cffi = True
         if "ctypes." in cleaned:
             self._needs_ctypes = True
-        if re.search(r"\bAny\b", cleaned):
+        names_used = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+        if "Any" in names_used:
             self._needs_any = True
-        if re.search(r"\bCallable\b", cleaned):
+        if "Callable" in names_used:
             self._needs_callable = True
         return cleaned
 
@@ -257,6 +337,16 @@ class PyiWriter(BaseWriter):
         is_param: bool = False,
         _seen_typedefs: frozenset[str] = frozenset(),
     ) -> str:
+        if isinstance(type_expr, Struct):
+            if type_expr.name and type_expr.name.strip():
+                s_key = type_expr.name.strip()
+                resolved = self._record_tags.get(s_key) or _sanitize_identifier(s_key, fallback="Any")
+                if resolved == "Any":
+                    self._needs_any = True
+                return resolved
+            self._needs_any = True
+            return "Any"
+
         if isinstance(type_expr, CType):
             key = _normalize_ctype_key(type_expr)
             if type_expr.is_elaborated is True:
@@ -287,12 +377,25 @@ class PyiWriter(BaseWriter):
             res = _sanitize_identifier(key, fallback="Any")
             if res == "Any":
                 self._needs_any = True
+                return "Any"
+            if (
+                is_param
+                and self.mode == "cffi"
+                and self.pointer_style != "ctypes"
+                and self._typedef_resolves_to_pointer_or_fnptr(key)
+            ):
+                self._needs_cffi = True
+                return f"{res} | cffi.FFI.CData"
             return res
 
         if isinstance(type_expr, Pointer):
             pointee = type_expr.pointee
             if isinstance(pointee, FunctionPointer) and (not pointee.is_pointer or self.pointer_style != "ctypes"):
-                return self._format_function_pointer(pointee)
+                fn_ptr_str = self._format_function_pointer(pointee)
+                if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                    self._needs_cffi = True
+                    return f"{fn_ptr_str} | cffi.FFI.CData"
+                return fn_ptr_str
             if self.pointer_style == "ctypes":
                 if isinstance(pointee, CType):
                     p_key = _normalize_ctype_key(pointee)
@@ -304,22 +407,53 @@ class PyiWriter(BaseWriter):
                 inner = self._format_type(pointee, is_param=False, _seen_typedefs=_seen_typedefs)
                 self._needs_ctypes = True
                 return f"ctypes._Pointer[{inner}]"
+            if isinstance(pointee, Struct):
+                if pointee.name and pointee.name.strip():
+                    s_key = pointee.name.strip()
+                    resolved = self._record_tags.get(s_key) or _sanitize_identifier(s_key, fallback="Any")
+                    if resolved == "Any":
+                        self._needs_any = True
+                        return "Any"
+                    if is_param and self.mode == "cffi":
+                        self._needs_cffi = True
+                        return f"{resolved} | cffi.FFI.CData"
+                    return resolved
+                if self.mode == "cffi":
+                    self._needs_cffi = True
+                    return "cffi.FFI.CData"
+                self._needs_any = True
+                return "Any"
             if isinstance(pointee, CType):
                 p_key = _normalize_ctype_key(pointee)
                 if pointee.is_elaborated is True:
                     resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
-                    if resolved is not None:
-                        return resolved
-                    res = _sanitize_identifier(p_key, fallback="Any")
+                    res = resolved if resolved is not None else _sanitize_identifier(p_key, fallback="Any")
                     if res == "Any":
                         self._needs_any = True
+                        return "Any"
+                    if is_param and self.mode == "cffi":
+                        self._needs_cffi = True
+                        return f"{res} | cffi.FFI.CData"
                     return res
                 if p_key == "char":
-                    return "bytes | str" if is_param else "bytes"
+                    if is_param:
+                        if self.mode == "cffi":
+                            self._needs_cffi = True
+                            return "bytes | str | cffi.FFI.CData"
+                        return "bytes | str"
+                    return "bytes"
                 if p_key == "void":
+                    if self.mode == "cffi":
+                        self._needs_cffi = True
+                        if is_param:
+                            return "cffi.FFI.CData | bytes | bytearray | memoryview"
+                        return "cffi.FFI.CData"
                     self._needs_any = True
                     return "Any"
                 if p_key in _BOOL_TYPES or p_key in _INT_TYPES or p_key in _FLOAT_TYPES:
+                    if self.mode == "cffi":
+                        self._needs_cffi = True
+                        return "cffi.FFI.CData"
                     self._needs_any = True
                     return "Any"
                 if p_key in self._contested_tags and pointee.is_elaborated is False and p_key not in _seen_typedefs:
@@ -328,13 +462,24 @@ class PyiWriter(BaseWriter):
                         is_param=is_param,
                         _seen_typedefs=_seen_typedefs | {p_key},
                     )
+                if self._typedef_resolves_to_primitive_or_pointer(p_key):
+                    if self.mode == "cffi":
+                        self._needs_cffi = True
+                        return "cffi.FFI.CData"
+                    self._needs_any = True
+                    return "Any"
                 resolved = self._record_tags.get(p_key) or self._enum_tags.get(p_key)
-                if resolved is not None:
-                    return resolved
-                res = _sanitize_identifier(p_key, fallback="Any")
+                res = resolved if resolved is not None else _sanitize_identifier(p_key, fallback="Any")
                 if res == "Any":
                     self._needs_any = True
+                    return "Any"
+                if is_param and self.mode == "cffi":
+                    self._needs_cffi = True
+                    return f"{res} | cffi.FFI.CData"
                 return res
+            if self.mode == "cffi":
+                self._needs_cffi = True
+                return "cffi.FFI.CData"
             self._needs_any = True
             return "Any"
 
@@ -347,12 +492,21 @@ class PyiWriter(BaseWriter):
                 and type_expr.element_type.is_elaborated is not True
                 and _normalize_ctype_key(type_expr.element_type) == "char"
             ):
-                return "bytes"
-            elem = self._format_type(type_expr.element_type, is_param=False)
-            return f"list[{elem}]"
+                arr_res = "bytes"
+            else:
+                elem = self._format_type(type_expr.element_type, is_param=False)
+                arr_res = f"list[{elem}]"
+            if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                return f"{arr_res} | cffi.FFI.CData"
+            return arr_res
 
         if isinstance(type_expr, FunctionPointer):
-            return self._format_function_pointer(type_expr)
+            fn_ptr_str = self._format_function_pointer(type_expr)
+            if is_param and self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                return f"{fn_ptr_str} | cffi.FFI.CData"
+            return fn_ptr_str
 
         self._needs_any = True
         return "Any"
@@ -403,8 +557,8 @@ class PyiWriter(BaseWriter):
             self._needs_any = True
             line = f"{indent}{name}: Any"
         lines = [line]
-        doc = getattr(const, "doc", None)
-        if isinstance(doc, str) and doc.strip():
+        doc = self._resolve_doc_text(const)
+        if doc is not None:
             lines.extend(self._format_docstring(doc, indent=indent))
         return lines
 
@@ -434,11 +588,11 @@ class PyiWriter(BaseWriter):
             self._needs_enum = True
             cls_name = _sanitize_identifier(enum.name)
             lines.append(f"class {cls_name}(enum.IntEnum):")
-            doc = getattr(enum, "doc", None)
-            if isinstance(doc, str) and doc.strip():
+            doc = self._resolve_doc_text(enum)
+            if doc is not None:
                 lines.extend(self._format_docstring(doc, indent="    "))
             if not enum.values:
-                if not (isinstance(doc, str) and doc.strip()):
+                if doc is None:
                     lines.append("    ...")
             else:
                 next_val = 0
@@ -483,9 +637,9 @@ class PyiWriter(BaseWriter):
             return []
         cls_name = _sanitize_identifier(struct.name)
         lines: list[str] = [f"class {cls_name}:"]
-        doc = getattr(struct, "doc", None)
+        doc = self._resolve_doc_text(struct)
         has_body = False
-        if isinstance(doc, str) and doc.strip():
+        if doc is not None:
             lines.extend(self._format_docstring(doc, indent="    "))
             has_body = True
 
@@ -528,14 +682,71 @@ class PyiWriter(BaseWriter):
                 param_parts.append(f"{p_name}: {p_type}")
 
         if func.is_variadic:
-            self._needs_any = True
-            param_parts.append("*args: Any")
+            if self.mode == "cffi" and self.pointer_style != "ctypes":
+                self._needs_cffi = True
+                param_parts.append("*args: cffi.FFI.CData")
+            else:
+                self._needs_any = True
+                param_parts.append("*args: Any")
 
         ret_override = self._resolve_override(getattr(func, "return_type_overrides", None)) or self._resolve_override(
             getattr(func, "type_overrides", None)
         )
         ret_str = ret_override or self._format_type(func.return_type, is_param=False)
         return f"({', '.join(param_parts)}) -> {ret_str}"
+
+    @staticmethod
+    def _format_parsed_doc(parsed: ParsedDoc, *, is_deprecated: bool = False) -> str:
+        sections: list[str] = []
+        if parsed.summary:
+            sections.append(parsed.summary)
+        if parsed.body:
+            sections.append(parsed.body)
+        if parsed.deprecated:
+            sections.append(f"Deprecated: {parsed.deprecated}")
+        elif is_deprecated:
+            sections.append("Deprecated.")
+        tag_lines: list[str] = []
+        for param_doc in parsed.params:
+            if param_doc.type_hint:
+                tag_lines.append(f":param {param_doc.name}: ({param_doc.type_hint}) {param_doc.description}".rstrip())
+            elif param_doc.description:
+                tag_lines.append(f":param {param_doc.name}: {param_doc.description}")
+            else:
+                tag_lines.append(f":param {param_doc.name}:")
+        if parsed.returns:
+            tag_lines.append(f":returns: {parsed.returns}")
+        if parsed.return_type_hint:
+            tag_lines.append(f":rtype: {parsed.return_type_hint}")
+        for raises_doc in parsed.raises:
+            if raises_doc.description:
+                tag_lines.append(f":raises {raises_doc.exception}: {raises_doc.description}")
+            else:
+                tag_lines.append(f":raises {raises_doc.exception}:")
+        if tag_lines:
+            sections.append("\n".join(tag_lines))
+        for note in parsed.notes:
+            sections.append(f"Note: {note}")
+        for warning in parsed.warnings:
+            sections.append(f"Warning: {warning}")
+        for example in parsed.examples:
+            sections.append(f"Example:\n{example}")
+        if parsed.see_also:
+            sections.append(f"See also: {', '.join(parsed.see_also)}")
+        return "\n\n".join(s for s in sections if s.strip())
+
+    @classmethod
+    def _resolve_doc_text(cls, decl: Any) -> str | None:
+        parsed = getattr(decl, "parsed_doc", None)
+        is_dep = bool(getattr(decl, "is_deprecated", False))
+        if isinstance(parsed, ParsedDoc):
+            rendered = cls._format_parsed_doc(parsed, is_deprecated=is_dep)
+            if rendered.strip():
+                return rendered
+        doc = getattr(decl, "doc", None)
+        if isinstance(doc, str) and doc.strip():
+            return doc
+        return None
 
     @staticmethod
     def _format_docstring(doc: str, *, indent: str = "    ") -> list[str]:
@@ -554,8 +765,8 @@ class PyiWriter(BaseWriter):
     def _format_function(self, func: Function, *, indent: str = "", include_self: bool = False) -> list[str]:
         fn_name = _sanitize_identifier(func.name)
         sig = self._format_function_params_and_return(func, include_self=include_self)
-        doc = getattr(func, "doc", None)
-        if isinstance(doc, str) and doc.strip():
+        doc = self._resolve_doc_text(func)
+        if doc is not None:
             lines = [f"{indent}def {fn_name}{sig}:"]
             lines.extend(self._format_docstring(doc, indent=f"{indent}    "))
             lines.append(f"{indent}    ...")
@@ -631,8 +842,8 @@ class PyiWriter(BaseWriter):
                     elif matches_define:
                         c_name = _sanitize_identifier(decl.name)
                         lib_member_lines.append(f"    {c_name}: int = ...")
-                        doc = getattr(decl, "doc", None)
-                        if isinstance(doc, str) and doc.strip():
+                        doc = self._resolve_doc_text(decl)
+                        if doc is not None:
                             lib_member_lines.extend(self._format_docstring(doc, indent="    "))
                 else:
                     const_lines = self._format_constant(decl)
@@ -656,8 +867,8 @@ class PyiWriter(BaseWriter):
                     continue
                 if alias_name != target_str:
                     td_lines = [f"{alias_name} = {target_str}"]
-                    doc = getattr(decl, "doc", None)
-                    if isinstance(doc, str) and doc.strip():
+                    doc = self._resolve_doc_text(decl)
+                    if doc is not None:
                         td_lines.extend(self._format_docstring(doc, indent=""))
                     body_blocks.append("\n".join(td_lines))
             elif isinstance(decl, Variable):
@@ -667,14 +878,14 @@ class PyiWriter(BaseWriter):
                 )
                 if self.mode == "cffi":
                     var_lines = [f"    {v_name}: {v_type}"]
-                    doc = getattr(decl, "doc", None)
-                    if isinstance(doc, str) and doc.strip():
+                    doc = self._resolve_doc_text(decl)
+                    if doc is not None:
                         var_lines.extend(self._format_docstring(doc, indent="    "))
                     lib_member_lines.extend(var_lines)
                 else:
                     var_lines = [f"{v_name}: {v_type}"]
-                    doc = getattr(decl, "doc", None)
-                    if isinstance(doc, str) and doc.strip():
+                    doc = self._resolve_doc_text(decl)
+                    if doc is not None:
                         var_lines.extend(self._format_docstring(doc, indent=""))
                     body_blocks.append("\n".join(var_lines))
             elif isinstance(decl, Function):
@@ -686,76 +897,43 @@ class PyiWriter(BaseWriter):
                     body_blocks.append("\n".join(fn_lines))
 
         if self.mode == "cffi":
+            all_func_decls = {decl.name: decl for decl in unit.declarations if isinstance(decl, Function)}
             for ext_entry in self.extern_python:
                 stripped = ext_entry.strip()
-                if stripped.startswith('extern "Python"'):
-                    stripped = stripped[len('extern "Python"') :].strip()
-                if stripped.endswith(";"):
-                    stripped = stripped[:-1].strip()
-                if not stripped:
-                    continue
-                if "(" in stripped:
-                    m_proto = re.match(r"^(.*?)\b([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$", stripped)
-                    if m_proto:
-                        ret_raw, cb_name, params_raw = (
-                            m_proto.group(1).strip(),
-                            m_proto.group(2),
-                            m_proto.group(3).strip(),
-                        )
-                        py_cb_name = _sanitize_identifier(cb_name)
-                        if py_cb_name in emitted_lib_funcs:
-                            continue
+                if (
+                    not stripped
+                    or "(" in stripped
+                    or stripped.startswith('extern "Python"')
+                    or not stripped.isidentifier()
+                ):
+                    raise ValueError(
+                        f"extern_python entry {ext_entry!r} must be a symbol name of a Function or "
+                        "function-pointer Typedef in Header.declarations, not a raw C prototype string"
+                    )
+                py_cb_name = _sanitize_identifier(stripped)
+                if stripped in all_func_decls:
+                    if py_cb_name not in emitted_lib_funcs:
                         emitted_lib_funcs.add(py_cb_name)
-                        ret_t: TypeExpr = (
-                            Pointer(CType(ret_raw.rstrip("*").strip()))
-                            if ret_raw.endswith("*")
-                            else CType(ret_raw or "void")
+                        lib_member_lines.extend(
+                            self._format_function(all_func_decls[stripped], indent="    ", include_self=True)
                         )
-                        cb_params: list[Parameter] = []
-                        if params_raw and params_raw != "void":
-                            for p_idx, p_str in enumerate(params_raw.split(",")):
-                                p_clean = p_str.strip()
-                                if not p_clean or p_clean == "void":
-                                    continue
-                                if "*" in p_clean:
-                                    lhs, rhs = p_clean.rsplit("*", 1)
-                                    p_n = rhs.strip() or f"arg{p_idx}"
-                                    p_t: TypeExpr = Pointer(CType(lhs.rstrip("*").strip() or "void"))
-                                else:
-                                    parts = p_clean.rsplit(None, 1)
-                                    if (
-                                        len(parts) == 2
-                                        and parts[1].isidentifier()
-                                        and parts[0] not in ("unsigned", "signed", "const", "struct", "enum", "union")
-                                    ):
-                                        p_t = CType(parts[0].strip())
-                                        p_n = parts[1].strip()
-                                    else:
-                                        p_t = CType(p_clean)
-                                        p_n = f"arg{p_idx}"
-                                cb_params.append(Parameter(p_n, p_t))
-                        synth_fn = Function(cb_name, ret_t, cb_params)
-                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
-                else:
-                    py_cb_name = _sanitize_identifier(stripped)
-                    if py_cb_name in emitted_lib_funcs:
-                        continue
-                    matched_td = self._typedef_map.get(stripped)
-                    while isinstance(matched_td, Pointer):
-                        matched_td = matched_td.pointee
-                    if isinstance(matched_td, FunctionPointer):
+                    continue
+                matched_fp = self._resolve_typedef_function_pointer(stripped)
+                if matched_fp is not None:
+                    if py_cb_name not in emitted_lib_funcs:
                         emitted_lib_funcs.add(py_cb_name)
                         synth_fn = Function(
                             stripped,
-                            matched_td.return_type,
-                            list(matched_td.parameters),
-                            is_variadic=matched_td.is_variadic,
+                            matched_fp.return_type,
+                            list(matched_fp.parameters),
+                            is_variadic=matched_fp.is_variadic,
                         )
                         lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
-                    else:
-                        emitted_lib_funcs.add(py_cb_name)
-                        synth_fn = Function(stripped, CType("void"), [])
-                        lib_member_lines.extend(self._format_function(synth_fn, indent="    ", include_self=True))
+                    continue
+                raise ValueError(
+                    f"extern_python symbol {stripped!r} not found as a Function or "
+                    "function-pointer Typedef in Header.declarations"
+                )
 
             body_blocks.append("ffi: cffi.FFI")
             lib_cls_lines = ["@final", "class _Lib:"]

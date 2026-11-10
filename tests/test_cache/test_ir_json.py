@@ -15,10 +15,14 @@ from headerkit.ir import (
     Function,
     FunctionPointer,
     Header,
+    ParamDoc,
     Parameter,
+    ParsedDoc,
     Pointer,
+    RaisesDoc,
     Reference,
     SourceLocation,
+    SourceMeta,
     Struct,
     TemplateParameter,
     Typedef,
@@ -497,6 +501,40 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
         exactly how five of them stayed broken.
         """
         loc = SourceLocation(file="h.h", line=3, column=9)
+        pdoc = ParsedDoc(
+            summary="Summary line.",
+            body="Detailed body.",
+            params=(
+                ParamDoc(
+                    name="p",
+                    description="Param desc.",
+                    type_hint="int32",
+                    direction="inout",
+                    optional=True,
+                ),
+            ),
+            returns="Return desc.",
+            return_type_hint="int",
+            raises=(RaisesDoc(exception="ValueError", description="On bad input."),),
+            deprecated="Use m2 instead.",
+            examples=("m(1)",),
+            see_also=("m2",),
+            since="1.0",
+            notes=("Note 1",),
+            warnings=("Warn 1",),
+            source_format="doxygen",
+            parse_errors=("Minor issue",),
+        )
+        smeta = SourceMeta(
+            source_language="nim",
+            source_name="origName",
+            source_type="seq[int32]",
+            module="mymod",
+            is_exported=False,
+            is_nothrow=True,
+            ownership="owned",
+            attributes=(("exportc", "m"), ("cdecl", "")),
+        )
         tpl_param = TemplateParameter(
             "N",
             default_value="4",
@@ -504,16 +542,44 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
             type_name="size_t",
             is_parameter_pack=True,
         )
-        inner = Struct("Inner", [Field("q", CType("int"), type_overrides={"nim": "cint"})], access="protected")
+        inner = Struct(
+            "Inner",
+            [
+                Field(
+                    "q",
+                    CType("int"),
+                    type_overrides={"nim": "cint"},
+                    doc="q doc",
+                    parsed_doc=pdoc,
+                    source_meta=smeta,
+                )
+            ],
+            access="protected",
+            doc="inner doc",
+            parsed_doc=pdoc,
+            source_meta=smeta,
+        )
         method = Function(
             "m",
             CType("void"),
-            [Parameter("p", CType("int"), type_overrides={"cffi": "int32_t"})],
+            [
+                Parameter(
+                    "p",
+                    CType("int"),
+                    type_overrides={"cffi": "int32_t"},
+                    doc="p doc",
+                    parsed_doc=pdoc,
+                    source_meta=smeta,
+                )
+            ],
             template_params=["N"],
             template_parameters=[tpl_param],
             mangled_name="_ZN2ns1mEi",
             type_overrides={"cython": "void"},
             location=loc,
+            doc="m doc",
+            parsed_doc=pdoc,
+            source_meta=smeta,
         )
         return Header(
             "h.h",
@@ -535,6 +601,9 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                             CType("const unsigned int", qualifiers=["const"], is_elaborated=True),
                             bit_width=4,
                             type_overrides={"nim": " cuint"},
+                            doc="a doc",
+                            parsed_doc=pdoc,
+                            source_meta=smeta,
                         ),
                         Field("", CType("unsigned int"), bit_width=3, is_padding=True),
                         Field("st", CType("int"), is_static=True, access="private"),
@@ -553,10 +622,13 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     bases=[BaseSpecifier("B", access="protected", is_virtual=True)],
                     alignment=16,
                     location=loc,
+                    doc="S doc",
+                    parsed_doc=pdoc,
+                    source_meta=smeta,
                 ),
                 Enum(
                     "E",
-                    [EnumValue("X", 1)],
+                    [EnumValue("X", 1, doc="X doc", parsed_doc=pdoc, source_meta=smeta)],
                     is_scoped=True,
                     underlying_type="int",
                     underlying_type_known=False,
@@ -564,6 +636,9 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     namespace="ns",
                     cpp_name="ns::E",
                     location=loc,
+                    doc="E doc",
+                    parsed_doc=pdoc,
+                    source_meta=smeta,
                 ),
                 Typedef(
                     "fn_t",
@@ -577,6 +652,9 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     ),
                     type_overrides={"cffi": "int(*)(int, ...)"},
                     location=loc,
+                    doc="fn_t doc",
+                    parsed_doc=pdoc,
+                    source_meta=smeta,
                 ),
                 Variable(
                     "g_val",
@@ -586,6 +664,9 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     mangled_name="_ZN2ns5g_valE",
                     type_overrides={"nim": "cint"},
                     location=loc,
+                    doc="g_val doc",
+                    parsed_doc=pdoc,
+                    source_meta=smeta,
                 ),
                 Constant(
                     "EXPR_MACRO",
@@ -595,6 +676,9 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
                     is_macro_expr=True,
                     raw_expression="(FOO + 1)",
                     location=loc,
+                    doc="macro doc",
+                    parsed_doc=pdoc,
+                    source_meta=smeta,
                 ),
             ],
         )
@@ -634,7 +718,7 @@ class TestEveryIrFieldSurvivesTheRoundTrip:
             for f in dataclasses.fields(obj):
                 value = getattr(obj, f.name)
                 rendered = d.get(f.name)
-                if isinstance(value, list) and isinstance(rendered, list):
+                if isinstance(value, (list, tuple)) and isinstance(rendered, list):
                     for item, sub in zip(value, rendered, strict=False):
                         walk(item, sub)
                 else:

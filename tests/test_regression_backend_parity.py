@@ -904,15 +904,7 @@ PARITY_CASES = [
         ),
     ),
     pytest.param("typedef int (*cb)(int a, char b);", id="funcptr_typedef_param_names"),
-    pytest.param(
-        "void reg(int (*cb)(int));",
-        id="funcptr_parameter",
-        marks=_xfail(
-            "DEFECT (tree-sitter): a function-pointer PARAMETER collapses to its return type "
-            "-- 'void reg(int)' -- losing the whole signature that libclang renders as "
-            "'void reg(int (*cb)(int))'."
-        ),
-    ),
+    pytest.param("void reg(int (*cb)(int));", id="funcptr_parameter"),
     pytest.param(
         "void f(const struct P *p);",
         id="undefined_struct_forward_decl",

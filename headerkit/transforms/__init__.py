@@ -13,6 +13,7 @@ from headerkit.transforms.builtin import (
     StripPrefix,
     rewrite_type_references,
 )
+from headerkit.transforms.doc_parser import DocParseError, DocParserTransform
 from headerkit.transforms.filter import (
     ChainedFilter,
     PipelineFilter,
@@ -23,11 +24,11 @@ from headerkit.transforms.filter import (
     list_transforms,
     register_transform,
 )
-from headerkit.transforms.nim_cleanup import NimCleanupTransform
-from headerkit.transforms.nim_jsondoc import NimJsonDocEnricher
 
 __all__ = [
     "ChainedFilter",
+    "DocParseError",
+    "DocParserTransform",
     "FilterByHeader",
     "FilterBySymbol",
     "FilterDeprecated",
@@ -35,8 +36,6 @@ __all__ = [
     "FilterUnexportedSymbolsTransform",
     "IRTransformer",
     "MakeOpaque",
-    "NimCleanupTransform",
-    "NimJsonDocEnricher",
     "PipelineFilter",
     "RenameTypes",
     "StripPaddingFields",

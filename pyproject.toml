@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "headerkit"
-version = "0.50.1"
-description = "The universal C/C++ header parser and FFI declaration generator for Python (cffi, ctypes, Cython, pyi), LuaJIT, JSON IR, and LLM prompts."
+version = "0.51.0"
+description = "The universal C/C++/Nim header and AST parser and FFI declaration generator for Python (cffi, ctypes, Cython, pyi), Nim, Mojo, LuaJIT, TypeScript/Wasm, C shims, JSON IR, and LLM prompts."
 readme = "README.md"
 license = "MIT AND Apache-2.0 WITH LLVM-exception"
 license-files = ["LICENSE", "headerkit/_clang/LICENSE"]
 authors = [
     { name = "elijahr", email = "elijahr+cir@gmail.com" },
 ]
-keywords = ["c", "c++", "parser", "cffi", "libclang", "ir", "code-generation", "ctypes", "cython", "ffi", "bindings", "header-parser"]
+keywords = ["c", "c++", "nim", "parser", "cffi", "libclang", "ir", "code-generation", "ctypes", "cython", "ffi", "bindings", "header-parser"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -59,6 +59,10 @@ dev = ["headerkit[test,lint,docs,treesitter]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["headerkit"]
+artifacts = ["headerkit/backends/*.nim", "headerkit/py.typed"]
+
+[tool.hatch.build.targets.sdist]
+artifacts = ["headerkit/backends/*.nim", "headerkit/py.typed"]
 
 
 [tool.ruff]

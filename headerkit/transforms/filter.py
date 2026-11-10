@@ -117,17 +117,6 @@ class PipelineFilter(IRTransformer):
     def __rrshift__(self, unit: SourceUnit) -> SourceUnit:
         return self.transform(unit)
 
-    def prepare_parse(
-        self,
-        code: str,
-        filename: str,
-        include_dirs: list[str],
-        extra_args: list[str],
-    ) -> tuple[list[str], list[str], dict[str, Any]]:
-        """Prepare include directories, compiler args, and backend kwargs prior to parsing."""
-        _ = (code, filename)
-        return list(include_dirs), list(extra_args), {}
-
     def transform(self, unit: SourceUnit, context: PipelineContext | None = None) -> SourceUnit:
         res = self.visit(unit, context=context)
         if isinstance(res, SourceUnit):
@@ -157,31 +146,6 @@ class ChainedFilter(PipelineFilter):
                 self.filters.extend(f.filters)
             else:
                 self.filters.append(f)
-
-    def prepare_parse(
-        self,
-        code: str,
-        filename: str,
-        include_dirs: list[str],
-        extra_args: list[str],
-    ) -> tuple[list[str], list[str], dict[str, Any]]:
-        inc = list(include_dirs)
-        args = list(extra_args)
-        merged_kwargs: dict[str, Any] = {}
-        for f in self.filters:
-            inc, args, b_kwargs = f.prepare_parse(code, filename, inc, args)
-            for k, v in b_kwargs.items():
-                if isinstance(v, (list, tuple)) and isinstance(merged_kwargs.get(k), list):
-                    for item in v:
-                        if item not in merged_kwargs[k]:
-                            merged_kwargs[k].append(item)
-                elif isinstance(v, (list, tuple)):
-                    merged_kwargs[k] = list(v)
-                elif isinstance(v, bool) and isinstance(merged_kwargs.get(k), bool):
-                    merged_kwargs[k] = merged_kwargs[k] or v
-                else:
-                    merged_kwargs[k] = v
-        return inc, args, merged_kwargs
 
     def transform(self, unit: SourceUnit, context: PipelineContext | None = None) -> SourceUnit:
         current = unit

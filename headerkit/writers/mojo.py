@@ -9,7 +9,6 @@ It supports:
 
 from __future__ import annotations
 
-import re
 from typing import ClassVar
 
 from headerkit.ir import (
@@ -169,10 +168,20 @@ def _sanitize_name(name: str) -> str:
     name = name.replace("operator|", "bor")
     name = name.replace("operator^", "bxor")
     name = name.replace("operator=", "assign")
-    name = re.sub(r"[<>, \t]+", "_", name)
+    collapsed: list[str] = []
+    in_sep = False
+    for ch in name:
+        if ch in "<>, \t":
+            if not in_sep:
+                collapsed.append("_")
+                in_sep = True
+        else:
+            collapsed.append(ch)
+            in_sep = False
+    name = "".join(collapsed)
     name = name.replace("&", "")
     name = name.replace("*", "Ptr")
-    name = re.sub(r"[^a-zA-Z0-9_]", "", name)
+    name = "".join(ch for ch in name if ch.isalnum() or ch == "_")
     clean = name.strip("_")
     return _escape_identifier(clean)
 

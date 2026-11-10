@@ -1711,6 +1711,32 @@ def _packed_verification_lines(
 _SECTION_ORDER: tuple[str, ...] = ("constants", "enums", "structs", "typedefs", "functions", "variables")
 
 
+def _doc_comment_prefix(decl: object) -> str:
+    """Return a ``# ...`` comment block when ``decl.parsed_doc`` is populated."""
+    parsed = getattr(decl, "parsed_doc", None)
+    if parsed is None:
+        return ""
+    comment_lines: list[str] = []
+    summary = getattr(parsed, "summary", "")
+    if isinstance(summary, str) and summary.strip():
+        for line in summary.strip().splitlines():
+            comment_lines.append(f"# {line}")
+    for param_doc in getattr(parsed, "params", ()):
+        if param_doc.description:
+            comment_lines.append(f"# @param {param_doc.name}: {param_doc.description}")
+        else:
+            comment_lines.append(f"# @param {param_doc.name}")
+    returns = getattr(parsed, "returns", None)
+    if isinstance(returns, str) and returns.strip():
+        comment_lines.append(f"# @return {returns.strip()}")
+    deprecated = getattr(parsed, "deprecated", None)
+    if isinstance(deprecated, str) and deprecated.strip():
+        comment_lines.append(f"# DEPRECATED: {deprecated.strip()}")
+    if not comment_lines:
+        return ""
+    return "\n".join(comment_lines) + "\n"
+
+
 def _render_declaration(
     decl: object,
     lib_name: str,
@@ -1723,18 +1749,25 @@ def _render_declaration(
     :returns: The rendered source (``None`` when the declaration emits nothing)
         and the section key, or ``""`` for a declaration kind this writer skips.
     """
+    prefix = _doc_comment_prefix(decl)
     if isinstance(decl, Constant):
-        return _constant_to_ctypes(decl), "constants"
+        res = _constant_to_ctypes(decl)
+        return (f"{prefix}{res}" if res is not None else None), "constants"
     if isinstance(decl, Enum):
-        return _enum_to_ctypes(decl, typedef_names), "enums"
+        res = _enum_to_ctypes(decl, typedef_names)
+        return (f"{prefix}{res}" if res is not None else None), "enums"
     if isinstance(decl, Struct):
-        return _struct_to_ctypes(decl, types, packed_expectations), "structs"
+        res = _struct_to_ctypes(decl, types, packed_expectations)
+        return (f"{prefix}{res}" if res is not None else None), "structs"
     if isinstance(decl, Typedef):
-        return _typedef_to_ctypes(decl, types), "typedefs"
+        res = _typedef_to_ctypes(decl, types)
+        return (f"{prefix}{res}" if res is not None else None), "typedefs"
     if isinstance(decl, Function):
-        return _function_to_ctypes(decl, lib_name, types), "functions"
+        res = _function_to_ctypes(decl, lib_name, types)
+        return (f"{prefix}{res}" if res is not None else None), "functions"
     if isinstance(decl, Variable):
-        return _variable_to_ctypes(decl, lib_name, types), "variables"
+        res = _variable_to_ctypes(decl, lib_name, types)
+        return (f"{prefix}{res}" if res is not None else None), "variables"
     if isinstance(decl, MacroFunction):
         params_str = ", ".join(p.name for p in decl.parameters)
         sig = f"{decl.name}({params_str})"
@@ -1765,7 +1798,8 @@ def _bound_names(decl: object, rendered: str, typedef_names: frozenset[str], typ
         return [types.record_classes.get(_record_qualified_name(decl), decl.name)]
     if isinstance(decl, Typedef):
         # An unrepresentable or redundant typedef renders as a bare comment.
-        return [] if rendered.lstrip().startswith("#") else [decl.name]
+        non_doc_lines = [line for line in rendered.splitlines() if not line.lstrip().startswith("#")]
+        return [decl.name] if non_doc_lines else []
     return []
 
 

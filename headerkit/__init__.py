@@ -31,6 +31,8 @@ from headerkit.backends import (
     is_backend_available,
     list_backends,
 )
+from headerkit.backends.nim import NimBackend, clean_nim_c_unit, extract_nim_ast_data
+from headerkit.backends.nimony import NimonyBackend
 from headerkit.hooks import (
     HookCaller,
     HookDispatcher,
@@ -60,12 +62,16 @@ from headerkit.ir import (
     InputSpec,
     MacroFunction,
     MacroParameter,
+    ParamDoc,
     Parameter,
+    ParsedDoc,
     # Protocol
     ParserBackend,
     Pointer,
+    RaisesDoc,
     Reference,
     SourceLocation,
+    SourceMeta,
     SourceUnit,
     Struct,
     TemplateParameter,
@@ -109,6 +115,8 @@ from headerkit.reconcile import (
 )
 from headerkit.transforms import (
     ChainedFilter,
+    DocParseError,
+    DocParserTransform,
     FilterByHeader,
     FilterBySymbol,
     FilterDeprecated,
@@ -116,8 +124,6 @@ from headerkit.transforms import (
     FilterUnexportedSymbolsTransform,
     IRTransformer,
     MakeOpaque,
-    NimCleanupTransform,
-    NimJsonDocEnricher,
     PipelineFilter,
     RenameTypes,
     StripPaddingFields,
@@ -172,6 +178,10 @@ __all__ = [
     "SourceUnit",
     "InputSpec",
     "SourceLocation",
+    "ParamDoc",
+    "RaisesDoc",
+    "ParsedDoc",
+    "SourceMeta",
     # Parser Protocol
     "ParserBackend",
     # Backend API
@@ -179,6 +189,10 @@ __all__ = [
     "list_backends",
     "is_backend_available",
     "LibclangUnavailableError",
+    "NimBackend",
+    "NimonyBackend",
+    "clean_nim_c_unit",
+    "extract_nim_ast_data",
     # Writer Protocol
     "WriterBackend",
     "BaseWriter",
@@ -265,10 +279,10 @@ __all__ = [
     "IRTransformer",
     "PipelineFilter",
     "ChainedFilter",
+    "DocParseError",
+    "DocParserTransform",
     "StripPrefix",
     "MakeOpaque",
-    "NimCleanupTransform",
-    "NimJsonDocEnricher",
     "RenameTypes",
     "StripPaddingFields",
     "FilterByHeader",

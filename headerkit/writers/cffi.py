@@ -590,12 +590,16 @@ def _find_typedef_struct_pairs(declarations: list[Declaration]) -> set[str]:
 def header_to_cffi(
     header: Header,
     exclude_patterns: list[str] | None = None,
+    extern_python_names: set[str] | None = None,
 ) -> str:
     """Convert all declarations in a Header to a CFFI cdef string.
 
     :param header: Parsed header IR from headerkit.
     :param exclude_patterns: List of regex patterns. Declarations with names
         matching any pattern will be excluded.
+    :param extern_python_names: Optional set of Function symbol names that will
+        be emitted as ``extern "Python"`` declarations instead of plain C
+        function declarations.
     :returns: A string suitable for passing to ``ffibuilder.cdef()``.
     """
     compiled_patterns = None
@@ -609,6 +613,9 @@ def header_to_cffi(
 
     lines = []
     for decl in header.declarations:
+        if extern_python_names and isinstance(decl, Function) and decl.name in extern_python_names:
+            continue
+
         if isinstance(decl, Enum) and decl.name in combined_enum_pairs:
             result = _enum_to_cffi_as_typedef(decl)
             if result is not None:
@@ -649,31 +656,50 @@ def _enum_to_cffi_as_typedef(decl: Enum) -> str | None:
     return "\n".join(lines)
 
 
+def _resolve_cffi_typedef_fnptr(
+    name: str,
+    typedef_map: dict[str, TypeExpr],
+    _seen: frozenset[str] = frozenset(),
+) -> FunctionPointer | None:
+    """Resolve a typedef symbol name (including alias chains) to an underlying FunctionPointer."""
+    if name not in typedef_map or name in _seen:
+        return None
+    underlying = typedef_map[name]
+    unwrapped = _unwrap_function_pointer(underlying)
+    if unwrapped is not None:
+        return unwrapped[0]
+    if isinstance(underlying, CType):
+        return _resolve_cffi_typedef_fnptr(underlying.name.strip(), typedef_map, _seen | {name})
+    return None
+
+
 def _format_extern_python_entry(
     entry: str,
     declarations: Sequence[Declaration],
     tag_kinds: TagKinds,
 ) -> str:
-    """Format a single `extern_python` entry into an `extern "Python" ...;` line."""
+    """Format a single `extern_python` symbol name into an `extern "Python" ...;` line."""
     stripped = entry.strip()
-    if stripped.startswith('extern "Python"'):
-        return stripped if stripped.endswith(";") else f"{stripped};"
-    if "(" in stripped:
-        proto = stripped if stripped.endswith(";") else f"{stripped};"
-        return f'extern "Python" {proto}'
+    if not stripped or "(" in stripped or stripped.startswith('extern "Python"') or not stripped.isidentifier():
+        raise ValueError(
+            f"extern_python entry {entry!r} must be a symbol name of a Function or "
+            "function-pointer Typedef in Header.declarations, not a raw C prototype string"
+        )
+    typedef_map = {d.name: d.underlying_type for d in declarations if isinstance(d, Typedef)}
     for decl in declarations:
         if isinstance(decl, Function) and decl.name == stripped:
             params = _format_params(decl.parameters, decl.is_variadic, tag_kinds)
             ret = type_to_cffi(decl.return_type, tag_kinds)
             return f'extern "Python" {ret} {decl.name}({params});'
         if isinstance(decl, Typedef) and decl.name == stripped:
-            unwrapped = _unwrap_function_pointer(decl.underlying_type)
-            if unwrapped is not None:
-                fp, _ = unwrapped
+            fp = _resolve_cffi_typedef_fnptr(stripped, typedef_map)
+            if fp is not None:
                 params = _format_params(fp.parameters, fp.is_variadic, tag_kinds)
                 ret = type_to_cffi(fp.return_type, tag_kinds)
                 return f'extern "Python" {ret} {decl.name}({params});'
-    return f'extern "Python" void {stripped}(void);'
+    raise ValueError(
+        f"extern_python symbol {stripped!r} not found as a Function or function-pointer Typedef in Header.declarations"
+    )
 
 
 class CffiWriter(BaseWriter):
@@ -694,8 +720,8 @@ class CffiWriter(BaseWriter):
         When set (e.g. ``"CDEF"``), wraps the output as a valid Python module
         exporting ``<module_var>: str = ...`` and ``__all__ = [<module_var>]``.
     extern_python : Sequence[str] | None
-        C function prototypes, ``extern "Python"`` lines, or declaration names
-        to append as ``extern "Python"`` callback declarations.
+        Symbol names of ``Function`` or function-pointer ``Typedef`` declarations
+        in ``Header.declarations`` to emit as ``extern "Python"`` callbacks.
     """
 
     name: str = "cffi"
@@ -731,7 +757,10 @@ class CffiWriter(BaseWriter):
         ),
         WriterOption(
             name="extern_python",
-            description='Function prototypes or names to emit as extern "Python" callbacks',
+            description=(
+                "Function or function-pointer typedef symbol names in Header.declarations "
+                'to emit as extern "Python" callbacks'
+            ),
             default=None,
             type=list,
         ),
@@ -789,18 +818,27 @@ class CffiWriter(BaseWriter):
 
     def _render(self, unit: SourceUnit | Header) -> str:
         header = unit if isinstance(unit, Header) else Header(declarations=unit.declarations, path=unit.path)
-        output = header_to_cffi(header, exclude_patterns=self._exclude_patterns)
+        extern_lines = ""
+        extern_python_names: set[str] | None = None
+        if self.extern_python:
+            tag_kinds = _build_tag_kinds(header.declarations)
+            extern_lines = "\n".join(
+                _format_extern_python_entry(entry, header.declarations, tag_kinds) for entry in self.extern_python
+            )
+            extern_python_names = {entry.strip() for entry in self.extern_python}
+
+        output = header_to_cffi(
+            header,
+            exclude_patterns=self._exclude_patterns,
+            extern_python_names=extern_python_names,
+        )
 
         matched_defines = self._collect_matched_defines(header)
         if matched_defines:
             define_lines = "\n".join(f"#define {name} ..." for name in matched_defines)
             output = output + "\n" + define_lines if output else define_lines
 
-        if self.extern_python:
-            tag_kinds = _build_tag_kinds(header.declarations)
-            extern_lines = "\n".join(
-                _format_extern_python_entry(entry, header.declarations, tag_kinds) for entry in self.extern_python
-            )
+        if extern_lines:
             output = output + "\n" + extern_lines if output else extern_lines
 
         if self.extra_cdef:

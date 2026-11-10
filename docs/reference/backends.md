@@ -14,6 +14,8 @@ what is available.
 |---------|-------------|:-----------:|:----------------:|:---------:|:---------------:|
 | `libclang` | LLVM clang-based parser | Yes | Yes | `c`, `cpp` | `header` |
 | `tree-sitter` | Zero-dependency parser using `tree-sitter-c` and `tree-sitter-cpp` | Yes | No | `c`, `cpp` | `header`, `source` |
+| `nim` | Native Nim 2.x compiler `std/macros` AST extractor (`_nim_ast_helper.nim`) and `nim c --header` C-ABI parser | No | Yes | `nim`, `c` | `source`, `header` |
+| `nimony` | Native Nimony (Nim 3.0) NIF S-expression reader (`_nimony_nif_helper.nim`) | No | No | `nif`, `nimony`, `nim` | `interface`, `source`, `header` |
 
 ## Protocol
 
@@ -50,5 +52,23 @@ full protocol definition including `parse()`, `name`, `supports_macros`,
       show_source: false
 
 ::: headerkit.backends.get_backend_info
+    options:
+      show_source: false
+
+## Nim & Nimony Backends
+
+::: headerkit.backends.nim.NimBackend
+    options:
+      show_source: false
+
+::: headerkit.backends.nim.extract_nim_ast_data
+    options:
+      show_source: false
+
+::: headerkit.backends.nim.clean_nim_c_unit
+    options:
+      show_source: false
+
+::: headerkit.backends.nimony.NimonyBackend
     options:
       show_source: false

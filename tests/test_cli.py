@@ -817,14 +817,14 @@ class TestBatchCLIIntegration:
                     str(hdr),
                     "--no-config",
                     "-t",
-                    "nim_cleanup",
+                    "doc_parser",
                     "--transform",
                     "filter_by_symbol:exclude=_*",
                 ]
             )
         assert rc == 0
         assert mock_generate.call_args.kwargs["transforms"] == [
-            "nim_cleanup",
+            "doc_parser",
             "filter_by_symbol:exclude=_*",
         ]
 

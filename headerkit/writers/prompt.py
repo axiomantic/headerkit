@@ -243,6 +243,8 @@ def _header_to_standard(header: Header) -> str:
         for s in structs:
             name = s.name or "(anon)"
             lines.append(f"  {name}:")
+            if s.parsed_doc is not None and s.parsed_doc.summary:
+                lines.append(f"    doc: {s.parsed_doc.summary}")
             if s.is_packed:
                 lines.append("    packed: true")
             if s.is_union:
@@ -280,7 +282,10 @@ def _header_to_standard(header: Header) -> str:
                 params_parts.append("...")
             params = ", ".join(params_parts)
             ret = _type_to_str(fn.return_type)
-            lines.append(f"  {fn.name}: ({params}) -> {ret}")
+            if fn.parsed_doc is not None and fn.parsed_doc.summary:
+                lines.append(f"  {fn.name}: ({params}) -> {ret}  # {fn.parsed_doc.summary}")
+            else:
+                lines.append(f"  {fn.name}: ({params}) -> {ret}")
 
     if typedefs:
         lines.append("")

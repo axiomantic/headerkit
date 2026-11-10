@@ -252,7 +252,6 @@ def _get_ir(
     context: PipelineContext | None = None,
     input_spec: InputSpec | None = None,
     prechecked_ir: tuple[SourceUnit | None, str, str] | None = None,
-    transforms: Sequence[PipelineFilter] | None = None,
 ) -> tuple[SourceUnit, str, str, bool]:
     """Resolve IR from cache or by parsing with the backend.
 
@@ -279,17 +278,6 @@ def _get_ir(
         parse_code = code if code is not None else header_path.read_text(encoding="utf-8")
         inc_dirs: list[str] = list(parsed_args.includes)
         extra_parse_args: list[str] = [f"-D{d}" for d in parsed_args.defines] + list(parsed_args.other_args)
-        transform_backend_kwargs: dict[str, Any] = {}
-        if transforms:
-            for t in transforms:
-                if hasattr(t, "prepare_parse"):
-                    inc_dirs, extra_parse_args, t_kwargs = t.prepare_parse(
-                        parse_code,
-                        str(header_path),
-                        inc_dirs,
-                        extra_parse_args,
-                    )
-                    transform_backend_kwargs.update(t_kwargs)
 
         all_args: list[str] = ["-target", target]
         for inc in inc_dirs:
@@ -298,7 +286,6 @@ def _get_ir(
 
         parse_kwargs: dict[str, Any] = {
             "project_prefixes": project_prefixes,
-            **transform_backend_kwargs,
         }
         if input_spec is not None:
             if not input_spec.recursive_includes:
@@ -717,9 +704,19 @@ def generate(
         raise FileNotFoundError(f"Header file not found: {resolved_path}")
 
     if backend_name is not None and backend_name.strip().lower() == "auto":
-        backend_name = resolve_backend("auto")
-    else:
-        backend_name = backend_name or get_default_backend()
+        if spec.language == "nim":
+            backend_name = "nim"
+        elif spec.language in ("nif", "nimony"):
+            backend_name = "nimony"
+        else:
+            backend_name = resolve_backend("auto")
+    elif backend_name is None:
+        if spec.language == "nim":
+            backend_name = "nim"
+        elif spec.language in ("nif", "nimony"):
+            backend_name = "nimony"
+        else:
+            backend_name = get_default_backend()
     writer_name = writer_name or "json"
     writer_options = writer_options or {}
 
@@ -796,7 +793,6 @@ def generate(
                 context=ctx,
                 input_spec=spec,
                 prechecked_ir=prechecked_ir,
-                transforms=resolved_transforms,
             )
 
         # Only check backend availability and output-cache fallback when Layer-1 IR

@@ -55,6 +55,7 @@ def _normalize_backend_name(name: str) -> str:
 
 __all__ = [
     "LibclangUnavailableError",
+    "extract_nim_ast_data",
     "get_backend",
     "get_backend_info",
     "get_default_backend",
@@ -357,6 +358,20 @@ def _ensure_backends_loaded() -> None:
 
         logging.getLogger(__name__).debug("Could not import treesitter backend", exc_info=True)
 
+    try:
+        import headerkit.backends.nim  # noqa: F401 (side effect import)
+    except ImportError:
+        import logging
+
+        logging.getLogger(__name__).debug("Could not import nim backend", exc_info=True)
+
+    try:
+        import headerkit.backends.nimony  # noqa: F401 (side effect import)
+    except ImportError:
+        import logging
+
+        logging.getLogger(__name__).debug("Could not import nimony backend", exc_info=True)
+
 
 def _load_backend_plugins() -> None:
     """Load backend plugins registered via entry points.
@@ -378,3 +393,6 @@ def _load_backend_plugins() -> None:
             import logging
 
             logging.getLogger(__name__).warning("Failed to load backend plugin %r: %s", ep.name, exc)
+
+
+from headerkit.backends.nim import extract_nim_ast_data  # noqa: E402

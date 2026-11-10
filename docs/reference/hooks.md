@@ -200,6 +200,40 @@ different rename configs cannot share a key. A hook written in Python is
 identified by module and qualified name: editing that function's body does not
 move the key, the same limitation writer plugins have with `cache_version`.
 
+## Documentation Hooks: `preprocess_doc` and `parse_doc`
+
+[`DocParserTransform`][headerkit.transforms.doc_parser.DocParserTransform] dispatches two hook points when converting raw `doc` strings into structured [`ParsedDoc`][headerkit.ir.ParsedDoc] nodes:
+
+1. **`preprocess_doc`** (`waterfall`): Transforms or normalizes raw comment strings (such as expanding custom company macro banners or stripping legacy annotations) before structured parsing.
+2. **`parse_doc`** (`first_result`): Parses the preprocessed comment string into a [`ParsedDoc`][headerkit.ir.ParsedDoc] instance. Matched on `doc_format` (`"doxygen"`, `"rst"`, `"sphinx"`, `"jsdoc"`, `"google"`, `"numpy"`, `"rustdoc"`, `"markdown"`, `"plain"`, `"auto"`) and `language`.
+
+```python
+from typing import Any
+from headerkit.hooks import PipelineContext, Priority, hook
+from headerkit.ir import ParamDoc, ParsedDoc
+
+
+@hook("preprocess_doc", priority=Priority.PROJECT)
+def expand_custom_macros(raw_doc: str, decl: Any, *, context: PipelineContext) -> str:
+    return raw_doc.replace("@MY_DEPRECATED", "@deprecated Use the v2 API.")
+
+
+@hook("parse_doc", priority=Priority.PROJECT, doc_format="custom-dsl")
+def parse_custom_dsl(
+    raw_doc: str,
+    decl: Any,
+    *,
+    context: PipelineContext,
+    doc_format: str = "custom-dsl",
+    on_error: str = "lenient",
+) -> ParsedDoc:
+    return ParsedDoc(
+        summary=raw_doc.strip(),
+        params=(ParamDoc(name="x", description="Input value"),),
+        source_format=doc_format,
+    )
+```
+
 ## API Reference
 
 ::: headerkit.hooks.Priority

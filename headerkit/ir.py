@@ -55,13 +55,14 @@ from dataclasses import (
 )
 from pathlib import Path
 from typing import (
+    Literal,
     Protocol,
     Union,
     runtime_checkable,
 )
 
 # =============================================================================
-# Source Location
+# Source Location, Structured Documentation & Origin Metadata
 # =============================================================================
 
 
@@ -90,6 +91,79 @@ class SourceLocation:
     file: str
     line: int
     column: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ParamDoc:
+    """Structured documentation for a single function parameter.
+
+    :param name: Parameter identifier documented in the docstring.
+    :param description: Human-readable parameter description.
+    :param type_hint: Optional high-level or source-language type annotation.
+    :param direction: Parameter direction (``"in"``, ``"out"``, or ``"inout"``).
+    :param optional: Whether the parameter is documented as optional.
+    """
+
+    name: str
+    description: str
+    type_hint: str | None = None
+    direction: Literal["in", "out", "inout"] | None = None
+    optional: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RaisesDoc:
+    """Structured documentation for an exception or error condition.
+
+    :param exception: Exception or error identifier.
+    :param description: Description of when the exception/error occurs.
+    """
+
+    exception: str
+    description: str
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedDoc:
+    """Normalized, format-agnostic structured documentation for an IR declaration.
+
+    Populated by :class:`headerkit.transforms.doc_parser.DocParserTransform` or
+    source-language parser backends so writers never parse raw docstring syntax.
+    """
+
+    summary: str | None = None
+    body: str | None = None
+    params: tuple[ParamDoc, ...] = ()
+    returns: str | None = None
+    return_type_hint: str | None = None
+    raises: tuple[RaisesDoc, ...] = ()
+    deprecated: str | None = None
+    examples: tuple[str, ...] = ()
+    see_also: tuple[str, ...] = ()
+    since: str | None = None
+    notes: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    source_format: str = "plain"
+    parse_errors: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SourceMeta:
+    """Source-language origin metadata attached to IR declarations, fields, or parameters.
+
+    Preserves rich source semantics (unmangled identifier, original source type
+    such as ``string`` or ``seq[float32]``, module name, ownership, and pragmas)
+    alongside the lowered C-ABI type expression.
+    """
+
+    source_language: str | None = None
+    source_name: str | None = None
+    source_type: str | None = None
+    module: str | None = None
+    is_exported: bool = True
+    is_nothrow: bool = False
+    ownership: Literal["borrowed", "owned", "shared", "caller_frees"] | None = None
+    attributes: tuple[tuple[str, str], ...] = ()
 
 
 # =============================================================================
@@ -287,6 +361,9 @@ class Parameter:
     type: TypeExpr
     default_value: str | None = None
     type_overrides: dict[str, str] = field(default_factory=dict)
+    doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __str__(self) -> str:
         default_str = f" = {self.default_value}" if self.default_value is not None else ""
@@ -443,6 +520,9 @@ class Field:
     is_static: bool = False
     is_padding: bool = False
     type_overrides: dict[str, str] = field(default_factory=dict)
+    doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __str__(self) -> str:
         if self.is_padding:
@@ -481,6 +561,9 @@ class EnumValue:
 
     name: str
     value: Union[int, str] | None = None  # None = auto, str = expression
+    doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __str__(self) -> str:
         if self.value is not None:
@@ -569,6 +652,8 @@ class Enum:
     underlying_type: str | None = None
     underlying_type_known: bool = True
     doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     @property
     def qualified_name(self) -> str | None:
@@ -687,6 +772,8 @@ class Struct:
     alignment: int | None = None
     location: SourceLocation | None = None
     doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __post_init__(self) -> None:
         if self.template_parameters and not self.template_params:
@@ -786,6 +873,8 @@ class Function:
     type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __post_init__(self) -> None:
         if self.template_parameters and not self.template_params:
@@ -840,6 +929,8 @@ class Typedef:
     type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __str__(self) -> str:
         return f"typedef {self.underlying_type} {self.name}"
@@ -881,6 +972,8 @@ class Variable:
     type_overrides: dict[str, str] = field(default_factory=dict)
     location: SourceLocation | None = None
     doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __str__(self) -> str:
         return f"{self.type} {self.name}"
@@ -933,6 +1026,8 @@ class Constant:
     is_macro_expr: bool = False
     location: SourceLocation | None = None
     doc: str | None = None
+    parsed_doc: ParsedDoc | None = None
+    source_meta: SourceMeta | None = None
 
     def __str__(self) -> str:
         if self.is_macro:
@@ -1064,6 +1159,12 @@ class InputSpec:
             elif lower.endswith((".zig",)):
                 deduced_lang = deduced_lang or "zig"
                 deduced_class = deduced_class or "source"
+            elif lower.endswith((".nim",)):
+                deduced_lang = deduced_lang or "nim"
+                deduced_class = deduced_class or "source"
+            elif lower.endswith((".nif",)):
+                deduced_lang = deduced_lang or "nif"
+                deduced_class = deduced_class or "interface"
             elif lower.endswith((".idl",)):
                 deduced_lang = deduced_lang or "idl"
                 deduced_class = deduced_class or "interface"

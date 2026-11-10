@@ -21,6 +21,8 @@ what is available.
 | [`mojo`](mojo.md) | `headerkit.writers.mojo` | Idiomatic Mojo FFI bindings with `sys.ffi.DLHandle` and CShim bridge |
 | [`nim`](nim.md) | `headerkit.writers.nim` | Native Nim bindings with C and C++ interop |
 | [`prompt`](prompt.md) | `headerkit.writers.prompt` | Token-optimized LLM context (compact/standard/verbose) |
+| [`pyi`](#pyiwriter) | `headerkit.writers.pyi` | Python `.pyi` type stubs (`pep484` and `cffi` modes) |
+| [`ts_wasm`](#tswasmwriter) | `headerkit.writers.ts_wasm` | TypeScript WebAssembly `.d.ts` declaration files |
 
 ## Base Class & Protocol
 
@@ -67,5 +69,19 @@ what is available.
       show_source: false
 
 ::: headerkit.writers.get_writer_info
+    options:
+      show_source: false
+
+## PyiWriter & TsWasmWriter
+
+### `PyiWriter`
+
+::: headerkit.writers.pyi.PyiWriter
+    options:
+      show_source: false
+
+### `TsWasmWriter`
+
+::: headerkit.writers.ts_wasm.TsWasmWriter
     options:
       show_source: false

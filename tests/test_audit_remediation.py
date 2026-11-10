@@ -7,12 +7,14 @@ from pathlib import Path
 
 import pytest
 
+from headerkit import NimBackend, clean_nim_c_unit
 from headerkit._cli import _build_parser, merge_config
 from headerkit._config import load_config
 from headerkit._generate import generate, generate_all
 from headerkit._ir_json import json_to_header
 from headerkit.backends import LibclangUnavailableError
 from headerkit.backends.libclang import _matches_project_prefix, normalize_path
+from headerkit.backends.nim import _parse_c_type_str
 from headerkit.ir import (
     Array,
     Constant,
@@ -33,10 +35,7 @@ from headerkit.ir import (
 from headerkit.transforms import (
     FilterBySymbol,
     FilterUnexportedSymbolsTransform,
-    NimCleanupTransform,
-    NimJsonDocEnricher,
 )
-from headerkit.transforms.nim_cleanup import _parse_c_type_str
 from headerkit.writers.cffi import header_to_cffi
 from headerkit.writers.cython import CythonWriter
 from headerkit.writers.diff import DiffEntry, diff_headers
@@ -399,7 +398,7 @@ class TestDiffWriterAuditRemediations:
                 Function("NimMain", CType("void"), []),
             ],
         )
-        target = raw_target >> NimCleanupTransform()
+        target = clean_nim_c_unit(raw_target)
         report = diff_headers(baseline, target, abi_mode=True)
         assert [e.name for e in report.entries if e.kind == "typedef_removed"] == ["removed_public_alias_t"]
         assert [e.name for e in report.entries if e.kind == "function_signature_changed"] == []
@@ -464,7 +463,7 @@ class TestLibclangPathNormalizationAndTransformsAndConfig:
             is True
         )
 
-    def test_nim_cleanup_filters_tySequence_and_ts_wasm_maps_cleaned_scalars(self) -> None:
+    def test_clean_nim_c_unit_filters_tySequence_and_ts_wasm_maps_cleaned_scalars(self) -> None:
         raw_unit = Header(
             path="nim_out.h",
             declarations=[
@@ -482,7 +481,7 @@ class TestLibclangPathNormalizationAndTransformsAndConfig:
                 ),
             ],
         )
-        cleaned = raw_unit >> NimCleanupTransform()
+        cleaned = clean_nim_c_unit(raw_unit)
         assert [d.name for d in cleaned.declarations] == ["wasm_compute"]
         dts_cleaned = write_ts_wasm(cleaned)
         assert dts_cleaned == textwrap.dedent("""\
@@ -549,17 +548,6 @@ class TestLibclangPathNormalizationAndTransformsAndConfig:
         unit = Header(path="engine.hpp", declarations=[cpp_fn, unexported_fn])
         filtered = unit >> FilterUnexportedSymbolsTransform(exported_symbols={"__ZN5audio12createEngineEi"})
         assert [d.name for d in filtered.declarations] == ["createEngine"]
-
-    def test_nim_jsondoc_fingerprint_includes_nim_source_sha256(self, tmp_path: Path) -> None:
-        nim_src = tmp_path / "mod.nim"
-        nim_src.write_text("proc hello*(): cint = 1\n", encoding="utf-8")
-        enricher = NimJsonDocEnricher(nim_source_path=nim_src)
-        fp1 = enricher.cache_fingerprint()
-        assert fp1["config"]["nim_source_sha256"] is not None
-
-        nim_src.write_text("proc hello*(): cint = 2\n", encoding="utf-8")
-        fp2 = enricher.cache_fingerprint()
-        assert fp2["config"]["nim_source_sha256"] != fp1["config"]["nim_source_sha256"]
 
     def test_config_writer_options_alias_embedded_target_and_ts_wasm_extension(
         self,
@@ -866,12 +854,13 @@ class TestShard1AndShard7AuditRemediations:
                 Constant("INT_CONST", 10),
                 Constant("FLOAT_MATCHED", 3.5),
                 Constant("FLOAT_UNMATCHED", 9.25),
+                Function("py_on_event", CType("int"), [Parameter("code", CType("int"))]),
             ],
         )
         writer = PyiWriter(
             mode="cffi",
             define_patterns=["^FLOAT_MATCHED$"],
-            extern_python=["int py_on_event(int code);"],
+            extern_python=["py_on_event"],
         )
         out = writer.write(header)
         assert out == textwrap.dedent("""\
@@ -917,11 +906,11 @@ class TestShard1AndShard7AuditRemediations:
                 Function("exported_fn", CType("void"), []),
             ],
         )
-        nim_cleaned = nim_raw >> NimCleanupTransform()
+        nim_cleaned = clean_nim_c_unit(nim_raw)
         assert [d.name for d in nim_cleaned.declarations] == ["exported_fn"]
         assert not hasattr(nim_cleaned, "source_origin")
 
-    def test_nim_cleanup_parse_c_type_str_and_ts_wasm_jsdoc_escaping(self) -> None:
+    def test_nim_backend_parse_c_type_str_and_ts_wasm_jsdoc_escaping(self) -> None:
         parsed = _parse_c_type_str("const char **")
         assert parsed == Pointer(Pointer(CType("char", qualifiers=["const"])))
         assert _parse_c_type_str("unsigned long *") == Pointer(CType("unsigned long"))
@@ -965,8 +954,8 @@ class TestOrthogonalLayerIsolation:
         parsed_default = default_backend.parse(code, "test.h")
         assert [d.name for d in parsed_default.declarations if isinstance(d, Function)] == []
 
-        # Positive control: when NimCleanupTransform supplies backend_options(), macros expand
-        nim_opts = NimCleanupTransform().backend_options()
+        # Positive control: when NimBackend supplies c_backend_options(), macros expand
+        nim_opts = NimBackend.c_backend_options()
         configured_backend = TreeSitterBackend(
             storage_macros=nim_opts["storage_macros"],
             callconv_macros=nim_opts["callconv_macros"],
@@ -979,19 +968,20 @@ class TestOrthogonalLayerIsolation:
         assert funcs[0].return_type == CType("int", is_elaborated=False)
         assert funcs[0].parameters == [Parameter("s", CType("NCSTRING", is_elaborated=False))]
 
-        cleaned = parsed_cfg >> NimCleanupTransform()
+        cleaned = clean_nim_c_unit(parsed_cfg)
         cleaned_funcs = [d for d in cleaned.declarations if isinstance(d, Function)]
-        assert cleaned_funcs[0].parameters == [Parameter("s", Pointer(CType("char", is_elaborated=False)))]
+        assert cleaned_funcs[0].parameters[0].name == "s"
+        assert cleaned_funcs[0].parameters[0].type == Pointer(CType("char", is_elaborated=False))
 
     def test_diff_writer_and_ts_wasm_writer_have_zero_nim_leakage(self) -> None:
-        # Negative control: DiffWriter without NimCleanupTransform treats NI32 and int32_t as distinct
+        # Negative control: DiffWriter without NimBackend cleanup treats NI32 and int32_t as distinct
         baseline = Header("a.h", [Function("calc", CType("int32_t"), [Parameter("x", CType("int32_t"))])])
         raw_nim = Header("b.h", [Function("calc", CType("NI32"), [Parameter("x_p0", CType("NI32"))])])
         uncleaned_report = diff_headers(baseline, raw_nim, abi_mode=True)
         assert len([e for e in uncleaned_report.entries if e.kind == "function_signature_changed"]) == 2
 
-        # Positive control: after NimCleanupTransform, DiffWriter sees 0 breaking changes
-        cleaned_nim = raw_nim >> NimCleanupTransform()
+        # Positive control: after clean_nim_c_unit, DiffWriter sees 0 breaking changes
+        cleaned_nim = clean_nim_c_unit(raw_nim)
         cleaned_report = diff_headers(baseline, cleaned_nim, abi_mode=True)
         assert cleaned_report.entries == []
 
@@ -1003,7 +993,7 @@ class TestOrthogonalLayerIsolation:
             infer_writer_from_extension,
         )
 
-        assert "nim_cleanup" in list_transforms()
+        assert "doc_parser" in list_transforms()
         assert "strip_prefix" in list_transforms()
         t = get_transform("strip_prefix", prefix="foo_")
         assert t.cache_fingerprint() == {

@@ -51,9 +51,39 @@ proc computeSum*(m: ptr FastMatrix): float64 {.exportc, dynlib.} =
 
 ---
 
-## 2. Defining the C API Header
+## 2. Direct Nim AST Parsing with `NimBackend` (Recommended)
 
-Define `src/fastmath_api.h` representing the exported C interface:
+With HeaderKit's first-class [`NimBackend`][headerkit.backends.nim.NimBackend], you do **not** need to hand-maintain a separate `.h` file. `NimBackend` parses `.nim` source files (and `nim c --header` generated headers) directly using Nim's compiler `std/macros` AST extractor (`_nim_ast_helper.nim`), preserving parameter names, `SourceMeta`, deprecation pragmas, and docstrings (`ParsedDoc`):
+
+```bash
+# Parse .nim source directly and emit CFFI cdefs + PEP 484 / CFFI .pyi stubs
+headerkit src/fastmath.nim -b nim -w cffi -w pyi \
+  -o cffi:fastmath/_defs.cdef.txt \
+  -o pyi:fastmath/_fastmath.pyi \
+  --writer-opt pyi:mode=cffi
+```
+
+Or programmatically in Python with [`DocParserTransform`][headerkit.transforms.doc_parser.DocParserTransform]:
+
+```python
+from pathlib import Path
+from headerkit.backends import get_backend
+from headerkit.transforms import DocParserTransform
+from headerkit.writers import get_writer
+
+nim_backend = get_backend("nim")
+unit = nim_backend.parse(Path("src/fastmath.nim").read_text(), "src/fastmath.nim")
+unit = DocParserTransform(doc_format="rst").transform(unit)
+
+cdef_code = get_writer("cffi").write(unit)
+pyi_code = get_writer("pyi", mode="cffi").write(unit)
+```
+
+---
+
+## 3. Alternative: Defining a Hand-Written C API Header
+
+If you prefer maintaining an explicit C header file (`src/fastmath_api.h`) representing the exported C interface:
 
 ```c
 #ifndef FASTMATH_API_H
@@ -84,7 +114,7 @@ double computeSum(FastMatrix* m);
 
 ---
 
-## 3. Parsing with Headerkit & Generating Bindings
+## 4. Parsing the C Header & Generating Bindings
 
 Use Headerkit to parse the C API and emit Python `ctypes` bindings:
 
@@ -107,7 +137,7 @@ bindings_code = writer.write(header)
 
 ---
 
-## 4. Packaging as a Python Wheel (`scikit-build-core`)
+## 5. Packaging as a Python Wheel (`scikit-build-core`)
 
 Define `pyproject.toml` and `CMakeLists.txt` to automate compiling the Nim library and packaging it into binary wheels:
 

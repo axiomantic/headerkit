@@ -8,7 +8,6 @@ guards and opaque handles (``typedef struct Foo Foo;``).
 from __future__ import annotations
 
 import collections
-import re
 import textwrap
 from pathlib import PureWindowsPath
 from typing import ClassVar
@@ -104,10 +103,20 @@ def _sanitize_name(name: str, num_params: int | None = None) -> str:
     name = name.replace("operator^", "bxor")
     name = name.replace("operator=", "assign")
     # Templates, whitespace, pointer/reference markers in type names
-    name = re.sub(r"[<>, \t]+", "_", name)
+    collapsed: list[str] = []
+    in_sep = False
+    for ch in name:
+        if ch in "<>, \t":
+            if not in_sep:
+                collapsed.append("_")
+                in_sep = True
+        else:
+            collapsed.append(ch)
+            in_sep = False
+    name = "".join(collapsed)
     name = name.replace("&", "")
     name = name.replace("*", "Ptr")
-    name = re.sub(r"[^a-zA-Z0-9_]", "", name)
+    name = "".join(ch for ch in name if ch.isalnum() or ch == "_")
     return name.strip("_")
 
 
@@ -161,9 +170,9 @@ def _is_std_vector(t: TypeExpr) -> str | None:
         raw = t.name.strip()
         if raw.startswith("const "):
             raw = raw[6:].strip()
-        m = re.match(r"^(?:std::)?vector<\s*(.*?)\s*>$", raw)
-        if m:
-            return m.group(1).strip()
+        for prefix in ("std::vector<", "vector<"):
+            if raw.startswith(prefix) and raw.endswith(">"):
+                return raw[len(prefix) : -1].strip()
     return None
 
 

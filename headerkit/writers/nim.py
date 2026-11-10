@@ -15,7 +15,6 @@ Features
 from __future__ import annotations
 
 import fnmatch
-import re
 import textwrap
 import unicodedata
 from collections.abc import Sequence
@@ -364,10 +363,56 @@ _NIM_PRAGMA_TOKENS: frozenset[str] = frozenset(
 )
 
 
+def _strip_nim_pragmas(text: str) -> str:
+    """Remove ``{. ... .}`` pragma blocks from a formatted Nim type expression."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i : i + 2] == "{.":
+            end = text.find(".}", i + 2)
+            if end != -1:
+                out.append(" ")
+                i = end + 2
+                continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def _strip_nim_param_labels(text: str) -> str:
+    """Remove ``param_name:`` labels preceding ``:`` in Nim ``proc(...)`` signatures."""
+    out: list[str] = []
+    parts = text.split(":")
+    if len(parts) <= 1:
+        return text
+    for idx, seg in enumerate(parts[:-1]):
+        rstripped = seg.rstrip()
+        if rstripped.endswith("`"):
+            open_tick = rstripped.rfind("`", 0, len(rstripped) - 1)
+            if open_tick != -1 and (open_tick == 0 or rstripped[open_tick - 1] in " (,;["):
+                out.append(rstripped[:open_tick])
+                out.append(" ")
+                continue
+        j = len(rstripped)
+        while j > 0 and (rstripped[j - 1].isalnum() or rstripped[j - 1] == "_"):
+            j -= 1
+        token = rstripped[j:]
+        if token and (token[0].isalpha() or token[0] == "_") and (j == 0 or rstripped[j - 1] in " (,;["):
+            out.append(rstripped[:j])
+            out.append(" ")
+        else:
+            out.append(seg)
+            if idx < len(parts) - 1:
+                out.append(" ")
+    out.append(parts[-1])
+    return "".join(out)
+
+
 def _extract_type_identifiers(type_str: str) -> set[str]:
     """Extract individual identifier tokens from a formatted Nim type expression."""
-    without_pragmas = re.sub(r"\{\.[^}]*\.\}", " ", type_str)
-    without_param_names = re.sub(r"(?:`[^`]+`|\b[A-Za-z_][A-Za-z0-9_]*)\s*:", " ", without_pragmas)
+    without_pragmas = _strip_nim_pragmas(type_str)
+    without_param_names = _strip_nim_param_labels(without_pragmas)
     cleaned = (
         without_param_names.replace("[", " ")
         .replace("]", " ")
@@ -2523,7 +2568,8 @@ class NimWriter(BaseWriter):
                 base_str = " of RootObj"
 
         pragma_str = f" {{.{', '.join(pragma_parts)}.}}" if pragma_parts else ""
-        lines = [*base_notes, f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
+        doc_lines = self._nim_doc_comment_lines(s)
+        lines = [*doc_lines, *base_notes, f"{t_name}*{gen_params}{pragma_str} = object{base_str}"]
 
         def _flatten_visible_fields(field_list: list[Field]) -> list[Field]:
             flat: list[Field] = []
@@ -2963,7 +3009,9 @@ class NimWriter(BaseWriter):
             spelling = _c_type_spelling(name, e.is_typedef, "enum")
             import_pragma = f'importc: "{spelling}", header: "{header_file}"'
         size_type = self._enum_size_type(e)
+        doc_lines = self._nim_doc_comment_lines(e)
         lines = [
+            *doc_lines,
             *self._enum_width_notes(e),
             f"{e_name}* {{.size: sizeof({size_type}), {import_pragma}.}} = enum",
         ]
@@ -3025,6 +3073,30 @@ class NimWriter(BaseWriter):
             emitted_types.add(t_name)
 
         return [f"{t_name}* = {underlying}"]
+
+    @staticmethod
+    def _nim_doc_comment_lines(decl: object, *, indent: str = "") -> list[str]:
+        """Return ``## ...`` Nim doc comment lines when ``decl.parsed_doc`` is populated."""
+        parsed = getattr(decl, "parsed_doc", None)
+        if parsed is None:
+            return []
+        lines: list[str] = []
+        summary = getattr(parsed, "summary", "")
+        if isinstance(summary, str) and summary.strip():
+            for line in summary.strip().splitlines():
+                lines.append(f"{indent}## {line}")
+        for param_doc in getattr(parsed, "params", ()):
+            if param_doc.description:
+                lines.append(f"{indent}## @param {param_doc.name}: {param_doc.description}")
+            else:
+                lines.append(f"{indent}## @param {param_doc.name}")
+        returns = getattr(parsed, "returns", None)
+        if isinstance(returns, str) and returns.strip():
+            lines.append(f"{indent}## @return {returns.strip()}")
+        deprecated = getattr(parsed, "deprecated", None)
+        if isinstance(deprecated, str) and deprecated.strip():
+            lines.append(f"{indent}## DEPRECATED: {deprecated.strip()}")
+        return lines
 
     def _write_function(self, f: Function, header_file: str) -> list[str]:
         """Render a function declaration."""
@@ -3095,7 +3167,8 @@ class NimWriter(BaseWriter):
             pragmas.append("discardable")
 
         t_params = f"[{', '.join(_template_param_ident(tp) for tp in f.template_params)}]" if f.template_params else ""
-        return [f"proc {f_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"]
+        doc_lines = self._nim_doc_comment_lines(f)
+        return [*doc_lines, f"proc {f_name}*{t_params}({', '.join(params)}){ret_str} {{.{', '.join(pragmas)}.}}"]
 
     def _write_variable(self, v: Variable, header_file: str) -> list[str]:
         """Render an extern global variable."""
